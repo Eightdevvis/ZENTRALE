@@ -193,9 +193,12 @@ sich das ganze ganz normal als termin bearbeiten lassen."
   OHNE-QUELLE.
 - **Routen:** `GET /api/calendar/quellen` (Listen + Projekte mit dem, was
   jetzt oben steht), `POST /api/calendar/quelle {kennung, art, id, label?}`,
-  `DELETE /api/calendar/quelle {kennung, titel_uebernehmen?}`;
-  `POST /api/calendar/entry` und die Wochen-Routine nehmen `quelle` (label
-  darf dann fehlen).
+  `DELETE /api/calendar/quelle {kennung, titel_uebernehmen?}`,
+  `GET /api/calendar/quelle?art=&id=&n=` (die ersten n offenen Punkte,
+  `vorschau`, fürs Ansehen in der TUI);
+  `POST /api/calendar/entry`, `/api/calendar/spanne` und beide Routinen-Wege
+  nehmen `quelle` (label darf bei entry dann fehlen). TUI: Abschnitt in
+  [kalender_ansichten_vorschau.md](kalender_ansichten_vorschau.md).
 - Kollisionen/Alarme: ganz normaler Termin (reservierte Zeit); `uncommitted`
   und Gruppen funktionieren unverändert. Tests: `tests/test_kalender_quelle.py`.
 

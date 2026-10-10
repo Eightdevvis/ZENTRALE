@@ -39,6 +39,9 @@ DATENANSICHT = {"A": "month", "B": "month", "C": "week"}
 SCHRITT = {"A": "tag", "B": "monat", "C": "woche"}
 
 INV = "_inv"
+# Gedämpfte Schrift AUF einer Fläche (Rolle „k_t3_inv_leise"): Liste unter dem
+# Titel, Zeit im Block. kalender.py mischt die Schrift zum Grund hin.
+LEISE = "_leise"
 
 # Semantik → Palettenrolle. Seit 09.10.2026 zeigen alle drei Ansichten auf
 # EINE Kalender-Tabelle (tui/ansichten/farben.py, KAL → C["k_…"]): gleiche
@@ -130,6 +133,21 @@ def titel_rolle(label) -> str:
     return TITEL_FARBEN[platz]
 
 
+def kurs_rolle(t: dict) -> str:
+    """Farbe eines normierten Eintrags: Quellen-Termin fest nach der Quelle
+    („quelle:<id>" in derselben FARBTABELLE), sonst nach dem Kurs im Titel.
+    Eine erledigte Liste („leer") ist gedämpft."""
+    q = t.get("quelle")
+    if not q:
+        return titel_rolle(t.get("label"))
+    if q["zustand"] == "leer":
+        return ROLLE["leer"]
+    platz = FARBTABELLE.get(q["schl"])
+    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
+        platz = _rechenplatz(q["schl"])
+    return TITEL_FARBEN[platz]
+
+
 def farben_vergeben(daten: dict, tabelle: dict) -> bool:
     """Jeder Kurs, der in `daten` mindestens zweimal vorkommt und noch keine
     Farbe hat, bekommt die nächste freie in RANGFOLGE. Häufigere zuerst,
@@ -143,7 +161,9 @@ def farben_vergeben(daten: dict, tabelle: dict) -> bool:
         for e in liste if isinstance(liste, list) else []:
             if isinstance(e, dict) and not (e.get("span") or e.get("von")) \
                     and not kalender_motive.ist_phase(e):
-                for k in (titel_schluessel(e.get("label")), kalender_gruppen.farb_schluessel(e)):
+                q = quelle_info(e)
+                kurs = q["schl"] if q else titel_schluessel(e.get("label"))
+                for k in (kurs, kalender_gruppen.farb_schluessel(e)):
                     if k:
                         zahl[k] = zahl.get(k, 0) + 1
     neu = sorted((k for k, n in zahl.items() if n >= 2 and k not in tabelle),
@@ -170,21 +190,35 @@ def naechste_ansicht(aktuell: str | None) -> str:
     return ANSICHTEN[(ANSICHTEN.index(aktuell) + 1) % len(ANSICHTEN)]
 
 
-def tasten_hinweis(ansicht: str) -> str:
-    """Fußzeile je Ansicht — nur Tasten, die beim Einhängen wirklich gebunden
-    sind. A/B/C sind reine Anzeige: bearbeitet wird im jetzigen Kalender."""
-    ziel = ANSICHT_NAMEN[naechste_ansicht(ansicht)]
-    # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
-    # a/e/d/r/c/p/g/enter, nur das Bewegen unterscheidet sich.
-    gleich = ("a neu · e ändern · d löschen · r wiederholen · u (un)committed · "
-              "enter ansehen · c/p kopieren · g gehe zu · R rhythmus · G gruppe")
-    if ansicht == "A":
-        return "↑↓ termin · ←→ tag · %s · tab kasten · v %s" % (gleich, ziel)
+def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
+    """Fußzeile je Ansicht — die längste Fassung, die in `breite` passt.
+
+    10.10.2026: in B/C wurde die Zeile bei 150 Spalten abgeschnitten (und
+    mit A für liste / ! abhaken käme mehr dazu). Darum drei Stufen: voll,
+    ohne Bewegen und Seltenes (Pfeile, r, c/p, g, G), nur das Nötigste. Was hier wegfällt, steht
+    vollständig in der Fußleiste unten (befehle.py, cal:…)."""
+    ziel = "v " + ANSICHT_NAMEN[naechste_ansicht(ansicht)]
     if ansicht == "B":
-        return "←→ tag · ↑↓ woche · enter tag bearbeiten · m/M monat · g gehe zu · v %s" % ziel
-    if ansicht == "C":
-        return "↑↓ termin · ←→ tag · %s · w/W woche · v %s" % (gleich, ziel)
-    return "v %s" % ziel
+        stufen = ("←→ tag · ↑↓ woche · enter tag bearbeiten · m/M monat · g gehe zu · "
+                  "R rhythmus · " + ziel,
+                  "←→ tag · ↑↓ woche · enter tag bearbeiten · " + ziel)
+    elif ansicht in ("A", "C"):
+        # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
+        # a/A/e/d/r/!/u/c/p/g/enter, nur das Bewegen unterscheidet sich.
+        gehen = "↑↓ termin · ←→ tag" + (" · w/W woche" if ansicht == "C" else "")
+        ende = (" · tab kasten · " if ansicht == "A" else " · ") + ziel
+        stufen = (
+            gehen + " · a neu · A für liste · e ändern · d löschen · r wiederholen · "
+            "! abhaken · u (un)committed · enter ansehen · c/p kopieren · g gehe zu · "
+            "R rhythmus · G gruppe" + ende,
+            "a neu · A für liste · e ändern · d löschen · ! abhaken · u (un)commit · "
+            "enter ansehen · R rhythmus" + ende,
+            "a neu · A für liste · e ändern · d löschen · ! abhaken · enter ansehen" + ende)
+    else:
+        stufen = (ziel,)
+    if breite is None:
+        return stufen[0]
+    return next((s for s in stufen if text_breite(s) <= breite), stufen[-1])
 
 
 def zeichne(ansicht: str, daten, breite: int, hoehe: int,
@@ -384,8 +418,38 @@ def _hm_kurz(m: int) -> str:
     return "%02d" % (m // 60) if m % 60 == 0 else _hm(m)
 
 
+def quelle_info(e: dict) -> dict | None:
+    """Termin mit Titel aus Liste/Projekt (core/kalender_quelle.py, „quelle")
+    → {"name", "zustand", "schl"} — sonst None. Sasha, 10.10.2026: „im
+    container steht das dann als ‚titel' wie ein normaler termin titel und
+    unten drunter weniger stark sichtbar dezent ‚titel der liste'"."""
+    q = e.get("quelle")
+    if not isinstance(q, dict) or not q.get("id"):
+        return None
+    return {"name": str(e.get("quelle_name") or e.get("label") or "?"),
+            "zustand": e.get("quelle_zustand") or "ok",
+            # Farbe fest nach der Quelle, nicht nach dem Titel: sonst wechselte
+            # der Block bei jedem Abhaken die Farbe.
+            "schl": "quelle:%s" % q["id"]}
+
+
+def quelle_unterzeile(t: dict) -> str | None:
+    """Die dezente Zeile unter dem Titel: Name der Liste; „leer" braucht
+    keine (der Titel sagt schon „— alles erledigt"), „fehlt" einen Hinweis."""
+    q = t.get("quelle")
+    if not q or q["zustand"] == "leer":
+        return None
+    if q["zustand"] == "fehlt":
+        return "liste fehlt"
+    return q["name"]
+
+
 def _normiere(e: dict, iso: str, aus: bool) -> dict:
-    label = str(e.get("label") or "?")
+    gespeichert = str(e.get("label") or "?")
+    quelle = quelle_info(e)
+    # Quellen-Termin: der Titel ist live der oberste offene Punkt (titel_live);
+    # `label` bleibt der Rückfall und der Schlüssel für die Werkzeuge (roh).
+    label = str(e.get("titel_live") or gespeichert) if quelle else gespeichert
     s, en = _zeitspanne(e.get("time"))
     if en is None:
         en = _min(e.get("ende"))
@@ -405,7 +469,8 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "erster": erster, "letzter": letzter, "tag": iso,
         "von": e.get("von") if isinstance(e.get("von"), str) else iso,
         "bis": e.get("bis") if isinstance(e.get("bis"), str) else iso,
-        "key": (e.get("von"), e.get("bis"), label, e.get("layer")),
+        "key": (e.get("von"), e.get("bis"), gespeichert, e.get("layer")),
+        "quelle": quelle,
         "routine": bool(e.get("recurring")), "aus": aus,
         # Ebene „uncommitted": liegt durchscheinend über den Terminen
         "unv": e.get("layer") == UNVERBINDLICH,
@@ -484,14 +549,14 @@ def _rolle(t: dict) -> str:
         return blass(ROLLE["spanne"], t)
     if t.get("gruppe"):
         return blass(gruppe_rolle(t["roh"]), t)
-    return blass(titel_rolle(t.get("label")), t)
+    return blass(kurs_rolle(t), t)
 
 
 def _glasrolle(t: dict) -> str:
     """Die Farbe, in der ein uncommitted-Eintrag als Glas über allem liegt."""
     if t.get("gruppe"):
         return gruppe_rolle(t["roh"])
-    return ROLLE["spanne"] if t["spanne"] else titel_rolle(t.get("label"))
+    return ROLLE["spanne"] if t["spanne"] else kurs_rolle(t)
 
 
 def _datum(s) -> date | None:
@@ -717,6 +782,17 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
             lw.setze(zy, cx + 1 if inv else cx + 3,
                      ("  " + titel + " " * (cw - 3 - text_breite(titel))) if inv else titel,
                      r + inv)
+            # Quellen-Termin: darunter dezent die Liste (eine Zeile mehr, die
+            # Luft zum nächsten Termin bleibt — calcurse-Takt bleibt erkennbar).
+            unter = quelle_unterzeile(t)
+            if unter and zy + 1 < y_ende:
+                zy += 1
+                unter = kuerzen(unter, cw - 3)
+                if inv:
+                    lw.setze(zy, cx + 1, "  " + unter + " " * (cw - 3 - text_breite(unter)),
+                             r + INV + LEISE)
+                else:
+                    lw.setze(zy, cx + 3, unter, ROLLE["leer"])
             zy += 2                          # Luft zwischen Terminen, wie calcurse
         if i < n - 1:
             lw.setze(y0 + bh - 1, cx - 1, "─" * (cw + 2), ROLLE["rahmen"])
@@ -1046,33 +1122,37 @@ def _c_bahnen(bloecke):
     return out, max(1, len(ende_je_bahn))
 
 
-def _c_label(t: dict, s: int, e: int, bw: int) -> str:
+def _c_zeit(t: dict, s: int, e: int) -> str:
+    """Zeitzeile eines Blocks: „10–12", „10:15–11:45"; Spannen ihre Marke
+    („18→", „→14", „↔"), die sagt, dass es am Nachbartag weitergeht."""
     if t["spanne"]:
         if t["start"] is not None and t["ende"] is not None:
-            vb = "%s–%s" % (_hm_kurz(s), _hm_kurz(e))
-        elif t["start"] is not None:
-            vb = "%s→" % _hm_kurz(s)
-        elif t["ende"] is not None:
-            vb = "→%s" % _hm_kurz(e)
-        else:
-            vb = "↔"
-    elif t["ende"] is not None and t["start"] is not None:
-        vb = "%s–%s" % (_hm_kurz(s), _hm_kurz(e))
-    else:
-        vb = _hm_kurz(s if t["start"] is not None else e)
-    voll = vb + " " + t["label"]
-    if text_breite(voll) <= bw:
-        return voll
-    # Schmale Säule: die Uhrzeit steht ohnehin an der Achse, die Fläche zeigt
-    # die Dauer — der Titel hat Vorrang. Spannen behalten ihren Pfeil, der
-    # sagt, dass es am Nachbartag weitergeht.
-    if bw < 5:
-        return kuerzen(t["label"], bw)      # ein Pfeil vor „…" sagt nichts
-    # Kurze Spannen-Marken („18→", „→14", „↔") bleiben: sie sagen, wann es
-    # anfängt/aufhört und dass es am Nachbartag weitergeht.
-    if t["spanne"] and text_breite(vb) <= 4:
-        return kuerzen(vb + " " + t["label"], bw)
-    return kuerzen(t["label"], bw)
+            return "%s–%s" % (_hm_kurz(s), _hm_kurz(e))
+        if t["start"] is not None:
+            return "%s→" % _hm_kurz(s)
+        if t["ende"] is not None:
+            return "→%s" % _hm_kurz(e)
+        return "↔"
+    if t["ende"] is not None and t["start"] is not None:
+        return "%s–%s" % (_hm_kurz(s), _hm_kurz(e))
+    return _hm_kurz(s if t["start"] is not None else e)
+
+
+def _c_zeilen(t: dict, s: int, e: int, bw: int, hoch: int) -> list:
+    """Beschriftung eines Blocks, Zeile für Zeile, je auf bw gekürzt.
+
+    Sasha, 10.10.2026: „wieso divergieren manche termine, bei manchen steht
+    die uhrzeit davor bei manchen nicht?" — früher stand die Zeit nur davor,
+    wenn sie mit dem Titel in die Breite passte. Jetzt EINHEITLICH: Zeile 1
+    ist immer nur der Titel; darunter (gedämpft, wenn der Block hoch genug
+    ist) bei Quellen-Terminen der Name der Liste, dann die Zeit. Ein
+    einzeiliger Block zeigt nur den Titel — die Zeit steht an der Achse."""
+    zeilen = [t["label"]]
+    unter = quelle_unterzeile(t)
+    if unter:
+        zeilen.append(unter)
+    zeilen.append(_c_zeit(t, s, e))
+    return [kuerzen(z, bw) for z in zeilen[:max(1, hoch)]]
 
 
 def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
@@ -1230,24 +1310,28 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
                 if t["spanne"]:
                     r = farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
                 else:
-                    r = titel_rolle(t.get("label"))
+                    r = kurs_rolle(t)
                 gewaehlt = sel is not None and t["roh"] is sel
                 if t["aus"]:
                     r = ROLLE["aus"]
                 if gewaehlt:                    # gewählter Termin: Akzent, deckend
                     r = _a_rolle("a_akzent")
-                lab_txt = _c_label(t, s, e, bw)
+                texte = _c_zeilen(t, s, e, bw, k1 - k0 + 1)
                 if t["unv"] and not gewaehlt and not t["aus"]:
-                    lw.glas(y0 + k0, bx, bw, r, lab_txt)
-                    for k in range(k0 + 1, k1 + 1):
-                        lw.glas(y0 + k, bx, bw, r)
+                    for k in range(k0, k1 + 1):
+                        txt = texte[k - k0] if k - k0 < len(texte) else ""
+                        lw.glas(y0 + k, bx, bw, r, txt,
+                                schrift=None if k == k0 else ROLLE["leer"])
                     continue
-                lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
-                for k in range(k0 + 1, k1 + 1):
-                    if t["aus"]:
-                        lw.setze(y0 + k, bx, "░" * bw, r)
-                    else:                       # Körper = dieselbe Fläche wie die Kopfzeile
-                        lw.setze(y0 + k, bx, " " * bw, r + INV)
+                for k in range(k0, k1 + 1):
+                    txt = texte[k - k0] if k - k0 < len(texte) else ""
+                    if k == k0:                 # Titel: Schrift der Fläche
+                        lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)), r + INV)
+                    elif t["aus"]:
+                        lw.setze(y0 + k, bx, txt + "░" * (bw - text_breite(txt)), r)
+                    else:                       # Körper = dieselbe Fläche, Schrift leise
+                        lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)),
+                                 r + INV + (LEISE if txt else ""))
         # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
         rechts = x0 + i * colw + max(0, colw - 2)
         if any(e <= lo for _bi, s, e, _t in alle):

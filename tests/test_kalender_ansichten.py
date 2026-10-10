@@ -270,15 +270,19 @@ def test_c_spanne_ist_durchgehende_flaeche(breite):
         a, b = _spalte(breite, tag)
         for y in _zeitzeilen(zeilen):
             z = zellen(zeilen[y])[a:b]
-            assert any(r.removesuffix(ka.INV) in ka.SPANNEN_FARBEN and ch != "·"
+            assert any(r.removesuffix(ka.LEISE).removesuffix(ka.INV) in ka.SPANNEN_FARBEN and ch != "·"
                        for ch, r in z), (tag, y, text(zeilen[y]))
 
 
 def test_c_spanne_mit_uhrzeit_beginnt_und_endet_richtig():
     zeilen = ka.ansicht_c(daten("week"), 110, 34)
     alles = "\n".join(text(z) for z in zeilen)
-    # Fr ab 18 Uhr, So bis 14 Uhr — auch in schmalen Säulen bleibt die Marke.
-    assert "18→ B" in alles and "→14 Berlin" in alles
+    # Fr ab 18 Uhr, So bis 14 Uhr — die Marke steht als Zeitzeile UNTER dem
+    # Titel (seit 10.10.2026 einheitlich: Zeile 1 nur der Titel).
+    assert "18→" in alles and "→14" in alles
+    i = next(i for i, z in enumerate(zeilen) if "18→" in text(z))
+    j = text(zeilen[i]).index("18→")
+    assert text(zeilen[i - 1])[j:j + 2] == "Be"
 
 
 def test_c_ueberschneidung_nebeneinander():
@@ -456,7 +460,7 @@ def test_c_uncommitted_nimmt_keine_bahn_der_festen():
     # Glas: Arbeit scheint unter dem Zahnarzt durch (Rolle kombiniert)
     zza = zellen(zeilen[za[0]])
     assert all(ka.GLAS in r for _ch, r in zza[a:b])
-    darunter = {r.split(ka.GLAS)[0] for _ch, r in zza[a:b]}
+    darunter = {r.split(ka.GLAS)[0].removesuffix(ka.LEISE) for _ch, r in zza[a:b]}
     arbeit = ka.titel_rolle("Arbeit") + ka.INV
     assert arbeit in darunter
 

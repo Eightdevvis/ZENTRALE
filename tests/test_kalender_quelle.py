@@ -283,3 +283,37 @@ def test_routen(cal, todo):
     woche = c.get(f"/api/calendar?ref={TAG}").get_json()
     fenster = [e for e in woche["days"][TAG] if e.get("quelle")]
     assert len(fenster) == 2 and all(e["titel_live"] == "Steuern planen" for e in fenster)
+
+
+# ── TUI-Anschluss (10.10.2026): Vorschau, Spanne und Routine mit Quelle ─
+def _client():
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
+    from flask import Flask
+    from routen import kalender as routen_kalender
+    app = Flask(__name__)
+    app.register_blueprint(routen_kalender.bp)
+    return app.test_client()
+
+
+def test_vorschau_nennt_die_naechsten_offenen(cal, todo):
+    lists.add_item(todo["lid"], "Fenster")
+    v = kq.vorschau({"art": "liste", "id": todo["lid"]}, 2)
+    assert v["name"] == "todo" and v["zustand"] == "ok"
+    assert v["punkte"] == ["Steuern planen", "Bad putzen"]
+    r = _client().get(f"/api/calendar/quelle?art=liste&id={todo['lid']}&n=3").get_json()
+    assert r["punkte"] == ["Steuern planen", "Bad putzen", "Fenster"]
+    weg = kq.vorschau({"art": "liste", "id": "l_weg"})
+    assert weg["zustand"] == "fehlt" and weg["punkte"] == []
+
+
+def test_spanne_und_routine_nehmen_quelle(cal, todo):
+    c = _client()
+    q = {"art": "liste", "id": todo["lid"]}
+    r = c.post("/api/calendar/spanne", json={"von": "2026-10-20", "bis": "2026-10-22",
+                                             "label": "todo", "quelle": q})
+    assert r.status_code == 200
+    r = c.post("/api/calendar/routine", json={"label": "todo", "seit": TAG, "freq": "w",
+                                              "time": "08:00", "quelle": q})
+    assert r.status_code == 200
+    mit = [e for e in kk.alle_eintraege() if e.get("quelle")]
+    assert {e["art"] for e in mit} >= {"spanne", "routine"}

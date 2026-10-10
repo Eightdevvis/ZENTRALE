@@ -25,7 +25,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from . import kalender_ansichten
 from .basis import BEENDEN
 from .farben import DECKKRAFT
-from .kalender_ansichten import (ANSICHT_NAMEN, GLAS, INV, glas_teile,
+from .kalender_ansichten import (ANSICHT_NAMEN, GLAS, INV, LEISE, glas_teile,
                                  naechste_ansicht, tasten_hinweis, text_breite)
 from .kalender_ansichten import zeichne as stil_zeichnen
 from .kalender_bedienung import Bedienung
@@ -175,12 +175,14 @@ class Kalender:
             for text, rolle in zeile:
                 if GLAS in rolle:
                     attr = self._glas_attr(rolle)
+                elif rolle.endswith(LEISE):
+                    attr = self._leise_attr(rolle[:-len(LEISE)])
                 elif rolle.endswith(INV):
                     # eigene Fläche (Kalender-Tabelle), sonst die Schrift invertiert
                     attr = C.get(rolle) or (C.get(rolle[:-len(INV)], C["dim"]) | curses.A_REVERSE)
                 else:
                     attr = C.get(rolle, C["dim"])
-                if text.strip() or rolle.endswith(INV) or GLAS in rolle:
+                if text.strip() or rolle.endswith((INV, LEISE)) or GLAS in rolle:
                     z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
                 x += text_breite(text)
         unten = bed.zeile_unten()
@@ -188,7 +190,7 @@ class Kalender:
             txt, rolle = unten
             z.addclip(bottom, ix, txt, iw, C.get(rolle, C["faint"]))
         else:
-            z.addclip(bottom, ix, tasten_hinweis(K["stil"]), iw, C["faint"])
+            z.addclip(bottom, ix, tasten_hinweis(K["stil"], iw), iw, C["faint"])
         bed.zeichne_popup(by, bx, bh, bw)
         bed.zeichne_kasten(by, bx, bh, bw)
 
@@ -213,6 +215,36 @@ class Kalender:
         if (z.pix_farbe(fg), z.pix_farbe(grund)) not in z.PIX["pairs"]:
             return rueckfall                    # Paare voll → lieber blass als Bernstein
         return attr | extra
+
+    def _leise_attr(self, flaeche):
+        """„k_t3_inv" + LEISE → dieselbe Fläche, die Schrift ein Stück zum
+        Grund hin gemischt (Liste und Zeit unter dem Titel eines Blocks,
+        10.10.2026). Lesbar bleibt sie (≥ 3:1). Ohne 256 Farben oder wenn
+        die Paare ausgehen: die Fläche mit A_DIM."""
+        C, z = self.z.C, self.z
+        basis = C.get(flaeche) or (C.get(flaeche[:-len(INV)], C["dim"]) | curses.A_REVERSE
+                                   if flaeche.endswith(INV) else C.get(flaeche, C["dim"]))
+        rueckfall = basis | curses.A_DIM
+        info = C.get("kal_glas")
+        paar = (info or {}).get("paare", {}).get(flaeche)
+        if not paar:
+            return rueckfall
+        schl = ("leise", flaeche, info["thema"], bool(C.get("pix_true")))
+        farben = self._glas_farben.get(schl)
+        if farben is None:
+            fg, grund, _e = paar
+            for a in (0.45, 0.3, 0.15, 0.0):     # Anteil Grund in der Schrift
+                f = tuple(round(x * (1 - a) + y * a) for x, y in zip(fg, grund))
+                if not C.get("pix_true"):
+                    f = pixel.bunt(f)
+                if _kontrast(f, grund) >= 3 or a == 0.0:
+                    break
+            farben = self._glas_farben[schl] = (f, grund)
+        f, grund = farben
+        attr = z.pix_attr(f, grund)
+        if (z.pix_farbe(f), z.pix_farbe(grund)) not in z.PIX["pairs"]:
+            return rueckfall
+        return attr
 
     def _glas_mischen(self, info, unter, glas, schrift):
         """(Schrift, Grund, Extra) einer Glaszelle als RGB — siehe _glas_attr."""

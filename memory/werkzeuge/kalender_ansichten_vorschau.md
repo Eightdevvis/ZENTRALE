@@ -499,3 +499,46 @@ Neu erzeugen: `venv/bin/python scripts/kalender_vorschau.py --farbe aus --breite
 - **Rückfragen, ein Schema** (`kalender_werkzeuge.py`, über `_wahl_umfang`):
   j/n · a alle · t nur dieser Tag · z Zeitraum · Auswahl per Anfangsbuchstabe
   (u Uni, k keine, e eigene), keine Ziffern; Esc bricht ab.
+
+## Titel aus Liste/Projekt in der TUI (10.10.2026)
+Kern: Abschnitt „quelle" in [kalender_ics_bauplan.md](kalender_ics_bauplan.md).
+Sasha: „im container steht das dann als ‚titel' wie ein normaler termin titel
+und unten drunter weniger stark sichtbar dezent ‚titel der liste' … ansonsten
+soll sich das ganze ganz normal als termin bearbeiten lassen".
+- **Anzeige** (`kalender_ansichten.quelle_info`/`quelle_unterzeile`): Titel =
+  `titel_live`, darunter gedämpft der Name der Liste — in A als eigene Zeile
+  unter dem Titel (Luft zum nächsten Termin bleibt), in C als zweite
+  Blockzeile. B zeigt nur den Live-Titel. `leer` → „<Liste> — alles
+  erledigt" gedämpft, ohne Namenszeile; `fehlt` → label + „liste fehlt".
+  **Farbe fest nach der Quelle** (`kurs_rolle`, Schlüssel `quelle:<id>` in
+  der FARBTABELLE), sonst wechselte der Block bei jedem Abhaken die Farbe.
+- **C einheitlich** (Sasha: „wieso divergieren manche termine, bei manchen
+  steht die uhrzeit davor bei manchen nicht?", `_c_zeilen`): Zeile 1 ist
+  immer nur der Titel; ab 2 Zeilen Höhe darunter gedämpft die Zeit
+  („10–12", „10:15–11:45"; Spannen ihre Marke 18→ / →14 / ↔), bei
+  Quellen-Terminen erst die Liste, dann die Zeit. Einzeilige Blöcke: nur
+  der Titel. Gilt auch für Glas und den gewählten Eintrag.
+- **Leise Schrift auf Fläche:** Rolle `<fläche>_inv_leise` (`ka.LEISE`);
+  `kalender.py _leise_attr` mischt die Schrift zum Grund (≥ 3:1), ohne 256
+  Farben `A_DIM`.
+- **Tasten** (`kalender_bedienung.py`): **`A`** (Shift+A) = neuer Termin für
+  eine Liste/ein Projekt — bis dahin nur ein zweites `a`, das Alias ist
+  aufgegeben (`a`/Strg-A legen weiter normal an; im TODO-Kasten bleibt `A`
+  „neue Aufgabe"). Erst der Kasten „welche Liste?" (`kalender_quellen.
+  QuellenWahl`: ≡ Liste, ◆ Projekt, Name + was jetzt oben steht; Tippen
+  filtert, ↑↓ wählt, Enter nimmt, Esc im Formular führt zurück), dann EXAKT
+  das Neu-Formular, Titel = Name der Liste (leer = Name, ist nur Rückfall).
+  **`!`** auf einem Quellen-Termin hakt den angezeigten Punkt ab
+  (`/api/lists/<lid>/items/<iid>/toggle`) → „erledigt: X — jetzt: Y".
+- **Bearbeiten (e):** Feld „Liste" im Kasten (wie Gruppe: ganzer Eintrag/
+  ganze Serie, nicht „nur dieser Tag"): Name = bleibt, „keine" = lösen →
+  „aktuellen Titel „X“ übernehmen? (j/n)" (`titel_uebernehmen`), „wählen …"
+  / „andere …" → nach dem Speichern derselbe Kasten, setzt per Kennung.
+  Kopieren (c/p) nimmt die Liste mit.
+- **Ansehen (Enter):** Liste, „Jetzt", „Danach" (die nächsten offenen,
+  neue Route `GET /api/calendar/quelle?art=&id=&n=4` → `kalender_quelle.
+  vorschau`). `POST /api/calendar/spanne` und die Routine mit `freq` nehmen
+  jetzt auch `quelle`.
+- **Fußzeile** (`tasten_hinweis(ansicht, breite)`): drei Stufen, die längste,
+  die passt (vorher in B/C bei 150 Spalten abgeschnitten); vollständig in der
+  Fußleiste (`befehle.py`). Tests: `tests/test_kalender_quellen_tui.py`.

@@ -12,10 +12,12 @@ import curses
 import json
 import time
 import urllib.error
+import urllib.parse
 from datetime import date, timedelta
 
 from .basis import BEENDEN, api_call
 from . import kalender_gruppen, kalender_motive, kalender_phasen
+from . import kalender_quellen as kq
 from . import kalender_werkzeuge as kw
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
@@ -26,6 +28,13 @@ FOKUS = ("termine", "kalender", "todo")
 # und befehle.py mitziehen.
 TASTE_RHYTHMUS = ord("R")   # Kasten „Rhythmus": Phasen einstellen
 TASTE_KURSGRUPPE = ord("G")  # Gruppe für den ganzen Kurs des gewählten Termins
+# Neuer Termin für eine Liste/ein Projekt (10.10.2026, Sasha: „mit shift a
+# oder sowas"). Shift+A war bis dahin nur ein zweites „a" — das Alias ist
+# dafür aufgegeben; a und Strg-A legen weiter normal an. Shift+Buchstabe
+# fängt kein Terminal, OS oder i3 ab. Abhaken des angezeigten Punkts: „!"
+# wie im TODO-Kasten (dort ist es calcurses „erledigt").
+TASTE_NEU_LISTE = ord("A")
+TASTE_ABHAKEN = ord("!")
 
 
 def _monat(d: date, delta: int) -> date:
@@ -273,7 +282,7 @@ class Bedienung:
             self.setze_tag(d + timedelta(days=sprung))
         elif ch in (10, 13, curses.KEY_ENTER):
             self.kal.sprung_zum_tag(d)
-        elif ch in (ord("a"), ord("A"), 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
+        elif ch in (ord("a"), TASTE_NEU_LISTE, 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
                     ord("c"), ord("p"), 22, ord("u"), ord("U"), TASTE_KURSGRUPPE, 9,
                     curses.KEY_BTAB):
             W["msg"] = "im monat nur ansehen — enter öffnet den tag zum bearbeiten"
@@ -303,22 +312,25 @@ class Bedienung:
             else:
                 W["msg"] = "kein termin gewählt"
             return True
-        if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse
+        if ch in (ord("a"), 1):                # Strg-A wie calcurse
             self._starte(kw.formular_neu(d, date.today()))
+        elif ch == TASTE_NEU_LISTE:
+            self._neu_fuer_liste(d)
         elif ch in (10, 13, curses.KEY_ENTER):
             roh = self.gewaehlt()
             if roh:
-                W["popup"] = kw.details(roh, d)
+                W["popup"] = kw.details(roh, d, self._quelle_vorschau(roh))
         elif ch in (ord("e"), ord("E"), ord("d"), ord("D"), ord("r"), ord("c")):
             roh = self.gewaehlt()
             if not roh:
                 W["msg"] = "kein termin gewählt"
             elif ch in (ord("e"), ord("E")):
-                self._starte(kw.formular_bearbeiten(roh, d, date.today()))
+                self._starte(kw.formular_bearbeiten(roh, d, date.today(),
+                                                    quelle_wahl=self._quelle_wahl_fuer))
             elif ch in (ord("d"), ord("D")):
                 self._starte(kw.dialog_loeschen(roh, d))
             elif ch == ord("r"):
-                dl = kw.formular_wiederholen(roh, d, date.today())
+                dl = kw.formular_wiederholen(roh, d, date.today(), self._quelle_wahl_fuer)
                 if dl is None:
                     W["msg"] = "eine spanne wiederholt sich nicht — e ändert sie"
                 else:
@@ -338,8 +350,12 @@ class Bedienung:
                 W["msg"] = "kein termin gewählt"
             else:
                 self._ausfuehren(plan, pruefen=False)
-        elif ch == ord("!"):
-            W["msg"] = "! hakt im TODO-Kasten ab (Tab)"
+        elif ch == TASTE_ABHAKEN:
+            roh = self.gewaehlt()
+            if roh and kq.quelle_von(roh):
+                self._quelle_abhaken(roh)
+            else:
+                W["msg"] = "! hakt den obersten Punkt eines Listen-Termins ab (A) · TODO: tab"
         else:
             return False
         return True
@@ -354,8 +370,10 @@ class Bedienung:
             self.setze_tag(d + timedelta(days=sprung))
         elif ch in (10, 13, curses.KEY_ENTER):
             self.W["fokus"] = "termine"
-        elif ch in (ord("a"), ord("A"), 1):
+        elif ch in (ord("a"), 1):
             self._starte(kw.formular_neu(d, date.today()))
+        elif ch == TASTE_NEU_LISTE:
+            self._neu_fuer_liste(d)
         else:
             return False
         return True
@@ -392,6 +410,57 @@ class Bedienung:
         else:
             return False
         return True
+
+    # ── Termine mit Titel aus Liste/Projekt (kalender_quellen.py) ─────
+    def _quellen_holen(self):
+        try:
+            return api_call("/api/calendar/quellen", timeout=8.0) or {}
+        except Exception as e:
+            self.W["msg"] = "⚠ listen: backend? " + str(e)[:50]
+            return None
+
+    def _neu_fuer_liste(self, d):
+        """A: erst die Liste wählen, dann das ganz normale Neu-Formular."""
+        auswahl = self._quellen_holen()
+        if auswahl is None:
+            return
+        if not kq.eintraege(auswahl):
+            self.W["msg"] = "keine listen gefunden"
+            return
+        self._starte(kq.QuellenWahl(auswahl, lambda q: kw._plan(
+            weiter=kw.formular_neu(d, date.today(), quelle=q))))
+
+    def _quelle_wahl_fuer(self, roh):
+        """Feld „Liste" → „wählen …": derselbe Kasten, setzt per Kennung."""
+        auswahl = self._quellen_holen()
+        if auswahl is None:
+            return None
+        return kq.QuellenWahl(auswahl, lambda q: kq.plan_setzen(roh, q),
+                              titel="liste für „%s“" % (roh.get("label") or "termin"))
+
+    def _quelle_vorschau(self, roh):
+        q = kq.quelle_von(roh)
+        if q is None:
+            return None
+        try:
+            return api_call("/api/calendar/quelle?art=%s&id=%s&n=4"
+                            % (q["art"], urllib.parse.quote(q["id"], safe="")), timeout=4.0)
+        except Exception:
+            return None
+
+    def _quelle_abhaken(self, roh):
+        """!: den angezeigten Punkt abhaken; der nächste rückt nach."""
+        plan = kq.plan_abhaken(roh)
+        if plan is None:
+            self.W["msg"] = "„%s“: nichts offen zum abhaken" % (roh.get("quelle_name")
+                                                               or roh.get("label") or "")
+            return
+        vorher = roh.get("titel_live") or "?"
+        self.W["msg"] = ""
+        self._ausfuehren(plan, pruefen=False)
+        if self.W["msg"].startswith("⚠"):
+            return
+        self.W["msg"] = kq.meldung_abgehakt(vorher, kq.finde(self.daten(), roh.get("kennung")))
 
     # ── Rhythmus (Tagesphasen) ─────────────────────────────────────────
     def _rhythmus(self):
@@ -573,7 +642,8 @@ class Bedienung:
         erst = max(0, dl.i - platz + 1)
         aktiv = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE)
         if not zeilen:
-            z.addclip(y + 2, x + 2, "noch keine phase — n legt eine an", w - 4, C["faint"])
+            z.addclip(y + 2, x + 2, getattr(dl, "leer_text", "noch keine phase — n legt eine an"),
+                      w - 4, C["faint"])
         for k, (zeichen, rolle, text, an) in enumerate(zeilen[erst:erst + platz]):
             yy = y + 2 + k
             z.addclip(yy, x + 2, zeichen, 2, aktiv if an else C.get(rolle, C["faint"]))

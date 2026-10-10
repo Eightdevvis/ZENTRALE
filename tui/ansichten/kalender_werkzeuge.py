@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from . import kalender_gruppen
+from . import kalender_gruppen, kalender_quellen
 from .kalender_ansichten import _tag_eintraege, monat_eintraege, titel_schluessel
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
@@ -592,13 +592,17 @@ def _zeiten(tag, w):
     return w["von"], e_dt
 
 
-def _neu_plan(w, tag, layer="termine"):
+def _neu_plan(w, tag, layer="termine", quelle=None):
     """Aufrufe für einen neuen Eintrag aus Formularwerten (ohne Altes zu
     löschen). Täglich ohne Intervall mit Ende = Spanne (bleibt als Block
-    sichtbar, Tage einzeln änderbar); sonst Wiederholung = Routine."""
+    sichtbar, Tage einzeln änderbar); sonst Wiederholung = Routine.
+    `quelle` ({art, id, name}): Titel live aus der Liste — geht in jeden
+    Body mit; ein leerer Titel wird ihr Name (der Rückfall)."""
     tag = w.get("datum") or tag
-    titel, ort = w["titel"], (w.get("ort") or None)
+    titel, ort = (w.get("titel") or (quelle or {}).get("name") or ""), (w.get("ort") or None)
     gruppe = _gruppe_body(w)
+    if quelle:
+        gruppe = {**gruppe, "quelle": {"art": quelle["art"], "id": quelle["id"]}}
     start, e_dt = _zeiten(tag, w)
     ende = e_dt.strftime("%H:%M") if e_dt else None
     wied = w.get("wied", "keine")
@@ -651,19 +655,77 @@ def _neu_plan(w, tag, layer="termine"):
     return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, kon
 
 
-def formular_neu(tag: date, heute: date) -> Formular:
-    """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender)."""
+def formular_neu(tag: date, heute: date, quelle: dict | None = None) -> Formular:
+    """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender).
+    A (mit `quelle` aus kalender_quellen.QuellenWahl): GENAU dasselbe
+    Formular, nur der Titel ist der Name der Liste vorbelegt (leer = ihr
+    Name) — angezeigt wird live ihr oberster offener Punkt."""
     def plan(w):
         layer = UNVERBINDLICH if w.get("verbindlich") == "nein" else "termine"
-        aufrufe, meldung, kon = _neu_plan(w, tag, layer)
+        aufrufe, meldung, kon = _neu_plan(w, tag, layer, quelle)
         if layer == UNVERBINDLICH:
             kon = None                    # uncommitted: Kollision nur Hinweis, keine Rückfrage
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
-    felder = _termin_felder(tag, heute)
+    felder = _termin_felder(tag, heute, titel=(quelle or {}).get("name") or "")
+    if quelle:
+        felder[0].lesen = lambda s: (True, s.strip() or quelle["name"])
+        felder[0].hilfe = _QUELLE_TITEL_HILFE
     # committed (Standard) oder uncommitted — umschalten später mit u
     felder.append(Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
                        optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
+    if quelle:
+        titel = "neuer termin · %s %s" % (kalender_quellen.wort(quelle["art"]).lower(),
+                                          quelle["name"])
+        return Formular(titel, felder, plan)
     return Formular("neuer termin", felder, plan)
+
+
+# ── Feld „Liste" im Bearbeiten-Kasten (10.10.2026) ─────────────────────
+# Sasha: „man wählt ja eigentlich einfach nur ne liste für nen termin slot
+# aus". Das Feld gilt wie die Gruppe für den ganzen Eintrag/die ganze Serie
+# (nicht im Kasten „nur dieser Tag"). Werte: der Name der jetzigen Quelle
+# (bleibt), „keine" (lösen — danach „aktuellen Titel übernehmen? (j/n)"),
+# „wählen …"/„andere …" (nach dem Speichern der Kasten mit allen Listen).
+_QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
+LISTE_KEINE, LISTE_WAEHLEN, LISTE_ANDERE = "keine", "wählen …", "andere …"
+
+
+def _quelle_felder(roh, quelle_wahl) -> list:
+    q = kalender_quellen.quelle_von(roh)
+    if q is None and quelle_wahl is None:
+        return []
+    if q is None:
+        optionen = (LISTE_KEINE, LISTE_WAEHLEN)
+    else:
+        optionen = (q["name"], LISTE_KEINE) + ((LISTE_ANDERE,) if quelle_wahl else ())
+    return [Feld("liste", "Liste", art="wahl", wert=optionen[0], optionen=optionen,
+                 hilfe="Titel = oberster offener Punkt der Liste · ←→ ändern")]
+
+
+def _quelle_folge(roh, w, quelle_wahl):
+    """Nach dem Speichern: was mit der Liste passiert → (zurueck, meldung).
+    zurueck ist ein () → Kasten, den die Bedienung nach den Aufrufen öffnet."""
+    wahl = w.get("liste")
+    q = kalender_quellen.quelle_von(roh)
+    if wahl is None or not roh.get("kennung"):
+        return None
+    if wahl in (LISTE_WAEHLEN, LISTE_ANDERE) and quelle_wahl is not None:
+        return lambda: quelle_wahl(roh)
+    if wahl == LISTE_KEINE and q is not None:
+        live = roh.get("titel_live") or roh.get("label") or ""
+        return lambda: Dialog("liste lösen", [Schritt(
+            "ok", "aktuellen Titel „%s“ übernehmen? (j/n)" % live, art="wahl",
+            wahl={"j": True, "n": False})],
+            lambda a: kalender_quellen.plan_loesen(roh, a["ok"]))
+    return None
+
+
+def _quelle_bleibt(roh, w):
+    """Beim Neu-Anlegen statt Ändern (Einmal → Wiederholung): die Quelle
+    wandert mit, außer „keine" ist gewählt."""
+    if w.get("liste") == LISTE_KEINE:
+        return None
+    return kalender_quellen.quelle_von(roh)
 
 
 UNVERBINDLICH = "uncommitted"
@@ -708,10 +770,13 @@ def _wahl_umfang(roh):
                    art="wahl", wahl={"t": "dieser", "a": "alle"})
 
 
-def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
+def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wahl=None):
     """e (und r): derselbe Kasten, vorbelegt. Routinen und Spannen fragen
     vorher „nur dieser Tag oder alle?" (Handy-Kalender) — dann ist das
-    Ergebnis ein kleiner Dialog, dessen Plan den Kasten als `weiter` bringt."""
+    Ergebnis ein kleiner Dialog, dessen Plan den Kasten als `weiter` bringt.
+    `quelle_wahl(roh)` → Kasten „welche Liste?" (von der Bedienung, die die
+    Listen holt); ohne sie gibt es im Feld „Liste" nur bleiben/lösen."""
+    qhilfe = _QUELLE_TITEL_HILFE if kalender_quellen.quelle_von(roh) else ""
     a_ = art(roh)
     label, layer = roh.get("label", ""), roh.get("layer") or "termine"
     t0, e0, ort0 = roh.get("time") or "", roh.get("ende") or "", roh.get("ort") or ""
@@ -720,13 +785,13 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
     if a_ == "einmal":
         def plan(w):
             if w.get("wied", "keine") != "keine":       # wird zur Wiederholung
-                aufrufe, meldung, _k = _neu_plan(w, tag, layer)
+                aufrufe, meldung, _k = _neu_plan(w, tag, layer, _quelle_bleibt(roh, w))
                 weg = ("DELETE", "/api/calendar/eintrag",
                        {"layer": layer, "day": iso, "label": label, "time": t0 or None})
                 return _plan(aufrufe + [weg], meldung)
             start, e_dt = _zeiten(w["datum"], w)
             if e_dt and e_dt.date() > w["datum"]:       # über Mitternacht → Spanne
-                aufrufe, meldung, _k = _neu_plan(w, tag, layer)
+                aufrufe, meldung, _k = _neu_plan(w, tag, layer, _quelle_bleibt(roh, w))
                 weg = ("DELETE", "/api/calendar/eintrag",
                        {"layer": layer, "day": iso, "label": label, "time": t0 or None})
                 return _plan(aufrufe + [weg], meldung, danach={"tag": w["datum"]})
@@ -738,10 +803,12 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
                             "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w),
-                         "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]})
-        return Formular("termin ändern", _termin_felder(
-            tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0, roh=roh),
-            plan, fokus=fokus)
+                         "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
+                         zurueck=_quelle_folge(roh, w, quelle_wahl))
+        felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
+                                ort=ort0, roh=roh) + _quelle_felder(roh, quelle_wahl)
+        felder[0].hilfe = qhilfe
+        return Formular("termin ändern", felder, plan, fokus=fokus)
 
     if a_ == "routine":
         def nur_dieser(w):
@@ -780,17 +847,21 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
                          "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
-            return _plan(aufrufe, "alle geändert: " + w["titel"])
+            return _plan(aufrufe, "alle geändert: " + w["titel"],
+                         zurueck=_quelle_folge(roh, w, quelle_wahl))
 
         r = _regel_felder(roh.get("rrule"))
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
             tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_regel=False,
             mit_ganz=False, datum_name="Verschieben auf", mit_gruppe=False),
             nur_dieser, fokus=fokus)
-        form_alle = lambda: Formular("alle termine der serie", _termin_felder(
-            tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
-            mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
-            wtage=r["wtage"], wbis=r["wbis"], roh=roh), alle, fokus=fokus)
+        def form_alle():
+            felder = _termin_felder(
+                tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
+                mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
+                wtage=r["wtage"], wbis=r["wbis"], roh=roh) + _quelle_felder(roh, quelle_wahl)
+            felder[0].hilfe = qhilfe
+            return Formular("alle termine der serie", felder, alle, fokus=fokus)
         if fokus == "wied":
             return form_alle()
         return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
@@ -820,7 +891,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
         return _plan([("PUT", "/api/calendar/spanne",
                        {"layer": layer, "von": von_iso, "label": label, "new": neu})]
                      + _gruppe_aufruf(roh, w),
-                     "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]})
+                     "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]},
+                     zurueck=_quelle_folge(roh, w, quelle_wahl))
 
     def alle_pruefen(w):
         if w["letzter"] < w["erster"]:
@@ -835,21 +907,21 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None):
              zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm, leer = ohne"),
     ], tag_plan)
     form_alle = lambda: Formular("ganze spanne", [
-        Feld("titel", "Titel", wert=label, lesen=_l_titel),
+        Feld("titel", "Titel", wert=label, lesen=_l_titel, hilfe=qhilfe),
         Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
         Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
         Feld("ort", "Ort", wert=ort0),
-    ] + _gruppe_felder(roh), alle_plan, pruefen=alle_pruefen)
+    ] + _gruppe_felder(roh) + _quelle_felder(roh, quelle_wahl), alle_plan, pruefen=alle_pruefen)
     return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
         weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
 
 
-def formular_wiederholen(roh: dict, tag: date, heute: date):
+def formular_wiederholen(roh: dict, tag: date, heute: date, quelle_wahl=None):
     """r (calcurse „repeat"): der Bearbeiten-Kasten, gleich auf
     „Wiederholung"; eine Spanne wiederholt sich nicht (None)."""
     if art(roh) == "spanne":
         return None
-    return formular_bearbeiten(roh, tag, heute, fokus="wied")
+    return formular_bearbeiten(roh, tag, heute, fokus="wied", quelle_wahl=quelle_wahl)
 
 
 # ── d: Löschen ─────────────────────────────────────────────────────────
@@ -898,6 +970,9 @@ def kopie(roh: dict) -> dict:
     k = {f: roh[f] for f in ("label", "time", "ende", "ort", "layer") if roh.get(f)}
     if kalender_gruppen.schluessel(roh):       # die Gruppe kommt mit
         k.update({f: roh[f] for f in ("kategorie", "kategorie_name") if roh.get(f)})
+    q = kalender_quellen.quelle_von(roh)
+    if q:                                      # die Liste kommt mit (Titel bleibt live)
+        k["quelle"] = {"art": q["art"], "id": q["id"]}
     return k
 
 
@@ -938,9 +1013,12 @@ def dialog_todo_loeschen(lid, item) -> Dialog:
 
 
 # ── Enter: Ansehen ─────────────────────────────────────────────────────
-def details(roh: dict, tag: date) -> list:
-    """Alles über einen Termin, für das Ansehen-Fenster (calcurse „v")."""
-    zeilen = [roh.get("label", "?"), ""]
+def details(roh: dict, tag: date, vorschau: dict | None = None) -> list:
+    """Alles über einen Termin, für das Ansehen-Fenster (calcurse „v").
+    Quellen-Termin: oben der Live-Titel, dazu Liste, aktueller und die
+    nächsten offenen Punkte (vorschau = GET /api/calendar/quelle)."""
+    quelle = kalender_quellen.details_zeilen(roh, vorschau)
+    zeilen = [(roh.get("titel_live") if quelle else None) or roh.get("label", "?"), ""]
     zeilen.append("Tag      %s, %s" % (WT_LANG[tag.weekday()], datum_text(tag)))
     t, e = roh.get("time"), roh.get("ende")
     if t or e:
@@ -963,6 +1041,7 @@ def details(roh: dict, tag: date) -> list:
         zeilen.append("An diesem Tag ausgeschaltet")
     if kalender_gruppen.anzeige(roh):
         zeilen.append("Gruppe   " + kalender_gruppen.anzeige(roh))
+    zeilen += quelle
     zeilen.append("Ebene    " + str(roh.get("layer", "")))
     return zeilen
 

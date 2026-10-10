@@ -139,6 +139,24 @@ def oberstes(items):
     return oberstes(kids) if kids else it
 
 
+def offene(items, n: int) -> list:
+    """Die ersten `n` offenen BLÄTTER in Anzeige-Reihenfolge (das erste ist
+    oberstes()) — fürs Ansehen in der TUI: „jetzt X, danach Y, Z"."""
+    raus = []
+
+    def gehen(ebene):
+        for it in listen_baum.ordnen(ebene):
+            if len(raus) >= n:
+                return
+            kids = it.get("items") if isinstance(it.get("items"), list) else []
+            if kids:
+                gehen(kids)
+            else:
+                raus.append(it)
+    gehen(items)
+    return raus
+
+
 def _listen_lesen() -> list | None:
     try:
         return lists.read_lists()
@@ -186,6 +204,20 @@ def pruefen(quelle) -> tuple[dict, str]:
     if q["art"] == PROJEKT and not knoten.get("project"):
         raise KalenderAbgelehnt("QUELLE-UNBEKANNT", f"{q['id']!r} ist kein Projekt")
     return q, name
+
+
+def vorschau(quelle, n: int = 4) -> dict:
+    """Für GET /api/calendar/quelle (Ansehen in der TUI, 10.10.2026): Name,
+    Zustand und die ersten `n` offenen Punkte als Text —
+    {"name", "zustand", "punkte": [...]}. Schreibt nie."""
+    n = max(1, min(int(n or 4), 20))
+    r = aufloesen(quelle, None)
+    if r["zustand"] != OK:
+        return {"name": r["quelle_name"], "zustand": r["zustand"], "punkte": []}
+    q = form(quelle)
+    knoten, name, _lid = _knoten(q, _listen_lesen() or [])
+    punkte = [it.get("text") or "?" for it in offene(knoten.get("items"), n)]
+    return {"name": name, "zustand": OK, "punkte": punkte or [r["titel"]]}
 
 
 # ── An Ausgaben hängen ─────────────────────────────────────────────────

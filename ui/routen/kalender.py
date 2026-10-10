@@ -278,7 +278,8 @@ def api_calendar_add_routine():
             body.get('freq'), body.get('intervall') or 1, body.get('bis') or None,
             body.get('wochentage') or None, body.get('time') or None,
             body.get('ende') or None, body.get('ort') or None,
-            body.get('kategorie') or None, body.get('kategorie_name') or None)
+            body.get('kategorie') or None, body.get('kategorie_name') or None,
+            body.get('quelle') or None)
         return (jsonify({"ok": True}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
@@ -357,7 +358,8 @@ def api_calendar_routine_abweichung():
 @bp.route('/api/calendar/spanne', methods=['POST'])
 def api_calendar_spanne_neu():
     """Mehrtägig anlegen. Body: {layer?, von, bis, label, start_zeit?,
-    end_zeit?, tageszeit?:[von, bis], ort?, kategorie?, kategorie_name?}."""
+    end_zeit?, tageszeit?:[von, bis], ort?, kategorie?, kategorie_name?,
+    quelle?: {art, id}}."""
     b = request.get_json(silent=True) or {}
     tz = b.get('tageszeit')
     return _antwort(kalender_bearbeiten.spanne_neu(
@@ -365,7 +367,7 @@ def api_calendar_spanne_neu():
         b.get('label') or '', b.get('start_zeit') or None, b.get('end_zeit') or None,
         tuple(tz) if isinstance(tz, list) and len(tz) == 2 else None,
         b.get('ort') or None, b.get('kategorie') or None,
-        b.get('kategorie_name') or None), "spanne abgelehnt")
+        b.get('kategorie_name') or None, b.get('quelle') or None), "spanne abgelehnt")
 
 
 @bp.route('/api/calendar/spanne', methods=['PUT'])
@@ -537,6 +539,18 @@ def api_calendar_quellen():
     """Zur Auswahl: {listen: [...], projekte: [...]}, je {art, id, name,
     titel (was jetzt oben steht), zustand}."""
     return jsonify(kalender_quelle.auswahl())
+
+
+@bp.route('/api/calendar/quelle')
+def api_calendar_quelle_vorschau():
+    """?art=liste|projekt&id=…&n=4 → {name, zustand, punkte: [die ersten n
+    offenen Punkte]} — fürs Ansehen eines Quellen-Termins (TUI)."""
+    a = request.args
+    try:
+        n = int(a.get('n') or 4)
+    except ValueError:
+        n = 4
+    return jsonify(kalender_quelle.vorschau({"art": a.get('art'), "id": a.get('id')}, n))
 
 
 @bp.route('/api/calendar/quelle', methods=['POST'])
