@@ -490,7 +490,8 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
     if mit_regel:
         felder += [
             Feld("wied", "Wiederholung", art="wahl", wert=wiederholung, optionen=WIEDERHOLUNG),
-            Feld("alle", "Alle wie viele", wert=alle, lesen=_l_zahl(), zeigen=regel_an),
+            Feld("alle", "Abstand", wert=alle, lesen=_l_zahl(), zeigen=regel_an,
+                 hilfe="1 = jedes Mal, 2 = jedes zweite Mal (z.B. jede 2. Woche)"),
             Feld("wtage", "An Tagen", wert=wtage, lesen=_l_wtage,
                  zeigen=lambda w: w.get("wied") == "wöchentlich",
                  hilfe="leer = %s; z.B. di do, mo-fr" % WT_KURZ[tag.weekday()]),
