@@ -38,7 +38,12 @@ def finden(namen: list, mit_verdeckten: bool = True) -> list:
     faelle = alle(mit_verdeckten=True)
     raus = []
     for n in namen:
+        # Erst „n_…" (f01 → f01_geige, nicht auch f01k_geige_kurz, 2026-10-10:
+        # sonst liefe mit --fall f01 still ein zweiter, bezahlter Fall mit),
+        # dann jeder Anfang.
         treffer = [f for f in faelle if f["id"] == n] or \
+                  [f for f in faelle if f["id"].startswith(n + "_")
+                   or os.path.basename(f["_pfad"]).startswith(n + "_")] or \
                   [f for f in faelle if f["id"].startswith(n)
                    or os.path.basename(f["_pfad"]).startswith(n)]
         if not treffer:
