@@ -455,7 +455,9 @@ meldet `kern.chat` das am Anfang (`{"modell_wechsel": …}`,
 welche Seiten der Zug wirklich gelesen hat — Python, nicht die KI, nennt die
 Adresse. Und „frag nicht im Text, ruf das Werkzeug": endet die Antwort mit
 „Soll ich im Netz suchen?" o. ä., obwohl Sasha gefragt/beauftragt hat, gibt
-es eine Korrekturrunde (alle Modelle, vorher nur qwen). Alles Weitere:
+es eine Korrekturrunde (alle Modelle, vorher nur qwen); ebenso bei einem
+Aufschub („trag ich erst ein, wenn …") eines klaren Auftrags — Sicheres
+sofort, nur das Fehlende fragen (auch als Satz im Antwortverhalten). Alles Weitere:
 [ehrlichkeit_live.md](ehrlichkeit_live.md).
 
 ### Kalender ohne Fallen — `core/ki_kalender.py`, `ki_kalender_aendern.py` (seit 2026-10-08)

@@ -90,9 +90,20 @@ def zuege_pruefstand(ordner):
 
 def messen(zuege, zeigen=False, name=""):
     n = taten = taten_offen = zusagen = kenn = kenn_offen = nicht_da = nicht_da_offen = 0
-    fragen = fragen_befund = 0
+    fragen = fragen_befund = aufschub = aufschub_befund = 0
     for antwort, prot, bekannt, frueher, nutzer in zuege:
         n += 1
+        # „Sicheres sofort" (2026-10-10): Aufschub-Sätze, und wie viele der
+        # Prüfer korrigieren würde (Sasha hat beauftragt, nichts Passendes lief).
+        for a in erkennen.aufschuebe(antwort):
+            aufschub += 1
+            if zeigen:
+                print(f"  AUFSCHUB {a.aktion} | {a.satz} || Sasha: "
+                      f"{' '.join(nutzer.split())[:120]}")
+        b_auf = ehrlichkeit.aufschub_befund(antwort, prot, nutzer)
+        aufschub_befund += b_auf is not None
+        if zeigen and b_auf:
+            print(f"  AUFSCHUB → KORREKTUR | {b_auf['satz']}")
         # „Frag nicht, tu" (2026-10-10): jede Erlaubnis-Frage am Ende, und
         # wie viele davon der Prüfer korrigieren würde (Sasha wollte es,
         # kein passendes Werkzeug lief).
@@ -134,7 +145,8 @@ def messen(zuege, zeigen=False, name=""):
     print(f"{name}: {n} Antworten · Erledigt-Sätze {taten} (davon ohne Beleg {taten_offen}) · "
           f"Zusagen {zusagen} · Kennungen {kenn} (unbekannt {kenn_offen}) · "
           f"Nicht-da-Sätze {nicht_da} (ohne vollständige Suche {nicht_da_offen}) · "
-          f"Erlaubnis-Fragen {fragen} (Korrektur {fragen_befund})")
+          f"Erlaubnis-Fragen {fragen} (Korrektur {fragen_befund}) · "
+          f"Aufschübe {aufschub} (Korrektur {aufschub_befund})")
 
 
 def main():

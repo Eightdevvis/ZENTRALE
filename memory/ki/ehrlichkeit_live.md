@@ -250,6 +250,39 @@ Suche an, statt zu suchen), **0 Falschtreffer in 98 Antworten**. Die beiden
 „ruhigen" in den Gesprächen: einmal lief schon ein Lesewerkzeug, einmal
 wollte Sasha nichts ändern. Stichprobe klein — nachmessen.
 
+## Sicheres sofort, Offenes fragen (seit 2026-10-10)
+
+Prüfstand 10.10., f01: Sasha „geige … fällt wegen der ferien jetzt aus" —
+die KI: „Die Pause für die Geigenstunde trag ich erst ein, wenn ich den
+Zeitraum sicher habe." Heute war sicher; nur das Ende fehlte.
+
+- **Prompt** (gross, Antwortverhalten, im Absatz „höchstens EINE Frage"
+  statt als neue Meta-Regel — der Kopf steht bei 4.992 von 5.000 Zeichen):
+  „Unklare Fragen beantwortest du so weit du kannst, Aufträge setzt du
+  sofort um, soweit sie sicher sind — nachgefragt wird nur das Fehlende."
+- **Prüfer** (`ehrlichkeit.aufschub_befund`, Satzmuster `erkennen.
+  aufschuebe`): ein Ich-Satz hängt eine Tat an eine Bedingung („trag ich
+  erst ein, wenn …", „mach ich, sobald …", „warte ich noch ab", „lass ich
+  erst liegen"), Sashas Nachricht ist ein klarer **Auftrag** (dieselbe enge
+  Erkennung wie oben; „ja/sure" zählt hier NICHT), und für die Art Tat lief
+  in diesem Zug kein passendes schreibendes Werkzeug (`TATEN`: „Pause" →
+  add_calendar_pause — andere Kalender-Änderungen im selben Zug zählen
+  nicht). Nicht, wenn die Bedingung an Sasha hängt („sobald du mir den Tag
+  sagst") — das ist eine echte Rückfrage.
+- Folge: EINE Korrekturrunde „Sasha hat das klar beauftragt. Trag den
+  sicheren Teil JETZT ein (z. B. add_calendar_pause nur mit von = heute) und
+  frag nur nach dem, was wirklich fehlt. Ist nichts davon sicher (Tag oder
+  Uhrzeit fehlen), lass den Aufschub weg und frag nur danach." Der letzte
+  Satz ist der Ausweg für f05-Lagen (Tag fehlt) — nichts erfinden. Keine
+  Warnung, wenn sie dabei bleibt.
+
+**Falschtreffer, gemessen 10.10.2026** (`ehrlichkeit_messen.py`, „Aufschübe
+(Korrektur n)"): Gespräche 31 Antworten → 0; Prüfstand 67 Antworten → 2
+Aufschub-Sätze, 1 Korrektur — genau der f01-Satz (echt). Der andere (f01 Zug
+6, „lass ich erst liegen, bis die Gruppe klar ist") bleibt ruhig, weil
+Sasha nur „sure" sagte. **0 Falschtreffer in 98 Antworten**, aber nur ein
+einziger echter Fall — nachmessen.
+
 ## Quellen-Zeile — die Adresse schreibt Python (seit 2026-10-10)
 
 Prüfstand 10.10., f08: Zeiten richtig, aber die Adresse der Seite fehlte im

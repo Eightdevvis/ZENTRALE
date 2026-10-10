@@ -23,6 +23,10 @@
 #                  Werkzeug lief → EINE Korrekturrunde „ruf das Werkzeug, das
 #                  Gate fragt per Knopf" (seit 2026-10-10, Prüfstand f09;
 #                  vorher nur im qwen-Zusatzprüfer). Keine Warnung danach.
+#   2d. Aufschub:  „trag ich erst ein, wenn …", obwohl Sasha es klar
+#                  beauftragt hat und kein passendes Werkzeug lief → EINE
+#                  Runde „trag den sicheren Teil jetzt ein, frag nur das
+#                  Fehlende" (2026-10-10, Prüfstand f01).
 #   3. Zusagen:    „trag ich gleich ein" wird als offener Punkt des Gesprächs
 #                  gespeichert (core/zusagen.py) und steht in jedem folgenden
 #                  Zug unsichtbar im Kontext-Umschlag, bis ein passendes
@@ -347,6 +351,19 @@ def erlaubnis_befund(antwort: str, protokoll: list, nutzer_text: str) -> dict | 
     return {"art": "erlaubnis_frage", "satz": f.satz, "werkzeug": TATEN[f.aktion][1]}
 
 
+def aufschub_befund(antwort: str, protokoll: list, nutzer_text: str) -> dict | None:
+    """Schiebt die Antwort eine von Sasha klar beauftragte Tat auf („trag ich
+    erst ein, wenn …"), und in diesem Zug lief dafür kein Werkzeug?
+    (2026-10-10, Prüfstand f01: Pause statt heute auf „irgendwann")."""
+    if not erkennen.auftrag(nutzer_text):
+        return None
+    for a in erkennen.aufschuebe(antwort):
+        if not tat_lief(a.aktion, True, protokoll):
+            return {"art": "aufschub", "satz": a.satz, "aktion": a.aktion,
+                    "werkzeug": TATEN[a.aktion][1]}
+    return None
+
+
 def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
             frueher: list = (), nutzer_text: str = "") -> list:
     """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]"""
@@ -365,9 +382,10 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
         bekannt.update(erkennen.kennungen(s.text))
     for k in erkennen.unbekannte_kennungen(antwort, bekannt):
         raus.append({"art": "kennung", "kennung": "#" + k})
-    frage = erlaubnis_befund(antwort, protokoll, nutzer_text)
-    if frage:
-        raus.append(frage)
+    for weich in (erlaubnis_befund(antwort, protokoll, nutzer_text),
+                  aufschub_befund(antwort, protokoll, nutzer_text)):
+        if weich:
+            raus.append(weich)
     return raus
 
 
@@ -407,6 +425,13 @@ def _befund_zeile(b: dict) -> str:
                 f"{b.get('werkzeug') or 'das Werkzeug'} auf; das Programm fragt Sasha per "
                 f"Knopf, wenn nötig. Fehlt wirklich eine Angabe, frag genau danach — ohne "
                 f"„soll ich“.")
+    if b["art"] == "aufschub":
+        beispiel = ("z. B. add_calendar_pause nur mit von = heute" if b.get("aktion") == "pause"
+                    else f"z. B. {b.get('werkzeug') or 'das Werkzeug'} mit dem, was feststeht")
+        return (f"- Du schreibst „{b['satz']}“ — Sasha hat das klar beauftragt. Trag den "
+                f"sicheren Teil JETZT ein ({beispiel}) und frag nur nach dem, was wirklich "
+                f"fehlt. Ist nichts davon sicher (Tag oder Uhrzeit fehlen), lass den "
+                f"Aufschub weg und frag nur danach.")
     return f"- Nicht belegt: {b.get('satz') or b.get('art')}"
 
 

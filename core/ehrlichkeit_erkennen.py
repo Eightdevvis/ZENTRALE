@@ -423,6 +423,48 @@ def aktion(satz: str) -> tuple:
     return None, False
 
 
+# ── Aufschub (2026-10-10, Prüfstand f01) ────────────────────────────────
+# Sasha: „geige … fällt wegen der ferien jetzt aus". Die KI: „Die Pause für
+# die Geigenstunde trag ich erst ein, wenn ich den Zeitraum sicher habe." —
+# dabei war „jetzt" sicher (heute pausieren, nach dem Ende fragen). Erkannt
+# wird ein Ich-Satz, der eine Tat an eine Bedingung hängt („trag ich erst
+# ein, wenn …", „mach ich, sobald …", „warte ich noch ab", „lass ich erst
+# liegen"). Hängt die Bedingung an Sasha („sobald du mir den Tag sagst"),
+# ist es eine echte Rückfrage und zählt nicht.
+
+_SCHREIB_VERB = (r"(trag|trage|leg|lege|lösch|lösche|änder|ändere|verschieb|verschiebe|"
+                 r"setz|setze|pausier|pausiere|notier|notiere|mach|mache|streich|"
+                 r"streiche|kümmer|kümmere|erledig|erledige|füg|füge|korrigier|korrigiere)")
+_AUFSCHUB = re.compile(
+    rf"\b{_SCHREIB_VERB}\s+ich\b[^.!?]{{0,60}}?\b(erst|später|dann erst)\b[^.!?]{{0,80}}"
+    rf"\b(wenn|sobald|nachdem|bis)\b"
+    rf"|\b{_SCHREIB_VERB}\s+ich\b[^.!?]{{0,60}}\bsobald\b"
+    rf"|\bsobald\b[^.!?]{{0,80}}\b{_SCHREIB_VERB}\s+ich\b"
+    rf"|\bwenn ich\b[^.!?]{{0,60}}\b(sicher|weiß|kenne|habe|hab)\b[^.!?]{{0,40}}"
+    rf"\b{_SCHREIB_VERB}\s+ich\b"
+    r"|\bwarte ich\b[^.!?]{0,40}\bab\b|\bwarte ich (noch|erst)\b"
+    r"|\blasse? ich\b[^.!?]{0,60}\b(liegen|offen|ruhen)\b")
+_SASHA_LIEFERT = re.compile(r"\b(du|dir|dich|dein\w*)\b")
+
+
+@dataclass
+class Aufschub:
+    satz: str
+    aktion: str          # pause, eintragen, loeschen, aendern, notieren, tun
+
+
+def aufschuebe(antwort: str) -> list:
+    """Sätze, in denen die KI eine Tat aufschiebt, ohne auf Sasha zu warten."""
+    raus = []
+    for s in saetze(antwort):
+        k = s.klein
+        if s.frage or not _AUFSCHUB.search(k) or _SASHA_LIEFERT.search(k):
+            continue
+        name, schreibend = aktion(k)
+        raus.append(Aufschub(s.text, name if schreibend else "tun"))
+    return raus
+
+
 def erlaubnis_frage(antwort: str) -> Frage | None:
     """Endet die Antwort damit, um Erlaubnis für eine Tat zu bitten, die ein
     Werkzeug erledigen könnte? -> Frage oder None."""

@@ -134,6 +134,12 @@ _SYSTEM_VORLAGE = _ohne(_ohne(_ohne(_ohne(
 #   * "hoechstens EINE Frage" ist die Antwort auf "wann ist wieder Zeit
 #     fuer Training?" -> "sag mir den Begriff, dann such ich gezielter".
 #     Erst antworten, dann fragen.
+#     Seit 2026-10-10 gilt dasselbe fuer Auftraege (Pruefstand f01: „Pause
+#     trag ich erst ein, wenn ich den Zeitraum sicher habe", obwohl Sasha
+#     „faellt jetzt aus" sagte): was sicher ist, sofort; nur das Fehlende
+#     fragen. Im selben Absatz statt als neue Meta-Regel — der Kopf steht
+#     bei ~4.990 von 5.000 Zeichen, und es ist dieselbe Regel: erst tun, was
+#     geht. Python prueft den Aufschub zusaetzlich (ehrlichkeit, „aufschub").
 #   * Die Floskel-Regel kommt MIT Begruendung ("wirkt unaufrichtig"), und
 #     eine begruendete Regel sitzt bei Modellen zuverlaessiger als ein
 #     nacktes Verbot.
@@ -149,7 +155,7 @@ Halte Antworten fokussiert und knapp, damit sie niemanden erschlagen. Vorbehalte
 
 Listen und Aufzählungen nur, wenn danach gefragt wird oder der Inhalt wirklich mehrteilig ist und dadurch klarer wird. Erklärungen darfst du mit Beispielen, Gedankenexperimenten oder Bildern greifbar machen.
 
-Du fragst nicht ständig nach. Wenn doch, dann höchstens EINE Frage pro Antwort — und selbst eine unklare Frage beantwortest du erst so weit du kannst, bevor du um Klärung bittest.
+Du fragst nicht ständig nach, höchstens EINE Frage pro Antwort. Unklare Fragen beantwortest du so weit du kannst, Aufträge setzt du sofort um, soweit sie sicher sind — nachgefragt wird nur das Fehlende.
 
 Verstärker wie "ehrlich gesagt", "wirklich" oder "ganz einfach" lässt du weg. Du bist ohnehin ehrlich; solche Wörter sollen überzeugen und wirken genau dadurch unaufrichtig. Sag es direkt.
 
