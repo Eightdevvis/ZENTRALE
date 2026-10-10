@@ -100,6 +100,19 @@ CODES = {
     "K-KATEGORIE-NAME-FEHLT": (
         "Bei der Gruppe custom fehlt der eigene Name.",
         "kategorie_name mitgeben oder keine Gruppe (keine) wählen."),
+    # Listen-/Projekt-Container (KALENDER, 3b77895, 2026-10-10)
+    "K-QUELLE-ART-UNBEKANNT": (
+        "Diese Art von Quelle gibt es nicht.",
+        "art liste oder projekt nehmen."),
+    "K-QUELLE-UNGUELTIG": (
+        "Die Quelle ist kein {art, id} mit gültiger id.",
+        "Art und id aus der Auswahl der Listen/Projekte übernehmen."),
+    "K-QUELLE-UNBEKANNT": (
+        "Diese Liste bzw. dieses Projekt gibt es nicht.",
+        "Die wählbaren Listen/Projekte lesen und eine echte id nehmen; nie raten."),
+    "K-OHNE-QUELLE": (
+        "Der Eintrag hängt an keiner Liste und keinem Projekt.",
+        "Nichts zu lösen — oder erst eine Quelle setzen."),
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt.",
         "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),
