@@ -188,13 +188,14 @@ def test_herumtasten_wirft_nie(tmp_path):
 
 
 def test_b_und_c_legen_am_gewaehlten_tag_an(tmp_path):
-    """B: → einen Tag weiter, a, Kasten; C: dasselbe. Beide Termine müssen
-    am Tag nach heute ankommen — dieselbe Auswahl, derselbe Kasten wie A."""
+    """B: → einen Tag weiter, Enter öffnet den Tag in A (der Monat selbst ist
+    seit 10.10.2026 nur Ansicht), a, Kasten; Esc zurück in den Monat; C:
+    → und a. Beide Termine müssen am gewählten Tag ankommen."""
     import datetime as dt
     morgen = (dt.date.today() + dt.timedelta(days=1)).isoformat()
     rechts = b"\x1bOC"
-    tasten = ([b"v", rechts] + _formular("InB", "09:00", "10:00")
-              + [b"v", rechts] + _formular("InC", "11:00", "12:00"))
+    tasten = ([b"v", rechts, b"\r"] + _formular("InB", "09:00", "10:00")
+              + [b"\x1b", b"v", rechts] + _formular("InC", "11:00", "12:00"))
     w, fehler = _lauf(tmp_path, tasten)
     assert fehler == "", fehler
     neu = {b["label"]: b["day"] for m, p, b in w if p == "/api/calendar/entry"}
