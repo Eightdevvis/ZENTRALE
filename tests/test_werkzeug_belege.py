@@ -108,6 +108,10 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
     abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx",
                                            "browser_screenshot", "import_skill",
                                            "unzip", "remove_input"}
+    # Erzeugte Kalender-Werkzeuge (2026-10-10): belegt in
+    # tests/test_werkzeug_kalender_erzeugt.py (Phasen, Gruppe, Ebene).
+    abgedeckt |= {"set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
+                  "set_calendar_group", "set_calendar_layer"}
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     assert schreibend <= abgedeckt, schreibend - abgedeckt
     ids = {}

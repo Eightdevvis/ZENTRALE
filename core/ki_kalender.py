@@ -44,7 +44,10 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import kalender
+import kalender_kategorie
+import kalender_kennung
 import kalender_quelle
+import kalender_rhythmus
 import werkzeug_befund
 
 _WOTAG_LANG = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
@@ -119,7 +122,6 @@ def stuecke(daten: dict | None = None) -> list:
         if _ohne_uid(daten):
             # Der JSON-Speicher vergibt feste Kennungen erst beim ersten
             # Zugriff über den Kern (kalender_kennung.alle_eintraege).
-            import kalender_kennung
             kalender_kennung.alle_eintraege()
             daten = roh()
     liste = []
@@ -258,10 +260,11 @@ def datum(iso: str, mit_jahr: bool = True) -> str:
     return f"{_WOTAG[d.weekday()]} {d.strftime('%d.%m.%Y' if mit_jahr else '%d.%m.')}"
 
 
-def zeit(time, ende) -> str:
-    """'18:10–19:10'; ohne Ende ausdrücklich so, damit niemand eins erfindet."""
+def zeit(time, ende, ueber_nacht: bool = False) -> str:
+    """'18:10–19:10'; ohne Ende ausdrücklich so, damit niemand eins erfindet.
+    ueber_nacht (Phase, Ende vor Beginn, 2026-10-10): '23:00–07:00 (bis Folgetag)'."""
     if time and ende:
-        return f"{time}–{ende}"
+        return f"{time}–{ende}" + (" (bis Folgetag)" if ueber_nacht else "")
     if time:
         return f"{time} (ohne Ende)"
     return "ganztags"
@@ -378,16 +381,20 @@ def beschreiben(s: Stueck, daten: dict | None = None) -> str:
         wann = datum(s.day)
         if s.bis:
             wann += f" bis {datum(s.bis)} (mehrtägig)"
-        return (f"{kenn}Termin {wann} {zeit(s.time, s.ende)} {s.label}{ort}, Ebene {s.layer}"
-                + _quelle_text(s))
+        return (f"{kenn}Termin {wann} {zeit(s.time, s.ende)} {s.label}{ort}, "
+                f"Ebene {ebene_text({**s.roh, 'layer': s.layer})}" + _quelle_text(s))
     daten = roh() if daten is None else daten
     # Ohne Enddatum sagt das die gross-Zeile ausdrücklich (2026-10-09): so
     # sieht die KI, welche Serien noch „für immer" laufen.
     spanne = zeitraum_von(s.roh)
     if mit_kennungen() and not regel_hat_ende(s.rrule):
         spanne += " (ohne Enddatum)"
-    teile = [f"{kenn}Routine {s.label}: {regel_text(s.rrule, False)} "
-             f"{zeit(s.time, s.ende)}{ort}{spanne}", f"Ebene {s.layer}"]
+    nacht = kalender_rhythmus.ist_phase(s.roh, s.layer) and \
+        kalender_rhythmus.ueber_mitternacht(s.time, s.ende)
+    art = "Phase" if kalender_rhythmus.ist_phase(s.roh, s.layer) else "Routine"
+    teile = [f"{kenn}{art} {s.label}: {regel_text(s.rrule, False)} "
+             f"{zeit(s.time, s.ende, nacht)}{ort}{spanne}",
+             f"Ebene {ebene_text({**s.roh, 'layer': s.layer})}"]
     if s.roh.get("quelle"):
         teile.append(_quelle_text(s)[2:])
     for p in _pausen(s.label, daten):
@@ -526,7 +533,37 @@ def _vorkommen_zeile(e: dict, s) -> str:
         bis = f" (mehrtägig {datum(e['von'], False)}–{datum(e['bis'], False)})"
     serie = " ↻" if e.get("recurring") else ""
     titel = kalender_quelle.anzeige_titel(e)      # Liste/Projekt: oberstes Item (aus Liste: …)
-    return f"{kenn}{zeit(e.get('time'), e.get('ende'))} {titel}{bis}{ort} [{e['layer']}]{serie}"
+    return (f"{kenn}{zeit(e.get('time'), e.get('ende'), bool(e.get('ueber_nacht')))} "
+            f"{titel}{bis}{ort} [{ebene_text(e)}]{serie}")
+
+
+def ebene_text(e: dict) -> str:
+    """Die Klammer einer Zeile (2026-10-10, wie die Kalender-Ansicht):
+    [termine] · [uncommitted · vielleicht] · [rhythmus · schlaf] ·
+    [termine · Uni]. Bei Phasen das Motiv, sonst die Gruppe, wenn gesetzt."""
+    lname = e.get("layer")
+    if lname == kalender_kennung.UNVERBINDLICH:
+        teile = [f"{lname} · vielleicht"]
+    elif kalender_rhythmus.ist_phase(e):
+        teile = [str(lname)] + ([e["motiv"]] if e.get("motiv") else [])
+    else:
+        teile = [str(lname)]
+    gruppe = kalender_kategorie.anzeige(e)
+    if gruppe:
+        teile.append(gruppe)
+    return " · ".join(teile)
+
+
+def ist_termin(e: dict) -> bool:
+    """Zählt als Termin? Phasen des Tagesrhythmus nie (2026-10-10: kein
+    Alarm, keine Kollision — und auch nicht in „der Tag hat n Einträge")."""
+    return not kalender_rhythmus.ist_phase(e)
+
+
+def termine_am(tag: str) -> int:
+    """Wie viele Einträge (ohne Phasen) an diesem Tag stehen."""
+    d = date.fromisoformat(tag)
+    return len([e for e in kalender.entries_in_range(d, d).get(tag) or [] if ist_termin(e)])
 
 
 class _Zuordnung:

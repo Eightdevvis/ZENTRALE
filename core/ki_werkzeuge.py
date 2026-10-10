@@ -91,8 +91,12 @@ def _verteilen(name: str, args: dict, projekt=None) -> str:
     unveraendert weiter.
     """
     w = werkzeug_register.eintrag(name)
-    if w is None or w.ausfuehrer is None:
+    if w is None or (w.ausfuehrer is None and w.gross_ausfuehrer is None):
         return f"[Unbekanntes Tool: {werkzeug_register.kanonisch(name)}]"
+    # Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/): auf gross der
+    # Ausführer des Erzeugers, klein bleibt beim handgeschriebenen.
+    if w.gross_ausfuehrer is not None and schiene() == "gross":
+        return w.gross_ausfuehrer(args)
     if getattr(w.ausfuehrer, "braucht_projekt", False):
         return w.ausfuehrer(args, projekt=projekt)
     return w.ausfuehrer(args)

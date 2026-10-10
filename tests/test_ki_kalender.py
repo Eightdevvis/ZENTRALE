@@ -44,7 +44,25 @@ VON_STD = (date.today() - timedelta(days=60)).isoformat()
 BIS_STD = (date.today() + timedelta(days=365)).isoformat()
 
 
+# Seit 2026-10-10 laufen ALLE Fälle hier zweimal: mit den erzeugten
+# Werkzeugen (core/werkzeug_erzeuger/, Einstellung werkzeuge_erzeugt=an) und
+# mit den handgeschriebenen — beide müssen gleich entscheiden.
+@pytest.fixture(autouse=True, params=["erzeugt", "von_hand"])
+def weg(request):
+    import werkzeug_register
+    werkzeug_register.erzeugte_einsetzen(request.param == "erzeugt")
+    yield request.param
+    werkzeug_register.erzeugte_einsetzen(True)
+
+
+# Die Gruppe ist beim Anlegen auf gross Pflicht (erzeugte Werkzeuge, Sasha
+# 10.10.: im Normalfall „keine"). Die Fälle hier prüfen anderes.
+_MIT_GRUPPE = ("add_calendar_entry", "add_calendar_routine")
+
+
 def roh(name, **args):
+    if name in _MIT_GRUPPE and werkzeug_befund.schiene() == "gross":
+        args.setdefault("kategorie", "keine")
     return ki_werkzeuge._verteilen(name, args)
 
 

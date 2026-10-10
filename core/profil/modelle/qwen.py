@@ -116,8 +116,15 @@ _ZUSATZ = {"edit_calendar_routine": _DAUER + _NUR_ZEITRAUM, "edit_calendar_entry
 
 
 def werkzeuge(tools: list) -> list:
-    """Die Werkzeug-Liste für qwen: Kopien, gross bleibt unberührt."""
+    """Die Werkzeug-Liste für qwen: Kopien, gross bleibt unberührt.
+    Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/) bringen ihren
+    Zuschnitt für schwache Modelle selbst mit (Felder weg, einfachere Texte)
+    — ungemessen, deshalb nur wenig: seltene Felder (layer,
+    kategorie_name …) und kürzere Texte für die neuen Werkzeuge."""
     import copy
+    import werkzeug_erzeuger
+    import werkzeug_register
+    tools = werkzeug_erzeuger.zuschneiden(tools, "schwach", werkzeug_register.eintrag)
     raus = []
     for t in tools:
         name = t["function"]["name"]
@@ -165,6 +172,14 @@ _GRUPPEN = {
                    ("create_series", "log_series")),
     "skills": (r"skill|anleitung|arbeitsweise|vorgehen",
                ("propose_skill", "edit_skill")),
+    # Tagesrhythmus, Gruppe, fest/vielleicht (2026-10-10, erzeugte
+    # Kalender-Werkzeuge): selten gebraucht, also erst auf ein passendes Wort.
+    "rhythmus": (r"schlaf|bett|aufsteh|aufwach|rhythmus|phase|hungrig|essen|"
+                 r"mittag|fokus|runterkommen",
+                 ("set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase")),
+    "gruppe": (r"gruppe|kategorie|block|\buni\b|arbeit|schicht|vielleicht|"
+               r"unverbindlich|\bfest\b|zugesagt|monatsansicht",
+               ("set_calendar_group", "set_calendar_layer")),
 }
 _IN_GRUPPE = {n for _, namen in _GRUPPEN.values() for n in namen}
 

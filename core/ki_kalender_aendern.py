@@ -33,6 +33,7 @@ from datetime import date
 import kalender
 import kalender_kennung
 import kalender_regel
+import kalender_rhythmus
 import ki_kalender as kk
 import werkzeug_befund
 from kalender_kennung import KalenderAbgelehnt
@@ -77,9 +78,16 @@ def _uhr(feld: str, wert) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def _reihenfolge(t: str, e: str) -> None:
+def _reihenfolge(t: str, e: str, ueber_mitternacht: bool = False) -> None:
+    """ueber_mitternacht (Phasen des Tagesrhythmus, 2026-10-10): ein Ende vor
+    dem Beginn heißt „am Folgetag" — nur Ende == Beginn ist falsch (wie
+    kalender_fehler.reihenfolge im Kern)."""
     if e and not t:
         raise _Abbruch("K-ENDE-OHNE-BEGINN", f"Ende {e} ohne Beginn — gib 'time' mit an")
+    if ueber_mitternacht:
+        if t and e and e == t:
+            raise _Abbruch("K-ENDE-VOR-BEGINN", f"Ende {e} ist gleich dem Beginn {t}")
+        return
     if t and e and e <= t:
         raise _Abbruch("K-ENDE-VOR-BEGINN", f"Ende {e} liegt nicht nach Beginn {t}")
 
@@ -213,8 +221,7 @@ def termin_eintragen(args: dict):
             kalender_kennung.eintrag_loeschen(k)
             raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen stand er anders da ("
                            + "; ".join(falsch) + "); wieder gelöscht")
-        n = len(kalender.entries_in_range(date.fromisoformat(tag),
-                                          date.fromisoformat(tag)).get(tag) or [])
+        n = kk.termine_am(tag)
         satz = (f"{termin_satz(x)} EINGETRAGEN{_kenn(x)}. Der Tag hat {n} "
                 f"{'Eintrag' if n == 1 else 'Einträge'}.")
         return erledigt(satz, satz, zusatz=_hinweise(x))
@@ -403,7 +410,7 @@ def routine_aendern(args: dict):
             raise _Abbruch("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
         t = _uhr("time", neu["time"]) if "time" in neu else (s.time or "")
         e = _uhr("ende", neu["ende"]) if "ende" in neu else (s.ende or "")
-        _reihenfolge(t, e)
+        _reihenfolge(t, e, ueber_mitternacht=kalender_rhythmus.ist_phase(s.roh, s.layer))
         if nur_am:
             if "von" in neu or "bis" in neu:
                 raise _Abbruch("K-UNBEKANNTES-FELD", "der Zeitraum gilt für die ganze Serie — "
@@ -565,8 +572,7 @@ def termin_loeschen(args: dict):
         kalender_kennung.eintrag_loeschen(s.uid)
         if s.uid in _kennungen():
             raise _Abbruch("W-NICHT-GESPEICHERT", "nachgelesen steht der Termin noch da")
-        n = len(kalender.entries_in_range(date.fromisoformat(s.day),
-                                          date.fromisoformat(s.day)).get(s.day) or [])
+        n = kk.termine_am(s.day)
         ganz = " (mehrtägig — ganz gelöscht)" if s.bis else ""
         satz = (f"{termin_satz(vorher)} GELÖSCHT{ganz}. Nachgelesen: weg; am "
                 f"{kk.datum(s.day)} stehen jetzt {n} Einträge.")

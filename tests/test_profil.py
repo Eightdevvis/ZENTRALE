@@ -164,7 +164,11 @@ def test_der_schnitt_haelt():
     kalender = {"read_calendar", "read_time", "add_calendar_entry",
                 "add_calendar_routine", "edit_calendar_routine",
                 "add_calendar_pause", "delete_calendar_entry",
-                "edit_calendar_entry", "read_calendar_warnings"}
+                "edit_calendar_entry", "read_calendar_warnings",
+                # 10.10.2026: aus dem Schema erzeugt (core/werkzeug_kalender.py) —
+                # Phasen, Gruppe, Ebene; die bisherigen sind dabei kürzer geworden.
+                "set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
+                "set_calendar_group", "set_calendar_layer"}
     # 08.10.2026: PDF und Word (Skills pdf/word) ebenso — eigener Deckel unten.
     pdf_word = {"read_pdf", "create_pdf", "combine_pdf", "read_docx",
                 "create_docx", "edit_docx"}

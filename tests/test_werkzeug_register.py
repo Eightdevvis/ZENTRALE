@@ -72,7 +72,10 @@ def test_jede_ausfuehrer_funktion_in_ki_werkzeuge_ist_angemeldet():
             for d in knoten.decorator_list:
                 if (isinstance(d, ast.Call) and getattr(d.func, "id", "") == "ausfuehrer"):
                     dekoriert[d.args[0].value] = knoten.name
-    mit_ausfuehrer = {w.name: w.ausfuehrer.__name__ for w in reg.WERKZEUGE if w.ausfuehrer}
+    # Erzeugte Werkzeuge (2026-10-10) melden sich nicht per Dekorator an:
+    # ihren Ausführer baut der Erzeuger (core/werkzeug_erzeuger/).
+    mit_ausfuehrer = {w.name: w.ausfuehrer.__name__ for w in reg.WERKZEUGE
+                      if w.ausfuehrer and not any(w is e for e in reg.ERZEUGT)}
     assert dekoriert == mit_ausfuehrer
 
 

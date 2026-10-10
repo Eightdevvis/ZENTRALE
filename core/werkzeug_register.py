@@ -46,6 +46,8 @@ from werkzeug_eintrag import Werkzeug  # noqa: F401  — Name bleibt hier öffen
 import werkzeug_pdf_word
 import werkzeug_browser
 import werkzeug_nutzer_ordner
+import werkzeug_erzeuger
+import werkzeug_kalender
 
 
 SCHIENEN = ("klein", "gross")
@@ -1339,6 +1341,28 @@ _erweitern("delete_calendar_entry", {}, vorn={"kennung": _KENNUNG}, required=[])
 # core/selbstauskunft.py — eine Quelle für Schema und Prüfer.
 _erweitern("antwort", copy.deepcopy(selbstauskunft.FELDER),
            required=list(selbstauskunft.PFLICHT))
+
+
+# ── Werkzeuge aus dem Schema (2026-10-10) ──────────────────────────────
+# Der Kalender ist die erste Quelle des Werkzeug-Erzeugers
+# (core/werkzeug_erzeuger/, core/werkzeug_kalender.py). Seine Werkzeuge
+# werden IMMER gebaut (dieselben Bytes in jedem Prozess); die Einstellung
+# `werkzeuge_erzeugt` (an|aus, Standard an) entscheidet beim Import, ob die
+# gross-Schiene sie bekommt. Ein bestehender Eintrag behält seine klein-Seite
+# byte-gleich und bekommt auf gross Beschreibung, Schema, Ausführer und Frage
+# des Erzeugers; neue Werkzeuge kommen hinten an (nur gross).
+ERZEUGT = werkzeug_erzeuger.werkzeuge(werkzeug_kalender.QUELLE)
+_VON_HAND = {}          # name → die handgeschriebenen gross-Felder
+
+
+def erzeugte_einsetzen(an: bool) -> None:
+    """Erzeugte Werkzeuge einsetzen (an) oder die handgeschriebenen zurück
+    (aus) — Tests und Prüfstand schalten hiermit um. profil.gross.TOOLS
+    entsteht beim Import; wer danach umschaltet, baut mit schema() neu."""
+    werkzeug_erzeuger.einsetzen(WERKZEUGE, _NACH_NAME, ERZEUGT, an, _VON_HAND)
+
+
+erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht

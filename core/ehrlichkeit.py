@@ -143,6 +143,11 @@ BEREICH = {
     "browser_screenshot": "ablage",
 }
 
+# Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/) bringen Bereich
+# und Erledigt-Worte selbst mit — aus der Quelle, nicht von Hand hier.
+BEREICH.update({w.name: w.bereich for w in werkzeug_register.ERZEUGT
+                if w.bereich and w.name not in BEREICH})
+
 # Wie Sasha einen Bereich liest — für die Warnungen (2026-10-09). Eine
 # Warn-Form für alles, was die KI kann; der Bereich kommt aus BEREICH bzw.
 # den Bereichswörtern des Satzes, nicht aus einem Text je Werkzeug. Ein
@@ -179,6 +184,8 @@ WORTE = {
     "unzip": ("ausgepackt", "Auspacken"),
     "remove_input": ("in den Papierkorb gelegt", "In den Papierkorb legen"),
 }
+WORTE.update({w.name: w.worte for w in werkzeug_register.ERZEUGT
+              if w.worte and w.name not in WORTE})
 
 _KOPF = re.compile(r"^\[ergebnis: (\w+)\]")
 
@@ -339,11 +346,14 @@ TATEN = {
                "browser_back", "browser_type"}, "fetch_url oder browser_open"),
     "nachsehen": (None, "das passende Werkzeug (read_calendar, read_note, web_search …)"),
     "pause": ({"add_calendar_pause"}, "add_calendar_pause"),
-    "eintragen": ({"add_calendar_entry", "add_calendar_routine", "add_calendar_pause"},
+    # Phasen, Gruppe, Ebene (2026-10-10, erzeugte Kalender-Werkzeuge)
+    "eintragen": ({"add_calendar_entry", "add_calendar_routine", "add_calendar_pause",
+                   "set_calendar_phase"},
                   "add_calendar_entry bzw. add_calendar_routine"),
-    "loeschen": ({"delete_calendar_entry", "edit_calendar_routine"},
+    "loeschen": ({"delete_calendar_entry", "edit_calendar_routine", "delete_calendar_phase"},
                  "delete_calendar_entry bzw. edit_calendar_routine"),
-    "aendern": ({"edit_calendar_entry", "edit_calendar_routine"},
+    "aendern": ({"edit_calendar_entry", "edit_calendar_routine", "edit_calendar_phase",
+                 "set_calendar_group", "set_calendar_layer"},
                 "edit_calendar_entry bzw. edit_calendar_routine"),
     "notieren": ({"write_note", "rewrite_note"}, "write_note"),
     "tun": (None, "das passende Werkzeug"),
