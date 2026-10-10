@@ -461,3 +461,147 @@ def test_kachel_art_zeigt_puffer_rueckfall_und_zustaende():
     c.fokus = "k"
     assert c.taste("oeffnen").grund[0] == "kachel_oeffnen"
     assert c.taste("enter") is None and c.modus == "greifen"     # enter greift auch Kacheln
+
+
+# ── Weich schieben, W A S D, Alt+Pfeile (2026-10-10) ──────────────────
+
+def test_wasd_grossbuchstaben_schieben_kleinbuchstaben_nicht():
+    for ch, r in (("W", "hoch"), ("A", "links"), ("S", "runter"), ("D", "rechts")):
+        assert cv.taste_deuten(ord(ch), b"") == "pan_" + r
+    assert cv.taste_deuten(ord("d"), b"") == "loeschen"    # klein bleibt wie es ist
+    assert cv.taste_deuten(ord("s"), b"") == "zeichen:s"
+
+
+def test_alt_pfeil_ueber_den_namen_und_als_folge():
+    for name, r in ((b"kLFT3", "links"), (b"kRIT3", "rechts"),
+                    (b"kUP3", "hoch"), (b"kDN3", "runter")):
+        assert cv.taste_deuten(571, name) == "pan_" + r
+    assert cv.esc_folge([curses.KEY_UP]) == "pan_hoch"          # ESC + Pfeil (Meta)
+    assert cv.esc_folge([ord(c) for c in "[1;3C"]) == "pan_rechts"
+    assert cv.esc_folge([27] + [ord(c) for c in "[D"]) == "pan_links"
+    assert cv.esc_folge([27] + [ord(c) for c in "OB"]) == "pan_runter"
+    assert cv.esc_folge([ord("x")]) is None
+
+
+def test_wasd_wirkt_in_jedem_zustand_ausser_der_frage():
+    c = leinwand()
+    c.taste("rechts"); c.taste("enter")                        # greifen
+    vx = c.vx
+    c.taste(cv.taste_deuten(ord("D"), b""))
+    assert c.vx == vx + cv.PAN_X and c.modus == "greifen"
+    c.taste("enter"); c.taste("loeschen")                      # Frage
+    vx = c.vx
+    c.taste(cv.taste_deuten(ord("D"), b""))
+    assert c.vx == vx and c.modus == "frage"
+
+
+def test_gleit_schritt_naehert_sich_und_rastet_ein():
+    pos, wege = 0.0, []
+    for _ in range(20):
+        pos = cv.gleit_schritt(pos, 10)
+        wege.append(pos)
+    assert 0 < wege[0] < wege[1] < 10                           # Zwischenlagen
+    assert wege[-1] == 10.0 and isinstance(wege[-1], float)
+    assert cv.gleit_schritt(9.6, 10) == 10.0                     # unter ½ Zelle: einrasten
+    assert cv.gleit_schritt(-5.0, -20) < -5.0                    # auch rückwärts
+
+
+def test_ohne_weich_zeichnet_bild_sofort_das_ziel():
+    c = leinwand()
+    c.taste("pan_rechts")
+    assert not c.gleiten() and not c.bewegt_sich()
+    assert c.anzeige_lage() == (c.vx, c.vy)
+
+
+def test_weich_gleitet_hoechstens_ein_paar_bilder_und_steht_dann():
+    c = leinwand()
+    c.weich = True
+    c.gleiten()                                                # Start: steht
+    start = c.vx
+    c.taste("pan_rechts")
+    assert c.bewegt_sich()
+    lagen = []
+    for _ in range(cv.GLEIT_BILDER + 2):
+        lagen.append(c.anzeige_lage()[0])
+        if not c.gleiten():
+            break
+    assert not c.bewegt_sich() and c.anzeige_lage() == (c.vx, c.vy)
+    assert start in lagen and any(start < x < c.vx for x in lagen)   # dazwischen gezeichnet
+    assert len(lagen) <= cv.GLEIT_BILDER
+
+
+def test_weiter_sprung_steht_spaetestens_nach_gleit_bildern():
+    c = leinwand()
+    c.weich = True
+    c.gleiten()
+    c.vx += 300                                                # z. B. Fokus-Sprung weit weg
+    n = 0
+    while c.gleiten():
+        n += 1
+        assert n < cv.GLEIT_BILDER
+    assert c.anzeige_lage()[0] == c.vx
+
+
+def test_folgen_beim_fokus_sprung_gleitet_auch():
+    c = leinwand([zettel("a", 0, 0), zettel("b", 200, 0)])
+    c.weich = True
+    c.gleiten()
+    c.fokus = "a"
+    c.taste("rechts")
+    assert c.fokus == "b" and c.bewegt_sich()
+    c.gleiten()
+    assert c.anzeige_lage()[0] < c.vx
+
+
+def test_bild_zeichnet_an_der_anzeige_lage_greifen_bleibt_zellgenau():
+    c = leinwand([zettel("a", 0, 0)])
+    c.weich = True
+    c.gleiten()
+    c.fokus = "a"
+    c.taste("enter")
+    c.taste("pan_rechts")
+    e = c.element("a")
+    assert e["x"] == cv.PAN_X and isinstance(e["x"], int)       # die Welt bleibt ganzzahlig
+    c.gleiten()
+    ox, oy = c.anzeige_lage()
+    zeilen = c.bild(30, 80)
+    spalte = e["x"] - ox
+    assert any(s == spalte and t.startswith("╔") for s, t, _r in zeilen[e["y"] - oy])
+
+
+class Uhr:
+    def __init__(self):
+        self.t = 100.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_gedrueckt_halten_beschleunigt_bis_vierfach_und_pause_setzt_zurueck():
+    c = leinwand()
+    c.uhr = uhr = Uhr()
+    schritte = []
+    for _ in range(8):
+        vx = c.vx
+        c.taste("pan_rechts")
+        schritte.append(c.vx - vx)
+        uhr.t += 0.03                                          # Tastenwiederholung
+    assert schritte[0] == cv.PAN_X
+    assert schritte == sorted(schritte) and schritte[1] > schritte[0]
+    assert schritte[-1] == cv.PAN_X * 4                        # Deckel
+    uhr.t += 0.5                                               # Pause
+    vx = c.vx
+    c.taste("pan_rechts")
+    assert c.vx - vx == cv.PAN_X
+    uhr.t += 0.03
+    vy = c.vy
+    c.taste("pan_runter")                                      # andere Richtung: Grundschritt
+    assert c.vy - vy == cv.PAN_Y
+
+
+def test_ohne_uhr_immer_der_grundschritt():
+    c = leinwand()
+    for _ in range(5):
+        vx = c.vx
+        c.taste("pan_links")
+        assert c.vx - vx == -cv.PAN_X

@@ -55,10 +55,18 @@
 #              enter/v verbindet (schon verbunden → Rückfrage „lösen?"),
 #              esc bricht ab
 #   frage      j ja, n/esc nein
-#   überall    shift+↑↓←→ schiebt den Ausschnitt; beim Greifen reist der
-#              Kasten mit (er liegt ja in der Hand)
+#   überall    W A S D (Großbuchstaben) schiebt den Ausschnitt, ebenso
+#              shift+↑↓←→ und alt+↑↓←→; beim Greifen reist der Kasten mit
+#              (er liegt ja in der Hand)
+#
+# Weich (2026-10-10, Sasha: „ich möchte dass die bewegung über das canvas
+# weicher ist"): (vx, vy) bleibt die Lage, mit der alles rechnet. Gezeichnet
+# wird eine Anzeige-Lage (ax, ay), die jedes Bild ein Stück auf (vx, vy)
+# zugleitet (`gleiten()`, die Ansicht ruft es je Bild). Aus, solange die
+# Ansicht `weich` nicht einschaltet — dann zeichnet bild() genau (vx, vy).
 
 import curses
+import math
 import secrets
 from collections import namedtuple
 
@@ -80,6 +88,30 @@ Ergebnis = namedtuple("Ergebnis", "art element grund")
 PAN_X, PAN_Y = 6, 3                     # so weit schiebt shift+Pfeil den Ausschnitt
 RASTER_X, RASTER_Y = 10, 5              # leise Punkte zur Orientierung beim Schieben
 
+# Gleiten (2026-10-10): je Bild dieser Anteil der Reststrecke (wie das Rad
+# auf der Startseite), unter einer halben Zelle rastet es ein. Spätestens
+# nach GLEIT_BILDER Bildern steht der Ausschnitt — bei ~33 ms je Bild gut
+# 0,2 s; mehr Bilder kosten auf dem Pi nur Rechenzeit.
+GLEIT_ANTEIL = 0.38
+GLEIT_BILDER = 6
+# Gedrückt halten (Tastenwiederholung, 2026-10-10): kommt dieselbe
+# Schiebe-Richtung schneller als WIEDERHOLUNG_S wieder, wächst der Schritt
+# ×BESCHLEUNIGUNG bis höchstens ×BESCHLEUNIGUNG_MAX; nach einer Pause oder
+# in eine andere Richtung wieder der Grundschritt.
+WIEDERHOLUNG_S = 0.08
+BESCHLEUNIGUNG, BESCHLEUNIGUNG_MAX = 1.5, 4.0
+
+
+def gleit_schritt(pos, ziel, anteil=GLEIT_ANTEIL):
+    """Ein Bild Gleiten: pos rückt um `anteil` der Reststrecke auf ziel zu
+    und rastet unter einer halben Zelle ein. PURE."""
+    d = ziel - pos
+    return float(ziel) if abs(d) < 0.5 else pos + d * anteil
+
+
+def _runden(x):
+    return int(math.floor(x + 0.5))      # nicht round(): 2.5 → 3, nicht 2
+
 
 # ── Tasten → Ereignisse ───────────────────────────────────────────────
 # Shift+Pfeil kommt je nach Terminal (und tmux) verschieden an: als
@@ -88,6 +120,13 @@ RASTER_X, RASTER_Y = 10, 5              # leise Punkte zur Orientierung beim Sch
 # von Terminal zu Terminal wechselt. Darum zählt der NAME (curses.keyname),
 # nicht die Zahl; die curses-Konstanten nur als Rückfall, wenn kein Name
 # zu haben ist (Tests ohne initscr).
+# Primär schieben die Großbuchstaben W A S D (2026-10-10, Sasha: „ZENTRALE
+# soll überall gleich gut funktionieren") — die kommen in jedem Terminal,
+# tmux, macOS und Handy gleich an. Shift+Pfeile und Alt+Pfeile bleiben
+# dazu; xfce4-terminal schluckt Shift+↑↓ von Haus aus.
+WASD = {ord("W"): "hoch", ord("A"): "links", ord("S"): "runter", ord("D"): "rechts"}
+# Alt+Pfeil: Modifier 3 im terminfo-Namen (wie in ansichten/karte.py).
+ALT_NAMEN = {b"kLFT3": "links", b"kRIT3": "rechts", b"kUP3": "hoch", b"kDN3": "runter"}
 SHIFT_NAMEN = {b"KEY_SLEFT": "links", b"kLFT2": "links",
                b"KEY_SRIGHT": "rechts", b"kRIT2": "rechts",
                b"KEY_SR": "hoch", b"kUP2": "hoch",
@@ -98,7 +137,12 @@ _PFEILE = {curses.KEY_UP: "hoch", curses.KEY_DOWN: "runter",
            curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts"}
 # Roh durchgereichte Folgen nach ESC, wenn das Terminal sie nicht übersetzt:
 # ESC [ 1 ; 2 A … (xterm-Stil, Modifier 2 = Shift).
-_SHIFT_FOLGE = {"[1;2A": "hoch", "[1;2B": "runter", "[1;2C": "rechts", "[1;2D": "links"}
+# ESC [ 1 ; 3 A … ist dasselbe mit Alt.
+_SHIFT_FOLGE = {"[1;2A": "hoch", "[1;2B": "runter", "[1;2C": "rechts", "[1;2D": "links",
+                "[1;3A": "hoch", "[1;3B": "runter", "[1;3C": "rechts", "[1;3D": "links"}
+# Alt als ESC-Vorsilbe vor einem rohen Pfeil (ESC ESC [ A, ESC ESC O A).
+_ALT_ROH = {"\x1b[A": "hoch", "\x1b[B": "runter", "\x1b[C": "rechts", "\x1b[D": "links",
+            "\x1bOA": "hoch", "\x1bOB": "runter", "\x1bOC": "rechts", "\x1bOD": "links"}
 _BUCHSTABEN = {ord("+"): "neu", ord("e"): "bearbeiten", ord("v"): "verbinden",
                ord("d"): "loeschen", curses.KEY_DC: "loeschen", ord("o"): "oeffnen",
                curses.KEY_PPAGE: "blaettern_hoch", curses.KEY_NPAGE: "blaettern_runter",
@@ -122,18 +166,27 @@ def shift_pfeil(ch, name=None):
     return _SHIFT_CODES.get(ch)
 
 
+def alt_pfeil(ch, name=None):
+    """Ist ch ein Alt+Pfeil (eine Taste, kLFT3 …)? -> Richtung oder None."""
+    return ALT_NAMEN.get(tastenname(ch) if name is None else name)
+
+
 def esc_folge(folge):
     """Bytes nach einem ESC (ohne das ESC) -> "pan_<richtung>", "esc" (nichts
     folgte) oder None (eine Folge, die der Canvas nicht kennt, z. B. Alt+x)."""
     if not folge:
         return "esc"
-    r = _SHIFT_FOLGE.get("".join(chr(c) for c in folge if 0 <= c < 128))
+    if folge[0] in _PFEILE:              # Alt = ESC + (schon übersetzter) Pfeil
+        return "pan_" + _PFEILE[folge[0]]
+    roh = "".join(chr(c) for c in folge if 0 <= c < 128)
+    r = _SHIFT_FOLGE.get(roh) or _ALT_ROH.get(roh)
     return "pan_" + r if r else None
 
 
 def taste_deuten(ch, name=None):
     """Taste -> Ereignis des Canvas oder None."""
-    p = shift_pfeil(ch, name)
+    name = tastenname(ch) if name is None else name
+    p = WASD.get(ch) or shift_pfeil(ch, name) or alt_pfeil(ch, name)
     if p:
         return "pan_" + p
     if ch in _PFEILE:
@@ -205,6 +258,16 @@ class Canvas:
         self.griff = None                # {"id", "x", "y", "neu"}
         self.ziel = None                 # verbinden: id des Ziels
         self.frage = None                # {"was": "loeschen"|"loesen", "id", "text"}
+        # Weich (2026-10-10): die Ansicht schaltet es ein; Tests und andere
+        # Apps bekommen ohne das den Ausschnitt sofort wie bisher.
+        self.weich = False
+        self.ax = self.ay = None         # Anzeige-Lage (float), None = noch keine
+        self._gleit_ziel, self._gleit_bilder = None, 0
+        # Uhr für die Beschleunigung beim Gedrückthalten (time.monotonic);
+        # None = immer der Grundschritt.
+        self.uhr = None
+        self._pan_letzt = None           # (zeit, richtung) des letzten Schiebens
+        self._pan_faktor = 1.0
 
     def __repr__(self):                  # Zustand sichtbar machen (Tests vergleichen repr)
         return "Canvas(%r)" % ((self.vx, self.vy, self.fokus, self.modus, self.griff,
@@ -273,9 +336,24 @@ class Canvas:
         return {"ruhe": self._ruhe, "greifen": self._greifen,
                 "verbinden": self._verbinden, "frage": self._frage}[self.modus](ereignis)
 
+    def _pan_faktor_neu(self, richtung):
+        """Schritt-Faktor für dieses Schieben: wächst bei schneller
+        Wiederholung derselben Richtung, sonst 1."""
+        if self.uhr is None:
+            return 1.0
+        jetzt = self.uhr()
+        letzt, self._pan_letzt = self._pan_letzt, (jetzt, richtung)
+        if letzt and letzt[1] == richtung and jetzt - letzt[0] < WIEDERHOLUNG_S:
+            self._pan_faktor = min(BESCHLEUNIGUNG_MAX, self._pan_faktor * BESCHLEUNIGUNG)
+        else:
+            self._pan_faktor = 1.0
+        return self._pan_faktor
+
     def _pan(self, richtung):
-        dx, dy = {"links": (-PAN_X, 0), "rechts": (PAN_X, 0),
-                  "hoch": (0, -PAN_Y), "runter": (0, PAN_Y)}[richtung]
+        f = self._pan_faktor_neu(richtung)
+        px, py = _runden(PAN_X * f), _runden(PAN_Y * f)
+        dx, dy = {"links": (-px, 0), "rechts": (px, 0),
+                  "hoch": (0, -py), "runter": (0, py)}[richtung]
         self.vx += dx
         self.vy += dy
         if self.modus == "greifen":
@@ -432,31 +510,67 @@ class Canvas:
             raus.append(dict(v, von_seite=sa, nach_seite=sb))
         return raus
 
+    # ── Gleiten ───────────────────────────────────────────────────────
+    def gleiten(self):
+        """Ein Bild weiter: die Anzeige-Lage rückt auf (vx, vy) zu.
+        -> True, solange sie noch nicht angekommen ist (dann will die Ansicht
+        schnell neu zeichnen). Ändert sich das Ziel, zählen die Bilder neu."""
+        if not self.weich or self.ax is None:
+            self.springen()
+            return False
+        ziel = (self.vx, self.vy)
+        if ziel != self._gleit_ziel:
+            self._gleit_ziel, self._gleit_bilder = ziel, 0
+        self._gleit_bilder += 1
+        if self._gleit_bilder >= GLEIT_BILDER:
+            self.springen()
+        else:
+            self.ax = gleit_schritt(self.ax, self.vx)
+            self.ay = gleit_schritt(self.ay, self.vy)
+        return self.bewegt_sich()
+
+    def springen(self):
+        """Anzeige sofort aufs Ziel (Öffnen, Zentrieren)."""
+        self.ax, self.ay = float(self.vx), float(self.vy)
+
+    def bewegt_sich(self):
+        """Gleitet der Ausschnitt gerade noch?"""
+        return (self.weich and self.ax is not None
+                and (self.ax, self.ay) != (float(self.vx), float(self.vy)))
+
+    def anzeige_lage(self):
+        """Welche Weltzelle oben links gezeichnet wird."""
+        if not self.weich or self.ax is None:
+            return self.vx, self.vy
+        return _runden(self.ax), _runden(self.ay)
+
     # ── Bild ──────────────────────────────────────────────────────────
     def bild(self, hoehe, breite):
         """Das sichtbare Stück als Zeilen: [[(spalte, text, rolle), …], …].
         Rollen: raster, schnur, schnur_vor, rahmen, fokus, griff, ziel, text,
         leise (+ was eine Art selbst liefert). Merkt sich die Größe — von ihr
-        hängen Folgen, Mitte und `+` ab."""
+        hängen Folgen, Mitte und `+` ab. Gezeichnet wird an der
+        Anzeige-Lage (beim Gleiten zwischen alter und neuer Lage)."""
         self.vw, self.vh = max(1, breite), max(1, hoehe)
+        ox, oy = self.anzeige_lage()
         netz = [[(" ", None)] * self.vw for _ in range(self.vh)]
 
         def setze(wx, wy, ch, rolle):
-            x, y = wx - self.vx, wy - self.vy
+            x, y = wx - ox, wy - oy
             if 0 <= x < self.vw and 0 <= y < self.vh:
                 netz[y][x] = (ch, rolle)
 
         for y in range(self.vh):                        # Raster
-            wy = self.vy + y
+            wy = oy + y
             if wy % RASTER_Y:
                 continue
             for x in range(self.vw):
-                if (self.vx + x) % RASTER_X == 0:
+                if (ox + x) % RASTER_X == 0:
                     netz[y][x] = ("·", "raster")
         self._schnuere(setze)
         oben = [self.griff and self.griff["id"], self.ziel, self.fokus]
         for e in sorted(self.elemente, key=lambda e: e.get("id") in oben):
-            self._kasten(e, setze)
+            self._kasten(e, setze, ox, oy)
         return self._zeilen(netz)
 
     def _schnuere(self, setze):
@@ -478,7 +592,7 @@ class Canvas:
                 for i, ch in enumerate(v["label"][:24]):
                     setze(m[0] + i, m[1], ch, "leise")
 
-    def _kasten(self, e, setze):
+    def _kasten(self, e, setze, ox, oy):
         x, y, w, h = e["x"], e["y"], max(3, e["w"]), max(3, e["h"])
         if self.griff and self.griff["id"] == e["id"]:
             rand, rolle = "╔═╗║╚╝", "griff"
@@ -490,7 +604,7 @@ class Canvas:
             rand = "┌─┐│└┘"
             rolle = getattr(self.arten.holen(e.get("art")), "rolle", "rahmen")
         # Schnell raus, wenn der Kasten ganz außerhalb liegt.
-        if x + w <= self.vx or x >= self.vx + self.vw or y + h <= self.vy or y >= self.vy + self.vh:
+        if x + w <= ox or x >= ox + self.vw or y + h <= oy or y >= oy + self.vh:
             return
         for i in range(w):
             setze(x + i, y, rand[1], rolle)

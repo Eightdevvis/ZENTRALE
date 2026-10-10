@@ -161,36 +161,38 @@ CTX_KEYS = {
         ("f", "done"), ("a", "reply"), ("s", "sort in"),
         ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
     ],
-    # Desk View (2026-10-09, memory/system/desk_view.md). shift+↑↓←→ (Ausschnitt
-    # schieben) steht in der Hinweiszeile im Kasten — fussleiste.codes() kennt
-    # „shift+" nicht.
+    # Desk View (2026-10-09, memory/system/desk_view.md). Ausschnitt schieben:
+    # W/A/S/D (Großbuchstaben, seit 2026-10-10 die Hauptbelegung — in jedem
+    # Terminal gleich); shift+/alt+↑↓←→ stehen nur in der Hinweiszeile im
+    # Kasten (fussleiste.codes() kennt „shift+" nicht, und Platz ist knapp).
     "desk:wahl": [
         ("↑↓", "select"), ("enter", "open"), ("n", "new desk"), ("esc", "close"),
     ],
     "desk:canvas": [
-        ("↑↓←→", "select"), ("enter", "grab"), ("+", "new"), ("e", "edit"),
+        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("+", "new"), ("e", "edit"),
         ("v", "connect"), ("d", "delete"), ("esc", "back"),
     ],
     # Ein Bild hat den Fokus (2026-10-10): o im Bildbetrachter öffnen,
     # f Vorschau mono/farbe, e Titel.
     "desk:bild": [
-        ("↑↓←→", "select"), ("enter", "grab"), ("o", "open"), ("f", "mono/colour"),
+        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("o", "open"), ("f", "mono/colour"),
         ("e", "title"), ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
     ],
     # Eine Kachel hat den Fokus (2026-10-10): o öffnet sie in ihrer App,
     # Bild↑↓ blättert (alle Tage zugleich).
     "desk:kachel": [
-        ("↑↓←→", "select"), ("enter", "grab"), ("o", "open"), ("pgup pgdn", "scroll"),
+        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("o", "open"), ("pgup pgdn", "scroll"),
         ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
     ],
     "desk:neu": [
         ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
     ],
     "desk:greifen": [
-        ("↑↓←→", "move"), ("enter", "drop"), ("esc", "cancel"),
+        ("↑↓←→", "move"), ("W/A/S/D", "move view"), ("enter", "drop"), ("esc", "cancel"),
     ],
     "desk:verbinden": [
-        ("↑↓←→", "target"), ("enter/v", "connect"), ("esc", "cancel"),
+        ("↑↓←→", "target"), ("W/A/S/D", "move view"), ("enter/v", "connect"),
+        ("esc", "cancel"),
     ],
     "desk:frage": [
         ("j", "yes"), ("n/esc", "no"),

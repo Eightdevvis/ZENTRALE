@@ -20,6 +20,7 @@ import curses
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -48,8 +49,10 @@ FETT = {"fokus", "griff", "ziel", "notiz_titel", "bild_titel"}
 # Was die Hinweiszeile im Kasten je Zustand zeigt. Die Fußleiste ganz unten
 # kommt aus befehle.CTX_KEYS — „shift+↑↓←→" kann fussleiste.codes() (noch)
 # nicht lesen, darum steht das Schieben nur hier.
-HINWEIS = {"ruhe": "shift+↑↓←→ move view · pgup/pgdn scroll · o open (image, tile) · f colour",
-           "greifen": "shift+↑↓←→ move view (note comes along)",
+# W A S D (Großbuchstaben) schiebt überall gleich (2026-10-10); shift+ und
+# alt+Pfeile gehen auch — die stehen nur hier, die Fußleiste zeigt W/A/S/D.
+HINWEIS = {"ruhe": "W A S D move view (also shift/alt+↑↓←→) · pgup/pgdn scroll · o open · f colour",
+           "greifen": "W A S D move view, note comes along (also shift/alt+↑↓←→)",
            "verbinden": "↑↓←→ pick target · enter/v connect · esc cancel"}
 
 
@@ -124,10 +127,11 @@ class Desk:
             D["msg"] = "„%s\" geht nicht auf" % name
             return
         # Ohne Fabrik meldet der Canvas bei + „neu_waehlen": Zettel oder Bild.
+        c = cv.Canvas(self.arten, list(d.get("elemente") or []), list(d.get("verbindungen") or []))
+        # Weich gleiten + schneller beim Gedrückthalten (2026-10-10).
+        c.weich, c.uhr = True, time.monotonic
         D.update(ebene="canvas", desk=d.get("name", name), stand=d.get("stand"), msg="",
-                 zentrieren=True, art_wahl=None, bild_wahl=None,
-                 canvas=cv.Canvas(self.arten, list(d.get("elemente") or []),
-                                  list(d.get("verbindungen") or [])))
+                 zentrieren=True, art_wahl=None, bild_wahl=None, canvas=c)
 
     def _anlegen(self, name):
         D = self.DESK
@@ -176,8 +180,18 @@ class Desk:
             folge.append(c)
             s.timeout(0)
             c = s.getch()
-        s.timeout(250)
+        # Kein festes timeout(250) zurück (2026-10-10): die Hauptschleife setzt
+        # vor JEDEM getch die Kadenz selbst (33 ms, solange der Ausschnitt
+        # gleitet) — ein Wert von hier würde nur gegen sie arbeiten.
         return folge
+
+    def bewegt_sich(self):
+        """Gleitet der Ausschnitt gerade? Dann tickt zentrale_tui.py schnell
+        (33 ms), sonst ruhig — kein Dauerlauf, wenn nichts passiert."""
+        D = self.DESK
+        c = D["canvas"]
+        return bool(D["active"] and D["ebene"] == "canvas" and c is not None
+                    and c.bewegt_sich())
 
     def taste(self, ch):
         D = self.DESK
@@ -482,7 +496,9 @@ class Desk:
         c.vw, c.vh = cw, ch_
         if D["zentrieren"]:
             self._zentrieren(c)
+            c.springen()                 # beim Öffnen nicht hingleiten
             D["zentrieren"] = False
+        c.gleiten()                      # ein Bild weiter auf (vx, vy) zu
         self.vorschauen_holen(c)
         desk_kacheln.pflegen(c.elemente, lambda *a, **k: api_call(*a, **k), self.starten)
         for j, stuecke in enumerate(c.bild(ch_, cw)):

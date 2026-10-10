@@ -384,3 +384,33 @@ def test_kachel_knoten_wird_unangetastet_durchgereicht():
     desk.speichern("h", d["elemente"], d["verbindungen"], d["stand"])
     k = lies("h")["nodes"][0]
     assert k["zentrale_kachel"] == kachel and k["text"] == "Einkauf\n- Milch" and k["x"] == 30
+
+
+def test_desk_meldet_gleiten_nur_solange_es_dauert(ansicht):
+    """Schnelle Kadenz (33 ms) nur, solange der Ausschnitt gleitet; danach
+    wieder ruhig — kein Dauerlauf (2026-10-10)."""
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("g")
+    d.oeffnen(); d.taste(10)
+    d.draw_desk(2, 0, 26, 100)
+    assert not d.bewegt_sich()                       # nach dem Öffnen: steht
+    d.taste(ord("D"))                                # W A S D schiebt
+    assert d.bewegt_sich()
+    for _ in range(10):
+        d.draw_desk(2, 0, 26, 100)
+        if not d.bewegt_sich():
+            break
+    assert not d.bewegt_sich()
+    D["active"] = False
+    assert not d.bewegt_sich()
+
+
+def test_alt_pfeil_als_esc_vorsilbe_schiebt(ansicht):
+    import curses
+    d, D = ansicht, ansicht.DESK
+    desk.anlegen("a")
+    d.oeffnen(); d.taste(10)
+    vy = D["canvas"].vy
+    d.z.stdscr.folge = [curses.KEY_DOWN]             # ESC + Pfeil = Alt+Pfeil
+    d.taste(27)
+    assert D["canvas"].vy > vy and D["ebene"] == "canvas"

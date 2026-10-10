@@ -4,7 +4,7 @@
 `worktree-desk-view`, `worktree-desk-kalender`).
 Im Rad Taste/Platz `d` („desk", zwischen tutor und elektronik). Erst die
 Auswahl der Desks (+ neuer Desk), dann die Fläche: Zettel liegen darauf,
-Schnüre verbinden sie, Shift+Pfeile schieben den Ausschnitt.
+Schnüre verbinden sie, W A S D (Großbuchstaben) schieben den Ausschnitt.
 
 Sasha: *„ich klappe z.B. ‚Elektronik' auf und habe einen infinity canvas vor
 mir … Mit + fügt man ein neues hinzu, das ist dann autoselected, man bewegt
@@ -44,17 +44,37 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | Modal | tippen, enter | Text, enter = neue Zeile; ←→↑↓ Pos1 Ende ⌫ Entf |
 | | ctrl+s | speichern |
 | | esc | abbrechen, nichts gespeichert |
-| überall außer Modal | shift+↑↓←→ | Ausschnitt schieben (6 Spalten / 3 Zeilen); beim Greifen reist der Zettel mit |
+| überall außer Modal | **W A S D** (groß) | Ausschnitt schieben (6 Spalten / 3 Zeilen), W hoch, A links, S runter, D rechts; beim Greifen reist der Zettel mit. Gedrückt halten wird schneller (bis 4×). Kleinbuchstaben bleiben, was sie sind (d = löschen) |
+| | shift+↑↓←→, alt+↑↓←→ | dasselbe, zusätzlich |
+
+**W A S D** ist seit 2026-10-10 die Hauptbelegung (Sasha: ZENTRALE soll
+überall gleich gut gehen): Großbuchstaben kommen in jedem Terminal, tmux,
+macOS und Handy gleich an; xfce4-terminal schluckt Shift+↑↓ von Haus aus.
+Alt+Pfeil kommt als `kLFT3`/`kRIT3`/`kUP3`/`kDN3`, als ESC + Pfeil, als
+`ESC [1;3A…D` oder `ESC ESC [A` (wie in der Karte).
 
 Shift+Pfeil erkennt der Baustein am **Namen** (`curses.keyname`: `kLFT2`,
 `kRIT2`, `kUP2`, `kDN2`, `KEY_SLEFT`, `KEY_SR` …), nicht an der Nummer —
 die wechselt mit Terminal und tmux. Rohe Folgen `ESC [1;2A…D` gehen auch.
 Die Fußleiste unten zeigt die Tasten je Zustand (`befehle.CTX_KEYS`,
 Kontexte `desk:wahl|canvas|bild|kachel|neu|greifen|verbinden|frage`; Modal
-und Kalender-Dialog sind Freitext ohne Leiste, ihr Kasten zeigt die Tasten); „shift+↑↓←→" und
-„pgup/pgdn" stehen nur in der Hinweiszeile im Kasten, weil
-`fussleiste.codes()` „shift+" nicht lesen kann (Datei gehörte in dieser
-Runde einer anderen Sitzung).
+und Kalender-Dialog sind Freitext ohne Leiste, ihr Kasten zeigt die Tasten).
+Die Leiste zeigt „W/A/S/D move view"; „shift/alt+↑↓←→" und „pgup/pgdn"
+stehen nur in der Hinweiszeile im Kasten, weil `fussleiste.codes()`
+„shift+" nicht lesen kann (Datei gehörte in dieser Runde einer anderen
+Sitzung).
+
+**Weich schieben** (2026-10-10, Sasha: *„ich möchte dass die bewegung über
+das canvas weicher ist"*): `vx/vy` bleibt die Lage, mit der alles rechnet.
+Gezeichnet wird eine Anzeige-Lage, die je Bild 38 % der Reststrecke auf
+sie zugleitet (wie das Rad der Startseite), unter einer halben Zelle
+einrastet und spätestens nach 6 Bildern steht (Pi). Gilt fürs Schieben und
+fürs Nachziehen bei Fokus-Sprung und Greifen; der gegriffene Kasten selbst
+bewegt sich zellgenau. Solange es gleitet, meldet `Desk.bewegt_sich()` —
+dann tickt `zentrale_tui.py` mit 33 ms, sonst ruhig. Gedrückt halten
+(Wiederholung derselben Richtung unter 80 ms) macht den Schritt je Druck
+×1,5 bis 4× größer; nach einer Pause wieder der Grundschritt. Der Baustein
+macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
 
 ## Wie es geschnitten ist
 
@@ -250,6 +270,9 @@ geöffnet kriegen wenn man es selected."*
 - Breite Zeichen (Emoji) im Zettel verschieben die Zeile um eine Spalte.
 
 ## Historie
+
+- **2026-10-10** — Weich schieben (gleitender Ausschnitt, schneller beim
+  Gedrückthalten), W A S D als Hauptbelegung, Alt+Pfeile zusätzlich.
 
 - **2026-10-10** — Kacheln: „kalender" im `+`-Wähler (mit Dialog), Kalender-Kachel
   (Woche/Monat, fest/mitlaufend, +N, blättern), Holen im Hintergrund über

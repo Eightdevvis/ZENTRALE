@@ -1309,7 +1309,8 @@ def run_ui(stdscr, store):
                 or PIANO["active"]
                 or RAD["pos"] != RAD["sel"] or RAD["schnell"]
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
-                or RAD.get("wurf") or TRAD.get("wurf"))
+                or RAD.get("wurf") or TRAD.get("wurf")
+                or desk.bewegt_sich())       # Desk-Ausschnitt gleitet (2026-10-10)
         # Denk-Adern (2026-10-07): ihr Bild ändert sich höchstens 10× pro
         # Sekunde (denkadern.BILDER_JE_S) — solange nur sie sich bewegen,
         # reichen 100 ms statt 33 (gemessen: etwa ein Drittel der CPU).
