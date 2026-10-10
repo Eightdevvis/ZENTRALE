@@ -33,6 +33,7 @@ from pathlib import Path
 
 import state
 import kalender_ics_abbildung as abb
+import kalender_rhythmus
 import kalender_sicherung as sich
 
 NEBEN_FORMAT = 1
@@ -520,15 +521,22 @@ class IcsSpeicher:
                 continue
             neu_uid = uid or abb.neue_uid()
             kern = ohne_interna(obj)
+            # Tagesrhythmus: durchsichtig (belegt nichts), Ende am Folgetag.
+            # Nur mitgeben, wenn es gilt (die Abbildung lässt sich so auch
+            # durch eine schlichte Ersatzfunktion tauschen, wie in Tests).
+            nur_rhythmus = ({"rhythmus": True} if st["layer"] == kalender_rhythmus.EBENE
+                            else {})
             try:
                 if st["art"] == "routine":
                     anker = (index.get(uid, {}).get("anker") if uid else None) \
                         or self.anker or date.today()
                     kal = abb.routine_kalender(kern, neu_uid, pos=st["pos"],
-                                               pausen=p_liste, anker=anker)
+                                               pausen=p_liste, anker=anker,
+                                               **nur_rhythmus)
                     gemappte_routinen.append(obj)
                 else:
-                    kal = abb.termin_kalender(st["tag"], kern, neu_uid, pos=st["pos"])
+                    kal = abb.termin_kalender(st["tag"], kern, neu_uid, pos=st["pos"],
+                                              **nur_rhythmus)
             except abb.NichtAbbildbar as ex:
                 state.push_log(f"[calendar] nicht als .ics abbildbar, roh in die "
                                f"Nebendaten: {ex}")

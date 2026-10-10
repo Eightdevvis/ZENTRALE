@@ -13,6 +13,8 @@ import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode�
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import kalender_kennung  # type: ignore  – Fehler-Codes (KalenderAbgelehnt)
 import kalender_bearbeiten  # type: ignore  – Wiederholung, „nur dieser Tag", Spannen
+import kalender_kategorie  # type: ignore  – Gruppen-Katalog (CATEGORIES)
+import kalender_rhythmus  # type: ignore  – Motive der Phasen (Tagesrhythmus)
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
@@ -95,6 +97,11 @@ def api_calendar():
         out['alarms'] = state.get_alarms() or []
     except Exception:
         out['alarms'] = []
+    # Jede Zeile nennt Ebene (`layer`) und Gruppe (`kategorie`, „keine" wenn
+    # leer); Phasen des Tagesrhythmus dazu `motiv` (aus dem Kern).
+    for liste in (out.get('days') or {}).values():
+        for e in liste:
+            e.setdefault('kategorie', 'keine')
     return jsonify(out)
 
 
@@ -126,7 +133,7 @@ def api_calendar_add_entry():
     time = (body.get('time') or '').strip() or None
     layer = (body.get('layer') or 'termine').strip() or 'termine'
     extras = {}
-    for k in ('ende', 'ort'):
+    for k in ('ende', 'ort', 'kategorie', 'kategorie_name'):
         v = (body.get(k) or '').strip()
         if v:
             extras[k] = v
@@ -282,7 +289,7 @@ def api_calendar_add_routine():
     time = (body.get('time') or '').strip() or None
     layer = (body.get('layer') or 'termine').strip() or 'termine'
     extras = {}
-    for k in ('ende', 'ort'):
+    for k in ('ende', 'ort', 'kategorie', 'kategorie_name'):
         v = (body.get(k) or '').strip()
         if v:
             extras[k] = v
@@ -426,3 +433,88 @@ def api_calendar_ebene():
     „uncommitted" verschieben. Body: {kennung, ziel?} — ohne ziel umschalten."""
     b = request.get_json(silent=True) or {}
     return jsonify(kalender_kennung.ebene_wechseln(b.get('kennung') or '', b.get('ziel') or None))
+
+
+# ── Tagesrhythmus (Phasen) und Gruppen, seit 10.10.2026 ────────────────
+# Alle Antworten mit Eintrag sind das Dict aus kalender_kennung.eintrag
+# (kennung, art, layer, kategorie, bei Phasen motiv); Ablehnung = 400 mit
+# {error, code} (Fehlerhandler oben).
+_PHASE_FELDER = ('time', 'ende', 'label', 'ort', 'motiv', 'rrule', 'von', 'bis',
+                 'kategorie', 'kategorie_name')
+
+
+@bp.route('/api/calendar/motive')
+def api_calendar_motive():
+    """Der feste Katalog der Motive für Phasen: [{schluessel, name, was}]."""
+    return jsonify({"motive": kalender_rhythmus.motive(), "ebene": kalender_rhythmus.EBENE})
+
+
+@bp.route('/api/calendar/kategorien')
+def api_calendar_kategorien():
+    """Der feste Katalog der Gruppen: [{schluessel, name}] inkl. keine/custom."""
+    return jsonify({"kategorien": kalender_kategorie.katalog()})
+
+
+@bp.route('/api/calendar/phasen')
+def api_calendar_phasen():
+    """Alle Phasen wie gespeichert (mit Kennung, Regel, Abweichungen)."""
+    return jsonify({"phasen": kalender_kennung.phasen()})
+
+
+@bp.route('/api/calendar/phase', methods=['POST'])
+def api_calendar_phase_neu():
+    """Body: {label, time, motiv, ende?, rrule? (Standard FREQ=DAILY), von?,
+    bis? (leer = bis auf Weiteres), ort?, kategorie?, kategorie_name?}."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.phase_anlegen(
+        b.get('label') or '', b.get('time') or '', motiv=b.get('motiv') or '',
+        ende=b.get('ende') or None, rrule=b.get('rrule') or 'FREQ=DAILY',
+        von=b.get('von') or None, bis=b.get('bis') or None, ort=b.get('ort') or None,
+        kategorie=b.get('kategorie'), kategorie_name=b.get('kategorie_name')))
+
+
+@bp.route('/api/calendar/phase', methods=['PUT'])
+def api_calendar_phase_aendern():
+    """Ab jetzt ändern. Body: {kennung, time?, ende?, label?, ort?, motiv?,
+    rrule?, von?, bis?, kategorie?, kategorie_name?} — "" löscht ein Feld
+    (bis "" = bis auf Weiteres), fehlend = unverändert."""
+    b = request.get_json(silent=True) or {}
+    felder = {k: b[k] for k in _PHASE_FELDER if k in b and b[k] is not None}
+    return jsonify(kalender_kennung.phase_aendern(b.get('kennung') or '', **felder))
+
+
+@bp.route('/api/calendar/phase', methods=['DELETE'])
+def api_calendar_phase_loeschen():
+    """Body: {kennung}."""
+    b = request.get_json(silent=True) or {}
+    kalender_kennung.phase_loeschen(b.get('kennung') or '')
+    return jsonify({"ok": True})
+
+
+@bp.route('/api/calendar/routine/zeitraum', methods=['POST'])
+def api_calendar_routine_zeitraum():
+    """Alle Vorkommen in [von, bis] einer Routine/Phase ändern („3 Tage um 2
+    ins Bett"). Body: {kennung, von, bis, time?, ende?, label?, ort?} — ""
+    = an diesen Tagen wieder wie die Regel."""
+    b = request.get_json(silent=True) or {}
+    felder = {k: b[k] for k in ('time', 'ende', 'label', 'ort') if b.get(k) is not None}
+    return jsonify(kalender_kennung.routine_zeitraum_aendern(
+        b.get('kennung') or '', b.get('von') or '', b.get('bis') or '', **felder))
+
+
+@bp.route('/api/calendar/kategorie', methods=['POST'])
+def api_calendar_kategorie():
+    """Gruppe eines Eintrags. Body: {kennung, kategorie, kategorie_name?}."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.kategorie_setzen(
+        b.get('kennung') or '', b.get('kategorie'), b.get('kategorie_name')))
+
+
+@bp.route('/api/calendar/kategorie/kurs', methods=['POST'])
+def api_calendar_kategorie_kurs():
+    """Gruppe für alle Einträge eines Kurses (titel_schluessel). Body:
+    {schluessel, kategorie, kategorie_name?, probe?} — probe: nur zeigen."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.kategorie_fuer_kurs(
+        b.get('schluessel') or '', b.get('kategorie'), b.get('kategorie_name'),
+        probe=bool(b.get('probe'))))

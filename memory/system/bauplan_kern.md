@@ -108,6 +108,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kalender_bearbeiten` | 2 | Bearbeiten wie calcurse/Handy: Wiederholung (Typ/Intervall/Ende), Routine gezielt ändern, „nur dieser Tag", Spannen mit Zeit pro Tag, Einmal-Termine genau treffen |
 | `kalender_konflikte` | 2 | Kollisionen, Fahrzeiten, Pausen-Grund, Abwesenheit, Alarme, Lese-Text und Abdruck für die KI (aus kalender.py ausgezogen, dort weitergereicht) |
 | `kalender_kennung` | 2 | Termine/Routinen per fester Kennung (UID) lesen und ändern; `KalenderAbgelehnt` mit festen Codes (`CODES`), ein Schreibvorgang, Ablehnung schreibt nichts |
+| `kalender_rhythmus` | 2 | Tagesrhythmus (seit 2026-10-10): Ebene `rhythmus`, fester Katalog `MOTIVE`, Motiv prüfen, „über Mitternacht" — nur Konstanten und reine Prüfungen (braucht nur `kalender_fehler`); Schreiben in `kalender_kennung` |
+| `kalender_kategorie` | 2 | Gruppen (CATEGORIES, seit 2026-10-10): fester Katalog `KATEGORIEN` + keine/custom, prüfen/setzen, Anzeigename, ↔ .ics-Namen; Kurs-Schlüssel eines Titels (`titel_schluessel`, `KURZFORMEN`) — rein (braucht nur `kalender_fehler`) |
 | `kalender_fehler` | 2 | Unterstes Kalender-Modul ohne Kalender-Abhängigkeit: `CODES`, `KalenderAbgelehnt`, Uhrzeit- und Reihenfolge-Prüfung (damit kalender/kalender_kennung/kalender_bearbeiten ohne Import-Kreis dieselbe Ablehnung werfen) |
 | `lists` | 2 | Listen-Registry (To-Do, Checklisten) |
 | `notes` | 2 | Notiz-Registry des TUI-Notiz-Werkzeugs |

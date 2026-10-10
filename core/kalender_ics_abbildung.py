@@ -18,6 +18,10 @@
 #   aus                      -> EXDATE + X-ZENTRALE-AUS
 #   pausen                   -> EXDATEs + X-ZENTRALE-PAUSE (Notiz mit Grund)
 #   absage_noetig            -> X-ZENTRALE-ABSAGE-NOETIG
+#   motiv (Phase)            -> X-ZENTRALE-MOTIV
+#   kategorie (Gruppe)       -> CATEGORIES (Anzeigename, RFC 5545)
+#   Ebene rhythmus           -> TRANSP:TRANSPARENT, Ende vor Beginn = DTEND
+#                               am Folgetag (Schlaf 23:00–07:00)
 #
 # Das Verlust-Prinzip: ein Feld wird nur dann auf eine iCalendar-Property
 # abgebildet, wenn es sich EXAKT zurücklesen lässt ("17:45" ja, "10" nein).
@@ -36,6 +40,7 @@ from zoneinfo import ZoneInfo
 
 from icalendar import Calendar, Event, Timezone, vRecur
 
+import kalender_kategorie
 import kalender_regel
 
 TZ_NAME = "Europe/Berlin"
@@ -53,6 +58,7 @@ X_ABSAGE = "X-ZENTRALE-ABSAGE-NOETIG"
 X_OHNE_ANFANG = "X-ZENTRALE-OHNE-ANFANG"
 X_RRULE_ROH = "X-ZENTRALE-RRULE-ROH"
 X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
+X_MOTIV = "X-ZENTRALE-MOTIV"
 
 # Was ZENTRALE an einem Ereignis selbst verwaltet. Alles ANDERE an einer
 # vorhandenen Datei (DESCRIPTION, VALARM, Google-Eigenheiten, ...) wird beim
@@ -60,7 +66,7 @@ X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 # Notiz, die Sasha am Handy dazugeschrieben hat.
 VERWALTET = {"UID", "DTSTAMP", "LAST-MODIFIED", "SUMMARY", "LOCATION",
              "DTSTART", "DTEND", "DURATION", "RRULE", "EXDATE",
-             "RECURRENCE-ID"}
+             "RECURRENCE-ID", "CATEGORIES"}
 VERWALTET_ABWEICHUNG = VERWALTET | {"STATUS"}
 
 # Eine kompakte, regelbasierte Zeitzone. icalendar würde sonst eine Fassung
@@ -220,6 +226,33 @@ def _kopf(ev: Event, e: dict, rest: dict) -> None:
     if e.get("absage_noetig") is True:
         ev.add(X_ABSAGE, "TRUE")
         rest.pop("absage_noetig", None)
+    if isinstance(e.get("motiv"), str) and re.fullmatch(r"[a-z0-9_-]{1,40}", e["motiv"]):
+        ev.add(X_MOTIV, e["motiv"])
+        rest.pop("motiv", None)
+    namen = _kategorie_namen(e)
+    if namen:
+        ev.add("CATEGORIES", namen)
+        for feld in ("kategorie", "kategorie_name", "kategorien_weitere"):
+            rest.pop(feld, None)
+
+
+def _kategorie_namen(e: dict) -> list | None:
+    """CATEGORIES-Werte, wenn sich die Gruppe exakt zurücklesen lässt (sonst
+    bleibt sie in den Extras). Komma, Semikolon, Backslash und Zeilenumbruch
+    gehen nicht in einen Namen — die behandeln Server verschieden."""
+    if "kategorie" not in e or not kalender_kategorie.sauber(e):
+        return None
+    weitere = e.get("kategorien_weitere", [])
+    if "kategorien_weitere" in e and (not isinstance(weitere, list) or not weitere):
+        return None
+    namen = [kalender_kategorie.anzeige(e)] + list(weitere)
+    if not all(isinstance(n, str) and n and n == n.strip()
+               and not re.search(r"[,;\\\n\r]", n) for n in namen):
+        return None
+    felder = {k: e[k] for k in ("kategorie", "kategorie_name", "kategorien_weitere") if k in e}
+    if kalender_kategorie.aus_namen(namen) != felder:
+        return None
+    return namen
 
 
 def _extras_anhaengen(ev: Event, rest: dict) -> None:
@@ -234,12 +267,13 @@ def _jetzt(jetzt):
 # ── Schreiben: Termin / Spanne ──────────────────────────────────────────
 
 def termin_kalender(tag: str, e: dict, uid: str, pos=None,
-                    jetzt: datetime | None = None) -> Calendar:
+                    jetzt: datetime | None = None, rhythmus: bool = False) -> Calendar:
     """Ein Einmal-Eintrag (auch eine Spanne mit `bis`) als VCALENDAR.
 
     `tag` ist der Schlüssel im entries-Dict (bei Spannen der Start-Tag),
     `e` der Eintrag OHNE interne Felder. Wirft NichtAbbildbar, wenn sich das
-    Ergebnis nicht exakt zurücklesen lässt."""
+    Ergebnis nicht exakt zurücklesen lässt. `rhythmus`: Ebene des
+    Tagesrhythmus (TRANSP:TRANSPARENT, Ende am Folgetag erlaubt)."""
     d = _datum(tag)
     if d is None or not isinstance(e, dict):
         raise NichtAbbildbar(f"Termin-Tag {tag!r} oder Eintrag unbrauchbar")
@@ -249,7 +283,9 @@ def termin_kalender(tag: str, e: dict, uid: str, pos=None,
     if "bis" in e:
         komps, mit_tz = _spanne(d, e, rest, roh, uid, pos, jetzt)
     else:
-        komps, mit_tz = _einzel(d, e, rest, roh, uid, pos, jetzt)
+        komps, mit_tz = _einzel(d, e, rest, roh, uid, pos, jetzt, rhythmus)
+    if rhythmus:
+        _durchsichtig(komps)
     _roh_anhaengen(komps[0], roh)
     _extras_anhaengen(komps[0], rest)
     kal = _kalender(komps, mit_tz)
@@ -267,24 +303,47 @@ def _roh_anhaengen(ev: Event, roh: dict) -> None:
         ev.add(X_ZEIT_ROH, _xkodieren(roh))
 
 
-def _ende_abbilden(ev, d, t, e, rest, roh, feld="ende"):
+def _ende_abbilden(ev, d, t, e, rest, roh, feld="ende", ueber_nacht=False):
     """DTEND aus `ende`, wenn es nach dem Beginn liegt. "24:00" = Mitternacht
     (DTEND am nächsten Tag 00:00, zurückgelesen wieder "24:00" — dieselbe
-    Zahl, mit der _interval in kalender.py rechnet)."""
+    Zahl, mit der _interval in kalender.py rechnet). `ueber_nacht` (nur
+    Ebene rhythmus): ein Ende vor dem Beginn ist DTEND am Folgetag; "00:00"
+    nicht (läse sich als "24:00" zurück) — das bleibt in den Extras."""
     en = e.get(feld)
     if en == "24:00":
         ev.add("DTEND", _ts(d + timedelta(days=1), time(0)))
         rest.pop(feld, None)
         return
     te = _zeit_locker(en)
-    if te and te > t:
-        ev.add("DTEND", _ts(d, te))
+    if te and (te > t or (ueber_nacht and time(0) < te < t)):
+        ev.add("DTEND", _ts(d if te > t else d + timedelta(days=1), te))
         rest.pop(feld, None)
         if en != _fmt(te):
             roh[feld] = [en, _fmt(te)]
 
 
-def _einzel(d, e, rest, roh, uid, pos, jetzt):
+def _ende_text(start, ende) -> str | None:
+    """Gegenstück beim Lesen: DTEND → `ende` (gleicher Tag, "24:00", oder
+    am Folgetag vor dem Beginn = über Mitternacht)."""
+    if not (isinstance(start, datetime) and isinstance(ende, datetime)) or ende <= start:
+        return None
+    if ende.date() == start.date():
+        return _fmt(ende)
+    folgetag = start.date() + timedelta(days=1)
+    if ende == datetime.combine(folgetag, time(0)):
+        return "24:00"
+    if ende.date() == folgetag and time(0) < ende.time() < start.time():
+        return _fmt(ende)
+    return None
+
+
+def _durchsichtig(komps) -> None:
+    """Phasen belegen nichts: TRANSP:TRANSPARENT (Google: „verfügbar")."""
+    for k in komps:
+        k.add("TRANSP", "TRANSPARENT")
+
+
+def _einzel(d, e, rest, roh, uid, pos, jetzt, rhythmus=False):
     ev = _basis(uid, ART_TERMIN, pos, jetzt)
     _kopf(ev, e, rest)
     t = _zeit_locker(e.get("time"))
@@ -293,7 +352,7 @@ def _einzel(d, e, rest, roh, uid, pos, jetzt):
         rest.pop("time", None)
         if e["time"] != _fmt(t):
             roh["time"] = [e["time"], _fmt(t)]
-        _ende_abbilden(ev, d, t, e, rest, roh)
+        _ende_abbilden(ev, d, t, e, rest, roh, ueber_nacht=rhythmus)
         return [ev], True
     ev.add("DTSTART", d)
     ev.add("DTEND", d + timedelta(days=1))
@@ -437,7 +496,7 @@ def _regel_text(rr) -> str:
 
 def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
                      anker: date | None = None,
-                     jetzt: datetime | None = None) -> Calendar:
+                     jetzt: datetime | None = None, rhythmus: bool = False) -> Calendar:
     """Eine Routine als VCALENDAR.
 
     pausen – [(nr, pause_dict)] aus der top-level `pausen`-Liste, deren
@@ -446,6 +505,8 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
              Zurücklesen wieder stimmt.
     anker  – technischer Start für Routinen OHNE `seit` (die alte JSON kannte
              keinen Anfang). Wird auf das erste Vorkommen ausgerichtet.
+    rhythmus – Phase des Tagesrhythmus: TRANSP:TRANSPARENT, Ende vor Beginn
+             = am Folgetag (auch bei Abweichungen).
     """
     if not isinstance(r, dict):
         raise NichtAbbildbar("Routine ist kein Dict")
@@ -479,7 +540,7 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
         if r["time"] != _fmt(t):
             roh["time"] = [r["time"], _fmt(t)]
         ev.add("DTSTART", _ts(start_d, t))
-        _ende_abbilden(ev, start_d, t, r, rest, roh)
+        _ende_abbilden(ev, start_d, t, r, rest, roh, ueber_nacht=rhythmus)
     else:
         ev.add("DTSTART", start_d)
         ev.add("DTEND", start_d + timedelta(days=1))
@@ -526,7 +587,7 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
             raise NichtAbbildbar("abweichungen ist kein Dict")
         rest_abw = {}
         for rid, a in abw.items():
-            k = _abweichung_komponente(uid, rid, a, t, ev, jetzt)
+            k = _abweichung_komponente(uid, rid, a, t, ev, jetzt, rhythmus)
             if k is None:
                 rest_abw[rid] = a
             else:
@@ -536,6 +597,8 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
             rest["abweichungen"] = rest_abw
 
     _extras_anhaengen(ev, rest)
+    if rhythmus:
+        _durchsichtig(komps)
     kal = _kalender(komps, mit_tz=bool(t) or len(komps) > 1)
     gelesen = lesen(kal)
     if (len(gelesen) != 1 or gelesen[0]["art"] != "routine"
@@ -566,7 +629,7 @@ def _pausen_tage(r: dict, p: dict) -> list:
 _ABW_FELDER = {"tag", "time", "ende", "label", "ort", "entfaellt"}
 
 
-def _abweichung_komponente(uid, rid, a, t, master, jetzt):
+def _abweichung_komponente(uid, rid, a, t, master, jetzt, rhythmus=False):
     """Eine Abweichung einer Routine (am Handy verschobener Einzeltermin) als
     Komponente mit RECURRENCE-ID. None, wenn sie sich nicht exakt ausdrücken
     lässt — dann bleibt sie in den Extras."""
@@ -586,7 +649,8 @@ def _abweichung_komponente(uid, rid, a, t, master, jetzt):
     if "time" in a and at is None:
         return None
     ae = _hhmm(a.get("ende")) if "ende" in a else None
-    if "ende" in a and (ae is None or at is None or ae <= at):
+    if "ende" in a and (ae is None or at is None or ae == at
+                        or (ae < at and not (rhythmus and ae > time(0)))):
         return None
     m_label = str(master.get("SUMMARY") or "")
     m_ort = str(master.get("LOCATION") or "")
@@ -599,7 +663,7 @@ def _abweichung_komponente(uid, rid, a, t, master, jetzt):
     if at:
         ab.add("DTSTART", _ts(tag, at))
         if ae:
-            ab.add("DTEND", _ts(tag, ae))
+            ab.add("DTEND", _ts(tag if ae > at else tag + timedelta(days=1), ae))
     else:
         ab.add("DTSTART", tag)
     label = a.get("label") or m_label
@@ -727,6 +791,12 @@ def _kopf_lesen(ev, daten: dict) -> None:
         daten["ort"] = str(ev.get("LOCATION"))
     if str(ev.get(X_ABSAGE) or "").upper() == "TRUE":
         daten["absage_noetig"] = True
+    if ev.get(X_MOTIV) is not None and str(ev.get(X_MOTIV)):
+        daten["motiv"] = str(ev.get(X_MOTIV))
+    namen = []
+    for c in _liste(ev.get("CATEGORIES")):
+        namen += [str(x) for x in getattr(c, "cats", [c])]
+    daten.update(kalender_kategorie.aus_namen(namen))
 
 
 def _roh_anwenden(ev, daten: dict) -> None:
@@ -767,11 +837,8 @@ def _termin_lesen(ev, start, ende, extras):
     _kopf_lesen(ev, daten)
     if isinstance(start, datetime):
         daten["time"] = _fmt(start)
-        if isinstance(ende, datetime) and ende > start:
-            if ende.date() == start.date():
-                daten["ende"] = _fmt(ende)
-            elif ende == datetime.combine(start.date() + timedelta(days=1), time(0)):
-                daten["ende"] = "24:00"
+        if _ende_text(start, ende):
+            daten["ende"] = _ende_text(start, ende)
     _roh_anwenden(ev, daten)
     return _luecken_fuellen(daten, extras)
 
@@ -846,11 +913,8 @@ def _routine_lesen(ev, abw, start, ende, rr, extras):
     daten["rrule"] = regel
     if isinstance(start, datetime):
         daten["time"] = _fmt(start)
-        if isinstance(ende, datetime) and ende > start:
-            if ende.date() == start.date():
-                daten["ende"] = _fmt(ende)
-            elif ende == datetime.combine(start.date() + timedelta(days=1), time(0)):
-                daten["ende"] = "24:00"
+        if _ende_text(start, ende):
+            daten["ende"] = _ende_text(start, ende)
     _roh_anwenden(ev, daten)
     if str(ev.get(X_OHNE_ANFANG) or "").upper() != "TRUE":
         daten["seit"] = (start.date() if isinstance(start, datetime) else start).isoformat()
@@ -897,8 +961,9 @@ def _routine_lesen(ev, abw, start, ende, rr, extras):
             eintrag = {"tag": (a_s.date() if isinstance(a_s, datetime) else a_s).isoformat()}
             if isinstance(a_s, datetime):
                 eintrag["time"] = _fmt(a_s)
-                if isinstance(a_e, datetime) and a_e.date() == a_s.date() and a_e > a_s:
-                    eintrag["ende"] = _fmt(a_e)
+                a_ende = _ende_text(a_s, a_e)
+                if a_ende and a_ende != "24:00":
+                    eintrag["ende"] = a_ende
             s = str(a.get("SUMMARY") or "")
             if s and s != daten.get("label", ""):
                 eintrag["label"] = s

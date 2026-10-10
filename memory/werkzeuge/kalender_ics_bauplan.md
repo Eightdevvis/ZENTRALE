@@ -70,6 +70,74 @@ getrennt angucken". Umsetzung:
   gegen JSON (Fixture nie aktiv) — repariert in `tests/conftest.py`, alle
   Beide-Speicher-Tests laufen jetzt wirklich auch gegen .ics.
 
+## Tagesrhythmus „rhythmus" (10.10.2026)
+
+Sasha: „jeder mensch hat nen rythmus … ‚ich werde gegen 10 hungrig' ist kein
+termin … eine leichte hintergrund ebene … wenn ich heute come down um 9:30
+habe, dann 3 tage um 2 in sbett gehe, muss das änderbar sein … bau das
+gerüst, dann is das gleich für jeden anderen auch nutzbar."
+- **Ebene** `rhythmus` in `_DEFAULT_LAYERS`, .ics-Ordner `data/kalender/rhythmus/`.
+  NICHT im Google-Paar (das hat nur `termine`/`uncommitted`) — so lassen.
+- **Phase** = Routine dieser Ebene: `label`, `rrule` (Standard `FREQ=DAILY`),
+  `time` (Pflicht), `ende` (optional), `seit` (erster Tag, Standard heute),
+  UNTIL in der Regel = letzter Tag (fehlt = „bis auf Weiteres"), **`motiv`**
+  aus dem festen Katalog `kalender_rhythmus.MOTIVE` (nachthimmel, schlaf,
+  essen, sonne, fokus, sport, ruhe, unterwegs; je `name`/`was`; erweitern =
+  eine Zeile, Schlüssel nie umbenennen).
+- **Über Mitternacht:** nur in dieser Ebene darf `ende` vor `time` liegen
+  (Schlaf 23:00–07:00 = endet am Folgetag; `kalender_fehler.reihenfolge(…,
+  ueber_mitternacht=True)`, Ende == Beginn bleibt ENDE-VOR-BEGINN). Normale
+  Termine bleiben streng. `entries_in_range` markiert solche Vorkommen mit
+  `ueber_nacht: True` (am Tag des Beginns).
+- **.ics:** `TRANSP:TRANSPARENT`, `X-ZENTRALE-MOTIV:<schlüssel>`, Ende am
+  Folgetag als echtes DTEND am Folgetag (auch bei Abweichungen; „00:00" geht
+  in die Extras, weil es sich als „24:00" zurücklesen würde). Die Abbildung
+  bekommt `rhythmus=True` vom Speicher (Ebene), gelesen wird generisch.
+- **Variabel** (alles per Kennung, `kalender_kennung`): ab jetzt
+  `phase_aendern`, ein Tag `routine_tag_aendern`, ein Zeitraum
+  `routine_zeitraum_aendern(k, von, bis, time/ende/label/ort)` — je Tag eine
+  Abweichung (RECURRENCE-ID), „" = wieder wie die Regel (die Abweichung fällt
+  weg), höchstens 366 Tage. Gilt für alle Routinen, nicht nur Phasen.
+- **Nie ein Termin** (`kalender_konflikte.NUR_HINWEIS`): kein Alarm, keine
+  Kollisions-Rückfrage, keine Abwesenheit, kein Countdown/Takt
+  (`naechster_termin`), nicht im Morgenblick. `ebene_wechseln` lehnt Phasen ab
+  (IST-PHASE).
+- **KI:** `render_range_for_tool`/Imprint zeigen `[rhythmus · schlaf]
+  23:00-07:00 (bis Folgetag) Schlaf`; der Imprint sagt dazu, dass das Sashas
+  Tagesrhythmus ist, kein Termin, stiller Hintergrund.
+
+## Gruppen (CATEGORIES, 10.10.2026)
+
+Sasha: „in der monatsansicht seh ich lieber uni uni uni statt jeden tag welche
+fächer genau". Eine Gruppe fasst Einträge in der Monatsansicht zu EINEM Block
+zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
+- **Felder** an Termin, Spanne, Routine, Phase: `kategorie` = Schlüssel aus
+  dem festen Katalog `kalender_kategorie.KATEGORIEN` (`uni`, `arbeit`) oder
+  `custom`; bei `custom` der Name in `kategorie_name`. Keine Gruppe = Feld
+  fehlt. Eingaben über `kalender_kategorie.pruefen(kategorie, name)`:
+  ""/„keine" → entfernen; Groß/Klein egal; ein custom-Name, der zum Katalog
+  passt („Uni"), wird dessen Schlüssel. Codes KATEGORIE-UNBEKANNT,
+  KATEGORIE-NAME-FEHLT, UNBEKANNTES-FELD (Name ohne custom).
+- **.ics:** `CATEGORIES:<Anzeigename>` („Uni" bzw. der eigene Name), beim
+  Lesen wieder Schlüssel; weitere Kategorien von außen bleiben in
+  `kategorien_weitere`. Namen mit Komma/Semikolon gehen verlustfrei in die
+  Extras. `CATEGORIES` ist jetzt eine von ZENTRALE verwaltete Property.
+- **Ausgaben:** `kalender_kennung`-Dicts haben immer `kategorie` („keine",
+  wenn leer); `entries_in_range` reicht die Felder durch (auch an
+  Routinen-Vorkommen, mit `motiv`); `/api/calendar` setzt `kategorie:
+  "keine"` an jede Zeile. Lesetext der KI: `[termine · Uni]`.
+- **Kurs:** `kalender_kategorie.titel_schluessel` (aus der TUI in den Kern
+  gezogen; die TUI hat noch ihre Kopie) und
+  `kalender_kennung.kategorie_fuer_kurs(schluessel, kategorie, name,
+  probe=False)` — alle Einträge des Kurses in EINEM Schreibvorgang, ohne
+  Phasen und `erlebt`; `probe=True` schreibt nichts.
+- **Routen:** `GET /api/calendar/motive`, `GET /api/calendar/kategorien`,
+  `GET /api/calendar/phasen`, `POST|PUT|DELETE /api/calendar/phase`,
+  `POST /api/calendar/routine/zeitraum`, `POST /api/calendar/kategorie`,
+  `POST /api/calendar/kategorie/kurs`; `POST /api/calendar/entry` und die
+  Wochen-Routine nehmen `kategorie`/`kategorie_name` mit.
+- Tests: `tests/test_kalender_rhythmus.py` (beide Speicher).
+
 ## Stand Sync (07.10.2026) — eingerichtet und live
 
 - **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen

@@ -25,6 +25,15 @@ CODES = {
     "TAG-AUSSERHALB": "Der Tag gehört nicht zu dieser Spanne.",
     "UNBEKANNTES-FELD": "Ein Feld, das es hier nicht gibt.",
     "EBENE-UNBEKANNT": "Diese Ebene gibt es nicht.",
+    # Tagesrhythmus (Phasen) und Gruppen, seit 10.10.2026
+    "MOTIV-UNBEKANNT": "Dieses Motiv gibt es nicht (Liste: /api/calendar/motive).",
+    "KEINE-PHASE": "Das geht nur bei einer Phase des Tagesrhythmus.",
+    "IST-PHASE": "Eine Phase des Tagesrhythmus ist kein Termin — das geht mit ihr nicht.",
+    "PHASE-OHNE-ZEIT": "Eine Phase braucht eine Beginn-Uhrzeit.",
+    "ZEITRAUM-ZU-LANG": "Der Zeitraum ist zu lang.",
+    "KATEGORIE-UNBEKANNT": "Diese Gruppe gibt es nicht (Liste: /api/calendar/kategorien; eigene: custom + kategorie_name).",
+    "KATEGORIE-NAME-FEHLT": "Bei custom fehlt der eigene Name (kategorie_name).",
+    "KEIN-TREFFER": "Kein Eintrag passt.",
 }
 
 
@@ -52,10 +61,17 @@ def uhrzeit(feld, wert) -> str:
     return "%02d:%02d" % (h, m)
 
 
-def reihenfolge(beginn, ende) -> None:
-    """Ende ohne Beginn oder Ende ≤ Beginn ablehnen."""
+def reihenfolge(beginn, ende, ueber_mitternacht: bool = False) -> None:
+    """Ende ohne Beginn oder Ende ≤ Beginn ablehnen. `ueber_mitternacht`
+    (nur Phasen des Tagesrhythmus, z. B. Schlaf 23:00–07:00): ein Ende vor
+    dem Beginn heißt „endet am Folgetag"; nur Ende == Beginn ist falsch."""
     if ende and not beginn:
         raise KalenderAbgelehnt("ENDE-OHNE-BEGINN", f"Ende {ende} ohne Beginn-Uhrzeit")
+    if ueber_mitternacht:
+        if beginn and ende and ende == beginn:
+            raise KalenderAbgelehnt("ENDE-VOR-BEGINN",
+                                    f"Ende {ende} ist gleich dem Beginn {beginn}")
+        return
     if beginn and ende and ende <= beginn:
         raise KalenderAbgelehnt("ENDE-VOR-BEGINN",
                                 f"Ende {ende} liegt nicht nach Beginn {beginn}")

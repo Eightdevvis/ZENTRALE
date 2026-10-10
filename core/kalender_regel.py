@@ -71,3 +71,25 @@ def regel_gueltig(rule_str: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def mit_ende(rule_str: str, bis: str | None) -> str:
+    """Die Regel ohne altes UNTIL/COUNT, mit UNTIL=<bis>T235959 — oder ganz
+    ohne Ende, wenn `bis` leer/None ist („bis auf Weiteres"). Dieselbe Form
+    wie ki_kalender.regel_mit_ende (Phasen des Tagesrhythmus brauchen sie im
+    Kern)."""
+    teile = [p for p in (rule_str or "").split(";")
+             if p.strip() and p.split("=", 1)[0].strip().upper() not in ("UNTIL", "COUNT")]
+    if bis:
+        teile.append(f"UNTIL={bis.replace('-', '')}T235959")
+    return ";".join(teile)
+
+
+def ende_der_regel(rule_str: str | None) -> str | None:
+    """UNTIL der Regel als JJJJ-MM-TT, sonst None."""
+    for p in (rule_str or "").split(";"):
+        k, _, v = p.partition("=")
+        if k.strip().upper() == "UNTIL" and len(v.strip()) >= 8:
+            v = v.strip()
+            return f"{v[:4]}-{v[4:6]}-{v[6:8]}"
+    return None

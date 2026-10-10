@@ -40,7 +40,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import state  # Logging in den UI-Terminal-Stream
+import kalender_kategorie
 import kalender_regel
+import kalender_rhythmus
 import kalender_speicher
 from kalender_ics import FELD as _ICS_FELD, ohne_interna
 
@@ -79,6 +81,16 @@ _DEFAULT_LAYERS = {
     "uncommitted": {
         "label":           "Uncommitted",
         "color":           "#888888",
+        "default_visible": True,
+        "entries":         {},
+        "routines":        [],
+    },
+    # Tagesrhythmus (Sasha, 10.10.2026: „eine leichte hintergrund ebene"):
+    # Phasen wie Schlaf, Essen, coming down — Routinen mit `motiv`, nie ein
+    # Termin (kalender_rhythmus.py). Nicht im Google-Abgleich.
+    kalender_rhythmus.EBENE: {
+        "label":           "Rhythmus",
+        "color":           "#556677",
         "default_visible": True,
         "entries":         {},
         "routines":        [],
@@ -184,6 +196,17 @@ def ensure_init() -> None:
 
 
 # ── Schreib-API ────────────────────────────────────────────────────────
+def _mit_kategorie(extras: dict) -> dict:
+    """`kategorie`/`kategorie_name` in den Zusatzfeldern geprüft übernehmen
+    (kalender_kategorie.pruefen; wirft KalenderAbgelehnt, dann ist nichts
+    geschrieben — die Prüfung läuft vor dem Laden). "keine" = kein Feld."""
+    if "kategorie" not in extras and "kategorie_name" not in extras:
+        return extras
+    rest = {k: v for k, v in extras.items() if k not in ("kategorie", "kategorie_name")}
+    kalender_kategorie.setzen(rest, extras.get("kategorie"), extras.get("kategorie_name"))
+    return rest
+
+
 def add_entry(layer: str, day: str, label: str,
               time: str | None = None, **extras) -> bool:
     """
@@ -204,7 +227,7 @@ def add_entry(layer: str, day: str, label: str,
         entry: dict = {"label": label}
         if time:
             entry["time"] = time
-        entry.update(extras)
+        entry.update(_mit_kategorie(extras))
         entries.setdefault(day, []).append(entry)
         _save_raw(data)
         return True
@@ -238,7 +261,7 @@ def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
             return False
         entries = data["layers"][layer].setdefault("entries", {})
         entry: dict = {"label": label, "bis": bis}
-        entry.update(extras)
+        entry.update(_mit_kategorie(extras))
         entries.setdefault(von, []).append(entry)
         _save_raw(data)
         return True
@@ -296,8 +319,9 @@ def naechster_termin(jetzt: datetime | None = None) -> dict | None:
         data = _load_raw()
     except Exception:
         return None
+    # Der Tagesrhythmus ist kein Termin: kein Countdown, kein Takt-Anstoß.
     sichtbar = [n for n, lyr in data.get("layers", {}).items()
-                if lyr.get("default_visible", True)]
+                if lyr.get("default_visible", True) and n != kalender_rhythmus.EBENE]
     tage = entries_in_range(heute, heute + timedelta(days=1), layers=sichtbar)
     for iso in sorted(tage):
         ist_morgen = iso != heute.isoformat()
@@ -367,7 +391,7 @@ def routine_aendern(label: str, layer: str | None = None,
     for _l, _i, r in treffer:
         t = felder["time"] if felder.get("time") is not None else r.get("time")
         e = felder["ende"] if felder.get("ende") is not None else r.get("ende")
-        _zeiten(t or None, e or None)
+        _zeiten(t or None, e or None, ueber_mitternacht=(_l == kalender_rhythmus.EBENE))
     geaendert = 0
     with _lock:
         data = _load_raw()
@@ -602,7 +626,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
         routine: dict = {"label": label, "rrule": rrule_str}
         if time:
             routine["time"] = time
-        routine.update(extras)
+        routine.update(_mit_kategorie(extras))
         data["layers"][layer].setdefault("routines", []).append(routine)
         _save_raw(data)
         return True
@@ -686,6 +710,19 @@ def kennung(e: dict) -> str | None:
     return str(e["uid"]) if e.get("uid") else None
 
 
+# Felder einer Routine, die jedes Vorkommen mitbekommt (zusätzlich zu Zeit,
+# Ende, Ort …): Motiv der Phase, Gruppe.
+_MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere")
+
+
+def _ueber_nacht_markieren(e: dict) -> None:
+    """Phase über Mitternacht (Schlaf 23:00–07:00): `ueber_nacht: True` —
+    das Vorkommen steht am Tag des Beginns und endet am Folgetag."""
+    if kalender_rhythmus.ist_phase(e) and kalender_rhythmus.ueber_mitternacht(
+            e.get("time"), e.get("ende")):
+        e["ueber_nacht"] = True
+
+
 def entries_in_range(start: date, end: date,
                      layers: list[str] | None = None) -> dict:
     """
@@ -765,6 +802,7 @@ def entries_in_range(start: date, end: date,
                     eintrag = {"layer": layer_name, **_aussen(e)}
                     if kennung(e):
                         eintrag["kennung"] = kennung(e)
+                    _ueber_nacht_markieren(eintrag)
                     out.setdefault(day_iso, []).append(eintrag)
 
         # 2. Routinen expandieren
@@ -790,6 +828,11 @@ def entries_in_range(start: date, end: date,
                         entry["ende"] = r["ende"]
                     if r.get("ort"):
                         entry["ort"] = r["ort"]
+                    # Phase (motiv) und Gruppe (kategorie) mitgeben — die
+                    # Ansichten fassen danach zusammen, die KI liest sie.
+                    for feld in _MITGEGEBEN:
+                        if r.get(feld):
+                            entry[feld] = copy.deepcopy(r[feld])
                     # absage_noetig: diese Routine muss bei Abwesenheit aktiv
                     # abgesagt werden (z.B. Geige bei der Lehrerin), fällt NICHT
                     # einfach weg wie Parkour. Steuert den Absage-Alarm.
@@ -822,6 +865,7 @@ def entries_in_range(start: date, end: date,
                             for k in ("time", "ende", "label", "ort"):
                                 if ab.get(k):
                                     entry[k] = ab[k]
+                    _ueber_nacht_markieren(entry)
                     out.setdefault(day_iso, []).append(entry)
             except Exception as e:
                 state.push_log(

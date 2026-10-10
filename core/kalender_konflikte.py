@@ -14,6 +14,9 @@ import hashlib
 import os
 from datetime import date, timedelta
 
+import kalender_kategorie
+import kalender_rhythmus
+
 # Kein `import kalender` (das wäre ein Import-Kreis, kalender reicht dieses
 # Modul ja weiter): die zwei Lesewege, die hier gebraucht werden, schließt
 # kalender.py beim Laden an (anschliessen() ganz unten in kalender.py). So
@@ -26,10 +29,13 @@ entries_in_range = None
 # keine Rückfrage aus und macht keine Abwesenheit — die KI liest es als
 # „vielleicht" (Sasha: „nur als hinweis").
 UNVERBINDLICH = "uncommitted"
+# Tagesrhythmus (10.10.2026): Phasen sind gar kein Termin — Hintergrund.
+RHYTHMUS = kalender_rhythmus.EBENE
+NUR_HINWEIS = (UNVERBINDLICH, RHYTHMUS)
 
 
 def _verbindlich(e: dict) -> bool:
-    return e.get("layer") != UNVERBINDLICH and not e.get("deaktiviert")
+    return e.get("layer") not in NUR_HINWEIS and not e.get("deaktiviert")
 
 
 def anschliessen(laden, im_zeitraum) -> None:
@@ -287,8 +293,8 @@ def _away_blocks(start: date, end: date, data: dict | None = None) -> list[dict]
         data = _load_raw()
     blocks: list[dict] = []
     for lname, layer in data.get("layers", {}).items():
-        if lname == UNVERBINDLICH:
-            continue                     # eine Vielleicht-Reise macht nicht abwesend
+        if lname in NUR_HINWEIS:
+            continue                     # Vielleicht-Reise/Phase macht nicht abwesend
         for day_iso, day_entries in layer.get("entries", {}).items():
             for e in day_entries:
                 bis = e.get("bis")
@@ -387,6 +393,8 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
             for e in ents:
                 if not (e.get("recurring") and e.get("absage_noetig")):
                     continue
+                if e.get("layer") in NUR_HINWEIS:
+                    continue
                 if e.get("ausfall"):
                     continue  # fällt eh aus (Ferien) → nichts abzusagen
                 if e.get("deaktiviert"):
@@ -421,6 +429,23 @@ def _absage_alarms(away_blocks: list[dict]) -> list[str]:
                     f"absagen{wo}, er entfällt nicht von selbst."
                 )
     return lines
+
+
+def _ebene_text(e: dict) -> str:
+    """Was in der Klammer vor einer Zeile steht: Ebene, bei Unverbindlichem
+    „vielleicht", bei Phasen das Motiv, dahinter die Gruppe (wenn gesetzt):
+    [termine] · [uncommitted · vielleicht] · [rhythmus · schlaf] · [termine · Uni]"""
+    lname = e.get("layer")
+    if lname == UNVERBINDLICH:
+        teile = ["uncommitted · vielleicht"]
+    elif lname == RHYTHMUS:
+        teile = [RHYTHMUS] + ([e["motiv"]] if e.get("motiv") else [])
+    else:
+        teile = [str(lname)]
+    gruppe = kalender_kategorie.anzeige(e)
+    if gruppe:
+        teile.append(gruppe)
+    return " · ".join(teile)
 
 
 def render_range_for_tool(start: date, end: date,
@@ -489,7 +514,9 @@ def render_range_for_tool(start: date, end: date,
                 continue
             # Zeit MIT Ende anzeigen, wenn vorhanden ('17:45-18:30'),
             # sonst nur Startzeit - das Modell sieht so die Dauer direkt.
-            if e.get("time") and e.get("ende"):
+            if e.get("time") and e.get("ende") and e.get("ueber_nacht"):
+                t = f"{e['time']}-{e['ende']} (bis Folgetag) "
+            elif e.get("time") and e.get("ende"):
                 t = f"{e['time']}-{e['ende']} "
             elif e.get("time"):
                 t = f"{e['time']} "
@@ -503,9 +530,7 @@ def render_range_for_tool(start: date, end: date,
                     bis = f" (bis {date.fromisoformat(e['bis']).strftime('%d.%m.')})"
                 except ValueError:
                     pass
-            ebene = ("uncommitted · vielleicht" if e.get("layer") == UNVERBINDLICH
-                     else e['layer'])
-            lines.append(f"  [{ebene}] {t}{e['label']}{bis}{ort}")
+            lines.append(f"  [{_ebene_text(e)}] {t}{e['label']}{bis}{ort}")
         # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
         #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
@@ -583,7 +608,13 @@ def imprint_for_prompt(tage: int | None = None) -> str:
               "damit kollidiert, sagst du es nochmal.\n\n"
               "[uncommitted · vielleicht] heißt: unverbindlich, noch nicht "
               "zugesagt. Erwähne es höchstens als Möglichkeit, plane nicht "
-              "fest damit und warne nicht, wenn es mit etwas kollidiert.")
+              "fest damit und warne nicht, wenn es mit etwas kollidiert.\n\n"
+              "[rhythmus · <motiv>] ist Sashas Tagesrhythmus (wann er meist "
+              "schläft, isst, runterkommt …) — KEIN Termin. Stiller "
+              "Hintergrund: nicht ansagen, nicht warnen, nie als belegt "
+              "zählen; nur nutzen, um besser einzuschätzen (z. B. nichts "
+              "ungefragt in die Schlafzeit legen). Er ist variabel und darf "
+              "geändert werden, wenn Sasha es sagt.")
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 
@@ -615,8 +646,8 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
         d = date.fromisoformat((day or "").strip())
     except ValueError:
         return []
-    if layer == UNVERBINDLICH:
-        return []                         # Unverbindliches fragt nie nach
+    if layer in NUR_HINWEIS:
+        return []                         # Unverbindliches/Phasen fragen nie nach
     existing = [e for e in entries_in_range(d, d).get(d.isoformat(), [])
                 if _verbindlich(e)]   # deaktivierte und uncommitted zählen nicht mit
     phantom: dict = {"layer": (layer or "termine"),

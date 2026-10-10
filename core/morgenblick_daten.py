@@ -22,6 +22,7 @@ from email.utils import parsedate_to_datetime
 import ablage
 import gespraeche
 import kalender
+import kalender_rhythmus
 import lists
 import mail
 import projekte
@@ -203,7 +204,9 @@ def ueberschneidungen(termine) -> list:
 def _kalender(heute, jetzt):
     tage = kalender.entries_in_range(heute, heute + timedelta(days=1))
     def tag(d):
-        ts = [termin(e) for e in tage.get(d.isoformat(), [])]
+        # Der Tagesrhythmus (Ebene rhythmus) ist kein Termin des Tages.
+        ts = [termin(e) for e in tage.get(d.isoformat(), [])
+              if e.get("layer") != kalender_rhythmus.EBENE]
         ts = [t for t in ts if t]
         ts.sort(key=lambda t: (t.get("start") is not None, t.get("start") or 0))
         return ts
