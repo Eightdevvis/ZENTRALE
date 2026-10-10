@@ -63,6 +63,22 @@ def test_pruefen_saeubert_und_lehnt_ab():
         stil.pruefen({"color": "#ffffff"}, namen=["border-style"])
     assert stil.unterschied({"color": "#ffffff"}, {"color": "#ffffff", "border-style": "none"}) == \
         {"border-style": "none"}
+    assert stil.unterschied({"color": "#ffffff"}, {}) == {"color": None}   # entfernt
+
+
+def test_none_heisst_entfernen_und_anwenden_laesst_es_weg():
+    with pytest.raises(ValueError):
+        stil.pruefen({"color": None})                        # ein Stil hat keine Lücken
+    assert stil.pruefen({"color": None, "border-style": "Double"}, entfernen=True) == \
+        {"color": None, "border-style": "double"}
+    with pytest.raises(ValueError):
+        stil.pruefen({"font-size": None}, ["color"], entfernen=True)
+    alt = {"color": "#ffffff", "border-style": "dashed"}
+    neu = stil.anwenden(alt, {"color": None, "background-color": "#202030", "border-color": None})
+    assert neu == {"border-style": "dashed", "background-color": "#202030"}
+    assert alt == {"color": "#ffffff", "border-style": "dashed"}   # alt bleibt
+    for a, b in ((alt, neu), (neu, alt), ({}, alt), (alt, {})):
+        assert stil.anwenden(a, stil.unterschied(a, b)) == b
 
 
 # ── Farbwähler: Geometrie ───────────────────────────────────────────────────
@@ -326,10 +342,12 @@ def test_angebot_als_schema_mit_eingeschraenkter_wahl():
     schema["properties"]["border-style"]["oneOf"] = [
         {"const": "solid", "title": "dünn"}, {"const": "double", "title": "doppelt"}]
     sb = Stylebox({}, schema)
-    assert sb.zeilen()[0]["text"] == "‹ dünn ›"
-    sb.taste(curses.KEY_RIGHT)
+    assert sb.zeilen()[0]["text"] == "—"                     # nicht gesetzt
+    sb.taste(curses.KEY_RIGHT)                               # weiter ab der Vorgabe (solid)
+    assert sb.zeilen()[0]["text"] == "‹ doppelt ›"
     sb.taste(curses.KEY_RIGHT)
     assert sb.werte["border-style"] == "solid"
+    assert sb.zeilen()[0]["text"] == "‹ dünn ›"
 
 
 def test_wahl_aendern_mit_pfeilen_und_leertaste():
@@ -344,7 +362,7 @@ def test_wahl_aendern_mit_pfeilen_und_leertaste():
     sb.taste(ord(" "))
     assert sb.werte["--zentrale-muster"] == "punkte"
     sb.taste(curses.KEY_BACKSPACE)
-    assert "--zentrale-muster" not in sb.werte              # zurück auf Anfang
+    assert "--zentrale-muster" not in sb.werte              # entfernt (war nicht gesetzt)
     sb.taste(curses.KEY_UP)
     assert sb.aktuell["name"] == "color"
 
@@ -388,6 +406,91 @@ def test_enter_gibt_nur_geaenderte_gueltige_css_zurueck():
     assert erg == ("fertig", {"border-style": "dotted"})
     assert stil.pruefen(sb.ergebnis, ALLES) == sb.ergebnis
     assert sb.ergebnis == {"border-style": "dotted"}
+
+
+def test_entfernen_setzt_nicht_gesetzt_und_gibt_none_zurueck():
+    sb = Stylebox(START, ALLES)
+    for ch in (curses.KEY_BACKSPACE, 127, 8, curses.KEY_DC):
+        sb.feld = 0
+        sb.werte["border-style"] = "dashed"
+        sb.taste(ch)
+        assert "border-style" not in sb.werte
+    assert sb.zeilen()[0]["text"] == "—"
+    sb.taste(curses.KEY_DOWN)
+    sb.taste(curses.KEY_DC)                                  # Rahmenfarbe weg
+    assert sb.zeilen()[1]["text"] == "—" and sb.zeilen()[1]["farbe"] is None
+    for _ in range(3):
+        sb.taste(9)                                          # Muster: nie gesetzt
+    sb.taste(curses.KEY_BACKSPACE)
+    erg = sb.taste(ENTER)
+    assert erg == ("fertig", {"border-style": None, "border-color": None})
+    assert stil.pruefen(sb.ergebnis, ALLES, entfernen=True) == sb.ergebnis
+    assert stil.anwenden(START, sb.ergebnis) == {"background-color": "#202030", "color": "#ffffff"}
+
+
+def test_entfernt_wieder_setzen_und_r_zurueck_auf_anfang():
+    sb = Stylebox(START, ALLES)
+    sb.taste(curses.KEY_BACKSPACE)
+    sb.taste(curses.KEY_RIGHT)                               # wieder gesetzt, ab Vorgabe solid
+    assert sb.werte["border-style"] == "dashed"
+    assert sb.taste(ENTER) == ("fertig", {})                 # wie am Anfang
+    sb = Stylebox(START, ALLES)
+    sb.taste(curses.KEY_DOWN)
+    sb.taste(curses.KEY_DC)
+    sb.taste(ord(" "))                                       # Farbwähler wie sonst
+    assert sb.waehler is not None and sb.waehler.hex == "#ffffff"
+    tippen(sb, "#123456")
+    sb.taste(ENTER)
+    assert sb.werte["border-color"] == "#123456"
+    sb.taste(ord("r"))                                       # zurück auf den Anfang
+    assert sb.werte["border-color"] == "#ff8800"
+    sb.taste(curses.KEY_DC)
+    sb.taste(ord("r"))
+    assert sb.werte["border-color"] == "#ff8800"
+    # neu gesetzt und wieder entfernt → None (Aufrufer räumt auf); r → gar nichts
+    sb.taste(curses.KEY_DOWN)
+    sb.taste(curses.KEY_DOWN)
+    sb.taste(curses.KEY_DOWN)                                # Muster
+    sb.taste(ord(" "))
+    sb.taste(curses.KEY_DC)
+    assert sb.taste(ENTER) == ("fertig", {"--zentrale-muster": None})
+    sb = Stylebox({"color": "kaputt"}, ["color"])            # kaputter Anfang
+    sb.taste(curses.KEY_DC)
+    assert sb.taste(ENTER) == ("fertig", {"color": None})
+    sb = Stylebox({"color": "kaputt"}, ["color"])
+    sb.taste(curses.KEY_DC)
+    sb.taste(ord("r"))
+    assert sb.taste(ENTER) == ("fertig", {})
+
+
+def test_entfernen_beim_gesperrten_icon_geht_nicht():
+    sb = Stylebox({"background-image": "url(x.png)"}, ["background-image"])
+    for ch in (curses.KEY_BACKSPACE, curses.KEY_DC, ord("r")):
+        sb.taste(ch)
+    assert "gesperrt" in sb.hinweis
+    assert sb.taste(ENTER) == ("fertig", {})
+
+
+def test_abbruch_nach_entfernen_laesst_das_original():
+    original = dict(START)
+    sb = Stylebox(original, ALLES)
+    sb.taste(curses.KEY_BACKSPACE)
+    assert sb.taste(ESC) == ("abbruch",) and sb.ergebnis is None
+    assert original == START
+
+
+def test_vorschau_ohne_entfernte_eigenschaft():
+    sb = Stylebox(START, ALLES, text="Uni")
+    sb.feld = ALLES.index("background-color")
+    sb.taste(curses.KEY_DC)
+    bild = sb.vorschau(9, 5, grund=(1, 2, 3))
+    assert bild[0][0][2] == (1, 2, 3) and bild[2][4][2] == (1, 2, 3)   # Fläche des Themes
+    sb.feld = 0
+    sb.taste(curses.KEY_DC)                                  # Rahmenstil weg → wie ohne Stil
+    assert sb.vorschau(4, 3)[0][0][0] == RAHMEN_ZEICHEN["solid"][0]
+    z = _Z()
+    sb.zeichne(z, 0, 0, 14, 70)
+    assert "—" in z.text()
 
 
 def test_esc_gibt_none():

@@ -9,7 +9,7 @@ sie kennen keinen Aufrufer, speichern nichts und fragen kein Backend.
 Eingehängt seit 10.10.2026 im Kalender: Feld „Stylebox" im Terminformular
 ([kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md)); das
 Angebot für einen Kasten steht als `stil.KASTEN` in `core/stil.py` (dort auch
-`als_css`/`aus_css` und die CSS3-Farbnamen für iCalendar COLOR).
+`als_css`/`aus_css`, `anwenden` und die CSS3-Farbnamen für iCalendar COLOR).
 
 | Was | Wo |
 |---|---|
@@ -27,15 +27,16 @@ solange es offen ist, jedes Bild zeichnen.
 ```python
 from tui.bausteine.farbwaehler import Farbwaehler   # als Skript: from bausteine.farbwaehler …
 from tui.bausteine.stylebox import Stylebox
+import stil                                          # core/stil.py
 
 self.modal = Stylebox(termin_stil,                  # dict CSS-Name → Wert
                       ["border-style", "border-color", "background-color",
                        "color", "--zentrale-muster", "background-image"],
                       titel="termin", text="Uni 08:30")
 # in taste(ch):
-erg = self.modal.taste(ch)          # None | ("fertig", {geänderte css}) | ("abbruch",)
+erg = self.modal.taste(ch)          # None | ("fertig", änderung) | ("abbruch",)
 if erg and erg[0] == "fertig":
-    termin_stil.update(erg[1])      # nur Geändertes; speichern tut die Ansicht
+    termin_stil = stil.anwenden(termin_stil, erg[1])   # None = entfernen; speichern tut die Ansicht
 if erg:
     self.modal = None
 # in draw_*:
@@ -47,8 +48,9 @@ self.modal.zeichne(self.z, y, x, h, w)
   `("fertig", "#rrggbb")` | `("abbruch",)`; `hex`, `rgb`, `zeichne(z, y, x, h, w)`,
   `mittig(H, W, h, w)`, `tasten()` (für eine Fußzeile).
 - `Stylebox(stil, optionen, titel="stil", text="Beispiel")`; `taste(ch)` →
-  None | `("fertig", dict)` | `("abbruch",)`; danach `ergebnis` (dict, bei
-  Abbruch None). `zeilen()` und `vorschau(b, h)` sind rein (Tests, andere
+  None | `("fertig", änderung)` | `("abbruch",)`; danach `ergebnis` (dict, bei
+  Abbruch None). Die Änderung anwenden mit **`stil.anwenden(alt, änderung)`**,
+  nicht mit `dict.update` (das schriebe None hinein). `zeilen()` und `vorschau(b, h)` sind rein (Tests, andere
   Zeichner). Ist der Farbwähler offen, zeichnet `zeichne` ihn an derselben
   Stelle, und `tasten()` liefert seine Tasten.
 - `z` ist der Kontext der TUI (`tui/ansichten/kontext.py`): gebraucht werden
@@ -129,16 +131,31 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
 - **Icon**: das Hochladen gibt es noch nicht. Bietet der Aufrufer
   `background-image` an, steht die Zeile da, lässt sich aber nicht öffnen
   (Hinweis „Icon: noch gesperrt"); ein vorhandener Wert bleibt unverändert.
-- **Rückgabe**: Enter prüft mit `stil.pruefen` und gibt nur zurück, was sich
-  gegenüber dem Anfang geändert hat (`stil.unterschied`). Kaputte Werte im
-  Start-Stil werden still weggelassen statt das Modal zu sprengen.
+- **Nicht gesetzt** (seit 10.10.2026): eine Eigenschaft ohne Wert steht in
+  der Liste als „—" (auch eine Auswahl wie Rahmen — die Vorgabe zeigt sich
+  erst, wenn man ändert), die Vorschau zeichnet ohne sie (Farbe des Themes,
+  ohne Rahmenstil durchgezogen). ⌫/Entf entfernt die gewählte Eigenschaft;
+  ←→/Leertaste/`#` setzen sie wie gewohnt wieder (eine Auswahl läuft ab der
+  Vorgabe weiter, der Farbwähler startet weiß). `r` holt den Wert vom Anfang
+  zurück. Enter nimmt immer die ganze Box.
+- **Rückgabe** (Vertrag): Enter prüft mit `stil.pruefen` und gibt eine
+  **Änderung** zurück — nur, was sich gegenüber dem Anfang geändert hat
+  (`stil.unterschied`): neuer Wert als `#rrggbb`/Wort, **entfernt als
+  `None`**, z. B. `{"border-style": None, "color": "#ff8800"}`. None kommt nur
+  für Eigenschaften, die der Start-Stil mitbrachte (auch kaputte) oder die in
+  dieser Sitzung geändert wurden; nie Gesetztes, das nur ⌫ bekam, fehlt.
+  `stil.anwenden(alt, änderung)` → neues dict ohne die None-Namen (`alt`
+  bleibt); `stil.pruefen(änderung, namen, entfernen=True)` lässt None durch.
+  Kaputte Werte im Start-Stil werden still weggelassen statt das Modal zu
+  sprengen; Abbruch lässt den Stil des Aufrufers, wie er war.
 
 | Taste | was |
 |---|---|
 | ↑ ↓ (Tab, Shift+Tab) | Eigenschaft wählen |
 | ← → / Leertaste | Auswahl ändern; bei einer Farbe: Leertaste oder → öffnet den Farbwähler (`#` öffnet ihn gleich mit Hex-Feld) |
-| ⌫ / Entf | diese Eigenschaft zurück auf den Anfang |
-| Enter | nehmen → `("fertig", {geänderte css})` |
+| ⌫ / Entf | diese Eigenschaft entfernen („—", Rückgabe None) |
+| `r` | diese Eigenschaft zurück auf den Anfang |
+| Enter | nehmen → `("fertig", {geänderte css, entfernte: None})` |
 | Esc | abbrechen → `("abbruch",)`, `ergebnis` = None |
 
 Im offenen Farbwähler gelten seine Tasten; sein Enter schreibt die Farbe in

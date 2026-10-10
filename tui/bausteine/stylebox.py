@@ -15,11 +15,13 @@
 #
 # Tasten: ↑↓ (Tab, Shift+Tab) Eigenschaft; ←→ oder Leertaste ändern eine
 # Auswahl; bei einer Farbe öffnen Leertaste/→ den Farbwähler (# öffnet ihn
-# gleich mit Hex-Feld); ⌫ setzt die Eigenschaft auf den Anfang zurück;
+# gleich mit Hex-Feld); ⌫/Entf entfernt die Eigenschaft („—", nicht
+# gesetzt; ändern setzt sie wieder), r setzt sie auf den Anfang zurück;
 # Enter nimmt, Esc bricht ab. Icon hochladen steht da, ist aber gesperrt
 # (readOnly) — es lässt sich nicht öffnen.
 #
-# `taste(ch)` → None | ("fertig", {geänderte css}) | ("abbruch",); danach
+# `taste(ch)` → None | ("fertig", {geänderte css, entfernte = None}) |
+# ("abbruch",); der Aufrufer wendet das mit stil.anwenden(alt, …) an; danach
 # steht dasselbe in `ergebnis` (None bei Abbruch). Rein gerechnet:
 # `zeilen()` (die Liste), `vorschau(b, h)` (das gestylte Kästchen als
 # Zellen); gezeichnet über den Kontext: `zeichne(z, y, x, h, w)`.
@@ -100,7 +102,9 @@ class Stylebox:
                 if not grund:
                     anfang[name] = sauber
         self.anfang = anfang
-        self.werte = dict(anfang)
+        self.eingang = set(stil or {}) & set(self.namen)   # angeboten und mitgebracht (auch kaputt)
+        self.werte = dict(anfang)       # fehlt ein Name: nicht gesetzt („—")
+        self.beruehrt = set()           # in dieser Sitzung geändert/entfernt
         self.feld = 0
         self.waehler = None             # offener Farbwähler
         self.hinweis = ""
@@ -117,6 +121,7 @@ class Stylebox:
             erg = self.waehler.taste(ch)
             if erg and erg[0] == "fertig":
                 self.werte[self.aktuell["name"]] = erg[1]
+                self.beruehrt.add(self.aktuell["name"])
             if erg:
                 self.waehler = None
             return None
@@ -126,7 +131,10 @@ class Stylebox:
             return ("abbruch",)
         if ch in ENTER:
             neu = stil_kern.pruefen(self.werte, self.namen)
-            self.ergebnis = stil_kern.unterschied(self.anfang, neu)
+            erg = stil_kern.unterschied(self.anfang, neu)   # Entferntes aus dem Anfang = None
+            for name in self.beruehrt - set(neu):           # auch Kaputtes/neu Gesetztes, das weg ist
+                erg[name] = None
+            self.ergebnis = erg
             return ("fertig", self.ergebnis)
         f = self.aktuell
         if f is None:
@@ -143,26 +151,34 @@ class Stylebox:
             jetzt = self.werte.get(f["name"], f["vorgabe"])
             i = werte.index(jetzt) if jetzt in werte else 0
             self.werte[f["name"]] = werte[(i + (-1 if ch == curses.KEY_LEFT else 1)) % len(werte)]
+            self.beruehrt.add(f["name"])
         elif f["art"] == "farbe" and ch in (curses.KEY_RIGHT, ord(" "), ord("#")):
             self.waehler = Farbwaehler(self.werte.get(f["name"]))
             if ch == ord("#"):
                 self.waehler.taste(ch)
-        elif ch in ZURUECK or ch == curses.KEY_DC:
+        elif f["art"] == "gesperrt" and ch in ZURUECK + (curses.KEY_DC, ord("r")):
+            self.hinweis = "%s: noch gesperrt" % f["titel"]
+        elif ch in ZURUECK or ch == curses.KEY_DC:      # entfernen: nicht gesetzt
+            if self.werte.pop(f["name"], None) is not None or f["name"] in self.eingang:
+                self.beruehrt.add(f["name"])            # nie Gesetztes kommt nicht zurück
+        elif ch == ord("r"):                            # zurück auf den Anfang
             if f["name"] in self.anfang:
                 self.werte[f["name"]] = self.anfang[f["name"]]
             else:
                 self.werte.pop(f["name"], None)
+            self.beruehrt.discard(f["name"])
         return None
 
     def tasten(self):
         if self.waehler is not None:
             return self.waehler.tasten()
         return [("↑↓", "wählen"), ("←→", "ändern"), ("space", "farbe"),
-                ("⌫", "anfang"), ("enter", "nehmen"), ("esc", "zurück")]
+                ("⌫", "entfernen"), ("r", "anfang"), ("enter", "nehmen"), ("esc", "zurück")]
 
     # ── Inhalt (rein) ───────────────────────────────────────────────────
     def zeilen(self):
-        """Je angebotener Eigenschaft: dict(name, titel, text, art, farbe, aktiv)."""
+        """Je angebotener Eigenschaft: dict(name, titel, text, art, farbe, aktiv);
+        nicht gesetzt → text „—"."""
         raus = []
         for i, f in enumerate(self.felder):
             wert = self.werte.get(f["name"])
@@ -172,9 +188,10 @@ class Stylebox:
             elif f["art"] == "farbe":
                 text = wert or "—"
                 farbe = stil_kern.hex_zu_rgb(wert) if wert else None
+            elif wert is None:
+                text = "—"
             else:
-                w = wert if wert is not None else f["vorgabe"]
-                text = "‹ %s ›" % next((t for c, t in f["wahl"] if c == w), w)
+                text = "‹ %s ›" % next((t for c, t in f["wahl"] if c == wert), wert)
             raus.append({"name": f["name"], "titel": f["titel"], "text": text,
                          "art": f["art"], "farbe": farbe, "aktiv": i == self.feld})
         return raus

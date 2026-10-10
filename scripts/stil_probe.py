@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tui.ansichten import kontext  # noqa: E402
 from tui.bausteine.farbwaehler import Farbwaehler  # noqa: E402
-from tui.bausteine.stylebox import Stylebox  # noqa: E402
+from tui.bausteine.stylebox import Stylebox, stil_kern  # noqa: E402
 
 BEISPIEL = {"border-style": "dashed", "border-color": "#ff8800",
             "background-color": "#202030", "color": "#ffffff"}
@@ -63,7 +63,7 @@ def lauf(stdscr, thema):
         if erg:
             meldung = "zurück: %r" % (erg,)
             if erg[0] == "fertig" and isinstance(erg[1], dict):
-                stil.update(erg[1])
+                stil = stil_kern.anwenden(stil, erg[1])     # None = entfernt
             modal = None
 
 

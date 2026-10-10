@@ -137,10 +137,12 @@ def wert_pruefen(name, wert):
     return wert.strip(), None
 
 
-def pruefen(stil, namen=None):
+def pruefen(stil, namen=None, entfernen=False):
     """Ein Stil-dict → gesäubertes dict (Farben klein und sechsstellig).
     Eigenschaften außerhalb von `namen` (falls gegeben) oder mit falschem
-    Wert → ValueError mit einem deutschen Satz."""
+    Wert → ValueError mit einem deutschen Satz. `entfernen=True` prüft eine
+    Änderung (Rückgabe der Stylebox): dort heißt None „Eigenschaft
+    entfernen" und bleibt None."""
     if not isinstance(stil, dict):
         raise ValueError("stil muss ein dict sein")
     erlaubt = set(EIGENSCHAFTEN if namen is None else namen)
@@ -148,6 +150,9 @@ def pruefen(stil, namen=None):
     for name, wert in stil.items():
         if name not in erlaubt:
             raise ValueError("nicht angeboten: %s" % name)
+        if wert is None and entfernen:
+            raus[name] = None
+            continue
         sauber, grund = wert_pruefen(name, wert)
         if grund:
             raise ValueError(grund)
@@ -156,10 +161,28 @@ def pruefen(stil, namen=None):
 
 
 def unterschied(alt, neu):
-    """Nur, was sich gegenüber `alt` geändert hat (für die Rückgabe der
-    Stylebox: der Aufrufer macht `stil.update(...)`)."""
-    alt = alt or {}
-    return {k: v for k, v in (neu or {}).items() if alt.get(k) != v}
+    """Nur, was sich gegenüber `alt` geändert hat — eine Änderung: neue oder
+    andere Werte, und was in `alt` stand, in `neu` aber fehlt, als None
+    („entfernen", 2026-10-10). Es gilt `anwenden(alt, unterschied(alt, neu))
+    == neu`."""
+    alt, neu = alt or {}, neu or {}
+    raus = {k: v for k, v in neu.items() if alt.get(k) != v}
+    raus.update({k: None for k in alt if k not in neu})
+    return raus
+
+
+def anwenden(alt, aenderung):
+    """Eine Änderung (z. B. die Rückgabe der Stylebox) auf einen Stil → neues
+    dict; `alt` bleibt unberührt. Wert None = Eigenschaft entfernen.
+    Aufrufer nehmen das statt `dict.update`: update würde None als Wert
+    hineinschreiben (2026-10-10, Kalender: „Eigenschaft entfernen")."""
+    raus = dict(alt or {})
+    for name, wert in (aenderung or {}).items():
+        if wert is None:
+            raus.pop(name, None)
+        else:
+            raus[name] = wert
+    return raus
 
 
 # ── Angebot für einen Kasten (Termin im Kalender, 2026-10-10) ──────────────
