@@ -86,6 +86,7 @@ class Kontext:
             # Zyklus-Fenster ohne Farbe: keine Fläche, nur die Rückfall-Linie.
             C["cycbg"] = curses.A_DIM
             C["cyc_is_bg"] = False
+            C["kal_glas"] = None               # Glas braucht Farben
             return
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
@@ -204,14 +205,33 @@ class Kontext:
             # Mischung wieder auf der Ausgangsfarbe, den nächsten helleren Ton
             # nehmen (notfalls fast Weiß — dann trägt nur die Schrift die Farbe).
             return pixel.rgb_256(rgb) if n == farbe else n
+        def rgb(farbe):
+            """Farbnummer (256er oder 24 Bit aus durchscheinend) → RGB."""
+            if farbe > 255:
+                return (farbe >> 16 & 255, farbe >> 8 & 255, farbe & 255)
+            return pixel.xterm_rgb(farbe)
+        # Glas (Ebene „uncommitted", kalender.py _glas_attr): zu jeder Rolle,
+        # die unter einer Glasscheibe liegen kann, ihre Schrift- und Grundfarbe
+        # als RGB — dort wird der Grund mit der Kursfarbe gemischt.
+        paare, flaeche = {}, {}
+        if c256:
+            for r in ROLES:
+                if r != "band":
+                    paare[r] = (rgb(th[r][1]), rgb(bg), th[r][2])
         for name, (schrift, f_grund, f_schrift, rueck) in KAL[tname].items():
             if c256:
+                dk = DECKKRAFT[tname]
+                k = "k_" + name
+                paare[k] = (rgb(schrift), rgb(bg), 0)
+                paare[k + "_inv"] = (rgb(f_schrift), rgb(f_grund), 0)
+                paare[k + "_blass"] = (rgb(durchscheinend(schrift, dk["schrift"])), rgb(bg), 0)
+                flaeche[k] = rgb(f_grund)
                 curses.init_pair(pp, schrift, bg)
                 C["k_" + name] = curses.color_pair(pp)
                 curses.init_pair(pp + 1, f_schrift, f_grund)
                 C["k_" + name + "_inv"] = curses.color_pair(pp + 1)
                 # „uncommitted": dieselbe Farbe, durchscheinend auf dem Grund
-                dk = DECKKRAFT[tname]
+                # (Rückfall, wo kein Glas geht — siehe kalender.py _glas_attr)
                 curses.init_pair(pp + 2, durchscheinend(schrift, dk["schrift"]), bg)
                 C["k_" + name + "_blass"] = curses.color_pair(pp + 2)
                 curses.init_pair(pp + 3, schrift if tname == "night"
@@ -224,6 +244,8 @@ class Kontext:
                 C["k_" + name + "_inv"] = C[rueck] | curses.A_REVERSE
                 C["k_" + name + "_blass"] = C[rueck] | curses.A_DIM
                 C["k_" + name + "_blass_inv"] = C[rueck] | curses.A_DIM | curses.A_REVERSE
+        C["kal_glas"] = ({"thema": tname, "paare": paare, "flaeche": flaeche}
+                         if c256 else None)
         # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap
         # (Neon auf der schwarzen Fläche) und dieselbe Farbe als Glühen für die
         # Buchstaben der weißen Tasten (auf Theme-Grund). Ohne 256 Farben gibt

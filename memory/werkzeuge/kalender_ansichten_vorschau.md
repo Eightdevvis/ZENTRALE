@@ -109,6 +109,14 @@ Listen-Sidebar heraus).
   Datei löschen. Selbst wählbare Farbe je Termin wäre iCal `COLOR` (RFC 7986).
 - **Nie breiter als erlaubt:** alles läuft über eine Leinwand, die am Rand
   abschneidet; Titel enden mit „…".
+- **Glas (Ebene „uncommitted", 10.10.2026):** `Leinwand.glas(y, x, breite,
+  glasrolle, text)` legt eine Scheibe über einen Bereich: die Zeichen darunter
+  bleiben, ihre Rolle wird zu `„<darunter>~<glas>"` (Label: `„…~<glas>~<schrift>"`).
+  `kalender.py` (`_glas_attr`) mischt den Grund der Rolle darunter mit der
+  Kursfläche (`farben.DECKKRAFT[…]["glas"]`, gerundet über `pixel.bunt`) und
+  holt das Paar über `z.pix_attr`; ohne 256 Farben oder bei vollen Paaren die
+  alte blasse Fläche (`k_…_blass_inv`). In C bekommen uncommitted eigene Bahnen
+  über die volle Spalte, nach den festen gezeichnet; der gewählte bleibt deckend.
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der
   Kalender-Kasten ist bei 140 Spalten innen 136 breit, bei 200 dann 196. Im
   alten 3-Spalten-Dashboard wären es ~67 (140) bzw. ~96 (200).

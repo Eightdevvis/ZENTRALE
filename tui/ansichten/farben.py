@@ -182,7 +182,15 @@ KAL = {
 # Terminals kennen keine Deckkraft — also wird die Farbe mit dem Theme-Grund
 # gemischt, als läge sie zu einem Teil durchsichtig darüber, und auf die
 # nächste der 256 Farben gerundet. DECKKRAFT: wie viel von der Farbe bleibt.
-DECKKRAFT = {"night": {"flaeche": 0.38, "schrift": 0.60},
-             "day":   {"flaeche": 0.45, "schrift": 0.70}}
-# Das Mischen selbst macht kontext.Kontext._durchscheinend (braucht pixel.bunt,
-# damit ein dunkles Orange orange bleibt statt auf die Graurampe zu fallen).
+# Seit 10.10.2026 abends ist es Glas (Leinwand.glas, kalender.py _glas_attr):
+# „glas" mischt den Grund JEDER Zelle darunter — Punktlinien, feste Termine —
+# mit der Kursfarbe; „flaeche"/„schrift" bleiben der Rückfall (blasse Fläche,
+# blasse Schrift in A und B). Nachts 0.30: die dunkelsten Töne der 256er, auf
+# denen die Neon-Schrift des Labels noch ≥ 3:1 hat. Tags landet jede Mischung
+# mit Weiß ohnehin wieder auf dem Pastell — durchscheinend wirkt es dort,
+# weil Punkte und Termine darunter sichtbar bleiben.
+DECKKRAFT = {"night": {"flaeche": 0.38, "schrift": 0.60, "glas": 0.30},
+             "day":   {"flaeche": 0.45, "schrift": 0.70, "glas": 0.45}}
+# Das Mischen selbst macht kontext.apply_theme (durchscheinend) bzw. für Glas
+# kalender.py — beide runden über pixel.bunt, damit ein dunkles Orange orange
+# bleibt statt auf die Graurampe zu fallen.

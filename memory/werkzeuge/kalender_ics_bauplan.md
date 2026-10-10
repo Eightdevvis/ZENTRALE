@@ -54,9 +54,16 @@ getrennt angucken". Umsetzung:
   Kollisions-Rückfrage, keine Abwesenheit durch eine Vielleicht-Reise; die KI
   sieht `[uncommitted · vielleicht]` und soll es höchstens als Möglichkeit
   nennen.
-- TUI: immer in A/B/C über den Terminen, durchscheinend in der Kursfarbe
-  (`farben.DECKKRAFT`, gemischt in `kontext.apply_theme`); Taste `u`
-  schaltet, Feld „Verbindlich" im Formular für Neues.
+- TUI: immer in A/B/C über den Terminen; Taste `u` schaltet, Feld
+  „Verbindlich" im Formular für Neues. Seit dem Abend als **Glas** (Sasha: „es
+  sieht nicht transparent aus da der hintergrund nicht durchscheint"):
+  Flächen in B und C liegen als Scheibe über allem — Punktlinien und feste
+  Termine bleiben sichtbar, nur ihr Grund wird mit der Kursfarbe gemischt
+  (`Leinwand.glas`, `kalender.py _glas_attr`, `farben.DECKKRAFT["glas"]`).
+  In C teilen sich uncommitted keine Bahnen mit festen. Nur die Schrift in A
+  und in den Textzeilen von B bleibt blass (`k_…_blass`). Tags landet jede
+  Mischung mit Weiß wieder auf dem Pastell; wo sie auf dem Grund darunter
+  landen würde, wird kräftiger gemischt, damit die Scheibe sichtbar bleibt.
 - Google: eigener zweiter Kalender, damit es auf Handy/Tablet mitkommt
   (zweite Sammlung im Paar `zentrale`).
 - Nebenbei gefunden: die Marke `kalender_beide` lief bis heute beide Male

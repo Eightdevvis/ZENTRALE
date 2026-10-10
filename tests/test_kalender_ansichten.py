@@ -57,7 +57,8 @@ def test_nie_breiter_oder_hoeher_als_erlaubt(ansicht, breite, hoehe):
         assert ka.zeilen_breite(z) <= breite, text(z)
         for t, r in z:
             assert isinstance(t, str) and isinstance(r, str)
-            assert r.removesuffix(ka.INV).isidentifier()       # Rollen sind Wörter
+            for teil in r.split(ka.GLAS):                     # „unter~glas" = Glas
+                assert teil.removesuffix(ka.INV).isidentifier()   # Rollen sind Wörter
 
 
 @pytest.mark.parametrize("ansicht", ka.ANSICHTEN)
@@ -401,3 +402,111 @@ def test_kurse_bekommen_feste_verschiedene_farben():
         assert ka.titel_rolle("Experimentalphysik") != ka.titel_rolle("Allgemeine Chemie (Mo)")
     finally:
         ka.FARBTABELLE.clear(); ka.FARBTABELLE.update(alt)
+
+
+# ── Ebene „uncommitted" als Glas (10.10.2026) ──────────────────────────
+def test_glas_laesst_zeichen_darunter_stehen():
+    lw = ka.Leinwand(12, 1)
+    lw.setze(0, 0, "····", "faint")
+    lw.setze(0, 4, "Fest", "k_t0_inv")
+    lw.glas(0, 2, 8, "k_t3")
+    z = zellen(lw.zeilen()[0])
+    assert "".join(ch for ch, _r in z) == "····Fest  "
+    assert z[0] == ("·", "faint")                       # außerhalb: unberührt
+    assert z[2] == ("·", "faint~k_t3")                  # Punkt scheint durch
+    assert z[5] == ("e", "k_t0_inv~k_t3")               # fester Termin scheint durch
+    assert z[9] == (" ", "dim~k_t3")
+    assert ka.glas_teile("faint~k_t3") == ("faint", "k_t3", None)
+    assert ka.glas_teile("faint") == ("faint", None, None)
+
+
+def test_glas_label_liegt_auf_dem_grund_darunter():
+    lw = ka.Leinwand(10, 1)
+    lw.setze(0, 0, "  ", "dim")
+    lw.setze(0, 2, "XXXXXX", "k_t0_inv")
+    lw.glas(0, 0, 8, "k_t3", "Drive")
+    z = zellen(lw.zeilen()[0])
+    assert "".join(ch for ch, _r in z) == "DriveXXX"
+    assert z[0] == ("D", "dim~k_t3~k_t3")
+    assert z[3] == ("v", "k_t0_inv~k_t3~k_t3")          # Label über festem Termin
+    assert z[5] == ("X", "k_t0_inv~k_t3")
+    # zusammengefasst: Läufe gleicher (kombinierter) Rolle
+    assert lw.zeilen()[0][0] == ("Dr", "dim~k_t3~k_t3")
+
+
+def _unv(d, *labels):
+    for liste in d["days"].values():
+        for e in liste:
+            if e.get("label") in labels:
+                e["layer"] = ka.UNVERBINDLICH
+    return d
+
+
+def test_c_uncommitted_nimmt_keine_bahn_der_festen():
+    """Zahnarzt (uncommitted) liegt über Arbeit: Arbeit behält die volle
+    Spalte, Zahnarzt ist Glas darüber statt einer Bahn daneben."""
+    d = _unv(daten("week"), "Zahnarzt")
+    zeilen = ka.ansicht_c(d, 110, 34)
+    a, b = _spalte(110, 0)
+    ar = [i for i, z in enumerate(zeilen) if "Arbeit" in text(z)[a:b + 1]]
+    za = [i for i, z in enumerate(zeilen) if "Zahna" in text(z)[a:b + 1]]
+    assert ar and za
+    # ohne uncommitted läge Zahnarzt in einer zweiten Bahn rechts daneben
+    assert text(zeilen[ar[0]]).index("Arbeit") == text(zeilen[za[0]]).index("Zahna") == a
+    # Glas: Arbeit scheint unter dem Zahnarzt durch (Rolle kombiniert)
+    zza = zellen(zeilen[za[0]])
+    assert all(ka.GLAS in r for _ch, r in zza[a:b])
+    darunter = {r.split(ka.GLAS)[0] for _ch, r in zza[a:b]}
+    arbeit = ka.titel_rolle("Arbeit") + ka.INV
+    assert arbeit in darunter
+
+
+def test_c_uncommitted_untereinander_eigene_bahnen():
+    termine = [{"day": "2026-10-05", "label": "Eins", "time": "10:00", "ende": "12:00"},
+               {"day": "2026-10-05", "label": "Zwei", "time": "11:00", "ende": "12:00"}]
+    d = _unv(daten("week", termine=termine, routinen=[]), "Eins", "Zwei")
+    zeilen = ka.ansicht_c(d, 110, 34)
+    e = next(z for z in zeilen if "Eins" in text(z))
+    zw = next(z for z in zeilen if "Zwei" in text(z))
+    assert text(e).index("Eins") != text(zw).index("Zwei")
+
+
+def test_c_gewaehlter_uncommitted_ist_deckend():
+    d = _unv(daten("week"), "Zahnarzt")
+    sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
+    zeilen = ka.ansicht_c(d, 110, 34, auswahl={"tag": "2026-10-05", "roh": sel})
+    z = next(z for z in zeilen if "Zahna" in text(z))
+    assert any(r == ka.ROLLE["a_akzent"] + ka.INV and "Zahna" in t for t, r in z)
+
+
+def test_b_uncommitted_ganztags_und_spanne_als_glas():
+    d = _unv(daten("month"), "Feiertag mit sehr langem Namen", "Urlaub")
+    zeilen = ka.ansicht_b(d, 110, 40)
+    for wort in ("Feiertag", "Urlaub"):
+        z = next(z for z in zeilen if wort in text(z))
+        assert any(wort in t and ka.GLAS in r for t, r in z), wort
+
+
+
+def test_glas_mischt_den_grund_darunter():
+    """kalender.py: der Grund der Zelle darunter wird mit der Kursfarbe
+    gemischt; landet die Mischung auf dem alten Grund, wird kräftiger
+    gemischt (sonst wäre die Scheibe unsichtbar). Ohne curses-Bildschirm."""
+    from types import SimpleNamespace
+    from tui import pixel
+    from tui.ansichten.kalender import Kalender
+    orange, cyan, schwarz = (255, 175, 95), (0, 255, 255), (0, 0, 0)
+    info = {"thema": "night", "flaeche": {"k_t3": orange}, "paare": {
+        "dim": ((255, 255, 255), schwarz, 0), "faint": ((138, 138, 138), schwarz, 0),
+        "k_t0_inv": (schwarz, cyan, 0), "k_t3": (orange, schwarz, 0),
+        "k_t3_inv": (schwarz, orange, 0), "k_t3_blass": ((150, 100, 50), schwarz, 0)}}
+    z = SimpleNamespace(C={"pix_true": False}, pix_farbe=pixel.rgb_256)
+    selbst = SimpleNamespace(z=z)
+    fg, grund, _x = Kalender._glas_mischen(selbst, info, "faint", "k_t3", None)
+    assert fg == (138, 138, 138)                       # der Punkt bleibt, wie er war
+    assert grund != schwarz and grund[0] > grund[2]    # dunkles Orange, nicht grau
+    assert sum(grund) < sum(orange)                    # durchscheinend, nicht deckend
+    _fg, grund2, _x = Kalender._glas_mischen(selbst, info, "k_t0_inv", "k_t3", None)
+    assert pixel.rgb_256(grund2) != pixel.rgb_256(cyan)     # Cyan, vom Glas getönt
+    fg3, _g, _x = Kalender._glas_mischen(selbst, info, "dim", "k_t3", "k_t3")
+    assert fg3 == orange                               # Label in der Kursfarbe

@@ -265,6 +265,42 @@ class Leinwand:
             out.append(zeile)
         return out
 
+    def glas(self, y: int, x: int, breite: int, glasrolle: str,
+             text: str = "", schrift: str | None = None) -> None:
+        """Glasscheibe über `breite` Zellen ab x (Ebene „uncommitted"): was
+        schon dasteht — Punktlinien, Flächen und Schrift fester Termine —
+        bleibt stehen, nur sein Hintergrund wird mit der Farbe von
+        `glasrolle` gemischt (Rolle „<darunter>~<glas>", kalender.py löst sie
+        auf). `text` (das Label des Eintrags) wird ab x darübergesetzt,
+        ebenfalls auf gemischtem Grund: „<darunter>~<glas>~<schrift>".
+
+        Sasha, 10.10.2026: „es sieht nicht transparent aus da der hintergrund
+        nicht durchscheint" — darum keine eigene Fläche mehr, sondern Glas."""
+        if not 0 <= y < self.h:
+            return
+        reihe = self.z[y]
+        unter = [r.split(GLAS)[0] for _ch, r in reihe]
+        for cx in range(max(0, x), min(self.b, x + breite)):
+            reihe[cx] = (reihe[cx][0], unter[cx] + GLAS + glasrolle)
+        if text:
+            ende = self.setze(y, x, text, glasrolle)
+            for cx in range(max(0, x), min(self.b, ende)):
+                reihe[cx] = (reihe[cx][0], unter[cx] + GLAS + glasrolle + GLAS
+                             + (schrift or glasrolle))
+
+
+# Trenner der Glas-Rollen (Leinwand.glas): „faint~k_t3" = Punkt auf Glas
+GLAS = "~"
+
+
+def glas_teile(rolle: str) -> tuple:
+    """„unter~glas[~schrift]" → (unter, glas, schrift|None); keine Glas-Rolle
+    → (rolle, None, None)."""
+    t = rolle.split(GLAS)
+    if len(t) < 2:
+        return rolle, None, None
+    return t[0], t[1], (t[2] if len(t) > 2 else None)
+
 
 def _kasten(lw: Leinwand, y: int, x: int, w: int, h: int, titel: str = ""):
     """Kasten wie in den Entwürfen: ┌─ TITEL ───┐, Titel in Titelfarbe."""
@@ -400,8 +436,10 @@ UNVERBINDLICH = "uncommitted"
 
 
 def blass(rolle: str, t: dict) -> str:
-    """Kalenderfarbe → ihre durchscheinende Variante, wenn `t` uncommitted
-    ist (C["k_…_blass"], C["k_…_blass_inv"]; tui/ansichten/kontext.py)."""
+    """Kalenderfarbe → ihre blasse Schrift, wenn `t` uncommitted ist
+    (C["k_…_blass"]; tui/ansichten/kontext.py). Nur noch für Zeilen, unter
+    denen nichts liegt (A, Textzeilen in B). Wo uncommitted ÜBER etwas liegt
+    (Flächen in B und C), zeichnet Leinwand.glas."""
     return rolle + "_blass" if t.get("unv") and rolle.startswith("k_") else rolle
 
 
@@ -411,6 +449,11 @@ def _rolle(t: dict) -> str:
     if t["spanne"]:
         return blass(ROLLE["spanne"], t)
     return blass(titel_rolle(t.get("label")), t)
+
+
+def _glasrolle(t: dict) -> str:
+    """Die Farbe, in der ein uncommitted-Eintrag als Glas über allem liegt."""
+    return ROLLE["spanne"] if t["spanne"] else titel_rolle(t.get("label"))
 
 
 def _datum(s) -> date | None:
@@ -816,8 +859,11 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
         breite = (b.weekday() - a.weekday() + 1) * (cw + 1) - 1
         ist = sel is not None and any(t["roh"] is sel for t in sp["tage"].values())
         erst_t = next(iter(sp["tage"].values()))
+        if erst_t["unv"] and not ist:            # uncommitted: Glas statt Fläche
+            lw.glas(y + 1 + bi, x0, breite, ROLLE["spanne"], _balken_text(sp, a, b, breite))
+            continue
         lw.setze(y + 1 + bi, x0, _balken_text(sp, a, b, breite),
-                 (_a_rolle("a_akzent") if ist else blass(ROLLE["spanne"], erst_t)) + INV)
+                 (_a_rolle("a_akzent") if ist else ROLLE["spanne"]) + INV)
     nb = min(len(bahnen_ende), platz)
     for d in sichtbar:
         x0 = 2 + d.weekday() * (cw + 1)
@@ -849,6 +895,9 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
             if t["start"] is None and t["ende"] is None:
                 # Ganztägig als Band: Fläche über die ganze Zellenbreite.
                 band = kuerzen(t["label"], cw)
+                if t["unv"] and not t["aus"]:
+                    lw.glas(yy, x0, cw, _glasrolle(t), band)
+                    continue
                 band += " " * (cw - text_breite(band))
                 lw.setze(yy, x0, band, _rolle(t) + ("" if t["aus"] else INV))
             else:
@@ -1006,15 +1055,27 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
         lw.setze(y0, 1, kuerzen("ganzt.", g - 1), ROLLE["zeit"])
         for i, (_b, ganz) in enumerate(tage):
             if ganz:
-                t = ganz[0]
+                # Feste zuerst: sie sind der Grund, uncommitted liegt als Glas
+                # darüber (ohne eigenes Label, wenn schon ein festes dasteht —
+                # „+n" sagt, dass da mehr ist).
+                fest = [x for x in ganz if not x["unv"]]
+                glas = [x for x in ganz if x["unv"] and not x["aus"]]
+                t = (fest or ganz)[0]
                 txt = t["label"] + (" +%d" % (len(ganz) - 1) if len(ganz) > 1 else "")
                 band = kuerzen(txt, colw - 1)
-                rolle = _rolle(t) + ("" if t["aus"] else INV)
+                xx = x0 + i * colw
                 if sel is not None and any(x["roh"] is sel for x in ganz):
                     t = next(x for x in ganz if x["roh"] is sel)
                     band = kuerzen(t["label"], colw - 1)
-                    rolle = _a_rolle("a_akzent") + INV
-                lw.setze(y0, x0 + i * colw, band + " " * (colw - 1 - text_breite(band)), rolle)
+                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)),
+                             _a_rolle("a_akzent") + INV)
+                elif fest or not glas:
+                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)),
+                             _rolle(t) + ("" if t["aus"] else INV))
+                    if glas:
+                        lw.glas(y0, xx, colw - 1, _glasrolle(glas[0]))
+                else:
+                    lw.glas(y0, xx, colw - 1, _glasrolle(t), band)
         y0 += 1
     _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel)
     return lw.zeilen()
@@ -1060,37 +1121,51 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
             lw.setze(y0 + k, 1, kuerzen(_hm(t) if g >= 6 else "%02d" % (t // 60), g - 1),
                      ROLLE["rahmen"])
             lw.setze(y0 + k, x0, "·" * (7 * colw), ROLLE["rahmen"])
+    pw = colw - 1
     for i, (bloecke, _g) in enumerate(tage):
-        bahnen, nb = _c_bahnen(bloecke)
-        pw = colw - 1
-        teil = max(1, (pw - (nb - 1)) // nb)
-        for bi, s, e, t in bahnen:
-            if e <= lo or s >= sicht_ende:
-                continue
-            bx = x0 + i * colw + bi * (teil + 1)
-            bw = teil if bi < nb - 1 else max(1, pw - bi * (teil + 1))
-            if bx >= x0 + i * colw + pw:
-                continue
-            k0 = (max(s, lo) - lo) // m
-            k1 = max(k0, math.ceil((min(e, sicht_ende) - lo) / m) - 1)
-            if t["spanne"]:
-                r = blass(farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)]), t)
-            else:
-                r = _rolle(t)
-            if t["aus"]:
-                r = ROLLE["aus"]
-            if sel is not None and t["roh"] is sel:   # gewählter Termin: Akzent
-                r = _a_rolle("a_akzent")
-            lab_txt = _c_label(t, s, e, bw)
-            lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
-            for k in range(k0 + 1, k1 + 1):
+        # Sasha, 10.10.2026: „immer den uncommitted kalender AUF den normalen
+        # drüberpacken". Darum teilen sich uncommitted-Blöcke KEINE Bahnen mit
+        # festen: die festen rechnen ihre Bahnen unter sich, uncommitted
+        # bekommen eigene über die volle Spalte und liegen als Glas darüber.
+        alle = []
+        for ebene in ([b for b in bloecke if not b[2]["unv"]],
+                      [b for b in bloecke if b[2]["unv"]]):
+            bahnen, nb = _c_bahnen(ebene)
+            alle += bahnen
+            teil = max(1, (pw - (nb - 1)) // nb)
+            for bi, s, e, t in bahnen:
+                if e <= lo or s >= sicht_ende:
+                    continue
+                bx = x0 + i * colw + bi * (teil + 1)
+                bw = teil if bi < nb - 1 else max(1, pw - bi * (teil + 1))
+                if bx >= x0 + i * colw + pw:
+                    continue
+                k0 = (max(s, lo) - lo) // m
+                k1 = max(k0, math.ceil((min(e, sicht_ende) - lo) / m) - 1)
+                if t["spanne"]:
+                    r = farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
+                else:
+                    r = titel_rolle(t.get("label"))
+                gewaehlt = sel is not None and t["roh"] is sel
                 if t["aus"]:
-                    lw.setze(y0 + k, bx, "░" * bw, r)
-                else:                       # Körper = dieselbe Fläche wie die Kopfzeile
-                    lw.setze(y0 + k, bx, " " * bw, r + INV)
+                    r = ROLLE["aus"]
+                if gewaehlt:                    # gewählter Termin: Akzent, deckend
+                    r = _a_rolle("a_akzent")
+                lab_txt = _c_label(t, s, e, bw)
+                if t["unv"] and not gewaehlt and not t["aus"]:
+                    lw.glas(y0 + k0, bx, bw, r, lab_txt)
+                    for k in range(k0 + 1, k1 + 1):
+                        lw.glas(y0 + k, bx, bw, r)
+                    continue
+                lw.setze(y0 + k0, bx, lab_txt + " " * (bw - text_breite(lab_txt)), r + INV)
+                for k in range(k0 + 1, k1 + 1):
+                    if t["aus"]:
+                        lw.setze(y0 + k, bx, "░" * bw, r)
+                    else:                       # Körper = dieselbe Fläche wie die Kopfzeile
+                        lw.setze(y0 + k, bx, " " * bw, r + INV)
         # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
         rechts = x0 + i * colw + max(0, colw - 2)
-        if any(e <= lo for _bi, s, e, _t in bahnen):
+        if any(e <= lo for _bi, s, e, _t in alle):
             lw.setze(y0, rechts, "▲", _a_rolle("a_akzent"))
-        if any(s >= sicht_ende for _bi, s, e, _t in bahnen):
+        if any(s >= sicht_ende for _bi, s, e, _t in alle):
             lw.setze(y0 + n - 1, rechts, "▼", _a_rolle("a_akzent"))
