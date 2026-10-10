@@ -1,0 +1,51 @@
+# Fall 12 — eine Phase des Tagesrhythmus für ein paar Tage anders.
+#
+# Schlaf ist eine Phase (Ebene rhythmus, Motiv schlaf), 23:00–07:00, also
+# über Mitternacht. Sasha sagt: die nächsten drei Nächte erst um 2 ins Bett.
+# Richtig ist: nur diese Tage ändern (edit_calendar_phase mit nur_von/nur_bis
+# — seit 10.10. aus dem Schema erzeugt), die Phase sonst lassen, keine neue
+# Regel anlegen. Ob die KI die drei Tage ab heute oder ab morgen zählt
+# (die Nacht nach heute beginnt morgen um 2), ist ihre Sache — beide
+# Lesarten zählen; geprüft werden die zwei Tage, die in beiden liegen, und
+# dass es danach wieder 23:00 ist.
+
+id: f12_schlaf_drei_tage
+titel: "Schlaf die nächsten 3 Tage ab 2 Uhr — nur diese Tage, Phase bleibt"
+verdeckt: false
+herkunft: "Sashas Beispiel für den Tagesrhythmus (10.10.2026)"
+jetzt: "2026-10-12T20:00"
+
+kalender:
+  phasen:
+    - {label: Schlaf, motiv: schlaf, zeit: "23:00", ende: "07:00", von: 2026-10-01}
+  termine:
+    - {tag: 2026-10-13, label: Fahrschule, zeit: "19:00", ende: "20:00"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "die nächsten 3 tage geh ich erst um 2 ins bett, trag das in meinen schlaf ein"
+
+endzustand:
+  - was: Di 13.10. und Mi 14.10. Schlaf ab 02:00
+    am: [2026-10-13, 2026-10-14]
+    label: schlaf
+    findet_statt: true
+    beginn: "02:00"
+  - was: Ab Fr 16.10. wieder 23:00–07:00
+    am: [2026-10-16, 2026-10-17]
+    label: schlaf
+    findet_statt: true
+    beginn: "23:00"
+    ende: "07:00"
+  - was: Weiter genau eine Schlaf-Regel
+    regeln: {label: schlaf, anzahl: 1}
+  - was: Fahrschule bleibt
+    am: 2026-10-13
+    label: fahrschule
+    findet_statt: true
+    beginn: "19:00"
+  - was: Keine erfundenen Kennungen
+    antwort: {zug: alle, kennungen_belegt: true}

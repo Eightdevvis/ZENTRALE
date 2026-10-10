@@ -171,3 +171,52 @@ def test_ohne_seiten_kein_server_und_platzhalter():
     fall = {"zuege": [{"sagt": "schau {server}/"}], "n": 3}
     assert umgebung.platzhalter(fall, {"{server}": "http://h"}) == \
         {"zuege": [{"sagt": "schau http://h/"}], "n": 3}
+
+
+# ── f12/f13 (2026-10-10): Phasen und Gruppen, trocken ohne Modell ──────
+# Der Fall lädt, der Ausgangszustand entsteht, und die Aufrufe, die eine
+# KI richtig machen würde, bestehen den Endzustand — nichts tun nicht.
+
+def _trocken(fall_id, aufrufe):
+    import ki_kalender
+    import ki_werkzeuge
+    import werkzeug_befund
+    import werkzeug_register
+    from pruefstand_teile import lauf
+    fall = faelle.finden([fall_id])[0]
+    lauf.ausgangszustand(fall)
+    werkzeug_register.erzeugte_einsetzen(True)
+    marke = werkzeug_befund.schiene_setzen("gross")
+    try:
+        for name, args in aufrufe:
+            k = {s.label: s.kennung for s in ki_kalender.stuecke()}
+            args = {f: (k[w[1:]] if isinstance(w, str) and w.startswith("@") else w)
+                    for f, w in args.items()}
+            r = ki_werkzeuge._verteilen(name, args)
+            assert r.status == "ok", r
+    finally:
+        werkzeug_befund.schiene_zuruecksetzen(marke)
+    pruef = [p for p in fall["endzustand"] if "antwort" not in p]
+    return [x for x in endzustand.pruefen(pruef) if not x["ok"]]
+
+
+@pytest.mark.parametrize("von, bis", [("2026-10-12", "2026-10-14"), ("2026-10-13", "2026-10-15")])
+def test_f12_richtig_besteht(von, bis):
+    assert _trocken("f12", [("edit_calendar_phase", {"kennung": "@Schlaf", "time": "02:00",
+                                                     "nur_von": von, "nur_bis": bis})]) == []
+
+
+def test_f12_nichts_tun_faellt_durch():
+    assert _trocken("f12", [])
+
+
+def test_f13_richtig_besteht():
+    assert _trocken("f13", [("set_calendar_group", {"kennung": "@Analysis I",
+                                                    "kategorie": "uni"})]) == []
+
+
+def test_f13_zu_viel_faellt_durch():
+    falsch = _trocken("f13", [("set_calendar_group", {"kennung": "@Analysis I", "kategorie": "uni"}),
+                              ("set_calendar_group", {"kennung": "@Lineare Algebra",
+                                                      "kategorie": "uni"})])
+    assert [x["was"] for x in falsch] == ["Lineare Algebra bleibt ohne Gruppe"]

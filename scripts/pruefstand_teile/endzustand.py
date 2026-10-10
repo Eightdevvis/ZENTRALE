@@ -22,6 +22,9 @@
 #   - was: Nur eine Geigen-Regel
 #     regeln: {label: geige, anzahl: 1}     # Wiederholungs-Regeln zählen
 #
+#   - was: Analysis gehört zur Uni
+#     regeln: {label: analysis, anzahl: 1, kategorie: uni}   # Gruppe jeder Regel
+#
 #   - was: Analysis nur im Wintersemester
 #     regeln: {label: analysis, anzahl: 1,
 #              zeitraum: {von: 2026-10-12, bis: 2027-02-12}}
@@ -136,6 +139,12 @@ def _regeln_pruefen(p: dict) -> str | None:
                 if nadel in str(x.get("label", "")).casefold()]
     soll = int(r.get("anzahl", 1))
     if len(gefunden) == soll:
+        if r.get("kategorie"):
+            # Gruppe (2026-10-10, f13): jede Regel trägt sie; „keine" = kein Feld.
+            falsch = [f"{x.get('label')}: {x.get('kategorie') or 'keine'}" for x in gefunden
+                      if (x.get("kategorie") or "keine") != r["kategorie"]]
+            if falsch:
+                return f"Gruppe {r['kategorie']} erwartet, steht: " + ", ".join(falsch)
         return _zeitraum_pruefen(r["zeitraum"], nadel) if r.get("zeitraum") else None
     zeilen = ", ".join(f"{x.get('label')} ({x.get('rrule')}, {x.get('time') or 'ganztags'}"
                        f"{'–' + x['ende'] if x.get('ende') else ''})" for x in gefunden)

@@ -51,11 +51,19 @@ def ausgangszustand(fall: dict) -> None:
             raise faelle.FallFehler(f"Termin nicht anlegbar: {t}")
     for r in kal.get("routinen") or []:
         extras = {k: _uhrzeit(r[k]) if k == "ende" else _text(r[k])
-                  for k in ("ende", "ort") if r.get(k)}
+                  for k in ("ende", "ort", "kategorie") if r.get(k)}
         if not kalender.add_routine(r.get("layer", "termine"), _text(r["label"]),
                                     _text(r["rrule"]), time=_uhrzeit(r.get("zeit")),
                                     **extras):
             raise faelle.FallFehler(f"Routine nicht anlegbar: {r}")
+    # Phasen des Tagesrhythmus (2026-10-10, f12): über den Kern, wie die KI
+    # sie anlegen würde (Ebene rhythmus, Motiv, Ende am Folgetag erlaubt).
+    for ph in kal.get("phasen") or []:
+        import kalender_kennung
+        kalender_kennung.phase_anlegen(
+            _text(ph["label"]), _uhrzeit(ph["zeit"]), motiv=_text(ph["motiv"]),
+            ende=_uhrzeit(ph.get("ende")), rrule=_text(ph.get("rrule") or "FREQ=DAILY"),
+            von=_text(ph["von"]) if ph.get("von") else None)
     for p in kal.get("pausen") or []:
         if not kalender.add_pause(_text(p["label"]), _text(p["von"]),
                                   _text(p["bis"]), p.get("grund")):

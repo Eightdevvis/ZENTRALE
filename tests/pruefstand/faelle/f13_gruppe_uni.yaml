@@ -1,0 +1,40 @@
+# Fall 13 — einen Eintrag einer Gruppe zuordnen.
+#
+# Sasha will in der Monatsansicht „Uni" als Block sehen statt jedes Fach.
+# Dafür bekommt die Routine die Gruppe uni (set_calendar_group, seit 10.10.
+# aus dem Schema erzeugt). Nur Analysis I — Lineare Algebra und der
+# Zahnarzt bleiben ohne Gruppe (Sashas Regel: im Normalfall keine).
+
+id: f13_gruppe_uni
+titel: "Analysis I gehört zur Uni-Gruppe — nur Analysis, sonst nichts"
+verdeckt: false
+herkunft: "Sashas Gruppen-Wunsch (10.10.2026)"
+jetzt: "2026-10-12T12:00"
+
+kalender:
+  routinen:
+    - {label: Analysis I, rrule: "FREQ=WEEKLY;BYDAY=MO,WE", zeit: "10:00", ende: "12:00", ort: HS 1}
+    - {label: Lineare Algebra, rrule: "FREQ=WEEKLY;BYDAY=TU", zeit: "08:30", ende: "10:00"}
+  termine:
+    - {tag: 2026-10-15, label: Zahnarzt, zeit: "09:00", ende: "09:30"}
+
+antworten:
+  erlaubnis: ja
+  knopf: null
+
+zuege:
+  - sagt: "analysis I gehört zur uni-gruppe"
+
+endzustand:
+  - was: Analysis I hat die Gruppe Uni
+    regeln: {label: analysis, anzahl: 1, kategorie: uni}
+  - was: Lineare Algebra bleibt ohne Gruppe
+    regeln: {label: lineare, anzahl: 1, kategorie: keine}
+  - was: Analysis findet weiter Mo 10–12 statt
+    am: 2026-10-19
+    label: analysis
+    findet_statt: true
+    beginn: "10:00"
+    ende: "12:00"
+  - was: Keine erfundenen Kennungen
+    antwort: {zug: alle, kennungen_belegt: true}
