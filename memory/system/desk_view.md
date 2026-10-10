@@ -130,10 +130,12 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   Eintrag aus `GET /api/kacheln` eine `KatalogWahl` (bei jedem `+` frisch
   geholt; ohne Backend bleiben zettel und bild). Eine neue App steht so von
   selbst darin. Ihr Dialog ist `tui/bausteine/feld_dialog.py`, gebaut aus
-  den `felder` des Eintrags (nur Tastatur: ↑↓/tab Feld, ←→/leertaste wählt,
+  dem JSON Schema `parameter` des Eintrags (seit 2026-10-10, vorher eine
+  eigene `felder`-Liste; nur Tastatur: ↑↓/tab Feld, ←→/leertaste wählt,
   tippen, enter legt an, esc bricht ab). Vor dem Hinlegen fragt der Desk
-  den Hub mit 0×0 Zellen: der prüft dieselben Regeln (sagt er nein, bleibt
-  der Dialog mit dem Grund offen) und nennt die Größe für genau diese
+  den Hub mit 0×0 Zellen: der prüft gegen das Schema und dazu, was JSON
+  Schema nicht sagen kann (über 31 Tage zwischen von und bis) — sagt er
+  nein, bleibt der Dialog mit seinem Satz offen) und nennt die Größe für genau diese
   Werte (`bevorzugt`). Die Kachel ist ein Element der allgemeinen Art
   `kachel` mit `kachel: {v: 2, adresse}`.
 - **Kacheln holen** `tui/ansichten/desk_kacheln.py`: bei jedem Bild prüft
@@ -148,7 +150,12 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   das zentrale_tui.py hereingibt. Der Router hat je App einen Handler
   (pfad, abfrage); heute `kalender` (Kalender öffnen am Tag der Adresse,
   `zentrale://kalender/2026-10-12`, bei einem Ausschnitt dessen `von`). Der
-  Desk kennt keine andere Ansicht.
+  Desk kennt keine andere Ansicht. **Zurück zum Öffner** (2026-10-10): der
+  Desk ruft `zeigen(adresse, zurueck=desk.zurueck)`; jede App trägt beim
+  Registrieren ihr Zustands-Dict ein (K, L, G), und die Hauptschleife fragt
+  nach jeder Taste `router.nachsehen()` — ist die geöffnete Ansicht zu
+  (Esc), kommt der Desk wieder, mit derselben Fläche und Lage. Allgemein im
+  Router, nicht je Ansicht.
 - **Backend** `core/desk.py` (Schicht 2) + `ui/routen/desk.py`, Endpunkte in
   [api_endpoints.md](api_endpoints.md).
 
@@ -196,8 +203,9 @@ selbst auf das Innere (w−2 × h−2).
 **Kalender** (App `kalender`, Art `ausschnitt`, Quelle
 `core/kachel_kalender.py`): `zentrale://kalender/ausschnitt?modus=
 mitlaufend&tage=7` (ab heute, rechnet jeden Tag neu) oder
-`…?bis=…&modus=fest&von=…`; höchstens 31 Tage — diese Regeln stehen in
-den `felder` des Katalog-Eintrags. Standard beim Anlegen: mitlaufend 7 Tage.
+`…?bis=…&modus=fest&von=…`; höchstens 31 Tage — diese Regeln stehen als
+JSON Schema im `parameter` des Katalog-Eintrags (die Spanne zwischen zwei
+Daten prüft der Hub selbst). Standard beim Anlegen: mitlaufend 7 Tage.
 - **bis 7 Tage → Woche:** eine Spalte je Tag (│ dazwischen), Kopf
   „Mo 12.10.", darunter Ganztägiges zuerst (Rolle `spanne`), dann
   „HH:MM titel" (`leise` + `text`). Startgröße 13 Spalten je Tag, 6 Zeilen
@@ -214,7 +222,8 @@ den `felder` des Katalog-Eintrags. Standard beim Anlegen: mitlaufend 7 Tage.
 - **Zu klein:** „zu klein / mind. W×H" statt Inhalt. **App weg/aus:**
   „nicht mehr da" bzw. der letzte Stand leise.
 - `o` öffnet den Kalender an dem Tag, an dem der Ausschnitt beginnt
-  (mitlaufend: heute). Esc dort führt zur Startseite, nicht zurück zum Desk.
+  (mitlaufend: heute). Esc dort führt zurück auf denselben Desk an
+  dieselbe Stelle (seit 2026-10-10, für jede mit `o` geöffnete Ansicht).
 
 **Liste** (App `fokus`, Art `liste`, `core/kachel_fokus.py`, seit
 2026-10-10): Dialog „liste" (←→ durch die Listen von jetzt), „erledigte"

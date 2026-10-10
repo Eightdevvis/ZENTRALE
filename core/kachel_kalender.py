@@ -10,9 +10,11 @@
 # Bezug (`ref`), Sasha 2026-10-10 — als Adresse:
 #   zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7   ab heute N Tage
 #   zentrale://kalender/ausschnitt?bis=2026-10-18&modus=fest&von=2026-10-12
-# Die Regeln dafür (Felder, höchstens 31 Tage) stehen im Katalog-Eintrag
-# ARTEN["ausschnitt"]["felder"]: Oberflächen bauen daraus ihren Dialog, der
-# Hub prüft damit. `bereich()` prüft noch einmal — das Netz darunter.
+# Die Regeln dafür stehen als JSON Schema im Katalog-Eintrag
+# ARTEN["ausschnitt"]["parameter"] (core/kachel_parameter.py): Oberflächen
+# bauen daraus ihren Dialog, der Hub prüft damit. Was JSON Schema nicht
+# sagen kann (von–bis höchstens 31 Tage, „bis" nicht vor „von"), prüft
+# `pruefen()` — der Hub ruft es gleich nach dem Schema (2026-10-10).
 # Bis 7 Tage eine Woche (eine Spalte je Tag), 8–31 ein Monatsraster (Wochen
 # als Zeilen, Mo–So als Spalten).
 #
@@ -31,6 +33,7 @@
 from datetime import date, timedelta
 
 import adressen
+import kachel_parameter
 import kalender
 from kachel_form import KachelFehler, KachelZuKlein, kuerzen, stueck
 
@@ -49,25 +52,38 @@ ZELLE_GUT_B, ZELLE_GUT_H = 11, 3
 # Katalog-Eintrag (GET /api/kacheln). min = kleinste sinnvolle Innengröße;
 # die genaue Grenze hängt am Bereich und kommt als KachelZuKlein. ttl: ein
 # Kalender ändert sich selten von außen, eine Minute reicht (Pull,
-# hub_bauplan.md „Frisch halten"). Felder: Sasha 2026-10-10 — mitlaufend
+# hub_bauplan.md „Frisch halten"). Parameter: Sasha 2026-10-10 — mitlaufend
 # (Standard, 7 Tage) oder fest von–bis, höchstens 31 Tage.
 ARTEN = {"ausschnitt": {
     "titel": "kalender",
     "min": (6, 2),
     "bevorzugt": (7 * (SPALTE_GUT + 1) - 1, 1 + 6),
     "ttl": 60,
-    "felder": [
-        {"name": "modus", "typ": "wahl", "titel": "art", "vorgabe": "mitlaufend",
-         "werte": [{"wert": "mitlaufend", "titel": "mitlaufend"},
-                   {"wert": "fest", "titel": "fest"}]},
-        {"name": "tage", "typ": "zahl", "titel": "tage", "vorgabe": 7,
-         "grenzen": {"min": 1, "max": GRENZE_TAGE}, "wenn": {"modus": "mitlaufend"},
-         "hilfe": "ab heute, jeden tag neu"},
-        {"name": "von", "typ": "datum", "titel": "von", "vorgabe": "heute",
-         "wenn": {"modus": "fest"}},
-        {"name": "bis", "typ": "datum", "titel": "bis", "vorgabe": "heute+6",
-         "grenzen": {"nicht_vor": "von", "tage_max": GRENZE_TAGE}, "wenn": {"modus": "fest"}},
-    ],
+    # JSON Schema 2020-12 (Sasha 2026-10-10: Standards statt Eigenformat).
+    # tage gilt nur mitlaufend, von/bis nur fest (if/then). Die Vorgaben für
+    # von/bis hängen am heutigen Tag — die trägt parameter_jetzt() ein.
+    "parameter": {
+        "$schema": kachel_parameter.ENTWURF,
+        "type": "object",
+        "properties": {
+            "modus": {"title": "art", "type": "string", "default": "mitlaufend",
+                      "oneOf": [{"const": "mitlaufend", "title": "mitlaufend"},
+                                {"const": "fest", "title": "fest"}]},
+            "tage": {"title": "tage", "description": "ab heute, jeden tag neu",
+                     "type": "integer", "minimum": 1, "maximum": GRENZE_TAGE, "default": 7},
+            "von": {"title": "von", "type": "string", "format": "date"},
+            "bis": {"title": "bis", "type": "string", "format": "date",
+                    "description": "höchstens %d tage ab „von“" % GRENZE_TAGE},
+        },
+        "required": ["modus"],
+        "additionalProperties": False,
+        "allOf": [
+            {"if": {"properties": {"modus": {"const": "mitlaufend"}}, "required": ["modus"]},
+             "then": {"required": ["tage"], "properties": {"von": False, "bis": False}}},
+            {"if": {"properties": {"modus": {"const": "fest"}}, "required": ["modus"]},
+             "then": {"required": ["von", "bis"], "properties": {"tage": False}}},
+        ],
+    },
 }}
 
 # Farbrollen (core/farbrollen.py): nur die Bedeutung, die Farbe wählt die
@@ -108,6 +124,20 @@ def bereich(ref, heute=None):
             raise KachelFehler("höchstens %d tage" % GRENZE_TAGE)
         return von, bis
     raise KachelFehler("modus muss „mitlaufend\" oder „fest\" sein")
+
+
+def parameter_jetzt(art, schema, heute=None):
+    """Katalog: das Schema mit den Vorgaben von heute (von = heute, bis =
+    heute + 6) — JSON Schema kennt kein „heute", darum zur Fragezeit."""
+    heute = heute or date.today()
+    return kachel_parameter.mit_vorgaben(schema, {
+        "von": heute.isoformat(), "bis": (heute + timedelta(days=WOCHE_BIS - 1)).isoformat()})
+
+
+def pruefen(art, ref):
+    """Was das Schema nicht sagen kann (Abstand zweier Daten): der Hub ruft
+    das nach dem Schema, ein KachelFehler wird 400 mit diesem Text."""
+    bereich(ref)
 
 
 # ── Daten ─────────────────────────────────────────────────────────────

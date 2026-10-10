@@ -9,8 +9,9 @@
 #
 # Eine KatalogWahl ist keine eigene Element-Art: sie legt Elemente der
 # allgemeinen Art „kachel" an (canvas_arten.Kachel), deren Verweis die
-# Adresse des Objekts ist (zentrale://<app>/<art>?<felder>). Den Dialog
-# baut tui/bausteine/feld_dialog.py aus den `felder` des Eintrags; die
+# Adresse des Objekts ist (zentrale://<app>/<art>?<werte>). Den Dialog
+# baut tui/bausteine/feld_dialog.py aus dem `parameter` des Eintrags (ein
+# JSON Schema, seit 2026-10-10; vorher eine eigene `felder`-Liste); die
 # Startgröße kommt vom Hub (`bevorzugt`, für genau diese Werte — siehe
 # desk.py), sonst aus dem Katalog. Vorher (bis 2026-10-10) stand hier ein
 # eigener Kalender-Dialog mit Kalender-Regeln.
@@ -50,7 +51,7 @@ class KatalogWahl:
         self.neu_label = str(eintrag.get("titel") or self.art)
 
     def neu_dialog(self):
-        return FeldDialog(self.eintrag.get("felder") or [], titel=self.neu_label,
+        return FeldDialog(self.eintrag.get("parameter") or {}, titel=self.neu_label,
                           kopf="%s auf den desk" % self.neu_label)
 
     def adresse(self, werte):

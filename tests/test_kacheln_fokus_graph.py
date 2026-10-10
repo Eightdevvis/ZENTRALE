@@ -2,7 +2,8 @@
 Listen- und Graph-Kacheln (2026-10-10, memory/system/hub_bauplan.md
 „Kacheln"): die Quellen core/kachel_fokus.py (`fokus`/`liste`) und
 core/kachel_graph.py (`graph`/`verlauf`) hinter dem Hub core/kacheln.py —
-Katalog mit Werten, die erst beim Fragen feststehen (`dynamisch`), Bild in
+Katalog mit Werten, die erst beim Fragen feststehen (JSON Schema, oneOf
+zur Fragezeit), Bild in
 w×h Zellen, blättern, „+N", Adressen, „weg", und: die Kacheln schreiben
 nie. Listen und Graphen liegen im Wegwerf-Ordner (conftest 7f).
 """
@@ -15,7 +16,7 @@ import pytest
 
 import farbrollen
 import graphs
-import kachel_felder
+import kachel_parameter
 import kachel_fokus as kf
 import kachel_graph as kg
 import kacheln
@@ -100,37 +101,41 @@ def test_katalog_traegt_die_listen_und_graphen_von_jetzt(einkauf, gewicht):
     (gr,) = [e for e in k if e["app"] == "graph"]
     assert lf["art"] == "liste" and gr["art"] == "verlauf"
     assert lf["aktionen"] == ["oeffnen"] and lf["min"] == {"w": 12, "h": 2}
-    felder = {f["name"]: f for f in lf["felder"]}
-    assert felder["liste"]["werte"] == [{"wert": einkauf, "titel": "Einkauf"}]
-    assert felder["erledigte"]["typ"] == "bool" and felder["erledigte"]["vorgabe"] is False
-    assert felder["tiefe"]["grenzen"] == {"min": 1, "max": 9}
-    gfeld = {f["name"]: f for f in gr["felder"]}
-    assert gfeld["graph"]["werte"] == [{"wert": gewicht, "titel": "Gewicht"}]
-    assert gfeld["tage"]["vorgabe"] == 14 and gfeld["tage"]["grenzen"] == {"min": 2, "max": 365}
+    p = lf["parameter"]["properties"]
+    assert p["liste"]["oneOf"] == [{"const": einkauf, "title": "Einkauf"}]
+    assert p["erledigte"]["type"] == "boolean" and p["erledigte"]["default"] is False
+    assert (p["tiefe"]["minimum"], p["tiefe"]["maximum"]) == (1, 9)
+    assert list(p) == ["liste", "erledigte", "tiefe"]
+    g = gr["parameter"]["properties"]
+    assert g["graph"]["oneOf"] == [{"const": gewicht, "title": "Gewicht"}]
+    assert g["tage"]["default"] == 14 and (g["tage"]["minimum"], g["tage"]["maximum"]) == (2, 365)
     # eine neue Liste steht beim nächsten Fragen von selbst drin
     neu = lists.create_list("Ideen")["id"]
     (lf,) = [e for e in kacheln.katalog() if e["app"] == "fokus"]
-    assert [w["wert"] for w in lf["felder"][0]["werte"]] == [einkauf, neu]
+    assert [w["const"] for w in lf["parameter"]["properties"]["liste"]["oneOf"]] == [einkauf, neu]
     # die Quelle selbst bleibt unverändert (keine Werte im Modul hängen)
-    assert "werte" not in kf.ARTEN["liste"]["felder"][0]
+    assert "oneOf" not in kf.ARTEN["liste"]["parameter"]["properties"]["liste"]
 
 
 def test_quelle_die_beim_katalog_stolpert_reisst_ihn_nicht(monkeypatch, einkauf):
     gemeldet = []
     monkeypatch.setattr(kacheln.state, "push_log", gemeldet.append)
-    monkeypatch.setattr(kf, "werte", lambda art, name: 1 / 0)
+    monkeypatch.setattr(kf, "parameter_jetzt", lambda art, schema: 1 / 0)
     apps = [e["app"] for e in kacheln.katalog()]
     assert "fokus" not in apps and "kalender" in apps and gemeldet
 
 
-def test_dynamische_wahl_prueft_nur_die_form():
-    feld = {"name": "liste", "typ": "wahl", "titel": "liste", "dynamisch": True}
-    assert kachel_felder.form_pruefen([feld]) == [feld]           # keine werte nötig
-    assert kachel_felder.pruefen([feld], {"liste": "l_x"}) == {"liste": "l_x"}
-    with pytest.raises(KachelFehler):
-        kachel_felder.pruefen([feld], {"liste": ""})
+def test_wahl_von_jetzt_prueft_der_hub_nur_als_text(einkauf):
+    """Die Auswahl steht nur im Katalog; geprüft wird die Form (ein Text) —
+    eine gelöschte Liste heißt dann „weg", nicht „ungültig"."""
+    schema = kf.ARTEN["liste"]["parameter"]
+    roh = {"liste": "l_x", "erledigte": "false", "tiefe": "3"}
+    assert kachel_parameter.pruefen(schema, roh) == {"liste": "l_x", "erledigte": False, "tiefe": 3}
+    with pytest.raises(KachelFehler, match="liste fehlt"):
+        kachel_parameter.pruefen(schema, dict(roh, liste=""))
+    assert holen(listen_adresse("l_gibts_nicht"))[1] == {"fehler": "weg"}
     with pytest.raises(ValueError):
-        kachel_felder.form_pruefen([{"name": "x", "typ": "wahl", "titel": "x"}])
+        kachel_parameter.schema_pruefen({"type": "object", "properties": {"x": {"type": "kaputt"}}})
 
 
 # ── Liste: Bild ──────────────────────────────────────────────────────

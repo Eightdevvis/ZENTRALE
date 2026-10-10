@@ -414,7 +414,8 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 `core/desk.py` über `ui/routen/desk.py`. Ein Desk = eine Datei
 `<desk_ordner>/<name>.canvas` (JSON Canvas 1.0). Die TUI rechnet in Zellen
 (1 Spalte = 10 px, 1 Zeile = 20 px); Format, Arten und Tasten:
-[desk_view.md](desk_view.md).
+[desk_view.md](desk_view.md). Auch diese Routen beschreibt `openapi.yaml`
+(seit 2026-10-10; bei Abweichung gilt die Datei).
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
@@ -432,16 +433,19 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 
 `core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede
 Oberfläche den Katalog liest und den Inhalt einer Kachel holt (nie direkt
-bei der App). Verweis = Adresse `zentrale://<app>/<art>?<felder>`
-(`core/adressen.py`). Form und Regeln: [hub_bauplan.md](hub_bauplan.md)
+bei der App). Verweis = Adresse `zentrale://<app>/<art>?<parameter>`
+(`core/adressen.py`). **Autorität für Anfragen, Antworten und Fehler dieser
+Routen ist `openapi.yaml`** im Repo-Wurzelordner (OpenAPI 3.1, seit
+2026-10-10; `tests/test_openapi.py` hält Routen und Datei gleich) — die
+Tabelle hier ist nur der Überblick. Form und Regeln: [hub_bauplan.md](hub_bauplan.md)
 „Kacheln", „Adressen", „Katalog", „Farbrollen"; Desk:
 [desk_view.md](desk_view.md).
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
-| `/api/kacheln` | GET | Katalog: `[{app, art, titel, min: {w, h}, bevorzugt: {w, h}, max?: {w, h}, ttl, felder: [{name, typ (datum\|zahl\|wahl\|text\|bool), titel, vorgabe, hilfe?, wenn?, werte?, grenzen?}], aktionen: ["oeffnen"], formen: ["zeilen"]}]` — nur Apps mit `<app>:lesen`. |
-| `/api/kachel` | POST | Body `{adresse, w, h, oben?, stand?, form?}` (w/h auch als `groesse: {w, h}`; Innenmaß in Zellen; alt statt `adresse`: `app, art, ref`). Der Hub prüft die Abfrage der Adresse gegen die `felder` des Katalogs. → `200 {form: "zeilen", zeilen: [[[text, rolle], …], …], text, stand, ttl, oben, oben_max, bevorzugt?}` (Rollen aus `core/farbrollen.py`; die App kürzt auf w×h; `form: "roh"` reserviert → 400) · `200 {unveraendert: true, stand, ttl}` wenn `stand` passt · `200 {zu_klein: {w, h}, ttl, bevorzugt?}` (w=h=0 fragt nur Prüfung + Größe) · `400 {fehler: "ungueltig", text}` (z. B. „höchstens 31 tage", „unbekannt: x") · `403 {fehler: "recht"}` (`<app>:lesen` fehlt) · `404 {fehler: "weg"}` · `503 {fehler: "aus", text}` (App nicht da oder kaputt). |
-| `/api/kachel/aktion` | POST | Body `{adresse, aktion}` (alt: `app, art, ref, aktion`); heute nur `aktion: "oeffnen"` → `200 {zeige: {adresse}}` (Kalender: `{"adresse": "zentrale://kalender/2026-10-12"}`); welche Ansicht das wird, entscheidet die Oberfläche. Fehler wie oben. |
+| `/api/kacheln` | GET | Katalog: `[{app, art, titel, min, bevorzugt, max, ttl, parameter, aktionen, formen}]`; `parameter` = JSON Schema 2020-12 (seit 2026-10-10). Genaues: `openapi.yaml`. |
+| `/api/kachel` | POST | Inhalt einer Kachel `{adresse, w, h, oben?, stand?}` → Zeilen mit Farbrollen \| unverändert \| zu klein; Fehler `ungueltig` (400, auch Schema- und Spannen-Fehler), `recht` (403), `weg` (404), `aus` (503). Genaues: `openapi.yaml`. |
+| `/api/kachel/aktion` | POST | `{adresse, aktion: "oeffnen"}` → `{zeige: {adresse}}`. Genaues: `openapi.yaml`. |
 
 Quellen heute: `kalender`/`ausschnitt` (`core/kachel_kalender.py`, Adresse
 `zentrale://kalender/ausschnitt?modus=mitlaufend&tage=N` oder
@@ -450,9 +454,10 @@ Seit 2026-10-10 dazu `fokus`/`liste` (`core/kachel_fokus.py`,
 `zentrale://fokus/liste?erledigte=false&liste=<lid>&tiefe=3`, `oeffnen` →
 `zentrale://fokus/<lid>`) und `graph`/`verlauf` (`core/kachel_graph.py`,
 `zentrale://graph/verlauf?graph=<gid>&tage=14`, 2–365 Tage, `oeffnen` →
-`zentrale://graph/<gid>`). Ihre Wahl-Felder tragen `dynamisch: true`: der
-Katalog füllt `werte` mit den Listen/Graphen von jetzt (gibt es keine,
-fehlt der Eintrag); gelöschte Liste/Graph → `404 {fehler: "weg"}`.
+`zentrale://graph/<gid>`). Welche Liste/welcher Graph: im Katalog als
+`oneOf [{const, title}]` mit den Listen/Graphen von jetzt (gibt es keine,
+fehlt der Eintrag); der Hub prüft nur die Form, gelöschte Liste/Graph →
+`404 {fehler: "weg"}`.
 
 ## Tutor (eigene App, seit 2026-10-09)
 
@@ -482,3 +487,6 @@ Stimm-Diensten.
   Quelle die Hub-Grenze 400×400; für `r` = Größe ändern im Desk).
 - **2026-10-10** — Kachel-Quellen `fokus`/`liste` und `graph`/`verlauf`;
   Wahl-Felder mit `dynamisch` (Werte frisch im Katalog).
+- **2026-10-10** — Katalog `felder` (eigenes Format) → `parameter` (JSON
+  Schema 2020-12); Kachel- und Desk-Routen in `openapi.yaml` (OpenAPI 3.1)
+  beschrieben, mit Drift-Test.

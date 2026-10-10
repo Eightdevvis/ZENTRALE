@@ -165,7 +165,8 @@ def antwort(pfad, methode):
     if p == "/api/kacheln":                       # Katalog (2026-10-10)
         return [{"app": "kalender", "art": "ausschnitt", "titel": "kalender",
                  "min": {"w": 6, "h": 2}, "bevorzugt": {"w": 90, "h": 7}, "ttl": 60,
-                 "felder": [{"name": "tage", "typ": "zahl", "titel": "tage", "vorgabe": 7}],
+                 "parameter": {"type": "object", "properties": {
+                     "tage": {"title": "tage", "type": "integer", "default": 7}}},
                  "aktionen": ["oeffnen"], "formen": ["zeilen"]}]
     if p == "/api/kachel":                        # Kacheln (2026-10-10)
         return {"zeilen": [[["Mo 12.10.", "heute"]]], "text": "Kalender", "stand": "s",

@@ -177,28 +177,38 @@ def test_katalog_form_und_kalender_eintrag():
     k = kacheln.katalog()
     assert json.loads(json.dumps(k)) == k
     (e,) = [x for x in k if x["app"] == "kalender"]
-    assert set(e) == {"app", "art", "titel", "min", "bevorzugt", "max", "ttl", "felder",
+    assert set(e) == {"app", "art", "titel", "min", "bevorzugt", "max", "ttl", "parameter",
                       "aktionen", "formen"}
     # Ohne max der Quelle: die neutrale Grenze des Hubs (2026-10-10)
     assert e["max"] == {"w": kacheln.GROESSE_GRENZE, "h": kacheln.GROESSE_GRENZE}
     assert e["art"] == "ausschnitt" and e["titel"] == "kalender"
     assert e["min"] == {"w": 6, "h": 2} and e["bevorzugt"] == {"w": 90, "h": 7} and e["ttl"] == 60
     assert e["aktionen"] == ["oeffnen"] and e["formen"] == ["zeilen"]
-    felder = {f["name"]: f for f in e["felder"]}
-    assert [f["name"] for f in e["felder"]] == ["modus", "tage", "von", "bis"]
-    assert felder["modus"]["typ"] == "wahl" and felder["modus"]["vorgabe"] == "mitlaufend"
-    assert felder["tage"]["grenzen"] == {"min": 1, "max": 31} and felder["tage"]["vorgabe"] == 7
-    assert felder["bis"]["grenzen"] == {"nicht_vor": "von", "tage_max": 31}
-    assert felder["von"]["wenn"] == {"modus": "fest"}
-    for f in e["felder"]:
-        assert f["typ"] in ("datum", "zahl", "wahl", "text", "bool") and f["titel"]
+    # parameter = JSON Schema 2020-12 (2026-10-10, Standards statt Eigenformat)
+    s = e["parameter"]
+    assert s["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert s["type"] == "object" and s["additionalProperties"] is False
+    p = s["properties"]
+    assert list(p) == ["modus", "tage", "von", "bis"]
+    assert p["modus"]["default"] == "mitlaufend"
+    assert [w["const"] for w in p["modus"]["oneOf"]] == ["mitlaufend", "fest"]
+    assert (p["tage"]["type"], p["tage"]["minimum"], p["tage"]["maximum"], p["tage"]["default"]) \
+        == ("integer", 1, 31, 7)
+    assert p["von"]["format"] == "date" and p["von"]["default"] == date.today().isoformat()
+    assert p["bis"]["default"] == (date.today() + timedelta(days=6)).isoformat()
+    fest = [t["then"] for t in s["allOf"] if t["if"]["properties"]["modus"]["const"] == "fest"]
+    assert fest == [{"required": ["von", "bis"], "properties": {"tage": False}}]
+    for name, prop in p.items():
+        assert prop["title"] and prop["type"] in ("string", "integer")
+    # die Quelle selbst trägt kein Datum (das kommt zur Fragezeit)
+    assert "default" not in kk.ARTEN["ausschnitt"]["parameter"]["properties"]["von"]
 
 
 def test_katalog_nur_mit_lese_recht_und_neue_apps_von_selbst(monkeypatch):
     probe = types.SimpleNamespace(APP="probe", RECHTE=("lesen",), kachel=lambda *a: {},
                                   ARTEN={"x": {"titel": "probe", "min": (2, 1), "max": (9, 9),
-                                               "felder": [{"name": "an", "typ": "bool",
-                                                           "titel": "an", "vorgabe": True}]}})
+                                               "parameter": {"type": "object", "properties": {
+                                                   "an": {"type": "boolean", "default": True}}}}})
     monkeypatch.setitem(kacheln.QUELLEN, "probe", probe)
     (e,) = [x for x in kacheln.katalog() if x["app"] == "probe"]
     assert e["max"] == {"w": 9, "h": 9} and e["bevorzugt"] == {"w": 2, "h": 1}
@@ -326,3 +336,16 @@ def test_quelle_ohne_gueltige_adresse_beim_oeffnen(monkeypatch):
     monkeypatch.setitem(kacheln.QUELLEN, "probe", quelle)
     s, a = kacheln.aktion({"adresse": "zentrale://probe/x", "aktion": "oeffnen"})
     assert s == 503 and "wohin" in a["text"]
+
+
+def test_ohne_jsonschema_sagt_der_hub_aus_statt_ungeprueft_zu_fragen(monkeypatch):
+    """Fehlt das Paket jsonschema auf einem Rechner, fragt der Hub keine
+    Quelle ungeprüft, sondern sagt „aus" mit dem Grund (2026-10-10)."""
+    import kachel_parameter
+
+    def fehlt():
+        raise kachel_parameter.OhnePruefer("jsonschema fehlt (pip install -r requirements.txt)")
+    monkeypatch.setattr(kachel_parameter, "_validator", fehlt)
+    status, a = kacheln.holen(anfrage())
+    assert status == 503 and a["fehler"] == "aus" and "jsonschema" in a["text"]
+    assert [e["app"] for e in kacheln.katalog()] == ["kalender"]   # anzeigen geht weiter

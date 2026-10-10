@@ -18,6 +18,12 @@ reden nur über Türen — galt INNEN; zwischen Tutor und Kern hielt sie nicht,
 weil der Tutor Kern-Code importierte. Der Hub macht aus der Abmachung eine
 Grenze.
 
+## Leitlinie: Standards statt Eigenformat (Sasha, 2026-10-10)
+
+Keine eigenen Daten- oder Schnittstellen-Formate: Feld-/Datenbeschreibungen
+sind **JSON Schema** (2020-12), HTTP-Schnittstellen **OpenAPI 3.1**
+(`openapi.yaml`), Adressen **URIs** (RFC 3986), Flächen **JSON Canvas**.
+
 ## Die eine Regel
 
 **Eine App importiert keinen Code einer anderen App und keinen Hub-Code.
@@ -153,7 +159,7 @@ tragen `ARTEN` und `RECHTE` selbst), Abbruch nach 0,5 s (erst für Apps
 hinter HTTP; im Prozess wird gemessen und geloggt).
 
 - **Begriff:** Eine Kachel ist ein **Verweis** auf ein Objekt einer anderen
-  App — seit 2026-10-10 seine **Adresse** `zentrale://<app>/<art>?<felder>`
+  App — seit 2026-10-10 seine **Adresse** `zentrale://<app>/<art>?<parameter>`
   (vorher App + Art + `ref`) —, keine Kopie. Leitlinie *„dasselbe Objekt, nicht
   kopiert"* (wie AFFiNE): die Wahrheit bleibt in der liefernden App. Der
   Rückfall-Text in der Canvas-Datei ist nur Anzeige-Cache für fremde
@@ -170,7 +176,7 @@ hinter HTTP; im Prozess wird gemessen und geloggt).
   der Adapter gegen HTTP getauscht.
 - **Manifest:** `liefert = ["kachel:<art>"]`, optional `[kachel.<art>]` mit
   denselben Schlüsseln wie ein Katalog-Eintrag (`titel`, `min`, `bevorzugt`,
-  `max`, `ttl`, `felder`) — heute stehen sie in `ARTEN` der Quelle.
+  `max`, `ttl`, `parameter`) — heute stehen sie in `ARTEN` der Quelle.
 - **Weg:** immer über den Hub (`POST /api/kachel`), nie direkt an die App.
   Anfrage `{adresse, w, h, oben?, stand?, form?}` (`groesse: {w, h}` geht
   auch; `oben` = Blätter-Lage, die Antwort sagt `oben`/`oben_max`). Antwort:
@@ -227,7 +233,8 @@ Handy.
 - **Kanonisch:** Namen der Abfrage sortiert, Werte als Text (Wahr/Falsch =
   `true`/`false`) — dasselbe Objekt ergibt dieselbe Zeichenkette.
 - **Kachel:** erster Pfad-Abschnitt = Art aus dem Katalog, Abfrage = deren
-  `felder`.
+  `parameter` (Werte als Text; der Hub liest sie nach dem `type` des
+  Schemas, wie OpenAPI Query-Parameter).
 - **Wer was tut:** die App vergibt die Adresse und weiß nichts von
   Ansichten. Jede Oberfläche bildet Adressen auf ihre Ansicht ab — in der
   TUI ein kleiner **Router** (`tui/ansichten/sprung.py`: App → Handler(pfad,
@@ -236,20 +243,41 @@ Handy.
 ### Katalog: was jede App als Kachel liefern kann (gebaut 2026-10-10)
 
 `GET /api/kacheln` → Liste von Einträgen `{app, art, titel, min: {w, h},
-bevorzugt: {w, h}, max?: {w, h}, ttl, felder: [...], aktionen: ["oeffnen"],
+bevorzugt: {w, h}, max: {w, h}, ttl, parameter, aktionen: ["oeffnen"],
 formen: ["zeilen"]}` (`"roh"` reserviert), nur Apps mit `<app>:lesen`.
 Heute gebaut aus `ARTEN` der Quellen im Prozess (`core/kacheln.py`), später
-aus `[kachel.<art>]` im `app.toml` derselben App.
+aus `[kachel.<art>]` im `app.toml` derselben App. Genaue Form aller
+Kachel- und Desk-Routen: **`openapi.yaml`** (Repo-Wurzel, OpenAPI 3.1, seit
+2026-10-10) — `tests/test_openapi.py` prüft, dass jede Route unter
+`/api/kachel*`, `/api/kacheln`, `/api/desk*` dort steht und umgekehrt, dass
+die Datei gültig ist und echte Antworten zu ihren Schemas passen.
 
-- **Felder** (`core/kachel_felder.py`): `{name, typ: datum|zahl|wahl|text|
-  bool, titel, vorgabe, hilfe?, wenn?: {feld: wert}, werte? (wahl),
-  grenzen?}` — Grenzen: zahl `{min, max}`, text `{max_laenge}`, datum
-  `{nicht_vor: <feld>, tage_max: N}`. Datum-Vorgabe auch `heute`/`heute+N`.
-- **Fach-Regeln wohnen in der App:** die Kalender-Regeln (mitlaufend/fest,
-  von, bis, tage ≤ 31) stehen im Katalog-Eintrag des Kalenders. Jede
-  Oberfläche baut ihren Anlege-Dialog daraus **generisch** (TUI:
-  `tui/bausteine/feld_dialog.py`), der Hub prüft dieselben Regeln, bevor er
-  die Quelle fragt (unbekannte oder nicht geltende Namen → 400).
+- **Parameter = JSON Schema** (2020-12, `core/kachel_parameter.py`, seit
+  2026-10-10; die eigene `felder`-Liste davor ist ganz weg). Benutzte
+  Teilmenge: `properties` (type string|integer|number|boolean, `title`,
+  `description`, `default`, `minimum`/`maximum`, `minLength`/`maxLength`,
+  `format: date`, Auswahl als `oneOf [{const, title}]` oder `enum`),
+  `required`, `allOf [{if: {properties: {x: {const}}}, then: {required,
+  properties: {y: false}}}]` (Felder, die nur bei einem Wert gelten),
+  `additionalProperties: false`. Reihenfolge der `properties` =
+  Reihenfolge im Dialog (die Route liefert unsortiert).
+- **Zur Fragezeit** trägt die Quelle mit `parameter_jetzt(art, schema)` ein,
+  was erst dann feststeht: die Listen/Graphen zur Wahl (`oneOf`), die
+  Vorgaben von heute (Kalender von/bis). Geprüft wird gegen das Schema
+  der Quelle ohne diese Auswahl — eine gelöschte Liste heißt so „weg".
+- **Prüfen:** der Hub liest die Werte der Adresse nach `type`, prüft mit
+  dem Paket `jsonschema` (nur Backend; fehlt es → `aus`) und gibt den
+  wichtigsten Fehler als einen deutschen Satz zurück (400 `ungueltig`).
+- **Nicht in JSON Schema ausdrückbar:** Beziehungen zwischen zwei Werten,
+  hier der Abstand zweier Daten (Kalender: „bis" nicht vor „von",
+  höchstens 31 Tage). Das prüft die Quelle in `pruefen(art, ref)`, der Hub
+  ruft es gleich nach dem Schema; 400 mit ihrem Text. Im Schema steht die
+  Regel nur als `description` („höchstens 31 tage ab „von“").
+- **Fach-Regeln wohnen in der App:** jede Oberfläche baut ihren
+  Anlege-Dialog **generisch** aus dem Schema (TUI:
+  `tui/bausteine/feld_dialog.py`, nur Standardbibliothek, prüft leicht:
+  Typ, Grenzen, Pflicht); Herr über die Regeln ist der Hub, sein Satz
+  steht im Dialog.
 - **Desk:** der `+`-Wähler = eigene Arten (Zettel, Bild) + alle
   Katalog-Einträge; eine neue App erscheint von selbst. Die Startgröße
   sagt der Hub für genau die gewählten Werte (`bevorzugt` in der Antwort).
@@ -269,8 +297,8 @@ wie `text`. Neue Rolle = Eintrag im Wörterbuch + in jeder Oberfläche.
 Wie der Kalender ein Modul je Quelle im Prozess, eingetragen in `QUELLEN`;
 beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
 
-- **`fokus`/`liste`** (`core/kachel_fokus.py`): Felder `liste` (wahl,
-  `dynamisch`), `erledigte` (bool, Standard nein), `tiefe` (zahl 1–9,
+- **`fokus`/`liste`** (`core/kachel_fokus.py`): Parameter `liste` (Text,
+  Auswahl zur Fragezeit), `erledigte` (boolean, Standard nein), `tiefe` (integer 1–9,
   Standard 3, „ebenen"). Adresse z. B.
   `zentrale://fokus/liste?erledigte=false&liste=l_einkauf&tiefe=3`. Kopf =
   Name, Bernstein-Steine, „erledigt/alle" (Blätter); darunter die Punkte
@@ -281,8 +309,8 @@ beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
   versteht auch `zentrale://fokus/<liste>/<eintrag>`. Gelesen über
   `lists.read_lists()` (neu: schreibt garantiert nie, auch nicht die
   einmalige »week«-Migration).
-- **`graph`/`verlauf`** (`core/kachel_graph.py`): Felder `graph` (wahl,
-  `dynamisch`), `tage` (zahl 2–365, Standard 14). Kopf = Name (+ Einheit),
+- **`graph`/`verlauf`** (`core/kachel_graph.py`): Parameter `graph` (Text,
+  Auswahl zur Fragezeit), `tage` (integer 2–365, Standard 14). Kopf = Name (+ Einheit),
   rechts der letzte Wert; darunter Balken aus `▁▂▃▄▅▆▇█`, je Tag eine
   Spalte (bis 3 breit), heute rechts in `heute`, Tage ohne Wert als leiser
   Punkt; mehr Tage als Spalten → Mittel je Spalte; unten min/max (und der
@@ -290,10 +318,10 @@ beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
   0–5), time als Uhrzeit, period als Dauer („7h30"). Keine Werte im
   Zeitraum → „keine werte in N tagen". `oeffnen` →
   `zentrale://graph/<gid>`.
-- **Werte zur Laufzeit** (`dynamisch` in `core/kachel_felder.py`): welche
-  Liste/welcher Graph steht erst beim Fragen fest — der Katalog holt die
-  Werte frisch bei der Quelle (`werte(art, name)`); gibt es keine, fehlt der
-  Eintrag im Katalog. Der Hub prüft dann nur die Form (Text); gibt es den
+- **Werte zur Laufzeit** (`parameter_jetzt` der Quelle, seit 2026-10-10
+  statt `dynamisch`/`werte`): welche Liste/welcher Graph steht erst beim
+  Fragen fest — der Katalog trägt sie als `oneOf` ein; gibt es keine, fehlt
+  der Eintrag im Katalog. Der Hub prüft nur die Form (Text); gibt es den
   Wert nicht mehr → 404 `weg`.
 - **Geteilte Helfer:** die Ansicht der TUI und die Kachel rechnen mit
   denselben reinen Funktionen (`core/listen_baum.py`,

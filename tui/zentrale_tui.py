@@ -1210,7 +1210,8 @@ def run_ui(stdscr, store):
     desk = ansichten.desk.Desk(z)          # Desk View (2026-10-09)
     DESK = desk.DESK
     # o auf einer Kachel: Adresse → Ansicht (Adress-Router, 2026-10-10)
-    desk.zeigen = ansichten.sprung.router_fuer(DESK, kalender, fokus, graphen).zeigen
+    router = ansichten.sprung.router_fuer(DESK, kalender, fokus, graphen)
+    desk.zeigen = router.zeigen
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik)
@@ -1271,7 +1272,7 @@ def run_ui(stdscr, store):
         fokus=fokus, graphen=graphen, kalender=kalender, karte=karte, klavier=klavier,
         notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
-        DESK=DESK, desk=desk)
+        DESK=DESK, desk=desk, router=router)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
@@ -1323,6 +1324,9 @@ def run_ui(stdscr, store):
 
         if taste_verteilen(u, ch) == BEENDEN:
             break
+        # Mit `o` geöffnete Ansicht zu (Esc)? Dann zurück zum Öffner, z. B.
+        # auf denselben Desk (sprung.Router, 2026-10-10).
+        router.nachsehen()
         # KEY_RESIZE oder Timeout → einfach neu zeichnen
 
         # Farbe nachziehen: ein Wort aus theme.now. Damit ist hier ALLES

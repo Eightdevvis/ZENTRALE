@@ -21,18 +21,22 @@
 # Eine Quelle (Modul) hat:
 #   APP                       Name der App („kalender")
 #   ARTEN                     {art: {titel, min: (w, h), bevorzugt?: (w, h),
-#                              max?: (w, h), ttl, felder: [...]}} — der
-#                              Katalog-Eintrag (Felder: core/kachel_felder.py)
+#                              max?: (w, h), ttl, parameter}} — der
+#                              Katalog-Eintrag; `parameter` ist ein JSON
+#                              Schema (core/kachel_parameter.py, 2026-10-10)
 #   RECHTE                    was die eingebaute App kann, z. B. ("lesen",)
-#   werte(art, name)          -> [{wert, titel}] für ein Feld mit
-#                              `dynamisch` (nur dann nötig): beim Katalog
-#                              frisch gefragt; leer = es gibt nichts zu
-#                              wählen, der Eintrag fehlt dann im Katalog
+#   parameter_jetzt(art, schema) -> schema | None (optional): beim Katalog
+#                              frisch gefragt — Auswahl von jetzt (welche
+#                              Liste), Vorgaben von heute; None = es gibt
+#                              nichts zu wählen, der Eintrag fehlt dann
+#   pruefen(art, ref)         (optional) was JSON Schema nicht sagen kann
+#                              (z. B. höchstens 31 Tage zwischen zwei Daten):
+#                              wirft KachelFehler → 400 mit diesem Text
 #   kachel(art, ref, w, h, oben) -> {zeilen, text, oben?, oben_max?}
 #   bevorzugt(art, ref)       -> (w, h) für genau diesen Bezug (optional)
 #   aktion(art, ref, was)     -> {"zeige": {"adresse"}} (optional)
 # und wirft kachel_form.KachelFehler / KachelWeg / KachelZuKlein. `ref` ist
-# die Abfrage der Adresse, schon nach den Feldern geprüft und getypt.
+# die Abfrage der Adresse, schon gegen das Schema geprüft und getypt.
 #
 # Maße: w/h sind abstrakte Zellen (Spalten × Zeilen), immer das Innere ohne
 # Rahmen — jede Oberfläche rechnet sie in ihr eigenes Raster um.
@@ -49,10 +53,10 @@ import json
 import time
 
 import adressen
-import kachel_felder
 import kachel_fokus
 import kachel_graph
 import kachel_kalender
+import kachel_parameter
 import state
 from kachel_form import (KachelFehler, KachelWeg, KachelZuKlein, stand_von,
                          zeilen_kuerzen)
@@ -104,35 +108,41 @@ def _wh(paar):
 
 # ── Katalog ───────────────────────────────────────────────────────────
 
-def _felder_jetzt(q, art, felder):
-    """Felder mit `dynamisch` bekommen ihre Werte frisch von der Quelle.
-    → Felder, oder None, wenn es bei einem nichts zu wählen gibt (keine
-    Liste, kein Graph) — dann lässt sich keine Kachel anlegen."""
-    raus = []
-    for f in felder:
-        if f.get("typ") == "wahl" and f.get("dynamisch"):
-            try:
-                werte = [{"wert": str(w["wert"]), "titel": str(w.get("titel") or w["wert"])}
-                         for w in _gemessen(q.APP, q.werte, art, f["name"]) or []]
-            except Exception as e:                   # eine Quelle darf den Katalog nie reißen
-                state.push_log("KACHEL ✗  %s: werte für %s: %s" % (q.APP, f["name"], e))
-                return None
-            if not werte:
-                return None
-            f = dict(f, werte=werte)
-        raus.append(f)
-    return raus
+def _parameter(info):
+    """Das Schema eines Katalog-Eintrags (ohne: ein leeres Objekt)."""
+    return info.get("parameter") or kachel_parameter.LEER
+
+
+def _parameter_jetzt(q, art, schema):
+    """Schema mit den Werten von jetzt (parameter_jetzt der Quelle). → Schema,
+    oder None, wenn es nichts zu wählen gibt (keine Liste, kein Graph) oder
+    die Quelle stolpert — dann lässt sich keine Kachel anlegen."""
+    jetzt = getattr(q, "parameter_jetzt", None)
+    if jetzt is None:
+        return schema
+    try:
+        return _gemessen(q.APP, jetzt, art, _leitung(schema))
+    except Exception as e:                       # eine Quelle darf den Katalog nie reißen
+        state.push_log("KACHEL ✗  %s: parameter für %s: %s" % (q.APP, art, e))
+        return None
 
 
 def _eintrag(q, art, info):
-    felder = _felder_jetzt(q, art, kachel_felder.form_pruefen(list(info.get("felder") or [])))
-    if felder is None:
+    schema = _parameter_jetzt(q, art, _parameter(info))
+    if schema is None:
         return None
+    try:
+        kachel_parameter.schema_pruefen(schema)
+    except ValueError as e:
+        state.push_log("KACHEL ✗  %s/%s: %s" % (q.APP, art, e))
+        return None
+    except kachel_parameter.OhnePruefer:
+        pass                                     # anzeigen geht; prüfen sagt dann „aus"
     e = {"app": q.APP, "art": art, "titel": str(info.get("titel") or art),
          "min": _wh(info.get("min", (1, 1))),
          "bevorzugt": _wh(info.get("bevorzugt") or info.get("min", (1, 1))),
          "ttl": int(info.get("ttl", TTL_VORGABE)),
-         "felder": felder,
+         "parameter": schema,
          "aktionen": list(AKTIONEN) if getattr(q, "aktion", None) else [],
          "formen": list(FORMEN)}
     # max immer (2026-10-10, Größe ändern im Desk): sagt die Quelle keins,
@@ -198,11 +208,15 @@ def _anfrage_lesen(anfrage):
     if art not in getattr(q, "ARTEN", {}):
         raise _Abgelehnt(400, {"fehler": "ungueltig",
                                "text": "%s kennt keine art „%s\"" % (app, art)})
-    felder = q.ARTEN[art].get("felder")
     try:
-        ref = kachel_felder.pruefen(felder, roh) if felder is not None else roh
+        ref = kachel_parameter.pruefen(_parameter(q.ARTEN[art]), roh)
+        extra = getattr(q, "pruefen", None)
+        if extra is not None:
+            extra(art, _leitung(ref))
     except KachelFehler as e:
         raise _Abgelehnt(400, {"fehler": "ungueltig", "text": str(e)})
+    except kachel_parameter.OhnePruefer as e:
+        raise _Abgelehnt(503, {"fehler": "aus", "text": str(e)})
     return q, app, art, ref
 
 

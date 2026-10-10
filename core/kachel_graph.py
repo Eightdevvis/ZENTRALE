@@ -26,6 +26,7 @@ from datetime import date, timedelta
 
 import adressen
 import graph_reihen
+import kachel_parameter
 import graphs
 from kachel_form import KachelFehler, KachelWeg, kuerzen, stueck
 
@@ -40,12 +41,20 @@ ARTEN = {"verlauf": {
     "min": (12, 2),
     "bevorzugt": (30, 6),
     "ttl": 120,                   # Werte kommen höchstens ein paarmal am Tag
-    "felder": [
-        {"name": "graph", "typ": "wahl", "titel": "graph", "dynamisch": True,
-         "hilfe": "←→ blättert durch die graphen"},
-        {"name": "tage", "typ": "zahl", "titel": "tage", "vorgabe": 14,
-         "grenzen": {"min": 2, "max": TAGE_GRENZE}, "hilfe": "die letzten tage bis heute"},
-    ],
+    # JSON Schema (core/kachel_parameter.py, 2026-10-10); den Graphen wählt
+    # man aus den vorhandenen — parameter_jetzt() trägt sie frisch ein.
+    "parameter": {
+        "$schema": kachel_parameter.ENTWURF,
+        "type": "object",
+        "properties": {
+            "graph": {"title": "graph", "description": "←→ blättert durch die graphen",
+                      "type": "string", "minLength": 1},
+            "tage": {"title": "tage", "description": "die letzten tage bis heute",
+                     "type": "integer", "minimum": 2, "maximum": TAGE_GRENZE, "default": 14},
+        },
+        "required": ["graph", "tage"],
+        "additionalProperties": False,
+    },
 }}
 
 # Farbrollen (core/farbrollen.py): nur die Bedeutung.
@@ -62,12 +71,12 @@ def _graph(gid):
     raise KachelWeg(gid)
 
 
-def werte(art, name):
-    """Die Graphen zur Wahl (Katalog, Feld `graph`): [{wert, titel}]."""
-    if art != "verlauf" or name != "graph":
-        return []
-    return [{"wert": str(g["id"]), "titel": str(g.get("name") or g["id"])}
+def parameter_jetzt(art, schema):
+    """Katalog: die Graphen von jetzt zur Wahl (oneOf mit Namen). Kein
+    Graph → None."""
+    wahl = [(g["id"], g.get("name") or g["id"])
             for g in graphs.list_graphs() if isinstance(g, dict) and g.get("id")]
+    return kachel_parameter.mit_auswahl(schema, "graph", wahl) if wahl else None
 
 
 def _pruefen(art, ref):

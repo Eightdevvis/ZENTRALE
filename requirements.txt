@@ -43,6 +43,13 @@ pypdf>=6,<7
 # mit 12.3.0.
 Pillow>=12.3,<13
 
+# JSON Schema prüfen (Entwurf 2020-12): die Parameter einer Kachel im Katalog
+# (core/kachel_parameter.py, Sasha 2026-10-10: Standards statt Eigenformat).
+# Nur das Backend; die TUI importiert es nie (sie liest die Schemas selbst).
+# Fehlt es, sagt der Hub beim Anlegen/Holen „aus", alles andere läuft.
+# Getestet mit 4.26.0.
+jsonschema>=4.18,<5
+
 # Recurrence-Rules (iCal RRULE) für Routinen im Kalender-System
 python-dateutil
 

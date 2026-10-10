@@ -63,7 +63,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
 | `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git |
 | `kachel_form` | 1 | Form einer Kachel-Antwort ohne Fachwissen: Fehler (ungültig, weg, zu klein), kürzen auf w×h, `stand` als Fingerabdruck (seit 2026-10-10) |
-| `kachel_felder` | 1 | Felder einer Kachel-Art im Katalog (datum/zahl/wahl/text/bool, `wenn`, `grenzen`): Vorgaben, Prüfung und Typen — dieselben Regeln, aus denen jede Oberfläche ihren Dialog baut (seit 2026-10-10) |
+| `kachel_parameter` | 1 | Parameter einer Kachel-Art im Katalog als JSON Schema 2020-12 (seit 2026-10-10, vorher eigene `felder`): Werte aus der Adresse typen, gegen das Schema prüfen (Paket `jsonschema`), Fehler als ein deutscher Satz; Auswahl/Vorgaben zur Fragezeit eintragen |
 | `adressen` | 1 | „Ein Objekt, eine Adresse": `zentrale://<app>/<pfad>?…` bauen, lesen, kanonisch machen (nur `urllib.parse`); alter Kachel-Verweis → Adresse (seit 2026-10-10) |
 | `farbrollen` | 1 | Wörterbuch der Farbrollen (Name + Bedeutung), das Apps und Oberflächen teilen; die Farbe wählt jede Oberfläche selbst (seit 2026-10-10) |
 | `listen_baum` | 1 | Reine Helfer über den Eintrags-Baum einer Liste (zählen, erledigt, Reihenfolge einer Ebene, flach, Pfad, Bernstein-Steine) — geteilt von Listen-Ansicht der TUI und Listen-Kachel, ohne Imports (seit 2026-10-10) |
@@ -161,9 +161,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz; Fremdes in der Datei bleibt stehen |
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `kacheln` | 2 | Hub für Kacheln (seit 2026-10-10): Anfrage prüfen, Recht `<app>:lesen`, Quelle aus `QUELLEN` fragen (im Prozess, Anfrage/Antwort durch JSON wie über HTTP), kürzen, `stand`/`ttl`, zu klein/weg/aus; Aktion „oeffnen“ → `zeige` |
-| `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie |
-| `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): eine Liste mit Punkten (offen/abgehakt, eingerückt bis N Ebenen, Fortschritt oben), blättern mit „+N“; Liste im Katalog frisch zur Wahl (`werte`); liest nur über `lists.read_lists`, schreibt nie |
-| `kachel_graph` | 2 | Kachel-Quelle `graph`/`verlauf` (seit 2026-10-10): letzte N Tage eines Graphen als Blockbalken, letzter Wert, min/max; Graph im Katalog frisch zur Wahl; liest nur über `graphs.list_graphs`/`read_values` |
+| `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie; Spanne zwischen zwei Daten (≤ 31 Tage, „bis" nicht vor „von") in `pruefen()`, weil JSON Schema sie nicht ausdrücken kann |
+| `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): eine Liste mit Punkten (offen/abgehakt, eingerückt bis N Ebenen, Fortschritt oben), blättern mit „+N“; Liste im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `lists.read_lists`, schreibt nie |
+| `kachel_graph` | 2 | Kachel-Quelle `graph`/`verlauf` (seit 2026-10-10): letzte N Tage eines Graphen als Blockbalken, letzter Wert, min/max; Graph im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `graphs.list_graphs`/`read_values` |
 | `ai` | 3 | Ollama-Weg, Tool-Liste und -Ausführung, Erlaubnis-Abfrage, Prompt-Bausteine |
 | `ai_backends` | 3 | Wer denkt: lokal oder Cloud, Anbieter, Modell, Effort, Rundengrenze |
 | `cloud` | 3 | Anthropic-Weg |

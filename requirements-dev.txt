@@ -2,3 +2,7 @@
 # Installieren:  venv/bin/pip install -r requirements-dev.txt
 # Tests laufen:  venv/bin/python -m pytest
 pytest
+# openapi.yaml lesen (tests/test_openapi.py). Kommt heute schon über
+# faster-whisper → huggingface_hub mit; hier, damit die Tests es nicht dem
+# Zufall verdanken (2026-10-10).
+pyyaml

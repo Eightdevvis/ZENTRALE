@@ -17,7 +17,9 @@
 # sprung.py, von zentrale_tui.py hereingegeben) öffnet die passende
 # Ansicht. Im Wähler hinter `+` steht neben Zettel und Bild alles aus dem
 # Katalog des Hubs (`GET /api/kacheln`, desk_neu.py) — mit einem Dialog,
-# den feld_dialog.py aus den Feldern des Eintrags baut (2026-10-10).
+# den feld_dialog.py aus dem JSON Schema des Eintrags baut (`parameter`,
+# 2026-10-10). Esc in der Ansicht, die `o` geöffnet hat, führt zurück auf
+# diesen Desk an dieselbe Stelle (`zurueck`, der Router merkt es sich).
 
 import curses
 import json
@@ -335,7 +337,7 @@ class Desk:
             if art.name == "bild":
                 self._bild_wahl_oeffnen()
             elif isinstance(art, desk_neu.KatalogWahl):
-                # Erst fragen (Felder aus dem Katalog), dann hinlegen; ohne
+                # Erst fragen (Schema aus dem Katalog), dann hinlegen; ohne
                 # Felder gleich.
                 dialog = art.neu_dialog()
                 if dialog.felder:
@@ -479,8 +481,16 @@ class Desk:
             D["msg"] = "öffnen geht nicht: " + self._fehlertext(e)
             return
         adresse = ((a or {}).get("zeige") or {}).get("adresse") or "?"
-        if not (self.zeigen and self.zeigen(adresse)):
+        if not (self.zeigen and self.zeigen(adresse, zurueck=self.zurueck)):
             D["msg"] = "„%s“ kann ich von hier nicht öffnen" % adresse
+
+    def zurueck(self):
+        """Die mit `o` geöffnete Ansicht ist zu (2026-10-10): wieder auf
+        diesen Desk, an dieselbe Stelle. Canvas, Ausschnitt und Fokus liegen
+        noch in DESK — der Router hat nur `active` abgeschaltet."""
+        D = self.DESK
+        if D["canvas"] is not None:
+            D.update(active=True, msg="")
 
     def _taste_modal(self, ch):
         D = self.DESK

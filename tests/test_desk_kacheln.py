@@ -1,6 +1,6 @@
 """
 Desk View mit Kacheln (2026-10-10, memory/system/desk_view.md): die
-+-Auswahl (eigene Arten + Katalog des Hubs), der Dialog aus den Feldern des
++-Auswahl (eigene Arten + Katalog des Hubs), der Dialog aus dem JSON Schema des
 Katalogs, Holen im Hintergrund aus dem Puffer, blättern, `o` →
 /api/kachel/aktion → Adresse → zeigen, enter greift auch Kacheln, und die
 Datei (core/desk.py) mit neuer Kachel (Adresse) und Rückfall-Text.
@@ -72,7 +72,7 @@ def ansicht(monkeypatch, client):
     d.starten = lambda f: f()                    # Hintergrund gleich ausführen
     d.aufrufe = aufrufe
     d.gesprungen = []
-    d.zeigen = lambda adresse: d.gesprungen.append(adresse) or True
+    d.zeigen = lambda adresse, zurueck=None: d.gesprungen.append(adresse) or True
     return d
 
 
@@ -187,7 +187,7 @@ def test_dialog_esc_legt_nichts_hin(ansicht):
 
 # ── Dialog aus dem Katalog ────────────────────────────────────────────
 
-def test_dialog_kommt_aus_den_feldern_des_katalogs(ansicht):
+def test_dialog_kommt_aus_dem_schema_des_katalogs(ansicht):
     from tui.bausteine.feld_dialog import FeldDialog
     m = kachel_anlegen(ansicht, "f")
     assert isinstance(m, FeldDialog) and m.kopf == "kalender auf den desk"
@@ -201,8 +201,8 @@ def test_hub_sagt_nein_dialog_bleibt_offen(ansicht, monkeypatch):
     import kacheln
     d, D = ansicht, ansicht.DESK
     m = kachel_anlegen(d, "h")
-    monkeypatch.setitem(kacheln.kachel_kalender.ARTEN["ausschnitt"]["felder"][1],
-                        "grenzen", {"min": 1, "max": 5})
+    monkeypatch.setitem(kacheln.kachel_kalender.ARTEN["ausschnitt"]["parameter"]["properties"]["tage"],
+                        "maximum", 5)
     d.taste(10)
     assert D["modal"] is m and "höchstens 5 tage" in m.fehler and D["canvas"].elemente == []
 
@@ -303,7 +303,7 @@ def test_unbekanntes_ziel_wird_gesagt(ansicht, termine):
     d, D = ansicht, ansicht.DESK
     kachel_anlegen(d, "u")
     d.taste(10); d.taste(10)
-    d.zeigen = lambda adresse: False
+    d.zeigen = lambda adresse, zurueck=None: False
     d.taste(ord("o"))
     assert "zentrale://kalender/" in D["msg"] and "nicht öffnen" in D["msg"]
 
@@ -534,3 +534,44 @@ def test_liste_und_graph_aus_dem_katalog_anlegen_und_oeffnen(ansicht):
     d.taste(ord("o"))
     assert d.gesprungen[-1] == "zentrale://graph/" + gid
     assert len(lies("gr")["nodes"]) == 1
+
+
+# ── Spanne prüft der Hub, der Dialog zeigt es (2026-10-10) ────────────
+
+def test_spanne_ueber_31_tage_sagt_der_hub_im_dialog(ansicht):
+    """Abstand zweier Daten kann JSON Schema nicht sagen: der Dialog lässt
+    durch, der Hub antwortet 400 mit seinem Satz, der Dialog bleibt offen."""
+    d, D = ansicht, ansicht.DESK
+    m = kachel_anlegen(d, "s")
+    fest_tippen(m, "2026-10-01", "2026-11-30")
+    assert m.pruefen()[1] is None                 # der Dialog selbst hat nichts
+    d.taste(10)
+    assert D["modal"] is m and m.fehler == "höchstens 31 tage"
+    assert D["canvas"].elemente == []
+    assert "höchstens 31 tage" in m.anzeige(44, 10)[0][-1]
+
+
+# ── o, dann Esc: zurück auf denselben Desk (2026-10-10) ───────────────
+
+def test_o_dann_esc_fuehrt_zurueck_auf_den_desk(ansicht, termine):
+    import types
+    from tui.ansichten import sprung
+    d, D = ansicht, ansicht.DESK
+    K = {"active": False}
+    kal = types.SimpleNamespace(K=K, bedienung=types.SimpleNamespace(setze_tag=lambda t: None))
+    kal.oeffnen = lambda: K.update(active=True)
+    router = sprung.router_fuer(D, kal)
+    d.zeigen = router.zeigen
+    kachel_anlegen(d, "z")
+    d.taste(10); d.taste(10)                      # mitlaufend, ablegen
+    zeichne(d)
+    c = D["canvas"]
+    lage = (c.vx, c.vy, c.fokus)
+    d.taste(ord("o"))
+    assert K["active"] and not D["active"]
+    assert not router.nachsehen()                 # Kalender noch offen: nichts
+    K["active"] = False                           # Esc im Kalender
+    assert router.nachsehen()
+    assert D["active"] and D["canvas"] is c and (c.vx, c.vy, c.fokus) == lage
+    assert D["desk"] == "z" and D["ebene"] == "canvas"
+    assert not router.nachsehen()                 # nur einmal

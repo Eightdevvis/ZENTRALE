@@ -9,6 +9,12 @@
 # Neue Ziele kommen als `registrieren(app, handler)` dazu, keine if-Kette
 # (Listen `fokus` und Graphen `graph` seit 2026-10-10). Später nutzen Links
 # in Notizen denselben Router.
+#
+# Zurück zum Öffner (2026-10-10): wer `zeigen(adresse, zurueck=…)` ruft,
+# kommt wieder dran, sobald die geöffnete Ansicht zu ist (Esc) — statt auf
+# der Startseite zu landen. Allgemein, nicht je Ansicht: jede App trägt beim
+# Registrieren ihr Zustands-Dict ein (`active`), die Hauptschleife fragt
+# nach jeder Taste `nachsehen()`.
 
 from datetime import date
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -34,21 +40,41 @@ class Router:
 
     def __init__(self):
         self._apps = {}
+        self._zustand = {}               # App → Zustands-Dict ihrer Ansicht
+        self._rueck = None               # (Zustands-Dict, zurueck) solange offen
 
-    def registrieren(self, app, handler):
+    def registrieren(self, app, handler, zustand=None):
         self._apps[app] = handler
+        if zustand is not None:
+            self._zustand[app] = zustand
         return handler
 
     def kennt(self, adresse):
         a = lesen(adresse)
         return bool(a and a[0] in self._apps)
 
-    def zeigen(self, adresse):
+    def zeigen(self, adresse, zurueck=None):
+        """Ansicht zur Adresse öffnen. `zurueck()` (optional) bringt den
+        Öffner wieder, wenn diese Ansicht zugeht."""
         a = lesen(adresse)
         if a is None or a[0] not in self._apps:
             return False
         app, pfad, abfrage = a
-        return bool(self._apps[app](pfad, abfrage))
+        ok = bool(self._apps[app](pfad, abfrage))
+        zustand = self._zustand.get(app)
+        if ok and zurueck is not None and zustand is not None and zustand.get("active"):
+            self._rueck = (zustand, zurueck)
+        return ok
+
+    def nachsehen(self):
+        """Nach jeder Taste: ist die geöffnete Ansicht zu, kommt der Öffner
+        zurück (einmal). → True, wenn zurückgekehrt wurde."""
+        if self._rueck is None or self._rueck[0].get("active"):
+            return False
+        _zustand, zurueck = self._rueck
+        self._rueck = None
+        zurueck()
+        return True
 
 
 def kalender_tag(pfad, abfrage):
@@ -95,9 +121,9 @@ def router_fuer(DESK, kalender, fokus=None, graphen=None):
         DESK["active"] = False
         return graphen.zeige_graph(pfad[0])
 
-    router.registrieren("kalender", kalender_zeigen)
+    router.registrieren("kalender", kalender_zeigen, getattr(kalender, "K", None))
     if fokus is not None:
-        router.registrieren("fokus", fokus_zeigen)
+        router.registrieren("fokus", fokus_zeigen, getattr(fokus, "L", None))
     if graphen is not None:
-        router.registrieren("graph", graph_zeigen)
+        router.registrieren("graph", graph_zeigen, getattr(graphen, "G", None))
     return router

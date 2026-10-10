@@ -1,0 +1,601 @@
+# openapi.yaml — die HTTP-Schnittstelle des Hubs (Kacheln, Katalog, Desk).
+#
+# OpenAPI 3.1 (Sasha 2026-10-10: Standards statt Eigenformat, „openapi als
+# Vorbild"). Diese Datei ist die Autorität für die Routen unten; die Tabelle
+# in memory/system/api_endpoints.md zeigt nur hierher. Schemas sind JSON
+# Schema 2020-12 — derselbe Dialekt wie `parameter` im Katalog.
+# tests/test_openapi.py hält Routen und Datei gleich (jede Route unter
+# /api/kachel*, /api/kacheln, /api/desk* steht hier und umgekehrt), prüft
+# die Datei selbst und echte Antworten gegen ihre Schemas.
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: ZENTRALE Hub
+  version: "2026-10-10"
+  description: >
+    Der Hub, durch den jede Oberfläche (TUI, später Fenster und Handy) Kacheln
+    anderer Apps holt, und die Desk-Ansicht (Flächen mit Zetteln, Bildern und
+    Kacheln). Jedes Objekt hat eine Adresse `zentrale://<app>/<pfad>?<abfrage>`
+    (eine gewöhnliche URI, RFC 3986; core/adressen.py). Doku:
+    memory/system/hub_bauplan.md, memory/system/desk_view.md.
+servers:
+  - url: http://localhost:5000
+    description: Backend auf diesem Rechner (Flask, ui/app.py)
+tags:
+  - name: kacheln
+    description: Katalog, Inhalt einer Kachel, Aktionen (core/kacheln.py)
+  - name: desk
+    description: Desks laden und speichern (core/desk.py)
+  - name: desk-bild
+    description: Bilder auf dem Desk (core/desk_bild.py)
+
+paths:
+  /api/kacheln:
+    get:
+      tags: [kacheln]
+      operationId: katalog
+      summary: Was jede App als Kachel liefern kann
+      description: >
+        Nur Apps mit dem Recht `<app>:lesen`. `parameter` ist ein JSON Schema
+        (2020-12): was man beim Anlegen angibt; Auswahl (welche Liste) und
+        Vorgaben (heute) sind zur Fragezeit eingetragen. Die Reihenfolge der
+        `properties` ist die Reihenfolge der Felder.
+      responses:
+        "200":
+          description: Der Katalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/KatalogEintrag"}
+
+  /api/kachel:
+    post:
+      tags: [kacheln]
+      operationId: kachelHolen
+      summary: Inhalt einer Kachel in w×h Zellen
+      description: >
+        Der Hub prüft die Abfrage der Adresse gegen `parameter` des Katalogs
+        (Werte als Text werden nach `type` gelesen, wie Query-Parameter) und
+        danach, was JSON Schema nicht sagen kann, bei der Quelle selbst (z. B.
+        höchstens 31 Tage zwischen „von" und „bis"). `w = h = 0` fragt nur
+        Prüfung und Größe (Antwort `zu_klein` mit `bevorzugt`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/KachelAnfrage"}
+      responses:
+        "200":
+          description: Inhalt, unverändert, oder zu klein
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KachelAntwort"}
+        "400": {$ref: "#/components/responses/Ungueltig"}
+        "403": {$ref: "#/components/responses/OhneRecht"}
+        "404": {$ref: "#/components/responses/Weg"}
+        "503": {$ref: "#/components/responses/Aus"}
+
+  /api/kachel/aktion:
+    post:
+      tags: [kacheln]
+      operationId: kachelAktion
+      summary: Aktion einer Kachel weiterreichen
+      description: >
+        Heute nur `oeffnen`: die App sagt mit einer Adresse, WAS aufgehen soll;
+        welche Ansicht das wird, entscheidet die Oberfläche.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AktionAnfrage"}
+      responses:
+        "200":
+          description: Wohin
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AktionAntwort"}
+        "400": {$ref: "#/components/responses/Ungueltig"}
+        "403": {$ref: "#/components/responses/OhneRecht"}
+        "404": {$ref: "#/components/responses/Weg"}
+        "503": {$ref: "#/components/responses/Aus"}
+
+  /api/desk:
+    get:
+      tags: [desk]
+      operationId: deskListe
+      summary: Alle Desks, zuletzt geändert zuerst
+      responses:
+        "200":
+          description: Die Desks
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DeskListe"}
+    post:
+      tags: [desk]
+      operationId: deskAnlegen
+      summary: Leeren Desk anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, examples: [Elektronik]}
+      responses:
+        "201":
+          description: Der neue Desk
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Desk"}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "409": {$ref: "#/components/responses/DeskFehler"}
+
+  /api/desk/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [desk]
+      operationId: deskLaden
+      summary: Einen Desk laden (in Zellen)
+      responses:
+        "200":
+          description: Der Desk
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Desk"}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+        "422": {$ref: "#/components/responses/DeskFehler"}
+    put:
+      tags: [desk]
+      operationId: deskSpeichern
+      summary: Den ganzen Desk schreiben
+      description: >
+        Fehlende Elemente sind gelöscht, ihre Schnüre auch. Hat sich die
+        Datei seit dem Laden woanders geändert (`stand`), kommt 409 mit dem
+        neuen Stand und es wird nichts geschrieben.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeskSpeichern"}
+      responses:
+        "200":
+          description: Der gespeicherte Desk
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Desk"}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+        "409": {$ref: "#/components/responses/DeskFehler"}
+        "422": {$ref: "#/components/responses/DeskFehler"}
+
+  /api/desk-bild/quellen:
+    get:
+      tags: [desk-bild]
+      operationId: bildQuellen
+      summary: Bilder in ~/Zentrale/Input, neueste zuerst
+      responses:
+        "200":
+          description: Die Bilder
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quellen]
+                properties:
+                  quellen:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, pfad]
+                      properties:
+                        name: {type: string, description: relativ zu Input/}
+                        pfad: {type: string}
+
+  /api/desk-bild:
+    post:
+      tags: [desk-bild]
+      operationId: bildUebernehmen
+      summary: Ein Bild in den Desk-Ordner kopieren
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quelle]
+              properties:
+                quelle: {type: string, description: Name in Input/ oder ein Pfad}
+      responses:
+        "201":
+          description: Übernommen
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [datei, titel, w, h]
+                properties:
+                  datei: {type: string, description: relativ zum Desk-Ordner}
+                  titel: {type: string}
+                  w: {type: integer, description: Vorschlag in Zellen}
+                  h: {type: integer}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+        "422": {$ref: "#/components/responses/DeskFehler"}
+        "503": {$ref: "#/components/responses/DeskFehler"}
+
+  /api/desk-bild/vorschau:
+    post:
+      tags: [desk-bild]
+      operationId: bildVorschau
+      summary: Ein Bild als Zeichen (ASCII-Filter, core/bild_vorschau.py)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datei, w, h]
+              properties:
+                datei: {type: string}
+                w: {type: integer}
+                h: {type: integer}
+                modus: {type: string, enum: [mono, farbe], default: mono}
+                invert: {type: boolean, default: false}
+      responses:
+        "200":
+          description: Vorschau oder ein leiser Grund
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BildVorschau"}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+
+  /api/desk-bild/oeffnen:
+    post:
+      tags: [desk-bild]
+      operationId: bildOeffnen
+      summary: Was die Oberfläche zum Öffnen braucht
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datei]
+              properties:
+                datei: {type: string}
+      responses:
+        "200":
+          description: Pfad, ob es ihn gibt, eingestellter Betrachter
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pfad, da, betrachter]
+                properties:
+                  pfad: {type: string}
+                  da: {type: boolean}
+                  betrachter: {type: string}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+
+  /api/desk-bild/datei:
+    get:
+      tags: [desk-bild]
+      operationId: bildDatei
+      summary: Das Bild selbst (für eine Oberfläche auf einem anderen Rechner)
+      parameters:
+        - name: datei
+          in: query
+          required: true
+          schema: {type: string, examples: [bilder/x.png]}
+      responses:
+        "200":
+          description: Die Bilddatei
+          content:
+            image/*:
+              schema: {type: string, contentMediaType: "image/*"}
+        "400": {$ref: "#/components/responses/DeskFehler"}
+        "404": {$ref: "#/components/responses/DeskFehler"}
+
+components:
+  responses:
+    Ungueltig:
+      description: Anfrage taugt nicht (Text in Alltagswörtern, z. B. „höchstens 31 tage")
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/KachelFehler"}
+    OhneRecht:
+      description: "`<app>:lesen` fehlt"
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/KachelFehler"}
+    Weg:
+      description: Das Objekt gibt es nicht mehr
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/KachelFehler"}
+    Aus:
+      description: App nicht da, kaputt oder zu langsam (auch wenn der Prüfer fehlt)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/KachelFehler"}
+    DeskFehler:
+      description: Fehler des Desks (409 trägt den neuen Stand)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/DeskFehler"}
+
+  schemas:
+    Adresse:
+      type: string
+      format: uri
+      pattern: "^zentrale://[a-z0-9_-]+(/[^?#]*)?(\\?[^#]*)?$"
+      description: >
+        Die eine Adresse eines Objekts: `zentrale://<app>/<pfad>?<abfrage>`
+        (URI nach RFC 3986, Schema `zentrale`, Autorität = App). Kanonisch:
+        Namen der Abfrage sortiert, Wahr/Falsch als `true`/`false`. Bei einer
+        Kachel ist der erste Pfad-Abschnitt die Art aus dem Katalog und die
+        Abfrage hält ihre Parameter. Fragment reserviert (heute abgelehnt).
+      examples:
+        - zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7
+        - zentrale://kalender/2026-10-12
+
+    Farbrolle:
+      type: string
+      description: >
+        Was ein Stück BEDEUTET, nie welche Farbe (core/farbrollen.py); jede
+        Oberfläche wählt die Farbe selbst.
+      enum: [text, leise, kopf, betont, heute, spanne, mehr, warnung, erledigt]
+
+    Stueck:
+      type: array
+      prefixItems:
+        - {type: string}
+        - {$ref: "#/components/schemas/Farbrolle"}
+      minItems: 2
+      maxItems: 2
+      description: "[text, rolle]"
+
+    Zeile:
+      type: array
+      items: {$ref: "#/components/schemas/Stueck"}
+
+    Groesse:
+      type: object
+      description: Abstrakte Zellen (Spalten × Zeilen), das Innere ohne Rahmen
+      required: [w, h]
+      properties:
+        w: {type: integer, minimum: 0, maximum: 400}
+        h: {type: integer, minimum: 0, maximum: 400}
+      additionalProperties: false
+
+    KatalogEintrag:
+      type: object
+      required: [app, art, titel, min, bevorzugt, max, ttl, parameter, aktionen, formen]
+      additionalProperties: false
+      properties:
+        app: {type: string}
+        art: {type: string}
+        titel: {type: string}
+        min: {$ref: "#/components/schemas/Groesse"}
+        bevorzugt: {$ref: "#/components/schemas/Groesse"}
+        max: {$ref: "#/components/schemas/Groesse"}
+        ttl: {type: integer, minimum: 0, description: Sekunden, bis neu gefragt wird}
+        parameter:
+          type: object
+          description: >
+            Ein JSON Schema (2020-12, `type: object`): die Parameter dieser Art,
+            die in die Abfrage der Adresse kommen. Benutzt werden properties
+            (type, title, description, default, minimum/maximum,
+            minLength/maxLength, format date, oneOf [{const, title}] oder
+            enum), required, allOf mit if/then (Felder, die nur bei einem Wert
+            gelten), additionalProperties false.
+        aktionen:
+          type: array
+          items: {type: string, enum: [oeffnen]}
+        formen:
+          type: array
+          items: {type: string, enum: [zeilen]}
+
+    KachelAnfrage:
+      type: object
+      properties:
+        adresse: {$ref: "#/components/schemas/Adresse"}
+        w: {type: integer, minimum: 0, maximum: 400}
+        h: {type: integer, minimum: 0, maximum: 400}
+        groesse: {$ref: "#/components/schemas/Groesse"}
+        oben: {type: integer, minimum: 0, maximum: 10000, default: 0, description: Blätter-Lage}
+        stand: {type: string, description: "Stand der letzten Antwort → `unveraendert`"}
+        form:
+          type: string
+          enum: [zeilen, roh]
+          default: zeilen
+          description: "`roh` ist reserviert (heute 400)"
+        app: {type: string, deprecated: true, description: alte Form statt adresse}
+        art: {type: string, deprecated: true}
+        ref: {type: object, deprecated: true}
+      examples:
+        - {adresse: "zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7", w: 90, h: 7}
+
+    KachelInhalt:
+      type: object
+      required: [form, zeilen, text, stand, ttl, oben, oben_max]
+      additionalProperties: false
+      properties:
+        form: {const: zeilen}
+        zeilen:
+          type: array
+          items: {$ref: "#/components/schemas/Zeile"}
+        text: {type: string, description: Klartext-Rückfall (z. B. für Obsidian)}
+        stand: {type: string}
+        ttl: {type: integer}
+        oben: {type: integer, minimum: 0}
+        oben_max: {type: integer, minimum: 0}
+        bevorzugt: {$ref: "#/components/schemas/Groesse"}
+        roh: {description: "Reserviert: Rohdaten für Fenster/Handy (noch nie gesendet)"}
+
+    KachelUnveraendert:
+      type: object
+      required: [unveraendert, stand, ttl]
+      additionalProperties: false
+      properties:
+        unveraendert: {const: true}
+        stand: {type: string}
+        ttl: {type: integer}
+
+    KachelZuKlein:
+      type: object
+      required: [zu_klein, ttl]
+      additionalProperties: false
+      properties:
+        zu_klein: {$ref: "#/components/schemas/Groesse"}
+        ttl: {type: integer}
+        bevorzugt: {$ref: "#/components/schemas/Groesse"}
+
+    KachelAntwort:
+      oneOf:
+        - {$ref: "#/components/schemas/KachelInhalt"}
+        - {$ref: "#/components/schemas/KachelUnveraendert"}
+        - {$ref: "#/components/schemas/KachelZuKlein"}
+
+    KachelFehler:
+      type: object
+      required: [fehler]
+      additionalProperties: false
+      properties:
+        fehler: {type: string, enum: [ungueltig, recht, weg, aus]}
+        text: {type: string}
+
+    AktionAnfrage:
+      type: object
+      required: [aktion]
+      properties:
+        adresse: {$ref: "#/components/schemas/Adresse"}
+        aktion: {type: string, enum: [oeffnen]}
+        app: {type: string, deprecated: true}
+        art: {type: string, deprecated: true}
+        ref: {type: object, deprecated: true}
+
+    AktionAntwort:
+      type: object
+      required: [zeige]
+      additionalProperties: false
+      properties:
+        zeige:
+          type: object
+          required: [adresse]
+          additionalProperties: false
+          properties:
+            adresse: {$ref: "#/components/schemas/Adresse"}
+
+    DeskListe:
+      type: object
+      required: [desks]
+      properties:
+        desks:
+          type: array
+          items:
+            type: object
+            required: [name, elemente, geaendert]
+            properties:
+              name: {type: string}
+              elemente: {type: [integer, "null"], description: "null bei kaputter Datei"}
+              geaendert: {type: number, description: Unix-Zeit}
+
+    Element:
+      type: object
+      description: Ein Element in Zellen; Felder mit „_" legt nur die Oberfläche zwischen
+      required: [id, x, y, w, h, art]
+      properties:
+        id: {type: string}
+        x: {type: integer}
+        y: {type: integer}
+        w: {type: integer, minimum: 1}
+        h: {type: integer, minimum: 1}
+        art: {type: string, enum: [notiz, bild, kachel, fremd]}
+        text: {type: string}
+        typ: {type: string}
+        titel: {type: string}
+        datei: {type: string}
+        modus: {type: string, enum: [mono, farbe]}
+        rueckfall: {type: string, description: Klartext für Obsidian (nur beim Speichern)}
+        kachel:
+          type: object
+          required: [v, adresse]
+          properties:
+            v: {const: 2}
+            adresse: {$ref: "#/components/schemas/Adresse"}
+
+    Verbindung:
+      type: object
+      required: [id, von, nach]
+      properties:
+        id: {type: string}
+        von: {type: string}
+        nach: {type: string}
+        label: {type: string}
+        von_seite: {type: string}
+        nach_seite: {type: string}
+
+    Desk:
+      type: object
+      required: [name, elemente, verbindungen, stand]
+      properties:
+        name: {type: string}
+        elemente:
+          type: array
+          items: {$ref: "#/components/schemas/Element"}
+        verbindungen:
+          type: array
+          items: {$ref: "#/components/schemas/Verbindung"}
+        stand: {type: [string, "null"]}
+
+    DeskSpeichern:
+      type: object
+      required: [elemente]
+      properties:
+        elemente:
+          type: array
+          items: {$ref: "#/components/schemas/Element"}
+        verbindungen:
+          type: array
+          items: {$ref: "#/components/schemas/Verbindung"}
+          description: ohne → die Schnüre der Datei bleiben
+        stand: {type: [string, "null"]}
+
+    DeskFehler:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+        stand: {type: [string, "null"]}
+
+    BildVorschau:
+      oneOf:
+        - type: object
+          required: [status, zeilen]
+          properties:
+            status: {const: ok}
+            zeilen:
+              type: array
+              items:
+                type: array
+                items:
+                  type: array
+                  prefixItems:
+                    - {type: string}
+                    - {type: [string, "null"], pattern: "^#[0-9a-f]{6}$"}
+                  minItems: 2
+                  maxItems: 2
+        - type: object
+          required: [status, text]
+          properties:
+            status: {type: string, enum: [weg, kein_bild, ohne_pillow]}
+            text: {type: string}

@@ -23,6 +23,7 @@
 # Dienst (Schicht 2, memory/system/bauplan_kern.md).
 
 import adressen
+import kachel_parameter
 import listen_baum
 import lists
 from kachel_form import KachelFehler, KachelWeg, kuerzen, stueck
@@ -34,22 +35,29 @@ EINRUECKEN = 2                    # Zellen je Ebene
 BALKEN_MAX = 10                   # Fortschritt: höchstens so viele Steine
 
 # Katalog-Eintrag. ttl: Listen ändern sich öfter als der Kalender (abhaken
-# in der TUI), eine halbe Minute reicht. Die Liste wählt man aus den
-# vorhandenen (`dynamisch`: der Katalog fragt `werte` frisch).
+# in der TUI), eine halbe Minute reicht. Parameter als JSON Schema
+# (core/kachel_parameter.py, 2026-10-10); die Liste wählt man aus den
+# vorhandenen — die trägt parameter_jetzt() beim Katalog frisch ein. Geprüft
+# wird nur die Form (ein Text): gibt es die Liste nicht mehr, heißt das „weg".
 ARTEN = {"liste": {
     "titel": "liste",
     "min": (12, 2),
     "bevorzugt": (36, 12),
     "ttl": 30,
-    "felder": [
-        {"name": "liste", "typ": "wahl", "titel": "liste", "dynamisch": True,
-         "hilfe": "←→ blättert durch die listen"},
-        {"name": "erledigte", "typ": "bool", "titel": "erledigte", "vorgabe": False,
-         "hilfe": "abgehakte auch zeigen"},
-        {"name": "tiefe", "typ": "zahl", "titel": "ebenen", "vorgabe": 3,
-         "grenzen": {"min": 1, "max": TIEFE_GRENZE},
-         "hilfe": "so tief gehen unterpunkte auf"},
-    ],
+    "parameter": {
+        "$schema": kachel_parameter.ENTWURF,
+        "type": "object",
+        "properties": {
+            "liste": {"title": "liste", "description": "←→ blättert durch die listen",
+                      "type": "string", "minLength": 1},
+            "erledigte": {"title": "erledigte", "description": "abgehakte auch zeigen",
+                          "type": "boolean", "default": False},
+            "tiefe": {"title": "ebenen", "description": "so tief gehen unterpunkte auf",
+                      "type": "integer", "minimum": 1, "maximum": TIEFE_GRENZE, "default": 3},
+        },
+        "required": ["liste", "erledigte", "tiefe"],
+        "additionalProperties": False,
+    },
 }}
 
 # Farbrollen (core/farbrollen.py): nur die Bedeutung.
@@ -72,12 +80,12 @@ def _liste(lid):
     raise KachelWeg(lid)
 
 
-def werte(art, name):
-    """Die Listen zur Wahl (Katalog, Feld `liste`): [{wert, titel}]."""
-    if art != "liste" or name != "liste":
-        return []
-    return [{"wert": str(l["id"]), "titel": str(l.get("name") or l["id"])}
+def parameter_jetzt(art, schema):
+    """Katalog: die Listen von jetzt zur Wahl (oneOf mit Namen). Keine
+    Liste → None, dann lässt sich keine Kachel anlegen."""
+    wahl = [(l["id"], l.get("name") or l["id"])
             for l in lists.read_lists() if isinstance(l, dict) and l.get("id")]
+    return kachel_parameter.mit_auswahl(schema, "liste", wahl) if wahl else None
 
 
 def _pruefen(art, ref):

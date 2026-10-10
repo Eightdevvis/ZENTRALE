@@ -93,3 +93,40 @@ def test_router_der_tui_oeffnet_den_kalender_am_tag():
     assert tage[-1] == date(2026, 10, 14)
     assert zeigen("zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7")   # heute: kein Tag gesetzt
     assert len(tage) == 2 and kal.geoeffnet == 3
+
+
+# ── Zurück zum Öffner (2026-10-10) ────────────────────────────────────
+
+def test_router_bringt_den_oeffner_zurueck_wenn_die_ansicht_zugeht():
+    r = sprung.Router()
+    ziel = {"active": False}
+    zurueck = []
+    r.registrieren("kalender", lambda pfad, abfrage: ziel.update(active=True) or True, ziel)
+    r.registrieren("fremd", lambda pfad, abfrage: True)          # ohne Zustand
+    assert r.zeigen("zentrale://kalender/2026-10-12", zurueck=lambda: zurueck.append(1))
+    assert not r.nachsehen() and zurueck == []
+    ziel["active"] = False
+    assert r.nachsehen() and zurueck == [1]
+    assert not r.nachsehen() and zurueck == [1]
+    # ohne zurueck, ohne Zustand oder wenn nichts aufging: nichts gemerkt
+    assert r.zeigen("zentrale://kalender/2026-10-12")
+    ziel["active"] = False
+    assert r.zeigen("zentrale://fremd/x", zurueck=lambda: zurueck.append(2))
+    assert not r.nachsehen() and zurueck == [1]
+
+
+def test_router_der_tui_traegt_die_zustaende_der_ansichten_ein():
+    K, L, G = {"active": False}, {"active": False}, {"active": False}
+    kal = types.SimpleNamespace(K=K, oeffnen=lambda: K.update(active=True),
+                                bedienung=types.SimpleNamespace(setze_tag=lambda t: None))
+    fokus = types.SimpleNamespace(L=L, zeige_liste=lambda lid, iid=None: L.update(active=True) or True)
+    graph = types.SimpleNamespace(G=G, zeige_graph=lambda gid: G.update(active=True) or True)
+    DESK = {"active": True}
+    r = sprung.router_fuer(DESK, kal, fokus, graph)
+    for adresse, zustand in (("zentrale://kalender/2026-10-12", K),
+                             ("zentrale://fokus/l_x", L), ("zentrale://graph/g_x", G)):
+        DESK["active"] = True
+        assert r.zeigen(adresse, zurueck=lambda: DESK.update(active=True))
+        assert not DESK["active"] and zustand["active"]
+        zustand["active"] = False
+        assert r.nachsehen() and DESK["active"]

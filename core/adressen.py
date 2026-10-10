@@ -17,8 +17,8 @@
 #   Autorität  der App-Name (klein: a–z, 0–9, _ und -)
 #   Pfad       das Objekt in der App, Abschnitte prozent-kodiert; bei einer
 #              Kachel ist der erste Abschnitt die Art aus dem Katalog
-#   Abfrage    Merkmale des Objekts (bei Kacheln: die `felder` des
-#              Katalogs), jeder Name höchstens einmal
+#   Abfrage    Merkmale des Objekts (bei Kacheln: die `parameter` des
+#              Katalogs, ein JSON Schema), jeder Name höchstens einmal
 #   Fragment   reserviert (Stelle IN einem Objekt), heute abgelehnt
 # Kanonisch: Namen der Abfrage sortiert, Werte als Text — dasselbe Objekt
 # ergibt dieselbe Zeichenkette, so lässt sich eine Adresse vergleichen.
