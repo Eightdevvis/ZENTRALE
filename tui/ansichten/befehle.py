@@ -113,7 +113,7 @@ CTX_KEYS = {
     "cal:a:termine": [
         ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("enter", "view"),
-        ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
+        ("u", "(un)commit"), ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
         ("g", "go to"), ("x", "show done"), ("tab", "box"),
         ("v", "view"), ("esc", "close"),
     ],
@@ -128,13 +128,13 @@ CTX_KEYS = {
     "cal:b": [
         ("←→", "day"), ("↑↓", "week"), ("tab", "entry of day"), ("a", "new"),
         ("e", "edit"), ("d", "delete"), ("r", "repeat"), ("enter", "view"),
-        ("c/p", "copy/paste"), ("m/M", "month"), ("g", "go to"),
+        ("u", "(un)commit"), ("c/p", "copy/paste"), ("m/M", "month"), ("g", "go to"),
         ("v", "view"), ("esc", "close"),
     ],
     "cal:c": [
         ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("enter", "view"),
-        ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
+        ("u", "(un)commit"), ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
         ("v", "view"), ("esc", "close"),
     ],
     "mail:cats": [

@@ -72,6 +72,17 @@ _DEFAULT_LAYERS = {
         "entries":         {},   # Einmal-Ausnahmen sind hier auch erlaubt
         "routines":        [],   # [{label, rrule, time?, ...}]
     },
+    # Unverbindliches (Sasha, 10.10.2026: „den layer uncommitted … mehr
+    # transparent … sachen verschieben committed <-> uncommitted"). Liegt in
+    # den Ansichten immer blass ÜBER den Terminen, nie getrennt; Kollisionen
+    # sind dort nur Hinweis, die KI liest es als „vielleicht".
+    "uncommitted": {
+        "label":           "Uncommitted",
+        "color":           "#888888",
+        "default_visible": True,
+        "entries":         {},
+        "routines":        [],
+    },
     "erlebt": {
         "label":           "Erlebt (auto)",
         "color":           "#888888",

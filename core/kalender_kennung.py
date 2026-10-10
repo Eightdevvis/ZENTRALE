@@ -365,3 +365,32 @@ def routine_pause(k: str, von: str, bis: str, grund: str | None = None) -> dict:
         data.setdefault("pausen", []).append(p)
         return False
     return _schreiben(k, arbeit, ("routine",))
+
+
+# ── Ebene wechseln (committed ↔ uncommitted) ───────────────────────────
+VERBINDLICH = "termine"
+UNVERBINDLICH = "uncommitted"
+
+
+def ebene_wechseln(k: str, ziel: str | None = None) -> dict:
+    """Einen Eintrag (Termin, Spanne oder Routine) samt Kennung, Abweichungen
+    und Pausen in eine andere Ebene legen. Ohne `ziel`: umschalten zwischen
+    „termine" (committed) und „uncommitted". Ein Schreibvorgang; im .ics-
+    Speicher wandert die Datei in den anderen Ordner (gleiche UID)."""
+    if ziel is not None and ziel not in (VERBINDLICH, UNVERBINDLICH):
+        raise KalenderAbgelehnt("EBENE-UNBEKANNT", f"Ebene {ziel!r} gibt es nicht")
+
+    def arbeit(data, art, lname, o, obj):
+        nach = ziel or (VERBINDLICH if lname == UNVERBINDLICH else UNVERBINDLICH)
+        if nach == lname:
+            return False
+        layers = data.setdefault("layers", {})
+        if nach not in layers:
+            layers[nach] = copy.deepcopy(kalender._DEFAULT_LAYERS[nach])
+        _aus_liste_nehmen(data, lname, o, obj)
+        if o[0] == "entries":
+            layers[nach].setdefault("entries", {}).setdefault(o[1], []).append(obj)
+        else:
+            layers[nach].setdefault("routines", []).append(obj)
+        return False
+    return _schreiben(k, arbeit)

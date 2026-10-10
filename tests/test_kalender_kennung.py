@@ -179,3 +179,59 @@ def test_alarme_haben_einen_tag(cal, monkeypatch):
     kalender.add_entry("termine", tag, "B", time="10:30", ende="11:30")
     alarme = kalender.open_alarms(3)
     assert any(a.get("tag") == tag for a in alarme), alarme
+
+
+# ── Ebene wechseln: committed ↔ uncommitted (10.10.2026) ───────────────
+def test_ebene_wechseln_hin_und_zurueck(cal):
+    k = _k("Geigenstunde", "routine", "18:10")
+    kk.routine_pause(k, "2026-10-12", "2026-10-18", "Ferien")
+    kk.routine_tag_aendern(k, "2026-10-20", time="19:00")
+    e = kk.ebene_wechseln(k)
+    assert e["kennung"] == k and e["layer"] == "uncommitted"
+    tag = [x for x in _tag("2026-10-13") if x.get("kennung") == k]
+    assert tag and tag[0]["layer"] == "uncommitted" and tag[0].get("ausfall") == "Ferien"
+    assert [x["time"] for x in _tag("2026-10-20") if x.get("kennung") == k] == ["19:00"]
+    assert kk.ebene_wechseln(k)["layer"] == "termine"
+    for kn, art in (("Kino", "einmal"), ("Messe", "spanne")):
+        kx = _k(kn, art)
+        assert kk.ebene_wechseln(kx, "uncommitted")["layer"] == "uncommitted"
+        assert kk.ebene_wechseln(kx, "uncommitted")["layer"] == "uncommitted"   # schon da
+        assert kk.ebene_wechseln(kx)["layer"] == "termine"
+    assert len(kk.alle_eintraege()) == 4
+
+
+def test_ebene_unbekannt_schreibt_nichts(cal):
+    k = _k("Kino", "einmal")
+    vorher = _stand(cal)
+    with pytest.raises(kk.KalenderAbgelehnt) as f:
+        kk.ebene_wechseln(k, "erlebt")
+    assert f.value.code == "EBENE-UNBEKANNT" and _stand(cal) == vorher
+
+
+def test_uncommitted_eigener_ordner_im_ics(cal):
+    if kalender._speicher().art != "ics":
+        pytest.skip("nur .ics hat Ordner")
+    k = _k("Kino", "einmal")
+    kk.ebene_wechseln(k)
+    ordner = {p.parent.name for p in kalender._speicher().vdir.rglob("*.ics")
+              if k in p.read_text(encoding="utf-8")}
+    assert ordner == {"uncommitted"}
+
+
+def test_kalender_beide_wirklich(_kalender_speicher_art):
+    """Die Marke kalender_beide schaltet den Speicher wirklich um."""
+    assert kalender._speicher().art == _kalender_speicher_art
+
+
+def test_uncommitted_nur_hinweis(cal, monkeypatch):
+    """Kein Alarm, keine Rückfrage, keine Abwesenheit — KI liest „vielleicht"."""
+    import kalender_konflikte as kf
+    tag = date.today().isoformat()
+    kalender.add_entry("termine", tag, "Fest", time="10:00", ende="11:00")
+    kalender.add_entry("termine", tag, "Vielleicht", time="10:30", ende="11:30")
+    kk.ebene_wechseln(_k("Vielleicht", "einmal"))
+    assert not [a for a in kalender.open_alarms(2) if a.get("tag") == tag]
+    assert kf.conflicts_for_proposed("termine", tag, "Neu", "10:45", "11:15")   # gegen „Fest"
+    assert kf.conflicts_for_proposed("uncommitted", tag, "Neu", "10:45", "11:15") == []
+    text = kf.render_range_for_tool(date.today(), date.today())
+    assert "[uncommitted · vielleicht]" in text and "Vielleicht" in text

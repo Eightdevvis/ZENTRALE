@@ -253,6 +253,13 @@ class Bedienung:
                 self._ausfuehren(kw.plan_einfuegen(W["clip"], d))
             else:
                 W["msg"] = "nichts kopiert (c)"
+        elif ch in (ord("u"), ord("U")):       # committed ↔ uncommitted
+            roh = self.gewaehlt()
+            plan = kw.plan_ebene(roh) if roh else None
+            if plan is None:
+                W["msg"] = "kein termin gewählt"
+            else:
+                self._ausfuehren(plan, pruefen=False)
         elif ch == ord("!"):
             W["msg"] = "! hakt im TODO-Kasten ab (Tab)"
         else:

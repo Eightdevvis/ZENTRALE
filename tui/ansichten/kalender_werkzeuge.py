@@ -575,9 +575,29 @@ def _neu_plan(w, tag, layer="termine"):
 def formular_neu(tag: date, heute: date) -> Formular:
     """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender)."""
     def plan(w):
-        aufrufe, meldung, kon = _neu_plan(w, tag)
+        layer = UNVERBINDLICH if w.get("verbindlich") == "nein" else "termine"
+        aufrufe, meldung, kon = _neu_plan(w, tag, layer)
+        if layer == UNVERBINDLICH:
+            kon = None                    # uncommitted: Kollision nur Hinweis, keine Rückfrage
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
-    return Formular("neuer termin", _termin_felder(tag, heute), plan)
+    felder = _termin_felder(tag, heute)
+    # committed (Standard) oder uncommitted — umschalten später mit u
+    felder.append(Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
+                       optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
+    return Formular("neuer termin", felder, plan)
+
+
+UNVERBINDLICH = "uncommitted"
+
+
+def plan_ebene(roh: dict) -> dict | None:
+    """u: zwischen committed und uncommitted umschalten (per Kennung)."""
+    k = roh.get("kennung")
+    if not k:
+        return None
+    nach = "committed" if roh.get("layer") == UNVERBINDLICH else "uncommitted"
+    return _plan([("POST", "/api/calendar/ebene", {"kennung": k})],
+                 "%s: %s" % (nach, roh.get("label", "")))
 
 
 def _regel_felder(rrule):
@@ -785,11 +805,11 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
 def kopie(roh: dict) -> dict:
     """calcurse „c": was beim Einfügen wieder entsteht (immer ein Einmal-
     Termin am gewählten Tag, auch aus einer Routine)."""
-    return {k: roh[k] for k in ("label", "time", "ende", "ort") if roh.get(k)}
+    return {k: roh[k] for k in ("label", "time", "ende", "ort", "layer") if roh.get(k)}
 
 
 def plan_einfuegen(k: dict, tag: date) -> dict:
-    body = {"layer": "termine", "day": tag.isoformat(), **k}
+    body = {"layer": "termine", "day": tag.isoformat(), **k}     # k trägt seine Ebene mit
     kon = ({"day": body["day"], "label": body["label"], "time": body["time"],
             "ende": body["ende"]} if body.get("time") and body.get("ende") else None)
     return _plan([("POST", "/api/calendar/entry", body)],

@@ -41,6 +41,28 @@ Anlass: die KI änderte per Titel BEIDE gleichnamigen Geigenstunde-Serien.
   `kalender` nicht, `kalender.py` schließt `_load_raw`/`entries_in_range`
   per `kalender_konflikte.anschliessen()` an.
 
+## Ebene „uncommitted" (10.10.2026)
+
+Sasha: „ich will nen 2. layer … ‚uncommitted' … mehr transparent … sachen
+verschieben committed <-> uncommitted … immer AUF den normalen drüber, nicht
+getrennt angucken". Umsetzung:
+- Eigene Ebene in `_DEFAULT_LAYERS`, im .ics-Speicher eigener Ordner
+  `data/kalender/uncommitted/` (gleiche UID beim Wechseln, Datei wandert).
+- `kalender_kennung.ebene_wechseln(k, ziel=None)` — umschalten oder fest
+  `termine`/`uncommitted`; Route `POST /api/calendar/ebene {kennung, ziel?}`.
+- Nur Hinweis (`kalender_konflikte._verbindlich`): kein Alarm, keine
+  Kollisions-Rückfrage, keine Abwesenheit durch eine Vielleicht-Reise; die KI
+  sieht `[uncommitted · vielleicht]` und soll es höchstens als Möglichkeit
+  nennen.
+- TUI: immer in A/B/C über den Terminen, durchscheinend in der Kursfarbe
+  (`farben.DECKKRAFT`, gemischt in `kontext.apply_theme`); Taste `u`
+  schaltet, Feld „Verbindlich" im Formular für Neues.
+- Google: eigener zweiter Kalender, damit es auf Handy/Tablet mitkommt
+  (zweite Sammlung im Paar `zentrale`).
+- Nebenbei gefunden: die Marke `kalender_beide` lief bis heute beide Male
+  gegen JSON (Fixture nie aktiv) — repariert in `tests/conftest.py`, alle
+  Beide-Speicher-Tests laufen jetzt wirklich auch gegen .ics.
+
 ## Stand Sync (07.10.2026) — eingerichtet und live
 
 - **Ein Kalender.** Die Ebene `routinen` ist nach `termine` gezogen

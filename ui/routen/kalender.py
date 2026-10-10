@@ -418,3 +418,11 @@ def api_calendar_eintrag_aendern():
     return _antwort(kalender_bearbeiten.eintrag_aendern(
         b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
         b.get('time') or None, b.get('new') or {}), "termin nicht gefunden/abgelehnt")
+
+
+@bp.route('/api/calendar/ebene', methods=['POST'])
+def api_calendar_ebene():
+    """Einen Eintrag per Kennung zwischen committed („termine") und
+    „uncommitted" verschieben. Body: {kennung, ziel?} — ohne ziel umschalten."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.ebene_wechseln(b.get('kennung') or '', b.get('ziel') or None))

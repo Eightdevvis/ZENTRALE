@@ -22,6 +22,16 @@ _load_raw = None
 entries_in_range = None
 
 
+# Ebene „uncommitted" (10.10.2026): Unverbindliches löst keinen Alarm und
+# keine Rückfrage aus und macht keine Abwesenheit — die KI liest es als
+# „vielleicht" (Sasha: „nur als hinweis").
+UNVERBINDLICH = "uncommitted"
+
+
+def _verbindlich(e: dict) -> bool:
+    return e.get("layer") != UNVERBINDLICH and not e.get("deaktiviert")
+
+
 def anschliessen(laden, im_zeitraum) -> None:
     global _load_raw, entries_in_range
     _load_raw, entries_in_range = laden, im_zeitraum
@@ -276,7 +286,9 @@ def _away_blocks(start: date, end: date, data: dict | None = None) -> list[dict]
     if data is None:
         data = _load_raw()
     blocks: list[dict] = []
-    for layer in data.get("layers", {}).values():
+    for lname, layer in data.get("layers", {}).items():
+        if lname == UNVERBINDLICH:
+            continue                     # eine Vielleicht-Reise macht nicht abwesend
         for day_iso, day_entries in layer.get("entries", {}).items():
             for e in day_entries:
                 bis = e.get("bis")
@@ -491,7 +503,9 @@ def render_range_for_tool(start: date, end: date,
                     bis = f" (bis {date.fromisoformat(e['bis']).strftime('%d.%m.')})"
                 except ValueError:
                     pass
-            lines.append(f"  [{e['layer']}] {t}{e['label']}{bis}{ort}")
+            ebene = ("uncommitted · vielleicht" if e.get("layer") == UNVERBINDLICH
+                     else e['layer'])
+            lines.append(f"  [{ebene}] {t}{e['label']}{bis}{ort}")
         # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
         #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
@@ -566,7 +580,10 @@ def imprint_for_prompt(tage: int | None = None) -> str:
               "EINMAL an; hat er ihn zur Kenntnis genommen, ist das Thema "
               "durch — auch wenn die Uhrzeit näher rückt. Kein zweiter "
               "Hinweis, kein Countdown. Nur wenn er selbst etwas sagt, das "
-              "damit kollidiert, sagst du es nochmal.")
+              "damit kollidiert, sagst du es nochmal.\n\n"
+              "[uncommitted · vielleicht] heißt: unverbindlich, noch nicht "
+              "zugesagt. Erwähne es höchstens als Möglichkeit, plane nicht "
+              "fest damit und warne nicht, wenn es mit etwas kollidiert.")
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 
@@ -598,8 +615,10 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
         d = date.fromisoformat((day or "").strip())
     except ValueError:
         return []
+    if layer == UNVERBINDLICH:
+        return []                         # Unverbindliches fragt nie nach
     existing = [e for e in entries_in_range(d, d).get(d.isoformat(), [])
-                if not e.get("deaktiviert")]   # deaktivierte zählen nicht mit
+                if _verbindlich(e)]   # deaktivierte und uncommitted zählen nicht mit
     phantom: dict = {"layer": (layer or "termine"),
                      "label": (label or "(neuer Termin)")}
     t = (time or "").strip()
@@ -643,7 +662,7 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
         raw.append(("ABSAGEN", line, None))
     for day_iso, entries in entries_in_range(today, end).items():
         d = date.fromisoformat(day_iso)
-        entries = [e for e in entries if not e.get("deaktiviert")]  # deaktivierte: kein Alarm
+        entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted: kein Alarm
         for line in _conflict_lines(d, entries, away_blocks):
             raw.append(("KONFLIKT", line, day_iso))
         for line in day_warnings(entries):

@@ -324,19 +324,25 @@ def _listen_und_graphen_nie_in_echten_daten(tmp_path_factory, monkeypatch):
 # Suite, die es schon gibt: jeder Test mit der Marke `kalender_beide` läuft
 # zweimal, einmal pro Speicher (Env ZENTRALE_KALENDER_SPEICHER, die
 # ai_config.setting zuerst liest).
+#
+# Bis 10.10.2026 lief das NICHT: die Fixture wurde per
+# `metafunc.fixturenames.insert` nachgereicht — das nimmt pytest nicht mehr
+# in den Fixture-Baum auf. Der Parameter stand im Test-Namen ([ics]), die
+# Fixture lief aber nie, also beide Male JSON. Jetzt autouse (läuft damit
+# auch VOR Fixtures wie `cal`, die schon beim Aufbau schreiben) und nur für
+# markierte Tests wirksam; test_kalender_beide_wirklich prüft es.
 def pytest_generate_tests(metafunc):
     if metafunc.definition.get_closest_marker("kalender_beide"):
-        # VORN einreihen: Fixtures wie `cal` schreiben schon beim Aufbau in
-        # den Kalender — der Speicher muss vorher feststehen.
-        if "_kalender_speicher_art" not in metafunc.fixturenames:
-            metafunc.fixturenames.insert(0, "_kalender_speicher_art")
         metafunc.parametrize("_kalender_speicher_art", ["json", "ics"],
                              ids=["json", "ics"], indirect=True)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def _kalender_speicher_art(request, monkeypatch):
-    art = request.param
+    art = getattr(request, "param", None)
+    if art is None:                 # Test ohne Marke kalender_beide
+        yield None
+        return
     monkeypatch.setenv("ZENTRALE_KALENDER_SPEICHER", art)
     import kalender_ics
     kalender_ics.cache_leeren()

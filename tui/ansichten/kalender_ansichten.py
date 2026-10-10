@@ -153,7 +153,8 @@ def tasten_hinweis(ansicht: str) -> str:
     ziel = ANSICHT_NAMEN[naechste_ansicht(ansicht)]
     # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
     # a/e/d/r/c/p/g/enter, nur das Bewegen unterscheidet sich.
-    gleich = "a neu · e ändern · d löschen · r wiederholen · enter ansehen · c/p kopieren · g gehe zu"
+    gleich = ("a neu · e ändern · d löschen · r wiederholen · u (un)committed · "
+              "enter ansehen · c/p kopieren · g gehe zu")
     if ansicht == "A":
         return "↑↓ termin · ←→ tag · %s · tab kasten · v %s" % (gleich, ziel)
     if ansicht == "B":
@@ -347,6 +348,8 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "bis": e.get("bis") if isinstance(e.get("bis"), str) else iso,
         "key": (e.get("von"), e.get("bis"), label, e.get("layer")),
         "routine": bool(e.get("recurring")), "aus": aus,
+        # Ebene „uncommitted": liegt durchscheinend über den Terminen
+        "unv": e.get("layer") == UNVERBINDLICH,
         "ausfall": bool(e.get("ausfall")),
         # Der API-Eintrag selbst: die Werkzeuge (kalender_werkzeuge.py) arbeiten
         # mit DERSELBEN Liste in DERSELBEN Reihenfolge wie die Ansicht.
@@ -393,12 +396,21 @@ def _vonbis(t: dict, kurz: bool = False) -> str:
     return "ganzt." if kurz else "ganztags"
 
 
+UNVERBINDLICH = "uncommitted"
+
+
+def blass(rolle: str, t: dict) -> str:
+    """Kalenderfarbe → ihre durchscheinende Variante, wenn `t` uncommitted
+    ist (C["k_…_blass"], C["k_…_blass_inv"]; tui/ansichten/kontext.py)."""
+    return rolle + "_blass" if t.get("unv") and rolle.startswith("k_") else rolle
+
+
 def _rolle(t: dict) -> str:
     if t["aus"]:
         return ROLLE["aus"]
     if t["spanne"]:
-        return ROLLE["spanne"]
-    return titel_rolle(t.get("label"))
+        return blass(ROLLE["spanne"], t)
+    return blass(titel_rolle(t.get("label")), t)
 
 
 def _datum(s) -> date | None:
@@ -803,8 +815,9 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
         x0 = 2 + a.weekday() * (cw + 1)
         breite = (b.weekday() - a.weekday() + 1) * (cw + 1) - 1
         ist = sel is not None and any(t["roh"] is sel for t in sp["tage"].values())
+        erst_t = next(iter(sp["tage"].values()))
         lw.setze(y + 1 + bi, x0, _balken_text(sp, a, b, breite),
-                 (_a_rolle("a_akzent") if ist else ROLLE["spanne"]) + INV)
+                 (_a_rolle("a_akzent") if ist else blass(ROLLE["spanne"], erst_t)) + INV)
     nb = min(len(bahnen_ende), platz)
     for d in sichtbar:
         x0 = 2 + d.weekday() * (cw + 1)
@@ -1061,7 +1074,7 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None):
             k0 = (max(s, lo) - lo) // m
             k1 = max(k0, math.ceil((min(e, sicht_ende) - lo) / m) - 1)
             if t["spanne"]:
-                r = farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
+                r = blass(farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)]), t)
             else:
                 r = _rolle(t)
             if t["aus"]:

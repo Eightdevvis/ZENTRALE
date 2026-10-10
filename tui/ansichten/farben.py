@@ -175,3 +175,14 @@ KAL = {
         "wochenende": (24,  153, 17,  "net"),    # Tiefwasser
     },
 }
+
+
+# ── Durchscheinend (Ebene „uncommitted", 10.10.2026) ────────────────────
+# Sasha: „mehr transparent … nich schraffiert, so transparent aussehend".
+# Terminals kennen keine Deckkraft — also wird die Farbe mit dem Theme-Grund
+# gemischt, als läge sie zu einem Teil durchsichtig darüber, und auf die
+# nächste der 256 Farben gerundet. DECKKRAFT: wie viel von der Farbe bleibt.
+DECKKRAFT = {"night": {"flaeche": 0.38, "schrift": 0.60},
+             "day":   {"flaeche": 0.45, "schrift": 0.70}}
+# Das Mischen selbst macht kontext.Kontext._durchscheinend (braucht pixel.bunt,
+# damit ein dunkles Orange orange bleibt statt auf die Graurampe zu fallen).

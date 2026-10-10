@@ -24,6 +24,7 @@ CODES = {
     "SPANNE-VERDREHT": "Der letzte Tag liegt vor dem ersten.",
     "TAG-AUSSERHALB": "Der Tag gehört nicht zu dieser Spanne.",
     "UNBEKANNTES-FELD": "Ein Feld, das es hier nicht gibt.",
+    "EBENE-UNBEKANNT": "Diese Ebene gibt es nicht.",
 }
 
 

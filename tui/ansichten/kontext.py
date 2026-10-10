@@ -15,7 +15,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from .farben import KAL, ROLES, THEMES
+from .farben import DECKKRAFT, KAL, ROLES, THEMES
 
 
 class Kontext:
@@ -191,16 +191,39 @@ class Kontext:
             C["key_press"] = curses.color_pair(pp)
         pp += 1
         # Kalender: eine Tabelle für alle Ansichten (farben.KAL).
+        echt = curses.COLORS >= (1 << 24)
+
+        def durchscheinend(farbe, deckkraft):
+            """`farbe` zu `deckkraft` Anteil über den Theme-Grund gelegt."""
+            a, g = pixel.xterm_rgb(farbe), pixel.xterm_rgb(th["bg256"])
+            rgb = tuple(round(x * deckkraft + y * (1 - deckkraft)) for x, y in zip(a, g))
+            if echt:
+                return max(8, (rgb[0] << 16) | (rgb[1] << 8) | rgb[2])
+            n = pixel.rgb_256(pixel.bunt(rgb))
+            # Tags sind die Pastelle schon die hellsten der 256: landet die
+            # Mischung wieder auf der Ausgangsfarbe, den nächsten helleren Ton
+            # nehmen (notfalls fast Weiß — dann trägt nur die Schrift die Farbe).
+            return pixel.rgb_256(rgb) if n == farbe else n
         for name, (schrift, f_grund, f_schrift, rueck) in KAL[tname].items():
             if c256:
                 curses.init_pair(pp, schrift, bg)
                 C["k_" + name] = curses.color_pair(pp)
                 curses.init_pair(pp + 1, f_schrift, f_grund)
                 C["k_" + name + "_inv"] = curses.color_pair(pp + 1)
-                pp += 2
+                # „uncommitted": dieselbe Farbe, durchscheinend auf dem Grund
+                dk = DECKKRAFT[tname]
+                curses.init_pair(pp + 2, durchscheinend(schrift, dk["schrift"]), bg)
+                C["k_" + name + "_blass"] = curses.color_pair(pp + 2)
+                curses.init_pair(pp + 3, schrift if tname == "night"
+                                 else durchscheinend(schrift, dk["schrift"]),
+                                 durchscheinend(f_grund, dk["flaeche"]))
+                C["k_" + name + "_blass_inv"] = curses.color_pair(pp + 3)
+                pp += 4
             else:
                 C["k_" + name] = C[rueck]
                 C["k_" + name + "_inv"] = C[rueck] | curses.A_REVERSE
+                C["k_" + name + "_blass"] = C[rueck] | curses.A_DIM
+                C["k_" + name + "_blass_inv"] = C[rueck] | curses.A_DIM | curses.A_REVERSE
         # Tastenbeleuchtung: je eine Farbe für den RAND der schwarzen Keycap
         # (Neon auf der schwarzen Fläche) und dieselbe Farbe als Glühen für die
         # Buchstaben der weißen Tasten (auf Theme-Grund). Ohne 256 Farben gibt
