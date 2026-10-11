@@ -168,8 +168,9 @@ zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
   Wochen-Routine und (seit 10.10.2026 abends, fürs TUI-Formular) auch die
   calcurse-Routine (`freq`, `kalender_bearbeiten.routine_neu`) und
   `POST /api/calendar/spanne` (`spanne_neu`) nehmen `kategorie`/`kategorie_name` mit.
-- **TUI:** B fasst je Tag zusammen, Formularfeld „Gruppe", Taste **G** = Gruppe
-  für den ganzen Kurs (erst `probe`, dann j/n) — `kalender_ansichten_vorschau.md`.
+- **TUI:** B fasst je Tag zusammen, Formularfeld „Gruppe" —
+  `kalender_ansichten_vorschau.md`. Die Kurs-Route hat seit 11.10.2026 keinen
+  TUI-Aufrufer mehr (Taste G entfernt), bleibt für KI/Schnittstelle.
   `titel_schluessel` bleibt in der TUI eine Kopie (die Tür `tui/` erlaubt nur
   reine Helfer, `kalender_kategorie` hängt an `kalender_fehler`); ein Test
   (`tests/test_kalender_gruppen_tui.py`) hält beide gleich.

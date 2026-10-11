@@ -24,7 +24,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from . import kalender_advanced, kalender_gruppen, kalender_quellen, kalender_stil
-from .kalender_ansichten import _tag_eintraege, monat_eintraege, titel_schluessel
+from .kalender_ansichten import _tag_eintraege, monat_eintraege
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 WT_CODE = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
@@ -545,7 +545,7 @@ def _gruppe_felder(roh=None) -> list:
         wert = kalender_gruppen.NAMEN.get(k, GRUPPE_KEINE)
     ist_eigene = lambda w: w.get("gruppe") == GRUPPE_EIGENE
     return [Feld("gruppe", "Gruppe", art="wahl", wert=wert, optionen=_gruppe_optionen(),
-                 hilfe="der Monat zeigt eine Gruppe je Tag als eine Zeile · G: ganzer Kurs"),
+                 hilfe="der Monat zeigt eine Gruppe je Tag als eine Zeile"),
             Feld("gruppe_name", "Name der Gruppe", wert=name, zeigen=ist_eigene,
                  lesen=lambda s: (True, s.strip()) if s.strip() else (False, "name fehlt"))]
 
@@ -1149,55 +1149,3 @@ def details_gruppe(roh: dict, tag: date) -> list:
         zeilen.append("%-11s %s" % (t + ("–" + e if e else ""), g.get("label", "?")))
     zeilen += ["", "einzeln ändern: v (Liste oder Woche)"]
     return zeilen
-
-
-# ── G: Gruppe für den ganzen Kurs ──────────────────────────────────────
-def dialog_kurs_gruppe(roh: dict) -> Dialog:
-    """Allen Einträgen des Kurses (erstes Wort des Titels, Kurzformen —
-    titel_schluessel) dieselbe Gruppe geben. Erst fragt die TUI das Backend
-    mit probe:true, was getroffen würde, dann „setzen? (j/n)"."""
-    kurs = titel_schluessel(roh.get("label"))
-    namen = list(kalender_gruppen.NAMEN.items())
-    wahl = {"k": kalender_gruppen.KEINE, "e": kalender_gruppen.CUSTOM}
-    teile = ["(k) keine"]
-    for k, n in namen:                   # Anfangsbuchstabe, wie überall (s. oben)
-        b = next((c for c in n.lower() if c.isalpha() and c not in wahl), None)
-        if b:
-            wahl[b] = k
-            teile.append("(%s) %s" % (b, n))
-    teile.append("(e) eigene")
-
-    def plan(a):
-        body = {"schluessel": roh.get("label") or kurs, "kategorie": a["gruppe"]}
-        if a.get("name"):
-            body["kategorie_name"] = a["name"]
-        return _plan(vorab={"aufruf": ("POST", "/api/calendar/kategorie/kurs",
-                                       {**body, "probe": True}),
-                            "dann": lambda antwort: _kurs_bestaetigen(body, antwort)})
-    return Dialog("gruppe für kurs", [
-        Schritt("gruppe", "Gruppe für alle „%s“: %s" % (kurs, "  ".join(teile)),
-                art="wahl", wahl=wahl),
-        Schritt("name", "Name der Gruppe", lesen=_l_titel,
-                wenn=lambda a: a.get("gruppe") == kalender_gruppen.CUSTOM),
-    ], plan)
-
-
-def _kurs_bestaetigen(body: dict, antwort) -> Dialog:
-    """Die Probe-Antwort ({eintraege, geaendert, …}) → „trifft N Einträge:
-    Analysis I, … — setzen? (j/n)"."""
-    antwort = antwort if isinstance(antwort, dict) else {}
-    eintr = [e for e in antwort.get("eintraege") or [] if isinstance(e, dict)]
-    titel = []
-    for e in eintr:
-        if e.get("label") and e["label"] not in titel:
-            titel.append(e["label"])
-    liste = ", ".join(titel[:3]) + (" …" if len(titel) > 3 else "")
-    name = body.get("kategorie_name") or kalender_gruppen.NAMEN.get(
-        body["kategorie"], "keine Gruppe")
-    frage = "trifft %d Einträge: %s — „%s“ setzen? (j/n)" % (len(eintr), liste, name)
-    return Dialog("gruppe für kurs", [Schritt("ok", frage, art="wahl",
-                                               wahl={"j": True, "n": False})],
-                  lambda a: _plan([("POST", "/api/calendar/kategorie/kurs", body)]
-                                  if a["ok"] else [],
-                                  "%s: %d Einträge" % (name, len(eintr)) if a["ok"]
-                                  else "nicht gesetzt"))

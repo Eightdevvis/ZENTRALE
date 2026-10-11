@@ -195,7 +195,7 @@ def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
 
     10.10.2026: in B/C wurde die Zeile bei 150 Spalten abgeschnitten (und
     mit ! abhaken käme mehr dazu). Darum drei Stufen: voll,
-    ohne Bewegen und Seltenes (Pfeile, r, c/p, g, G), nur das Nötigste. Was hier wegfällt, steht
+    ohne Bewegen und Seltenes (Pfeile, r, c/p, g), nur das Nötigste. Was hier wegfällt, steht
     vollständig in der Fußleiste unten (befehle.py, cal:…)."""
     ziel = "v " + ANSICHT_NAMEN[naechste_ansicht(ansicht)]
     if ansicht == "B":
@@ -212,7 +212,7 @@ def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
         stufen = (
             gehen + " · a neu · e ändern · d löschen · r wiederholen · "
             "! abhaken · u (un)committed · enter ansehen · c/p kopieren · g gehe zu · "
-            "R rhythmus · G gruppe" + ende,
+            "R rhythmus" + ende,
             "a neu · e ändern · d löschen · ! abhaken · u (un)commit · "
             "enter ansehen · R rhythmus" + ende,
             "a neu · e ändern · d löschen · ! abhaken · enter ansehen" + ende)

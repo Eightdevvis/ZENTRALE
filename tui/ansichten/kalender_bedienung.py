@@ -23,12 +23,11 @@ from . import kalender_werkzeuge as kw
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
 FOKUS = ("termine", "kalender", "todo")
-# Tasten für Rhythmus und Gruppe (10.10.2026). Groß, damit sie keine der
-# calcurse-Tasten (r wiederholen, g gehe zu) überschreiben; in A, B und C
+# Taste für Rhythmus (10.10.2026). Groß, damit sie keine der
+# calcurse-Tasten (r wiederholen) überschreibt; in A, B und C
 # gleich. Andere Belegung → hier, Fußzeilen in kalender_ansichten.tasten_hinweis
 # und befehle.py mitziehen.
 TASTE_RHYTHMUS = ord("R")   # Kasten „Rhythmus": Phasen einstellen
-TASTE_KURSGRUPPE = ord("G")  # Gruppe für den ganzen Kurs des gewählten Termins
 # Neuer Termin für eine Liste/ein Projekt: seit 11.10.2026 keine eigene
 # Taste mehr (vorher Shift+A, d75f21a). Sasha: „dann wird der listentermin zu
 # nem termintypen und nicht zu so nem extra shortcut den kannst dann
@@ -284,7 +283,7 @@ class Bedienung:
         elif ch in (10, 13, curses.KEY_ENTER):
             self.kal.sprung_zum_tag(d)
         elif ch in (ord("a"), ord("A"), 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
-                    ord("c"), ord("p"), 22, ord("u"), ord("U"), TASTE_KURSGRUPPE, 9,
+                    ord("c"), ord("p"), 22, ord("u"), ord("U"), 9,
                     curses.KEY_BTAB):
             W["msg"] = "im monat nur ansehen — enter öffnet den tag zum bearbeiten"
         else:
@@ -297,7 +296,7 @@ class Bedienung:
         roh = self.gewaehlt()
         if roh and roh.get("gruppe") and ch in (10, 13, curses.KEY_ENTER, ord("e"), ord("E"),
                                                  ord("d"), ord("D"), ord("r"), ord("c"),
-                                                 ord("u"), ord("U"), TASTE_KURSGRUPPE):
+                                                 ord("u"), ord("U")):
             # Eine Gruppe in B ist eine Zusammenfassung, kein Termin: Enter
             # zeigt, was drinsteckt; ändern geht am einzelnen Fach (A/C).
             if ch in (10, 13, curses.KEY_ENTER):
@@ -306,12 +305,6 @@ class Bedienung:
                 W["msg"] = ("„%s“ fasst %d Termine zusammen — enter zeigt sie, "
                             "einzeln ändern in A oder C (v)" % (roh["label"],
                                                                 len(roh.get("glieder") or [])))
-            return True
-        if ch == TASTE_KURSGRUPPE:
-            if roh:
-                self._starte(kw.dialog_kurs_gruppe(roh))
-            else:
-                W["msg"] = "kein termin gewählt"
             return True
         if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse, A = a
             self._starte(kw.formular_neu(d, date.today(), quellen=self._quellen_holen))

@@ -116,7 +116,7 @@ CTX_KEYS = {
         ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
         ("u", "(un)commit"), ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
-        ("g", "go to"), ("x", "show done"), ("R", "rhythm"), ("G", "course group"),
+        ("g", "go to"), ("x", "show done"), ("R", "rhythm"),
         ("tab", "box"), ("v", "view"), ("esc", "close"),
     ],
     "cal:a:kalender": [
@@ -137,7 +137,7 @@ CTX_KEYS = {
         ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
         ("u", "(un)commit"), ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
-        ("R", "rhythm"), ("G", "course group"), ("v", "view"), ("esc", "close"),
+        ("R", "rhythm"), ("v", "view"), ("esc", "close"),
     ],
     "mail:cats": [
         ("↑↓", "select"), ("enter", "open"), ("e", "inbox"), ("r", "poll"),

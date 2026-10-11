@@ -162,9 +162,7 @@ Listen-Sidebar heraus).
   (keine / Uni / Arbeit / eigene → Name; nicht im Kasten „nur dieser Tag" —
   die Gruppe gilt für die ganze Serie); geändert wird per Kennung
   (`POST /api/calendar/kategorie`), neu angelegt mit `kategorie` im Body.
-  Taste **G** auf einem Termin: Gruppe für den ganzen Kurs (erstes Wort des
-  Titels, Kurzformen) — erst `POST /api/calendar/kategorie/kurs` mit
-  `probe:true`, dann „trifft N Einträge: … — setzen? (j/n)".
+  Die Taste G (ganzer Kurs) ist seit 11.10.2026 raus (Sasha: „wollte ich gar nicht").
 - **Platz:** offene Apps haben die volle Fensterbreite (`DASH["an"]` aus), der
   Kalender-Kasten ist bei 140 Spalten innen 136 breit, bei 200 dann 196. Im
   alten 3-Spalten-Dashboard wären es ~67 (140) bzw. ~96 (200).

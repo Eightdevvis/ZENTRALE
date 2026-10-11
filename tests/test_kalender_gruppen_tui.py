@@ -1,12 +1,11 @@
 """
-Gruppen in der TUI (tui/ansichten/kalender_gruppen.py, Formularfeld, Taste G).
+Gruppen in der TUI (tui/ansichten/kalender_gruppen.py, Formularfeld).
 
 Sasha, 10.10.2026: „in der monatsansicht seh ich einfach lieber uni uni uni
 statt jeden tag welche fächer genau, dafür ist die wochenansicht" — gewählt:
 „Uni 08:30–16:00". Geprüft: B fasst je Tag zusammen, A/C nicht; Tab wählt die
-Gruppe, Enter zeigt ihre Glieder; das Formular schickt die Gruppe mit; G
-fragt erst per Probe, dann j/n. Dazu: die TUI-Kopie von titel_schluessel
-rechnet wie der Kern (core/kalender_kategorie.py).
+Gruppe, Enter zeigt ihre Glieder; das Formular schickt die Gruppe mit. Dazu:
+die TUI-Kopie von titel_schluessel rechnet wie der Kern (core/kalender_kategorie.py).
 """
 import os
 import sys
@@ -164,39 +163,6 @@ def test_kopie_nimmt_gruppe_mit():
     k = kw.kopie(_e("Chor", "19:30", "21:00", kat="custom", kategorie_name="Musik"))
     assert (k["kategorie"], k["kategorie_name"]) == ("custom", "Musik")
     assert "kategorie" not in kw.kopie(_e("Parkour", "18:00", None, kat="keine"))
-
-
-# ── G: Gruppe für den ganzen Kurs ──────────────────────────────────────
-def test_kurs_gruppe_erst_probe_dann_frage():
-    d = kw.dialog_kurs_gruppe(_e("ExPhy Übung", "08:30", "10:00", kat="keine"))
-    assert "experimentalphysik" in d.zeile()
-    d.taste(ord("u"))                       # (u) Uni
-    assert d.fertig
-    plan = d.plan()
-    methode, pfad, body = plan["vorab"]["aufruf"]
-    assert (pfad, body["probe"], body["kategorie"]) == ("/api/calendar/kategorie/kurs",
-                                                       True, "uni")
-    frage = plan["vorab"]["dann"]({"eintraege": [{"label": "ExPhy Übung"},
-                                                  {"label": "Experimentalphysik"},
-                                                  {"label": "Experimentalphysik"}],
-                                   "geaendert": 2})
-    assert "trifft 3 Einträge: ExPhy Übung, Experimentalphysik" in frage.zeile()
-    frage.taste(ord("j"))
-    (_m, pfad, body), = frage.plan()["aufrufe"]
-    assert pfad == "/api/calendar/kategorie/kurs" and "probe" not in body
-    frage = plan["vorab"]["dann"]({"eintraege": []})
-    frage.taste(ord("n"))
-    assert frage.plan()["aufrufe"] == []
-
-
-def test_kurs_gruppe_eigener_name():
-    d = kw.dialog_kurs_gruppe(_e("Chor", "19:30", "21:00", kat="keine"))
-    d.taste(ord("e"))
-    for b in b"Musik":
-        d.taste(b)
-    d.taste(10)
-    body = d.plan()["vorab"]["aufruf"][2]
-    assert (body["kategorie"], body["kategorie_name"]) == ("custom", "Musik")
 
 
 @pytest.fixture(autouse=True)
