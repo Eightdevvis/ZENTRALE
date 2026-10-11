@@ -66,7 +66,7 @@ Neue Dateien kommen nie auf diese Liste: aufteilen statt eintragen.
 | `system/tui_bauplan.md` | 650 |
 | `werkzeuge/mail_system.md` | 636 |
 | `ki/cloud_umstieg_plan.md` | 621 |
-| `werkzeuge/kalender_ansichten_vorschau.md` | 603 |
+| `werkzeuge/kalender_ansichten_vorschau.md` | 608 |
 
 **Wenn der Test rot wird:**
 - **„neu über der Grenze"** — das neue Thema in eine eigene Datei ziehen,
