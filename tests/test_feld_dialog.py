@@ -190,3 +190,19 @@ def test_die_tui_braucht_kein_paket_fuer_schemas():
                     text = f.read()
                 assert "import jsonschema" not in text and "from jsonschema" not in text, n
                 assert "import yaml" not in text, n
+
+
+def test_tastentabelle_folgt_dem_feld():
+    """2026-10-11: eigene Tastentabelle; ↑↓ nur, wenn es mehr als ein Feld
+    gibt, ←→ nur bei einer Auswahl."""
+    from tui.ansichten.tasten import Tasten
+    zahl = {"tage": {"title": "tage", "type": "integer", "default": 7}}
+    wahl = {"modus": {"title": "modus", "enum": ["woche", "monat"]}}
+    m = FeldDialog({"properties": dict(zahl, **wahl)})
+    assert Tasten(FeldDialog.TASTEN).fehlende_methoden(m) == []
+    assert m.ansicht() == "felder:tippen"
+    m.taste(curses.KEY_DOWN)
+    assert m.ansicht() == "felder:waehlen"
+    assert FeldDialog({"properties": zahl}).ansicht() == "tippen"
+    assert FeldDialog({"properties": wahl}).ansicht() == "waehlen"
+    assert FeldDialog({}).ansicht() == "leer"

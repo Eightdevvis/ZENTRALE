@@ -62,6 +62,7 @@ def test_beschriftungen_werden_zu_tastennamen():
     assert tt.namen("/") == ["/"]
     assert tt.namen("+/-") == ["+", "-"]
     assert tt.namen("alt+←→") == ["alt+left", "alt+right"]
+    assert tt.namen("shift+↑↓←→") == ["shift+up", "shift+down", "shift+left", "shift+right"]
     assert tt.namen("ctrl+C") == ["ctrl+c"]
     assert tt.namen("pgup pgdn") == ["pgup", "pgdn"]
     assert tt.namen("⌫") == ["backspace"]
@@ -123,6 +124,14 @@ def test_tabelle_verteilt_neutrale_namen():
     assert s.taste(ord("q")) == BEENDEN
     assert s.taste(ord("x")) is None and len(s.log) == 3       # nicht belegt: nichts
     assert s.TASTEN.eintraege("start") == [("↑↓", "move"), ("alt+←", "back"), ("q", "quit")]
+
+
+def test_shift_pfeile_kommen_als_eigene_namen():
+    """Desk (2026-10-11): curses meldet Shift+Pfeile als KEY_SR/KEY_SF/
+    KEY_SLEFT/KEY_SRIGHT — sie heißen shift+up … und gehen hin und zurück."""
+    for n in ("shift+up", "shift+down", "shift+left", "shift+right"):
+        (code,) = tasten.codes(n)
+        assert tasten.name_von(code) == n
 
 
 def test_teile_bringen_ihre_tabelle_mit():

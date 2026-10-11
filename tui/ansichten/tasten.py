@@ -49,6 +49,9 @@ _CURSES = {
     curses.KEY_PPAGE: "pgup", curses.KEY_NPAGE: "pgdn",
     10: "enter", 13: "enter", curses.KEY_ENTER: "enter",
     9: "tab", 32: "space", 27: "esc",
+    # Shift+Pfeil, wie curses es übersetzt (Desk: Ausschnitt schieben)
+    curses.KEY_SR: "shift+up", curses.KEY_SF: "shift+down",
+    curses.KEY_SLEFT: "shift+left", curses.KEY_SRIGHT: "shift+right",
 }
 _CURSES.update({curses.KEY_F0 + i: "f%d" % i for i in range(1, 13)})
 _NAME_ZU_CODE = {"up": curses.KEY_UP, "down": curses.KEY_DOWN,
@@ -56,7 +59,9 @@ _NAME_ZU_CODE = {"up": curses.KEY_UP, "down": curses.KEY_DOWN,
                  "shift+tab": curses.KEY_BTAB, "backspace": curses.KEY_BACKSPACE,
                  "del": curses.KEY_DC, "home": curses.KEY_HOME, "end": curses.KEY_END,
                  "pgup": curses.KEY_PPAGE, "pgdn": curses.KEY_NPAGE,
-                 "enter": 10, "tab": 9, "space": 32, "esc": 27}
+                 "enter": 10, "tab": 9, "space": 32, "esc": 27,
+                 "shift+up": curses.KEY_SR, "shift+down": curses.KEY_SF,
+                 "shift+left": curses.KEY_SLEFT, "shift+right": curses.KEY_SRIGHT}
 _NAME_ZU_CODE.update({"f%d" % i: curses.KEY_F0 + i for i in range(1, 13)})
 # Alt+Pfeil als EIN Keycode (terminfo kUP3 …, Modifier 3 = Alt)
 _ALT_KEYNAME = {b"kUP3": "alt+up", b"kDN3": "alt+down",

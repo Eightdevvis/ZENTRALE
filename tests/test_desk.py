@@ -307,6 +307,9 @@ def test_ansicht_modal_esc_verwirft(ansicht):
     D["canvas"].fokus = "z"
     d.taste(ord("e"))
     tippe(d, "neu")
+    d.z.stdscr.folge = [ord("x")]                    # Alt+x: nie „abbrechen"
+    d.taste(27)
+    assert D["modal"] is not None and D["modal"].eingabe.text == "altneu"
     d.taste(27)
     assert D["modal"] is None
     assert desk.laden("a")["elemente"][0]["text"] == "alt"
@@ -358,14 +361,20 @@ def test_ansicht_ohne_backend(monkeypatch):
     assert d.DESK["ebene"] == "wahl" and "nicht angelegt" in d.DESK["msg"]
 
 
-def test_shift_pfeil_als_rohe_folge_schiebt(ansicht):
+def test_shift_pfeil_schiebt(ansicht):
+    """Shift+Pfeil, wie curses es meldet (KEY_SRIGHT …), schiebt wie D
+    (Tastentabelle: shift+↑↓←→, 2026-10-11). Eine rohe Folge nach Esc, die
+    der Kern nicht kennt ([1;2C), tut nichts — schließt aber auch nicht."""
+    import curses
     d, D = ansicht, ansicht.DESK
     desk.anlegen("p")
     d.oeffnen(); d.taste(10)
     vx = D["canvas"].vx
+    d.taste(curses.KEY_SRIGHT)
+    assert D["canvas"].vx > vx and D["ebene"] == "canvas"
     d.z.stdscr.folge = [ord(c) for c in "[1;2C"]
     d.taste(27)
-    assert D["canvas"].vx > vx and D["ebene"] == "canvas"
+    assert D["ebene"] == "canvas"
 
 
 def test_kachel_knoten_wird_unangetastet_durchgereicht():
@@ -479,9 +488,9 @@ def test_ansicht_zettel_groesse_aendern_speichert_nur_bei_aenderung(ansicht):
     d.aufrufe.clear()
     d.taste(ord("r"))
     assert D["canvas"].modus == "groesse"
-    assert d.tasten_text().startswith("24×6 ·")
+    assert d.status_text() == "24×6"
     d.taste(curses.KEY_RIGHT); d.taste(curses.KEY_RIGHT); d.taste(curses.KEY_DOWN)
-    assert d.tasten_text().startswith("26×7 ·")              # live
+    assert d.status_text() == "26×7"              # live
     d.draw_desk(2, 0, 26, 100)
     assert not any(m == "PUT" for m, _p in d.aufrufe)       # erst enter speichert
     d.taste(10)
@@ -492,7 +501,7 @@ def test_ansicht_zettel_groesse_aendern_speichert_nur_bei_aenderung(ansicht):
     d.taste(ord("r")); d.taste(curses.KEY_LEFT)
     for _ in range(30):
         d.taste(curses.KEY_UP)
-    assert "kleiner geht nicht" in d.tasten_text()
+    assert "kleiner geht nicht" in d.status_text()
     d.taste(27)                                               # esc: alte Größe
     assert (D["canvas"].element("a1")["w"], D["canvas"].element("a1")["h"]) == (26, 7)
     assert not any(m == "PUT" for m, _p in d.aufrufe)

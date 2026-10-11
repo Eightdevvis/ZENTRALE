@@ -14,6 +14,17 @@
 
 import curses
 
+try:
+    from tui.bausteine import tastenteil
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    from bausteine import tastenteil
+
+# Beschriftung der Bearbeiten-Tasten für die Tastentabelle eines Gastgebers
+# (Zweitbelegung ohne Text: verarbeitet, nicht angezeigt; 2026-10-11) —
+# eine Zeile ohne ↑↓ (dort täten sie nichts), mehrere mit.
+TASTEN_ZEILE = "←→ home end ⌫ del"
+TASTEN_ZEILEN = "↑↓←→ home end ⌫ del"
+
 ENTER = (10, 13, curses.KEY_ENTER)
 ZURUECK = (curses.KEY_BACKSPACE, 127, 8)
 STRG_S = 19
@@ -30,7 +41,15 @@ class Textfeld:
         self._breite = 40                # letzte Anzeige-Breite (für ↑↓)
         self.oben = 0                    # erste sichtbare Zeile
 
+    def __repr__(self):                  # Zustand sichtbar (Tests vergleichen repr)
+        return "Textfeld(%r)" % ((self.text, self.pos),)
+
     # ── Tasten ────────────────────────────────────────────────────────
+    def taste_name(self, name):
+        """Wie taste(), mit neutralem Tastennamen ("left", "backspace", "a"
+        …) — so geben Modale mit Tastentabelle hierher weiter (2026-10-11)."""
+        return self.taste(tastenteil.code(name))
+
     def taste(self, ch):
         """-> None | "speichern" | "abbrechen"."""
         if ch == STRG_S:

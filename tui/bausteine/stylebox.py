@@ -25,7 +25,10 @@
 # Auswahl; bei einer Farbe öffnen Leertaste/→ den Farbwähler (# öffnet ihn
 # gleich mit Hex-Feld); ⌫/Entf setzt auf ‹ keine › (nicht gesetzt), r setzt
 # auf den Anfang zurück; Enter nimmt, Esc bricht ab. Icon hochladen steht da, ist aber gesperrt
-# (readOnly) — es lässt sich nicht öffnen.
+# (readOnly) — es lässt sich nicht öffnen. Alles in EINER Tastentabelle
+# (TASTEN, 2026-10-11, tui/bausteine/tastenteil.py): Ansicht je Art des
+# Feldes unter dem Cursor (wahl | farbe | gesperrt), bei offenem Farbwähler
+# „farbe:" + dessen Ansicht. Hinweise zeigt nur die Leiste ganz unten.
 #
 # Die Box zeigt immer, was gezeichnet wird (11.10.2026, Sasha): nach jeder
 # Änderung gilt stil.stimmig — Rahmenfarbe ohne Rahmenstil → durchgezogen,
@@ -42,10 +45,12 @@ import curses
 
 try:
     from tui import pixel
-    from tui.bausteine.farbwaehler import Farbwaehler, ENTER, ESC, ZURUECK, leeren
+    from tui.bausteine import tastenteil
+    from tui.bausteine.farbwaehler import Farbwaehler, leeren
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
-    from bausteine.farbwaehler import Farbwaehler, ENTER, ESC, ZURUECK, leeren
+    from bausteine import tastenteil
+    from bausteine.farbwaehler import Farbwaehler, leeren
 
 import stil as stil_kern                # core/stil.py (Pfad: bausteine/__init__.py)
 
@@ -57,6 +62,21 @@ RAHMEN_ZEICHEN = {
 }
 
 KEINE = "‹ keine ›"                     # Anzeige: Eigenschaft nicht gesetzt
+
+# Tasten (Tastentabelle, 2026-10-11). Ohne Text = verarbeitet, nicht gezeigt.
+_FELD = [("↑↓", "feld", "field"), ("tab/shift+tab", "feld")]
+_ENDE = [("r", "anfang", "reset"), ("enter", "nehmen", "ok"), ("esc", "abbrechen", "back")]
+_KEINE = [("⌫", "keine", "none"), ("del", "keine")]
+TASTEN = dict({
+    "wahl": _FELD + [("←→", "wert", "value"), ("space", "wert")] + _KEINE + _ENDE,
+    "farbe": _FELD + [("space", "farbe_oeffnen", "colour"), ("→", "farbe_oeffnen"),
+                      ("#", "farbe_oeffnen", "hex")] + _KEINE + _ENDE,
+    # Gesperrt (Icon hochladen): die Tasten sagen nur, dass es noch nicht geht.
+    "gesperrt": _FELD + [("←→ space # ⌫ del r", "gesperrt"), ("enter", "nehmen", "ok"),
+                         ("esc", "abbrechen", "back")],
+    "leer": [("enter", "nehmen", "ok"), ("esc", "abbrechen", "back")],
+}, **{"farbe:" + a: [(e[0], "farbwahl") + tuple(e[2:]) for e in liste]   # Farbwähler offen
+      for a, liste in Farbwaehler.TASTEN.items()})
 
 
 def muster_zeichen(name, zeile, spalte):
@@ -133,67 +153,87 @@ class Stylebox:
         return self.felder[self.feld] if self.felder else None
 
     # ── Tasten ──────────────────────────────────────────────────────────
+    TASTEN = TASTEN
+
+    def ansicht(self):
+        if self.waehler is not None:
+            return "farbe:" + self.waehler.ansicht()
+        f = self.aktuell
+        return f["art"] if f is not None else "leer"
+
     def taste(self, ch):
         """→ None | ("fertig", {geänderte css}) | ("abbruch",)."""
-        if self.waehler is not None:
-            erg = self.waehler.taste(ch)
-            if erg and erg[0] == "fertig":
-                name = self.aktuell["name"]
-                vorher = dict(self.werte)
-                self.werte[name] = erg[1]
-                self.beruehrt.add(name)
-                self._stimmig(vorher)
-            if erg:
-                self.waehler = None
-            return None
-        self.hinweis = ""
-        if ch == ESC:
-            self.ergebnis = None
-            return ("abbruch",)
-        if ch in ENTER:
-            neu = stil_kern.pruefen(self.werte, self.namen)
-            erg = stil_kern.unterschied(self.anfang, neu)   # Entferntes aus dem Anfang = None
-            for name in (self.beruehrt | self.alt_nichts) - set(neu):   # auch Kaputtes/Altes, das weg ist
-                erg[name] = None
-            self.ergebnis = erg
-            return ("fertig", self.ergebnis)
-        f = self.aktuell
-        if f is None:
-            return None
-        vorher = dict(self.werte)
-        n = len(self.felder)
-        if ch in (curses.KEY_UP, curses.KEY_BTAB):
-            self.feld = (self.feld - 1) % n
-        elif ch in (curses.KEY_DOWN, 9):
-            self.feld = (self.feld + 1) % n
-        elif f["art"] == "gesperrt" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" "), ord("#")):
-            self.hinweis = "%s: noch gesperrt" % f["titel"]
-        elif f["art"] == "wahl" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
-            werte = [None] + [w for w, _t in f["wahl"]]     # None = ‹ keine ›
-            jetzt = self.werte.get(f["name"])
-            i = werte.index(jetzt) if jetzt in werte else 0
-            neu = werte[(i + (-1 if ch == curses.KEY_LEFT else 1)) % len(werte)]
-            if neu is None:
-                self._keine(f["name"])
-            else:
-                self.werte[f["name"]] = neu
-                self.beruehrt.add(f["name"])
-        elif f["art"] == "farbe" and ch in (curses.KEY_RIGHT, ord(" "), ord("#")):
-            self.waehler = Farbwaehler(self.werte.get(f["name"]))
-            if ch == ord("#"):
-                self.waehler.taste(ch)
-        elif f["art"] == "gesperrt" and ch in ZURUECK + (curses.KEY_DC, ord("r")):
-            self.hinweis = "%s: noch gesperrt" % f["titel"]
-        elif ch in ZURUECK or ch == curses.KEY_DC:      # ‹ keine ›: nicht gesetzt
-            self._keine(f["name"])
-        elif ch == ord("r"):                            # zurück auf den Anfang
-            if f["name"] in self.anfang:
-                self.werte[f["name"]] = self.anfang[f["name"]]
-            else:
-                self.werte.pop(f["name"], None)
-            self.beruehrt.discard(f["name"])
-        self._stimmig(vorher)           # Rahmenstil ↔ Rahmenfarbe (stil.stimmig)
+        return tastenteil.verteilen(self, ch)
+
+    def aktion_farbwahl(self, taste):
+        """Eine Taste im offenen Farbwähler; „fertig" übernimmt die Farbe."""
+        erg = tastenteil.weiter(self.waehler, taste)
+        if erg and erg[0] == "fertig":
+            name = self.aktuell["name"]
+            vorher = dict(self.werte)
+            self.werte[name] = erg[1]
+            self.beruehrt.add(name)
+            self._stimmig(vorher)
+        if erg:
+            self.waehler = None
         return None
+
+    def aktion_abbrechen(self, _taste):
+        self.hinweis = ""
+        self.ergebnis = None
+        return ("abbruch",)
+
+    def aktion_nehmen(self, _taste):
+        self.hinweis = ""
+        neu = stil_kern.pruefen(self.werte, self.namen)
+        erg = stil_kern.unterschied(self.anfang, neu)   # Entferntes aus dem Anfang = None
+        for name in (self.beruehrt | self.alt_nichts) - set(neu):   # auch Kaputtes/Altes, das weg ist
+            erg[name] = None
+        self.ergebnis = erg
+        return ("fertig", self.ergebnis)
+
+    def aktion_feld(self, taste):
+        self.hinweis = ""
+        self.feld = (self.feld + (-1 if taste in ("up", "shift+tab") else 1)) % len(self.felder)
+
+    def aktion_wert(self, taste):
+        self.hinweis = ""
+        f, vorher = self.aktuell, dict(self.werte)
+        werte = [None] + [w for w, _t in f["wahl"]]     # None = ‹ keine ›
+        jetzt = self.werte.get(f["name"])
+        i = werte.index(jetzt) if jetzt in werte else 0
+        neu = werte[(i + (-1 if taste == "left" else 1)) % len(werte)]
+        if neu is None:
+            self._keine(f["name"])
+        else:
+            self.werte[f["name"]] = neu
+            self.beruehrt.add(f["name"])
+        self._stimmig(vorher)           # Rahmenstil ↔ Rahmenfarbe (stil.stimmig)
+
+    def aktion_farbe_oeffnen(self, taste):
+        self.hinweis = ""
+        self.waehler = Farbwaehler(self.werte.get(self.aktuell["name"]))
+        if taste == "#":                # gleich mit Hex-Feld
+            self.waehler.aktion_hex(taste)
+
+    def aktion_keine(self, _taste):     # ‹ keine ›: nicht gesetzt
+        self.hinweis = ""
+        vorher = dict(self.werte)
+        self._keine(self.aktuell["name"])
+        self._stimmig(vorher)
+
+    def aktion_anfang(self, _taste):    # zurück auf den Anfang
+        self.hinweis = ""
+        f, vorher = self.aktuell, dict(self.werte)
+        if f["name"] in self.anfang:
+            self.werte[f["name"]] = self.anfang[f["name"]]
+        else:
+            self.werte.pop(f["name"], None)
+        self.beruehrt.discard(f["name"])
+        self._stimmig(vorher)
+
+    def aktion_gesperrt(self, _taste):
+        self.hinweis = "%s: noch gesperrt" % self.aktuell["titel"]
 
     def _stimmig(self, vorher):
         """stil.stimmig nach jeder Änderung (Rahmenstil ↔ Rahmenfarbe), nur
@@ -211,12 +251,6 @@ class Stylebox:
         """Auf ‹ keine › (nicht gesetzt); nie Gesetztes kommt nicht zurück."""
         if self.werte.pop(name, None) is not None or name in self.eingang:
             self.beruehrt.add(name)
-
-    def tasten(self):
-        if self.waehler is not None:
-            return self.waehler.tasten()
-        return [("↑↓", "feld"), ("←→", "wert"), ("space", "farbe"),         # passt in 80 Spalten
-                ("⌫", "keine"), ("r", "anfang"), ("enter", "ok"), ("esc", "zurück")]
 
     # ── Inhalt (rein) ───────────────────────────────────────────────────
     def zeilen(self):
@@ -297,13 +331,13 @@ class Stylebox:
         """(h, w) des Modals aus dem Inhalt (11.10.2026, Sasha: „unten voll
         viel Platz frei" — vorher setzten die Aufrufer fest 22 Zeilen):
         Liste und Vorschau nebeneinander (sonst untereinander), eine
-        Leerzeile, die Fußzeile, Rahmen; höchstens H×W. Breit genug für die
-        Fußzeile, solange W reicht. Mit offenem Farbwähler dessen Maß."""
+        Leerzeile, die Hinweiszeile („noch gesperrt"), Rahmen; höchstens
+        H×W. Mit offenem Farbwähler dessen Maß. Tasten stehen nur in der
+        Leiste ganz unten (2026-10-11)."""
         if self.waehler is not None:
             return min(H, self.WAEHLER_MASS[0]), min(W, self.WAEHLER_MASS[1])
         _rand, lb = self._listen_breite()
-        fuss = len(" · ".join("%s %s" % t for t in self.tasten()))
-        w = min(W, max(lb + 2 + 10, fuss) + 4)
+        w = min(W, lb + 2 + 10 + 4)
         n = len(self.felder)
         if (w - 4) - lb - 2 >= 10:                       # Vorschau rechts
             innen = max(n, self.vorschau_h)
@@ -341,9 +375,8 @@ class Stylebox:
             vb, vh = min(iw, 30), h - 4 - len(self.felder) - 1
         if vb >= 4 and vh >= 3:
             self._zeichne_vorschau(z, vy, vx, min(vh, self.vorschau_h), vb, farbig)
-        unten = self.hinweis or " · ".join("%s %s" % t for t in self.tasten())
-        z.safe_addstr(y + h - 2, ix, unten[:iw],
-                      C.get("warn", 0) if self.hinweis else C.get("faint", 0))
+        if self.hinweis:
+            z.safe_addstr(y + h - 2, ix, self.hinweis[:iw], C.get("warn", 0))
 
     def _zeichne_vorschau(self, z, y, x, h, w, farbig):
         C = z.C

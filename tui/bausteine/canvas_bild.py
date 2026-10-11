@@ -18,13 +18,14 @@
 # das Bild im Bildbetrachter. Farben gehen als Rolle "#rrggbb" hinaus; die
 # Ansicht macht daraus ein Pixel-Farbpaar (Vordergrund auf Theme-Grund).
 
-import curses
 import os
 
 try:
-    from tui.bausteine.textfeld import Textfeld
+    from tui.bausteine import tastenteil
+    from tui.bausteine.textfeld import TASTEN_ZEILE, Textfeld
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
-    from bausteine.textfeld import Textfeld
+    from bausteine import tastenteil
+    from bausteine.textfeld import TASTEN_ZEILE, Textfeld
 
 MODI = ("mono", "farbe")
 
@@ -45,20 +46,39 @@ class TitelModal:
     """Titel eines Bildes: eine Zeile, enter oder ctrl+s speichert. Leer =
     wieder der Dateiname."""
     titel = "bild-titel"
+    TASTEN = {"tippen": [
+        ("type", "tippen", "title"), ("enter", "speichern", "save"), ("ctrl+s", "speichern"),
+        ("esc", "abbrechen", "cancel"), (TASTEN_ZEILE, "feld"),
+    ]}
 
     def __init__(self, text):
         self.eingabe = Textfeld(text)
 
+    def __repr__(self):
+        return "TitelModal(%r)" % (self.eingabe,)
+
+    def ansicht(self):
+        return "tippen"
+
     def taste(self, ch):
-        if ch in (10, 13, curses.KEY_ENTER):
-            return "speichern"
-        return self.eingabe.taste(ch)
+        if 0x80 <= ch <= 0xFF:          # Umlaut-Bytes setzt das Textfeld zusammen
+            return self.eingabe.taste(ch)
+        return tastenteil.verteilen(self, ch)
+
+    def aktion_tippen(self, zeichen):
+        return self.eingabe.taste(ord(zeichen))
+
+    def aktion_feld(self, taste):
+        return self.eingabe.taste_name(taste)
+
+    def aktion_speichern(self, _taste):
+        return "speichern"
+
+    def aktion_abbrechen(self, _taste):
+        return "abbrechen"
 
     def anzeige(self, breite, hoehe):
         return self.eingabe.anzeige(breite, hoehe)
-
-    def tasten(self):
-        return [("type", "title"), ("enter", "save"), ("empty", "file name"), ("esc", "cancel")]
 
     def aenderungen(self):
         return {"titel": " ".join(self.eingabe.text.split())}
@@ -68,6 +88,8 @@ class Bild:
     name = "bild"
     rolle = "dim"
     neu_label = "bild"
+    TASTEN = [("o", "oeffnen", "open"), ("f", "art_taste", "mono/colour"),
+              ("e", "bearbeiten", "title")]
 
     def neu(self, eid, x, y, datei="", w=34, h=12):
         return {"id": eid, "art": self.name, "x": x, "y": y, "w": w, "h": h,

@@ -64,16 +64,25 @@ macOS und Handy gleich an; xfce4-terminal schluckt Shift+↑↓ von Haus aus.
 Alt+Pfeil kommt als `kLFT3`/`kRIT3`/`kUP3`/`kDN3`, als ESC + Pfeil, als
 `ESC [1;3A…D` oder `ESC ESC [A` (wie in der Karte).
 
-Shift+Pfeil erkennt der Baustein am **Namen** (`curses.keyname`: `kLFT2`,
-`kRIT2`, `kUP2`, `kDN2`, `KEY_SLEFT`, `KEY_SR` …), nicht an der Nummer —
-die wechselt mit Terminal und tmux. Rohe Folgen `ESC [1;2A…D` gehen auch.
-Die Fußleiste unten zeigt die Tasten je Zustand (`befehle.CTX_KEYS`,
-Kontexte `desk:wahl|canvas|bild|kachel|neu|greifen|verbinden|frage|groesse`; Modal
-und Kalender-Dialog sind Freitext ohne Leiste, ihr Kasten zeigt die Tasten).
-Die Leiste zeigt „W/A/S/D move view"; „shift/alt+↑↓←→" und „pgup/pgdn"
-stehen nur in der Hinweiszeile im Kasten, weil `fussleiste.codes()`
-„shift+" nicht lesen kann (Datei gehörte in dieser Runde einer anderen
-Sitzung).
+**Tasten: Tastentabelle** (seit 2026-10-11, `tui/ansichten/tasten.py`):
+`Desk.TASTEN` ist EINE Tabelle, aus der die Tasten verteilt werden und die
+die Leiste ganz unten zeigt; im Kasten stehen keine Tasten mehr (nur noch
+Status: Frage „löschen?", Größe „26×7" mit Anschlag, Meldungen, rechts die
+Lage). Eigene Ansichten `wahl`, `name`, `neu` (Wähler hinter +), `bild`,
+`pfad`; Canvas und Modale bringen ihre Tabelle als Baustein mit
+(`Tasten.zusammen`, `tui/bausteine/tastenteil.py`): `canvas:ruhe` (nichts
+gewählt), `canvas:kasten` (Art ohne eigene Zeilen), `canvas:notiz|bild|kachel`
+(Zeilen der Art: e, o, f, pgup/pgdn), `canvas:greifen|verbinden|frage|groesse`,
+`text:schreiben` (Zettel), `titel:tippen` (Bild-Titel),
+`dialog:tippen|waehlen|felder:…|leer` (Kalender-Dialog). Shift+Pfeil und
+Alt+Pfeil sind Zweitbelegung ohne Text: Shift kommt als curses-Taste
+(`KEY_SR`/`KEY_SF`/`KEY_SLEFT`/`KEY_SRIGHT`, Namen `shift+up …` in
+`core/tastentabelle.py`), Alt liest `tasten.py`. Seit dem Umbau NICHT mehr
+erkannt: Shift+Pfeil als erweiterte Taste mit Namen `kUP2`/`kLFT2` … und als
+rohe Folge `ESC [1;2A…D` (tasten.py kennt nur Alt-Folgen) — W A S D geht
+immer. Umlaute beim Tippen setzt das Textfeld aus den UTF-8-Bytes zusammen
+(die Tabelle liest nur ASCII). Wege zu jeder Ansicht:
+`tests/tasten_zustaende/desk.py`.
 
 **Weich schieben** (2026-10-10, Sasha: *„ich möchte dass die bewegung über
 das canvas weicher ist"*): `vx/vy` bleibt die Lage, mit der alles rechnet.
@@ -89,14 +98,14 @@ macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
 
 **Größe ändern** (2026-10-10, Sasha: die Größe muss man nachträglich
 ändern können — Kachel, Zettel, Bild): `r` auf dem gewählten Kasten. Der
-Rahmen wird gestrichelt mit der Ecke ◢ unten rechts; die Hinweiszeile zeigt
+Rahmen wird gestrichelt mit der Ecke ◢ unten rechts; die Statuszeile zeigt
 die Größe live („26×7", Außenmaß mit Rahmen). Grenzen sagt die Art
 (`grenzen(element)` im Baustein, Außenmaß): Zettel und Bild mindestens
 10×4 (Titel + eine Zeile), Bild höchstens 402×203 (Grenze der Vorschau im
 Backend), sonst 400×200. Eine Kachel: `min`/`max` aus dem Katalog des Hubs
 (+ Rahmen), beim Druck auf `r` geholt (ohne Backend: Hinweis, Größe
 bleibt); ohne `max` der Quelle setzt der Hub 400×400. An einer Grenze
-bleibt der Kasten stehen, die Hinweiszeile sagt „kleiner geht nicht
+bleibt der Kasten stehen, die Statuszeile sagt „kleiner geht nicht
 (mind. 10×4)". Der Ausschnitt folgt der Ecke unten rechts (gleitet weich).
 Schnüre legen sich von selbst neu (sie werden aus den Lagen gerechnet).
 Eine Kachel holt schon beim Ziehen im Hintergrund in der neuen Größe
@@ -129,7 +138,7 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   von selbst, Spitze ▸◂▴▾ am Ziel, unter den Kästen. Ein gelöschter Kasten
   nimmt seine Schnüre mit (Baustein und Backend).
 - **App** `tui/ansichten/desk.py`: Auswahl, laden/speichern über HTTP,
-  Modal, Hinweise. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
+  Modal, Tastentabelle. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
   und Bearbeiten den ganzen Desk (ohne Puffer-Felder „_…").
 - **Katalog im `+`-Wähler** `tui/ansichten/desk_neu.py` (seit 2026-10-10):
   der Wähler = eigene Arten des Canvas mit `neu_label` (zettel, bild) + je

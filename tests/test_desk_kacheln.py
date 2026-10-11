@@ -468,7 +468,7 @@ def test_kachel_groesse_aendern_holt_in_neuer_groesse(ansicht, termine):
         d.taste(curses.KEY_LEFT)
     for _ in range(30):
         d.taste(curses.KEY_UP)
-    assert (el["w"], el["h"]) == (8, 4) and "kleiner geht nicht" in d.tasten_text()
+    assert (el["w"], el["h"]) == (8, 4) and "kleiner geht nicht" in d.status_text()
     d.taste(27)
     assert (el["w"], el["h"]) == (w0 - 1, h0 + 2)
 
@@ -485,7 +485,7 @@ def test_kachel_groesse_ohne_katalog_sagt_es(ansicht, termine, monkeypatch):
         raise OSError("weg")
     monkeypatch.setattr(desk_ansicht, "api_call", kaputt)
     d.taste(ord("r"))
-    assert D["canvas"].modus == "ruhe" and "größe geht gerade nicht" in d.tasten_text()
+    assert D["canvas"].modus == "ruhe" and "größe geht gerade nicht" in d.status_text()
     assert echt is d.aufrufe
 
 

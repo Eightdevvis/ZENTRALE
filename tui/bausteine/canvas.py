@@ -41,8 +41,8 @@
 #                              mit Rahmen, für `r` (Größe ändern); ohne gilt
 #                              GROESSE_MIN / GROESSE_MAX (2026-10-10)
 #
-# Bedienung (Zustände, Sasha 2026-10-09, Belegung siehe
-# memory/hub/desk_view.md):
+# Bedienung (Zustände, Sasha 2026-10-09; Belegung: die Tastentabelle
+# TASTEN unten, memory/hub/desk_view.md):
 #   ruhe       ↑↓←→ Fokus springt zum nächsten Kasten in der Richtung,
 #              enter greift, + legt einen neuen an (gleich gegriffen),
 #              e bearbeiten, v verbinden, d löschen (Rückfrage), o öffnen
@@ -77,7 +77,6 @@
 # des Ausschnitts gerechnet, `_in_der_hand`): es gleitet mit der Ansicht,
 # statt vorzuspringen und zurückzurutschen (2026-10-10).
 
-import curses
 import math
 import secrets
 from collections import namedtuple
@@ -130,92 +129,54 @@ def _runden(x):
     return int(math.floor(x + 0.5))      # nicht round(): 2.5 → 3, nicht 2
 
 
-# ── Tasten → Ereignisse ───────────────────────────────────────────────
-# Shift+Pfeil kommt je nach Terminal (und tmux) verschieden an: als
-# KEY_SLEFT/KEY_SRIGHT/KEY_SR/KEY_SF oder als erweiterte Taste mit dem
-# terminfo-Namen kLFT2/kRIT2/kUP2/kDN2 (Modifier 2 = Shift), deren Nummer
-# von Terminal zu Terminal wechselt. Darum zählt der NAME (curses.keyname),
-# nicht die Zahl; die curses-Konstanten nur als Rückfall, wenn kein Name
-# zu haben ist (Tests ohne initscr).
-# Primär schieben die Großbuchstaben W A S D (2026-10-10, Sasha: „ZENTRALE
+# ── Tasten (Tastentabelle, 2026-10-11) ──────────────────────────────
+# Der Canvas trägt seine Tabelle selbst (tui/bausteine/tastenteil.py); die
+# Ansicht bindet sie mit Tasten.zusammen ein und verteilt. Ansichten = die
+# Zustände unten, „ruhe" ohne gewählten Kasten, „kasten" mit; eine Art mit
+# eigenen Zeilen (`TASTEN` der Art: e, o, pgup/pgdn, f …) bekommt ihre
+# eigene Ansicht unter ihrem Namen (tabelle_mit(arten)).
+# Schieben: primär die Großbuchstaben W A S D (2026-10-10, Sasha: „ZENTRALE
 # soll überall gleich gut funktionieren") — die kommen in jedem Terminal,
-# tmux, macOS und Handy gleich an. Shift+Pfeile und Alt+Pfeile bleiben
-# dazu; xfce4-terminal schluckt Shift+↑↓ von Haus aus.
-WASD = {ord("W"): "hoch", ord("A"): "links", ord("S"): "runter", ord("D"): "rechts"}
-# Alt+Pfeil: Modifier 3 im terminfo-Namen (wie in ansichten/karte.py).
-ALT_NAMEN = {b"kLFT3": "links", b"kRIT3": "rechts", b"kUP3": "hoch", b"kDN3": "runter"}
-SHIFT_NAMEN = {b"KEY_SLEFT": "links", b"kLFT2": "links",
-               b"KEY_SRIGHT": "rechts", b"kRIT2": "rechts",
-               b"KEY_SR": "hoch", b"kUP2": "hoch",
-               b"KEY_SF": "runter", b"kDN2": "runter"}
-_SHIFT_CODES = {curses.KEY_SLEFT: "links", curses.KEY_SRIGHT: "rechts",
-                curses.KEY_SR: "hoch", curses.KEY_SF: "runter"}
-_PFEILE = {curses.KEY_UP: "hoch", curses.KEY_DOWN: "runter",
-           curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts"}
-# Roh durchgereichte Folgen nach ESC, wenn das Terminal sie nicht übersetzt:
-# ESC [ 1 ; 2 A … (xterm-Stil, Modifier 2 = Shift).
-# ESC [ 1 ; 3 A … ist dasselbe mit Alt.
-_SHIFT_FOLGE = {"[1;2A": "hoch", "[1;2B": "runter", "[1;2C": "rechts", "[1;2D": "links",
-                "[1;3A": "hoch", "[1;3B": "runter", "[1;3C": "rechts", "[1;3D": "links"}
-# Alt als ESC-Vorsilbe vor einem rohen Pfeil (ESC ESC [ A, ESC ESC O A).
-_ALT_ROH = {"\x1b[A": "hoch", "\x1b[B": "runter", "\x1b[C": "rechts", "\x1b[D": "links",
-            "\x1bOA": "hoch", "\x1bOB": "runter", "\x1bOC": "rechts", "\x1bOD": "links"}
-_BUCHSTABEN = {ord("+"): "neu", ord("e"): "bearbeiten", ord("v"): "verbinden",
-               ord("d"): "loeschen", curses.KEY_DC: "loeschen", ord("o"): "oeffnen",
-               ord("r"): "groesse",
-               curses.KEY_PPAGE: "blaettern_hoch", curses.KEY_NPAGE: "blaettern_runter",
-               ord("j"): "ja", ord("y"): "ja", ord("n"): "nein",
-               10: "enter", 13: "enter", curses.KEY_ENTER: "enter", 27: "esc"}
+# tmux, macOS und Handy gleich an. Shift+Pfeile und Alt+Pfeile gehen dazu
+# (ohne Text: verarbeitet, nicht gezeigt); xfce4-terminal schluckt
+# Shift+↑↓ von Haus aus.
+_SCHIEBEN = [("W/A/S/D", "schieben", "move view"), ("alt+↑↓←→", "schieben"),
+             ("shift+↑↓←→", "schieben")]
+_KOPF = [("↑↓←→", "waehlen", "select")] + _SCHIEBEN[:1] + [("enter", "greifen", "grab")]
+_FUSS = [("r", "groesse", "size"), ("+", "neu", "new"), ("v", "verbinden", "connect"),
+         ("d", "loeschen", "delete"), ("del", "loeschen"), ("esc", "zu", "back")] + _SCHIEBEN[1:]
+TASTEN = {
+    "ruhe": [("↑↓←→", "waehlen", "select"), _SCHIEBEN[0], ("+", "neu", "new"),
+             ("esc", "zu", "back")] + _SCHIEBEN[1:],
+    "kasten": _KOPF + _FUSS,
+    "greifen": [("↑↓←→", "bewegen", "move"), _SCHIEBEN[0], ("enter", "ablegen", "drop"),
+                ("esc", "zurueck", "cancel")] + _SCHIEBEN[1:],
+    "verbinden": [("↑↓←→", "ziel", "target"), _SCHIEBEN[0], ("enter/v", "verbinden", "connect"),
+                  ("esc", "zurueck", "cancel")] + _SCHIEBEN[1:],
+    "frage": [("j", "ja", "yes"), ("y", "ja"), ("n/esc", "nein", "no")],
+    "groesse": [("←→", "aendern", "width"), ("↑↓", "aendern", "height"), _SCHIEBEN[0],
+                ("enter", "behalten", "keep"), ("esc", "zurueck", "undo")] + _SCHIEBEN[1:],
+}
 
 
-def tastenname(ch):
-    """curses.keyname, ohne zu werfen (vor initscr oder bei -1)."""
-    try:
-        return curses.keyname(ch) if ch >= 0 else b""
-    except (ValueError, OverflowError, curses.error):
-        return b""
+def tabelle_mit(arten):
+    """Die Tabelle des Canvas plus je Art mit eigenen Zeilen (`TASTEN` der
+    Art) eine Ansicht unter ihrem Namen: Kopf (wählen, schieben, greifen),
+    die Zeilen der Art, dann der Rest. Für Ansichten, die diese Arten
+    registrieren (Desk)."""
+    tab = {a: list(liste) for a, liste in TASTEN.items()}
+    for art in arten.alle():
+        zeilen = getattr(art, "TASTEN", None)
+        if zeilen and art.name not in tab:
+            tab[art.name] = _KOPF + list(zeilen) + _FUSS
+    return tab
 
 
-def shift_pfeil(ch, name=None):
-    """Ist ch ein Shift+Pfeil? -> "hoch"/"runter"/"links"/"rechts" oder None."""
-    name = tastenname(ch) if name is None else name
-    if name in SHIFT_NAMEN:
-        return SHIFT_NAMEN[name]
-    return _SHIFT_CODES.get(ch)
-
-
-def alt_pfeil(ch, name=None):
-    """Ist ch ein Alt+Pfeil (eine Taste, kLFT3 …)? -> Richtung oder None."""
-    return ALT_NAMEN.get(tastenname(ch) if name is None else name)
-
-
-def esc_folge(folge):
-    """Bytes nach einem ESC (ohne das ESC) -> "pan_<richtung>", "esc" (nichts
-    folgte) oder None (eine Folge, die der Canvas nicht kennt, z. B. Alt+x)."""
-    if not folge:
-        return "esc"
-    if folge[0] in _PFEILE:              # Alt = ESC + (schon übersetzter) Pfeil
-        return "pan_" + _PFEILE[folge[0]]
-    roh = "".join(chr(c) for c in folge if 0 <= c < 128)
-    r = _SHIFT_FOLGE.get(roh) or _ALT_ROH.get(roh)
-    return "pan_" + r if r else None
-
-
-def taste_deuten(ch, name=None):
-    """Taste -> Ereignis des Canvas oder None."""
-    name = tastenname(ch) if name is None else name
-    p = WASD.get(ch) or shift_pfeil(ch, name) or alt_pfeil(ch, name)
-    if p:
-        return "pan_" + p
-    if ch in _PFEILE:
-        return _PFEILE[ch]
-    if ch in _BUCHSTABEN:
-        return _BUCHSTABEN[ch]
-    # Andere druckbare Zeichen gehen als „zeichen:x" an die Art (eigene
-    # Tasten wie `f` beim Bild); der Canvas selbst kennt sie nicht.
-    if 33 <= ch < 127:
-        return "zeichen:" + chr(ch)
-    return None
+# Neutraler Tastenname → Richtung (Pfeile, W A S D, alt+/shift+Pfeil)
+_PFEIL = {"up": "hoch", "down": "runter", "left": "links", "right": "rechts"}
+_RICHTUNG = dict(_PFEIL, W="hoch", A="links", S="runter", D="rechts",
+                 **{"alt+" + k: r for k, r in _PFEIL.items()},
+                 **{"shift+" + k: r for k, r in _PFEIL.items()})
 
 
 def neue_id():
@@ -255,6 +216,9 @@ class Arten:
     def gibt_es(self, name):
         return name in self._arten
 
+    def alle(self):
+        return list(self._arten.values())
+
     def anlegbar(self):
         """Arten, die `+` zur Wahl stellt (mit `neu_label`), in der
         Reihenfolge des Registrierens."""
@@ -289,6 +253,9 @@ class Canvas:
         self.uhr = None
         self._pan_letzt = None           # (zeit, richtung) des letzten Schiebens
         self._pan_faktor = 1.0
+        # vor_groesse(element) -> bool: die Ansicht darf vor `r` noch etwas
+        # holen (Desk: Grenzen einer Kachel beim Hub); False = es geht nicht.
+        self.vor_groesse = None
 
     def __repr__(self):                  # Zustand sichtbar machen (Tests vergleichen repr)
         return "Canvas(%r)" % ((self.vx, self.vy, self.fokus, self.modus, self.griff,
@@ -348,8 +315,77 @@ class Canvas:
             self.vy = min(e["y"] - rand, e["y"] + e["h"] - self.vh + rand)
 
     # ── Tasten ────────────────────────────────────────────────────────
+    TASTEN = TASTEN
+
+    def ansicht(self):
+        """Welche Ansicht der Tabelle gerade offen ist: der Zustand; in Ruhe
+        „ruhe" (nichts gewählt), der Name der gewählten Art (hat sie eigene
+        Zeilen, tabelle_mit) oder „kasten"."""
+        if self.modus != "ruhe":
+            return self.modus
+        fokus = self.element(self.fokus)
+        if fokus is None:
+            return "ruhe"
+        art = self.arten.holen(fokus.get("art"))
+        return art.name if getattr(art, "TASTEN", None) else "kasten"
+
+    # Die Aktionen der Tabelle: neutraler Tastenname → Ereignis für taste().
+    def aktion_waehlen(self, taste):
+        return self.taste(_RICHTUNG[taste])
+
+    aktion_bewegen = aktion_ziel = aktion_aendern = aktion_waehlen
+
+    def aktion_schieben(self, taste):
+        return self.taste("pan_" + _RICHTUNG[taste])
+
+    def aktion_greifen(self, _taste):
+        return self.taste("enter")
+
+    aktion_ablegen = aktion_behalten = aktion_greifen
+
+    def aktion_zu(self, _taste):
+        return self.taste("esc")
+
+    aktion_zurueck = aktion_zu
+
+    def aktion_verbinden(self, taste):
+        return self.taste("verbinden" if self.modus == "ruhe" else "enter")
+
+    def aktion_neu(self, _taste):
+        return self.taste("neu")
+
+    def aktion_bearbeiten(self, _taste):
+        return self.taste("bearbeiten")
+
+    def aktion_loeschen(self, _taste):
+        return self.taste("loeschen")
+
+    def aktion_oeffnen(self, _taste):
+        return self.taste("oeffnen")
+
+    def aktion_groesse(self, _taste):
+        fokus = self.element(self.fokus)
+        if fokus is not None and self.vor_groesse and not self.vor_groesse(fokus):
+            return None
+        return self.taste("groesse")
+
+    def aktion_blaettern(self, taste):
+        return self.taste("blaettern_hoch" if taste == "pgup" else "blaettern_runter")
+
+    def aktion_art_taste(self, taste):
+        return self.taste("zeichen:" + taste)
+
+    def aktion_ja(self, _taste):
+        return self.taste("ja")
+
+    def aktion_nein(self, _taste):
+        return self.taste("nein")
+
     def taste(self, ereignis):
-        """Ein Ereignis (taste_deuten) verarbeiten -> Ergebnis oder None."""
+        """Ein Ereignis verarbeiten -> Ergebnis oder None. Ereignisse:
+        hoch/runter/links/rechts, pan_<richtung>, enter, esc, neu,
+        bearbeiten, verbinden, loeschen, oeffnen, groesse,
+        blaettern_hoch/_runter, ja, nein, zeichen:<x> (an die Art)."""
         if ereignis is None:
             return None
         if ereignis.startswith("pan_") and self.modus != "frage":

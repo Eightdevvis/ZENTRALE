@@ -10,11 +10,18 @@
 #                                 mit + anlegen kann; `neu_label` = Name im
 #                                 Wähler von +)
 # Ein Modal hat: titel, taste(ch) -> None|"speichern"|"abbrechen",
-# anzeige(w, h) -> (zeilen, (cursor_zeile, cursor_spalte)), tasten() ->
-# [(taste, was)], aenderungen() -> dict (wird ins Element übernommen).
+# anzeige(w, h) -> (zeilen, (cursor_zeile, cursor_spalte)), aenderungen()
+# -> dict (wird ins Element übernommen) und eine eigene Tastentabelle
+# (2026-10-11, tui/bausteine/tastenteil.py): TASTEN, ansicht(), je Aktion
+# aktion_<name>(taste) — deren Rückgabe ist dieselbe wie bei taste(ch). Die
+# Ansicht bindet sie mit Tasten.zusammen ein; Tastenhinweise zeigt nur die
+# Leiste ganz unten, nie das Modal.
 #
-# Optional: `rolle` (Farbrolle des Rahmens) und `blaettern(element, schritt)`
-# (Bild↑/Bild↓ im gewählten Kasten), siehe canvas.py.
+# Optional: `rolle` (Farbrolle des Rahmens), `blaettern(element, schritt)`
+# (Bild↑/Bild↓ im gewählten Kasten) und `TASTEN` — die Zeilen, die der
+# Canvas in seiner Tabelle zeigt, solange ein Kasten dieser Art gewählt ist
+# (Aktionen des Canvas: bearbeiten, oeffnen, blaettern, art_taste), siehe
+# canvas.py.
 #
 # 2026-10-09 gibt es „notiz" (ein Zettel des Canvas, in der Datei type
 # "text", Markdown; erste Zeile = Titel) und „fremd" (was Obsidian sonst
@@ -42,10 +49,12 @@
 # kommt aus dem Katalog des Hubs (tui/ansichten/desk_neu.py).
 
 try:
-    from tui.bausteine.textfeld import Textfeld
+    from tui.bausteine import tastenteil
+    from tui.bausteine.textfeld import TASTEN_ZEILEN, Textfeld
     from tui.bausteine.canvas_bild import Bild
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
-    from bausteine.textfeld import Textfeld
+    from bausteine import tastenteil
+    from bausteine.textfeld import TASTEN_ZEILEN, Textfeld
     from bausteine.canvas_bild import Bild
 
 
@@ -77,21 +86,46 @@ def umbrechen(text, breite):
 class TextModal:
     """Bearbeiten-Modal für ein Textfeld eines Elements (z. B. notiz.text)."""
 
+    TASTEN = {"schreiben": [
+        ("type", "tippen", "write"), ("enter", "zeile", "new line"),
+        ("ctrl+s", "speichern", "save"), ("esc", "abbrechen", "cancel"),
+        (TASTEN_ZEILEN, "feld"),
+    ]}
+
     def __init__(self, titel, feld, text):
         self.titel = titel
         self.feld = feld
         self.eingabe = Textfeld(text)
         self.anfang = str(text or "")
 
+    def __repr__(self):
+        return "TextModal(%r)" % (self.eingabe,)
+
+    def ansicht(self):
+        return "schreiben"
+
     def taste(self, ch):
-        return self.eingabe.taste(ch)
+        if 0x80 <= ch <= 0xFF:          # Umlaut-Bytes setzt das Textfeld zusammen
+            return self.eingabe.taste(ch)
+        return tastenteil.verteilen(self, ch)
+
+    def aktion_tippen(self, zeichen):
+        return self.eingabe.taste(ord(zeichen))
+
+    def aktion_zeile(self, _taste):
+        return self.eingabe.taste(10)
+
+    def aktion_feld(self, taste):
+        return self.eingabe.taste_name(taste)
+
+    def aktion_speichern(self, _taste):
+        return "speichern"
+
+    def aktion_abbrechen(self, _taste):
+        return "abbrechen"
 
     def anzeige(self, breite, hoehe):
         return self.eingabe.anzeige(breite, hoehe)
-
-    def tasten(self):
-        return [("type", "write"), ("enter", "new line"),
-                ("ctrl+s", "save"), ("esc", "cancel")]
 
     def geaendert(self):
         return self.eingabe.text != self.anfang
@@ -108,6 +142,7 @@ class Notiz:
     rolle = "amber"
     neu_label = "zettel"
     BREITE, HOEHE = 24, 6
+    TASTEN = [("e", "bearbeiten", "edit"), ("pgup pgdn", "blaettern", "scroll")]
 
     def neu(self, eid, x, y):
         return {"id": eid, "art": self.name, "x": x, "y": y,
@@ -121,7 +156,7 @@ class Notiz:
     def zeichne(self, element, w, h):
         titel, rest = self._teile(element.get("text"))
         if not titel and not rest.strip():
-            return [[("leer · e schreibt", "leise")]]
+            return [[("leer", "leise")]]
         zeilen = [[(t, "notiz_titel")] for t in umbrechen(titel, w)[:1]]
         koerper = umbrechen(rest, w) if rest.strip() else []
         platz = max(0, h - len(zeilen))
@@ -164,6 +199,7 @@ class Kachel:
     text?, oben_max?, zu_klein?: {w, h} (Außenmaß mit Rahmen)}. Ohne Inhalt
     steht der Rückfall-Text aus der Datei da (`titel`). 2026-10-10."""
     name = "kachel"
+    TASTEN = [("o", "oeffnen", "open"), ("pgup pgdn", "blaettern", "scroll")]
 
     def zeichne(self, element, w, h):
         inhalt = element.get("_inhalt") or {}

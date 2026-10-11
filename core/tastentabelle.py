@@ -28,7 +28,7 @@
 #
 # Tastennamen sind neutral (keine curses-Codes): ein druckbares Zeichen ist
 # es selbst, sonst enter esc tab shift+tab space backspace del home end pgup
-# pgdn up down left right, alt+<pfeil|enter|zeichen>, ctrl+<a–z>, f1–f12.
+# pgdn up down left right, shift+<pfeil>, alt+<pfeil|enter|zeichen>, ctrl+<a–z>, f1–f12.
 # Die TUI bildet sie in tui/ansichten/tasten.py auf curses ab.
 #
 # Nur Standardbibliothek (die TUI liest das Modul über basis.kern_pfad()).
@@ -56,6 +56,8 @@ def _wort(t):
         return [_WOERTER[t]]
     if t and all(c in _PFEILE for c in t):
         return [_PFEILE[c] for c in t]
+    if t.startswith("shift+") and t[6:] and all(c in _PFEILE for c in t[6:]):
+        return ["shift+" + _PFEILE[c] for c in t[6:]]      # Desk: Ausschnitt schieben
     if t.startswith("alt+") and t[4:]:
         rest = t[4:]
         if all(c in _PFEILE for c in rest):

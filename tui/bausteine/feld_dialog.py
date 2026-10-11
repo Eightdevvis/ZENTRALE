@@ -21,11 +21,17 @@
 #
 # Nur Tastatur: ↑↓ (tab) Feld, ←→ (leertaste) wählt bei Auswahl/ja-nein,
 # Ziffern/„-"/Text tippen, ⌫ löscht, enter (ctrl+s) legt an, esc bricht ab.
-# Ein Modal im Sinn von canvas_arten.py (titel, taste, anzeige, tasten,
-# aenderungen).
+# Ein Modal im Sinn von canvas_arten.py (titel, taste, anzeige,
+# aenderungen) mit eigener Tastentabelle (2026-10-11): die Ansicht richtet
+# sich nach dem Feld unter dem Cursor (tippen | waehlen) und danach, ob es
+# mehr als ein Feld gibt (nur dann gehen ↑↓).
 
-import curses
 from datetime import date
+
+try:
+    from tui.bausteine import tastenteil
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    from bausteine import tastenteil
 
 TIPPEN = ("zahl", "datum", "text")
 
@@ -105,7 +111,19 @@ class FeldDialog:
     """Dialog aus einem JSON Schema (Katalog `parameter`). aenderungen() →
     {"werte": {name: wert}} mit getypten Werten, nur Felder, die gerade
     gelten."""
-    breite = 52                         # die Tastenzeile passt ganz hinein
+    breite = 52
+
+    # Tasten: Feld unter dem Cursor tippen oder wählen; „felder:" = mehr als
+    # ein Feld (dann ↑↓/tab), „leer" = kein Feld gilt gerade.
+    _ENDE = [("enter", "nehmen", "add"), ("ctrl+s", "nehmen"), ("esc", "abbrechen", "cancel")]
+    _TIPPEN = [("type", "tippen", "type"), ("⌫", "zurueck")]
+    _WAEHLEN = [("←→", "wert", "choose"), ("space", "wert")]
+    _FELDER = [("↑↓", "feld", "field"), ("tab/shift+tab", "feld")]
+    TASTEN = {
+        "tippen": _TIPPEN + _ENDE, "waehlen": _WAEHLEN + _ENDE,
+        "felder:tippen": _FELDER + _TIPPEN + _ENDE, "felder:waehlen": _FELDER + _WAEHLEN + _ENDE,
+        "leer": _ENDE,
+    }
 
     def __init__(self, schema, titel="neu", kopf=None):
         schema = schema if isinstance(schema, dict) else {}
@@ -173,37 +191,54 @@ class FeldDialog:
         self.feld = max(0, min(self.feld, len(felder) - 1))
         return felder[self.feld] if felder else None
 
+    def __repr__(self):                  # Zustand sichtbar (Tests vergleichen repr)
+        return "FeldDialog(%r)" % ((self.feld, self.eingabe, self.fehler),)
+
     # ── Tasten ────────────────────────────────────────────────────────
-    def taste(self, ch):
+    def ansicht(self):
         f = self._aktuell()
-        n = len(self.sichtbar())
-        if ch == 27:
-            return "abbrechen"
-        if ch in (10, 13, curses.KEY_ENTER, 19):
-            self.werte, self.fehler = self.pruefen()
-            self.fehler = self.fehler or ""
-            return "speichern" if self.werte is not None else None
         if f is None:
-            return None
-        art, name = f["art"], f["name"]
-        if ch in (curses.KEY_UP, curses.KEY_BTAB):
-            self.feld = (self.feld - 1) % n
-        elif ch in (curses.KEY_DOWN, 9):
-            self.feld = (self.feld + 1) % n
-        elif art == "wahl" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
+            return "leer"
+        art = "tippen" if f["art"] in TIPPEN else "waehlen"
+        return ("felder:" + art) if len(self.sichtbar()) > 1 else art
+
+    def taste(self, ch):
+        return tastenteil.verteilen(self, ch)
+
+    def aktion_abbrechen(self, _taste):
+        return "abbrechen"
+
+    def aktion_nehmen(self, _taste):
+        self.werte, self.fehler = self.pruefen()
+        self.fehler = self.fehler or ""
+        return "speichern" if self.werte is not None else None
+
+    def aktion_feld(self, taste):
+        n = len(self.sichtbar())
+        self.feld = (self.feld + (-1 if taste in ("up", "shift+tab") else 1)) % n
+        self.fehler = ""
+
+    def aktion_wert(self, taste):
+        f = self._aktuell()
+        name = f["name"]
+        if f["art"] == "wahl":
             werte = [w for w, _t in f["wahl"]]
             i = werte.index(self.eingabe[name]) if self.eingabe[name] in werte else 0
-            self.eingabe[name] = werte[(i + (-1 if ch == curses.KEY_LEFT else 1)) % len(werte)]
-        elif art == "bool" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
+            self.eingabe[name] = werte[(i + (-1 if taste == "left" else 1)) % len(werte)]
+        else:                                    # ja/nein
             self.eingabe[name] = not self.eingabe[name]
-        elif art in TIPPEN and ch in (curses.KEY_BACKSPACE, 127, 8):
-            self.eingabe[name] = self.eingabe[name][:-1]
-        elif art in TIPPEN and self._passt(f, ch):
-            self.eingabe[name] += chr(ch)
-        else:
-            return None
         self.fehler = ""
-        return None
+
+    def aktion_zurueck(self, _taste):
+        f = self._aktuell()
+        self.eingabe[f["name"]] = self.eingabe[f["name"]][:-1]
+        self.fehler = ""
+
+    def aktion_tippen(self, zeichen):
+        f = self._aktuell()
+        if self._passt(f, ord(zeichen)):
+            self.eingabe[f["name"]] += zeichen
+            self.fehler = ""
 
     def _passt(self, f, ch):
         """Darf dieses Zeichen in dieses Feld?"""
@@ -243,9 +278,6 @@ class FeldDialog:
         zeilen.append(self.fehler or grund or "")
         zr, zs = cursor
         return [z[:breite] for z in zeilen[:hoehe]], (zr, min(zs, max(0, breite - 1)))
-
-    def tasten(self):
-        return [("↑↓", "field"), ("←→", "choose"), ("enter", "add"), ("esc", "cancel")]
 
     def aenderungen(self):
         return {"werte": self.werte if self.werte is not None else (self.pruefen()[0] or {})}

@@ -1,7 +1,7 @@
 """
 Der Canvas-Baustein (tui/bausteine/canvas.py, schnur.py, textfeld.py,
 canvas_arten.py) ohne Terminal: Zustände, Fokus-Sprung, Greifen, Schnüre,
-Shift+Pfeil-Erkennung, Zettel-Editor. Desk View, 2026-10-09
+Tastentabelle (seit 2026-10-11 statt eigener Tastendeutung), Zettel-Editor. Desk View, 2026-10-09
 (memory/hub/desk_view.md).
 """
 import curses
@@ -10,6 +10,15 @@ from tui.bausteine import canvas as cv
 from tui.bausteine import schnur
 from tui.bausteine.canvas_arten import Fremd, Kachel, Notiz, TextModal, standard_arten, umbrechen
 from tui.bausteine.textfeld import Textfeld
+from tui.ansichten.tasten import Tasten
+
+# Die Tabelle, wie der Desk sie einbindet (Canvas + Zeilen der Arten).
+TAB = Tasten(cv.tabelle_mit(standard_arten(cv.Arten())))
+
+
+def druecke(c, ch):
+    """Eine Taste (curses-Code) über die Tabelle an den Canvas."""
+    return TAB.verteilen(c, c.ansicht(), ch)
 
 
 def zettel(eid, x, y, w=10, h=4, text=""):
@@ -31,40 +40,54 @@ def leinwand(elemente=None, verbindungen=None, neu=True):
     return c
 
 
-# ── Tasten deuten ─────────────────────────────────────────────────────
+# ── Tastentabelle (2026-10-11) ────────────────────────────────────
 
-def test_shift_pfeil_ueber_den_namen_egal_welche_nummer():
-    """tmux/xterm melden Shift+Pfeil als erweiterte Taste mit wechselnder
-    Nummer — der Name zählt."""
-    for name, r in ((b"kLFT2", "links"), (b"kRIT2", "rechts"),
-                    (b"kUP2", "hoch"), (b"kDN2", "runter"),
-                    (b"KEY_SLEFT", "links"), (b"KEY_SR", "hoch")):
-        assert cv.shift_pfeil(577, name) == r
-        assert cv.taste_deuten(577, name) == "pan_" + r
+def test_jede_aktion_der_tabelle_hat_eine_methode():
+    assert TAB.fehlende_methoden(leinwand()) == []
 
 
-def test_shift_pfeil_rueckfall_ohne_namen():
-    assert cv.taste_deuten(curses.KEY_SLEFT, b"") == "pan_links"
-    assert cv.taste_deuten(curses.KEY_SF, b"") == "pan_runter"
-    assert cv.shift_pfeil(curses.KEY_LEFT, b"KEY_LEFT") is None
+def test_ansicht_folgt_zustand_und_gewaehlter_art():
+    c = leinwand(kreuz() + [{"id": "f", "art": "fremd", "x": 60, "y": 0, "w": 10, "h": 4},
+                            {"id": "b", "art": "bild", "x": 60, "y": 20, "w": 14, "h": 6}])
+    assert c.ansicht() == "ruhe"                       # nichts gewählt
+    c.fokus = "m"
+    assert c.ansicht() == "notiz"                      # Art mit eigenen Zeilen
+    c.fokus = "f"
+    assert c.ansicht() == "kasten"                     # Art ohne: die allgemeine
+    c.fokus = "b"
+    assert c.ansicht() == "bild"
+    c.taste("enter")
+    assert c.ansicht() == "greifen"
 
 
-def test_einfache_tasten():
-    assert cv.taste_deuten(curses.KEY_UP, b"KEY_UP") == "hoch"
-    assert cv.taste_deuten(10, b"^J") == "enter"
-    assert cv.taste_deuten(ord("+"), b"+") == "neu"
-    assert cv.taste_deuten(ord("e"), b"e") == "bearbeiten"
-    assert cv.taste_deuten(ord("v"), b"v") == "verbinden"
-    assert cv.taste_deuten(ord("d"), b"d") == "loeschen"
-    assert cv.taste_deuten(ord("o"), b"o") == "oeffnen"
-    assert cv.taste_deuten(ord("q"), b"q") == "zeichen:q"
-    assert cv.taste_deuten(-1, b"") is None
+def test_tasten_der_tabelle():
+    assert TAB.nimmt("notiz", "up") == "waehlen"
+    assert TAB.nimmt("notiz", "enter") == "greifen"
+    assert TAB.nimmt("notiz", "+") == "neu"
+    assert TAB.nimmt("notiz", "e") == "bearbeiten"
+    assert TAB.nimmt("notiz", "v") == "verbinden"
+    assert TAB.nimmt("notiz", "d") == TAB.nimmt("notiz", "del") == "loeschen"
+    assert TAB.nimmt("notiz", "r") == "groesse"
+    assert TAB.nimmt("notiz", "o") is None             # ein Zettel öffnet nichts
+    assert TAB.nimmt("bild", "o") == "oeffnen" and TAB.nimmt("bild", "f") == "art_taste"
+    assert TAB.nimmt("kasten", "e") is None            # fremd: kein Modal
+    assert TAB.nimmt("ruhe", "enter") is None          # nichts gewählt: nichts zu greifen
+    assert TAB.nimmt("notiz", "q") is None
 
 
-def test_esc_folgen():
-    assert cv.esc_folge([]) == "esc"
-    assert cv.esc_folge([ord(c) for c in "[1;2D"]) == "pan_links"
-    assert cv.esc_folge([ord("x")]) is None          # Alt+x: nichts tun
+def test_shift_und_alt_pfeile_schieben_ohne_text():
+    for v in ("shift+", "alt+"):
+        for n in ("up", "down", "left", "right"):
+            assert TAB.nimmt("ruhe", v + n) == "schieben"
+    gezeigt = [t for t, _x in TAB.eintraege("ruhe")]
+    assert "W/A/S/D" in gezeigt and not any(t.startswith(("shift+", "alt+")) for t in gezeigt)
+    c = leinwand()
+    vx = c.vx
+    druecke(c, curses.KEY_SLEFT)
+    assert c.vx == vx - cv.PAN_X
+    vy = c.vy
+    druecke(c, curses.KEY_SF)
+    assert c.vy == vy + cv.PAN_Y
 
 
 # ── Fokus ─────────────────────────────────────────────────────────────
@@ -380,7 +403,7 @@ def test_o_meldet_die_aktion_der_art_enter_greift_immer():
                    "kachel": {"v": 1, "app": "fokus", "art": "liste", "ref": {"id": "l1"}}}])
     c.arten.registrieren(Kachel())
     c.fokus = "k"
-    erg = c.taste(cv.taste_deuten(ord("o"), b"o"))
+    erg = c.aktion_oeffnen("o")
     assert erg.art == "aktion" and erg.grund == ("oeffnen", {"id": "l1"}) and c.modus == "ruhe"
     assert c.taste("enter") is None and c.modus == "greifen"
     c.taste("esc")
@@ -406,8 +429,7 @@ def test_eigene_taste_der_art_meldet_geaendert():
     c = leinwand([{"id": "s", "art": "schalter", "x": 0, "y": 0, "w": 10, "h": 4}])
     c.arten.registrieren(Schalter())
     c.fokus = "s"
-    assert cv.taste_deuten(ord("f"), b"f") == "zeichen:f"
-    erg = c.taste("zeichen:f")
+    erg = c.aktion_art_taste("f")
     assert erg.art == "geaendert" and erg.grund == "art" and c.elemente[0]["an"] is True
     assert c.taste("zeichen:x") is None
 
@@ -466,31 +488,27 @@ def test_kachel_art_zeigt_puffer_rueckfall_und_zustaende():
 
 def test_wasd_grossbuchstaben_schieben_kleinbuchstaben_nicht():
     for ch, r in (("W", "hoch"), ("A", "links"), ("S", "runter"), ("D", "rechts")):
-        assert cv.taste_deuten(ord(ch), b"") == "pan_" + r
-    assert cv.taste_deuten(ord("d"), b"") == "loeschen"    # klein bleibt wie es ist
-    assert cv.taste_deuten(ord("s"), b"") == "zeichen:s"
-
-
-def test_alt_pfeil_ueber_den_namen_und_als_folge():
-    for name, r in ((b"kLFT3", "links"), (b"kRIT3", "rechts"),
-                    (b"kUP3", "hoch"), (b"kDN3", "runter")):
-        assert cv.taste_deuten(571, name) == "pan_" + r
-    assert cv.esc_folge([curses.KEY_UP]) == "pan_hoch"          # ESC + Pfeil (Meta)
-    assert cv.esc_folge([ord(c) for c in "[1;3C"]) == "pan_rechts"
-    assert cv.esc_folge([27] + [ord(c) for c in "[D"]) == "pan_links"
-    assert cv.esc_folge([27] + [ord(c) for c in "OB"]) == "pan_runter"
-    assert cv.esc_folge([ord("x")]) is None
+        assert TAB.nimmt("notiz", ch) == "schieben"
+        c = leinwand()
+        c.fokus = "m"
+        vx, vy = c.vx, c.vy
+        druecke(c, ord(ch))
+        dx, dy = {"hoch": (0, -cv.PAN_Y), "links": (-cv.PAN_X, 0),
+                  "runter": (0, cv.PAN_Y), "rechts": (cv.PAN_X, 0)}[r]
+        assert (c.vx, c.vy) == (vx + dx, vy + dy)
+    assert TAB.nimmt("notiz", "d") == "loeschen"       # klein bleibt wie es ist
+    assert TAB.nimmt("notiz", "s") is None
 
 
 def test_wasd_wirkt_in_jedem_zustand_ausser_der_frage():
     c = leinwand()
     c.taste("rechts"); c.taste("enter")                        # greifen
     vx = c.vx
-    c.taste(cv.taste_deuten(ord("D"), b""))
+    druecke(c, ord("D"))
     assert c.vx == vx + cv.PAN_X and c.modus == "greifen"
     c.taste("enter"); c.taste("loeschen")                      # Frage
     vx = c.vx
-    c.taste(cv.taste_deuten(ord("D"), b""))
+    druecke(c, ord("D"))
     assert c.vx == vx and c.modus == "frage"
 
 
@@ -636,8 +654,17 @@ def test_ohne_uhr_immer_der_grundschritt():
 
 # ── Größe ändern (r, 2026-10-10) ──────────────────────────────────────
 
-def test_r_ist_groesse_und_frei():
-    assert cv.taste_deuten(ord("r"), b"r") == "groesse"
+def test_r_ist_groesse_und_der_gastgeber_darf_vorher_nein_sagen():
+    assert TAB.nimmt("notiz", "r") == "groesse"
+    c = leinwand()
+    c.fokus = "m"
+    gefragt = []
+    c.vor_groesse = lambda e: gefragt.append(e["id"]) or False
+    druecke(c, ord("r"))
+    assert gefragt == ["m"] and c.modus == "ruhe"
+    c.vor_groesse = lambda e: True
+    druecke(c, ord("r"))
+    assert c.modus == "groesse"
 
 
 def test_groesse_wachsen_schrumpfen_enter_behaelt():

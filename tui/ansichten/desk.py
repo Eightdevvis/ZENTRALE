@@ -5,9 +5,11 @@
 # Auswahl der Desks (+ neuer Desk), dann die Fläche. Die Fläche selbst ist
 # der Baustein tui/bausteine/canvas.py — er weiß nichts vom Desk. Diese
 # Ansicht ist die App drumherum: Desks laden und speichern (HTTP
-# /api/desk, core/desk.py), das Bearbeiten-Modal mittig zeigen, Tasten und
-# Hinweise. So kann Desk View später als eigene Hub-App ausziehen, ohne den
-# Canvas mitzunehmen, und andere Apps nehmen den Canvas ohne den Desk.
+# /api/desk, core/desk.py), das Bearbeiten-Modal mittig zeigen, die
+# Tastentabelle (Canvas und Modale bringen ihre als Bausteine mit; Tasten
+# zeigt nur die Leiste ganz unten). So kann Desk View später als eigene
+# Hub-App ausziehen, ohne den Canvas mitzunehmen, und andere Apps nehmen
+# den Canvas ohne den Desk.
 # Doku: memory/hub/desk_view.md.
 #
 # Kacheln (2026-10-10): ihr Inhalt kommt im Hintergrund über den Hub
@@ -30,19 +32,22 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import basis, bild_betrachter, desk_kacheln, desk_neu
+from . import basis, bild_betrachter, desk_kacheln, desk_neu, tasten
 from .basis import api_call
+from .tasten import Tasten
 
 try:
     from tui.bausteine import canvas as cv
     from tui.bausteine import canvas_bild
-    from tui.bausteine.canvas_arten import standard_arten
-    from tui.bausteine.textfeld import Textfeld
+    from tui.bausteine.canvas_arten import TextModal, standard_arten
+    from tui.bausteine.feld_dialog import FeldDialog
+    from tui.bausteine.textfeld import TASTEN_ZEILE, Textfeld
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     from bausteine import canvas as cv
     from bausteine import canvas_bild
-    from bausteine.canvas_arten import standard_arten
-    from bausteine.textfeld import Textfeld
+    from bausteine.canvas_arten import TextModal, standard_arten
+    from bausteine.feld_dialog import FeldDialog
+    from bausteine.textfeld import TASTEN_ZEILE, Textfeld
 
 # Rolle des Canvas → Farbrolle der TUI (ansichten/farben.py).
 FARBEN = {"raster": "faint", "schnur": "dim", "schnur_vor": "acc", "rahmen": "dim",
@@ -50,14 +55,9 @@ FARBEN = {"raster": "faint", "schnur": "dim", "schnur_vor": "acc", "rahmen": "di
           "notiz_titel": "amberhi", "bild": "ink", "bild_titel": "bright"}
 FETT = {"fokus", "griff", "groesse", "ziel", "notiz_titel", "bild_titel"}
 
-# Was die Hinweiszeile im Kasten je Zustand zeigt. Die Fußleiste ganz unten
-# kommt aus befehle.CTX_KEYS — „shift+↑↓←→" kann fussleiste.codes() (noch)
-# nicht lesen, darum steht das Schieben nur hier.
-# W A S D (Großbuchstaben) schiebt überall gleich (2026-10-10); shift+ und
-# alt+Pfeile gehen auch — die stehen nur hier, die Fußleiste zeigt W/A/S/D.
-HINWEIS = {"ruhe": "W A S D move view (also shift/alt+↑↓←→) · pgup/pgdn scroll · o open · f colour · r size",
-           "greifen": "W A S D move view, note comes along (also shift/alt+↑↓←→)",
-           "verbinden": "↑↓←→ pick target · enter/v connect · esc cancel"}
+# Die Modale, die der Desk zeigt, und wie ihre Ansichten in der
+# Tastentabelle heißen („text:schreiben" …).
+MODALE = (("text", TextModal), ("titel", canvas_bild.TitelModal), ("dialog", FeldDialog))
 
 
 def _pfad(name):
@@ -151,6 +151,7 @@ class Desk:
         c = cv.Canvas(self.arten, list(d.get("elemente") or []), list(d.get("verbindungen") or []))
         # Weich gleiten + schneller beim Gedrückthalten (2026-10-10).
         c.weich, c.uhr = True, time.monotonic
+        c.vor_groesse = self._groesse_vorbereiten
         D.update(ebene="canvas", desk=d.get("name", name), stand=d.get("stand"), msg="",
                  zentrieren=True, art_wahl=None, bild_wahl=None, canvas=c)
 
@@ -190,22 +191,6 @@ class Desk:
             D["stand"] = d["stand"]
         D["msg"] = ""
 
-    # ── Tasten ────────────────────────────────────────────────────────
-    def _esc_folge(self):
-        """Nach ESC kurz auf Folgebytes warten (Alt+x, rohe Shift+Pfeile)."""
-        s = self.z.stdscr
-        folge = []
-        s.timeout(50)
-        c = s.getch()
-        while c != -1 and len(folge) < 8:
-            folge.append(c)
-            s.timeout(0)
-            c = s.getch()
-        # Kein festes timeout(250) zurück (2026-10-10): die Hauptschleife setzt
-        # vor JEDEM getch die Kadenz selbst (33 ms, solange der Ausschnitt
-        # gleitet) — ein Wert von hier würde nur gegen sie arbeiten.
-        return folge
-
     def bewegt_sich(self):
         """Gleitet der Ausschnitt gerade? Dann tickt zentrale_tui.py schnell
         (33 ms), sonst ruhig — kein Dauerlauf, wenn nichts passiert."""
@@ -214,67 +199,124 @@ class Desk:
         return bool(D["active"] and D["ebene"] == "canvas" and c is not None
                     and c.bewegt_sich())
 
+    # ── Tasten: EINE Tabelle (tasten.py, 2026-10-11) ──────────────────
+    # Eigene Ansichten: wahl (Desks), name (neuer Desk), neu (Wähler hinter
+    # +), bild (Bild aus Input), pfad (Pfad tippen). Die Fläche und die
+    # Modale bringen ihre Tabelle als Bausteine mit (Tasten.zusammen):
+    # canvas:<zustand|art>, text:…, titel:…, dialog:…. Ohne Text =
+    # verarbeitet, aber nicht gezeigt.
+    TASTEN = Tasten.zusammen({
+        "wahl": [("↑↓", "waehlen", "select"), ("enter", "oeffnen", "open"),
+                 ("n", "neuer_desk", "new desk"), ("esc", "schliessen", "close")],
+        "name": [("type", "name_tippen", "type name"), ("enter", "name_anlegen", "create"),
+                 ("esc", "name_abbrechen", "cancel"), (TASTEN_ZEILE, "name_feld")],
+        "neu": [("↑↓", "art_waehlen", "select"), ("enter/+", "art_nehmen", "take"),
+                ("esc", "art_abbrechen", "cancel")],
+        "bild": [("↑↓", "quelle_waehlen", "select"), ("enter", "quelle_nehmen", "take"),
+                 ("esc", "bild_abbrechen", "cancel")],
+        "pfad": [("type", "pfad_tippen", "type path"), ("enter", "pfad_nehmen", "take"),
+                 ("esc", "pfad_zurueck", "back"), (TASTEN_ZEILE, "pfad_feld")],
+    }, dict({"canvas": (Tasten(cv.tabelle_mit(standard_arten(cv.Arten()))),
+                        lambda d: d.DESK["canvas"] or cv.Canvas)},
+            # Ist das Teil nicht offen, steht seine Klasse da (die Methoden
+            # gibt es trotzdem; gedrückt wird dort ohnehin nichts).
+            **{name: (Tasten(klasse.TASTEN),
+                      lambda d, k=klasse: d.DESK["modal"] if isinstance(d.DESK["modal"], k) else k)
+               for name, klasse in MODALE}))
+
+    def ansicht(self):
+        """Welche Ansicht der Tabelle gerade offen ist."""
+        D = self.DESK
+        if D["modal"] is not None:
+            name = next(n for n, k in MODALE if isinstance(D["modal"], k))
+            return name + ":" + D["modal"].ansicht()
+        if D["bild_wahl"] is not None:
+            return "bild" if D["bild_wahl"]["pfad"] is None else "pfad"
+        if D["art_wahl"] is not None:
+            return "neu"
+        if D["name"] is not None:
+            return "name"
+        if D["ebene"] == "wahl":
+            return "wahl"
+        return "canvas:" + D["canvas"].ansicht()
+
+    def _textfeld(self):
+        """Das Textfeld, in das gerade getippt wird (oder None)."""
+        D = self.DESK
+        if D["modal"] is not None:
+            feld = getattr(D["modal"], "eingabe", None)
+            return feld if isinstance(feld, Textfeld) else None
+        if D["bild_wahl"] is not None:
+            return D["bild_wahl"]["pfad"]
+        return D["name"]
+
     def taste(self, ch):
         D = self.DESK
         if ch == -1:
             return None
-        folge = self._esc_folge() if ch == 27 else None
-        if folge:                        # Alt+… / Escape-Folge: nie „abbrechen"
-            if D["canvas"] is not None and D["ebene"] == "canvas" and D["modal"] is None \
-                    and D["name"] is None and D["art_wahl"] is None and D["bild_wahl"] is None:
-                self._canvas_ereignis(cv.esc_folge(folge))
+        ansicht = self.ansicht()
+        # Umlaute kommen als UTF-8-Bytes; die Tabelle liest nur ASCII als
+        # Zeichen — das Textfeld setzt sie selbst zusammen.
+        if 0x80 <= ch <= 0xFF and self.TASTEN.freitext(ansicht):
+            feld = self._textfeld()
+            if feld is not None:
+                feld.taste(ch)
             return None
-        if D["modal"] is not None:
-            return self._taste_modal(ch)
-        if D["bild_wahl"] is not None:
-            return self._taste_bild_wahl(ch)
-        if D["art_wahl"] is not None:
-            return self._taste_art_wahl(ch)
-        if D["name"] is not None:
-            return self._taste_name(ch)
-        if D["ebene"] == "wahl":
-            return self._taste_wahl(ch)
-        self._canvas_ereignis(cv.taste_deuten(ch, cv.tastenname(ch)))
+        # Alt+… ist nie „abbrechen" (wie bisher): auch wo die Tabelle keine
+        # Alt-Taste hat (dort horcht tasten.py nicht nach), erst kurz auf
+        # eine Folge horchen — sonst schlösse Alt+x beim Tippen das Modal.
+        if ch == 27 and self.TASTEN.nimmt(ansicht, "alt+up") is None \
+                and tasten.name_von(27, self.z.stdscr, alt=True) != "esc":
+            return None
+        auf_flaeche = ansicht.startswith("canvas:")
+        if auf_flaeche and D["msg"] and D["canvas"].modus != "frage":
+            D["msg"] = ""                    # eine Meldung gilt bis zur nächsten Taste
+        erg = self.TASTEN.verteilen(self, ansicht, ch)
+        if auf_flaeche:
+            self._canvas_ergebnis(erg)
+        elif D["modal"] is not None and ansicht.split(":")[0] in dict(MODALE):
+            self._modal_ergebnis(erg)
         return None
 
-    def _taste_wahl(self, ch):
+    # ── wahl: die Desks ──
+    def aktion_waehlen(self, taste):
         D = self.DESK
-        n = len(D["desks"])
-        if ch == curses.KEY_UP:
-            D["sel"] = max(0, D["sel"] - 1)
-        elif ch == curses.KEY_DOWN:
-            D["sel"] = min(n, D["sel"] + 1)
-        elif ch in (10, 13, curses.KEY_ENTER):
-            if D["sel"] < n:
-                self.desk_oeffnen(D["desks"][D["sel"]]["name"])
-            else:
-                D["name"] = Textfeld("")
-        elif ch == ord("n"):
+        D["sel"] = max(0, D["sel"] - 1) if taste == "up" else min(len(D["desks"]), D["sel"] + 1)
+
+    def aktion_oeffnen(self, _taste):
+        D = self.DESK
+        if D["sel"] < len(D["desks"]):
+            self.desk_oeffnen(D["desks"][D["sel"]]["name"])
+        else:                                # letzte Zeile: „+ neuer desk"
             D["name"] = Textfeld("")
-        elif ch == 27:
-            D["active"] = False
-        return None
 
-    def _taste_name(self, ch):
-        D = self.DESK
-        if ch in (10, 13, curses.KEY_ENTER):
-            name = D["name"].text.strip()
-            D["name"] = None
-            if name:
-                self._anlegen(name)
-            return None
-        if D["name"].taste(ch) == "abbrechen":
-            D["name"] = None
-        return None
+    def aktion_neuer_desk(self, _taste):
+        self.DESK["name"] = Textfeld("")
 
-    def _canvas_ereignis(self, ev):
+    def aktion_schliessen(self, _taste):
+        self.DESK["active"] = False
+
+    # ── name: neuen Desk benennen ──
+    def aktion_name_tippen(self, zeichen):
+        self.DESK["name"].taste(ord(zeichen))
+
+    def aktion_name_feld(self, taste):
+        self.DESK["name"].taste_name(taste)
+
+    def aktion_name_anlegen(self, _taste):
         D = self.DESK
-        if ev is not None and D["msg"] and D["canvas"].modus != "frage":
-            D["msg"] = ""                # eine Meldung gilt bis zur nächsten Taste
-        if ev == "groesse" and not self._groesse_vorbereiten():
-            return
-        erg = D["canvas"].taste(ev)
-        if erg is None:
+        name = D["name"].text.strip()
+        D["name"] = None
+        if name:
+            self._anlegen(name)
+
+    def aktion_name_abbrechen(self, _taste):
+        self.DESK["name"] = None
+
+    # ── Fläche: was der Canvas meldet ──
+    def _canvas_ergebnis(self, erg):
+        D = self.DESK
+        if not isinstance(erg, cv.Ergebnis):
             return
         if erg.art == "zu":
             D.update(ebene="wahl", canvas=None, desk=None, msg="")
@@ -296,15 +338,14 @@ class Desk:
             elif was == "kachel_oeffnen":
                 self.kachel_oeffnen(erg.grund[1])
 
-    def _groesse_vorbereiten(self):
-        """r auf einer Kachel: erst ihre Grenzen aus dem Katalog des Hubs
-        holen (min, max — die App bestimmt, wie klein sie lesbar ist). Kurz
-        und auf Tastendruck wie `+`. → False, wenn es nicht geht (dann
-        bleibt die Größe, und die Hinweiszeile sagt warum)."""
+    def _groesse_vorbereiten(self, fokus):
+        """r auf einer Kachel (Haken vor_groesse des Canvas): erst ihre
+        Grenzen aus dem Katalog des Hubs holen (min, max — die App bestimmt,
+        wie klein sie lesbar ist). Kurz und auf Tastendruck wie `+`. → False,
+        wenn es nicht geht (dann bleibt die Größe, und die Statuszeile sagt
+        warum)."""
         D = self.DESK
-        c = D["canvas"]
-        fokus = c.element(c.fokus) if c.modus == "ruhe" else None
-        if fokus is None or not desk_kacheln.ist_kachel(fokus):
+        if not desk_kacheln.ist_kachel(fokus):
             return True
         try:
             g = desk_kacheln.grenzen(fokus, api_call("/api/kacheln"))
@@ -343,33 +384,33 @@ class Desk:
         D["canvas"].neu_ablegen(wahl.neu(cv.neue_id(), 0, 0, werte, innen))
         return None
 
-    def _taste_art_wahl(self, ch):
+    # ── neu: Wähler hinter + ──
+    def aktion_art_waehlen(self, taste):
+        w = self.DESK["art_wahl"]
+        w["sel"] = max(0, w["sel"] - 1) if taste == "up" else min(len(w["arten"]) - 1, w["sel"] + 1)
+
+    def aktion_art_nehmen(self, _taste):
         D = self.DESK
         w = D["art_wahl"]
-        if ch == curses.KEY_UP:
-            w["sel"] = max(0, w["sel"] - 1)
-        elif ch == curses.KEY_DOWN:
-            w["sel"] = min(len(w["arten"]) - 1, w["sel"] + 1)
-        elif ch in (10, 13, curses.KEY_ENTER, ord("+")):
-            art = w["arten"][w["sel"]] if w["arten"] else None
-            D["art_wahl"] = None
-            if art is None:
-                return None
-            if art.name == "bild":
-                self._bild_wahl_oeffnen()
-            elif isinstance(art, desk_neu.KatalogWahl):
-                # Erst fragen (Schema aus dem Katalog), dann hinlegen; ohne
-                # Felder gleich.
-                dialog = art.neu_dialog()
-                if dialog.felder:
-                    D["modal"], D["modal_neu"], D["modal_id"] = dialog, art, None
-                else:
-                    D["msg"] = self._kachel_anlegen(art, {}) or ""
+        art = w["arten"][w["sel"]] if w["arten"] else None
+        D["art_wahl"] = None
+        if art is None:
+            return
+        if art.name == "bild":
+            self._bild_wahl_oeffnen()
+        elif isinstance(art, desk_neu.KatalogWahl):
+            # Erst fragen (Schema aus dem Katalog), dann hinlegen; ohne
+            # Felder gleich.
+            dialog = art.neu_dialog()
+            if dialog.felder:
+                D["modal"], D["modal_neu"], D["modal_id"] = dialog, art, None
             else:
-                D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0))
-        elif ch == 27:
-            D["art_wahl"] = None
-        return None
+                D["msg"] = self._kachel_anlegen(art, {}) or ""
+        else:
+            D["canvas"].neu_ablegen(art.neu(cv.neue_id(), 0, 0))
+
+    def aktion_art_abbrechen(self, _taste):
+        self.DESK["art_wahl"] = None
 
     def _bild_wahl_oeffnen(self):
         D = self.DESK
@@ -380,32 +421,38 @@ class Desk:
             D["msg"] = "bilder nicht lesbar: " + self._fehlertext(e)
         D["bild_wahl"] = {"quellen": quellen, "sel": 0, "pfad": None}
 
-    def _taste_bild_wahl(self, ch):
-        D = self.DESK
-        w = D["bild_wahl"]
-        if w["pfad"] is not None:                   # Pfad wird getippt
-            if ch in (10, 13, curses.KEY_ENTER):
-                text = w["pfad"].text.strip()
-                if text:
-                    self._bild_hinlegen(text)
-                else:
-                    w["pfad"] = None
-            elif w["pfad"].taste(ch) == "abbrechen":
-                w["pfad"] = None
-            return None
+    # ── bild: Bild aus Input, pfad: Pfad tippen ──
+    def aktion_quelle_waehlen(self, taste):
+        w = self.DESK["bild_wahl"]
         n = len(w["quellen"])                       # letzte Zeile: Pfad tippen
-        if ch == curses.KEY_UP:
-            w["sel"] = max(0, w["sel"] - 1)
-        elif ch == curses.KEY_DOWN:
-            w["sel"] = min(n, w["sel"] + 1)
-        elif ch in (10, 13, curses.KEY_ENTER):
-            if w["sel"] < n:
-                self._bild_hinlegen(w["quellen"][w["sel"]]["name"])
-            else:
-                w["pfad"] = Textfeld("")
-        elif ch == 27:
-            D["bild_wahl"] = None
-        return None
+        w["sel"] = max(0, w["sel"] - 1) if taste == "up" else min(n, w["sel"] + 1)
+
+    def aktion_quelle_nehmen(self, _taste):
+        w = self.DESK["bild_wahl"]
+        if w["sel"] < len(w["quellen"]):
+            self._bild_hinlegen(w["quellen"][w["sel"]]["name"])
+        else:
+            w["pfad"] = Textfeld("")
+
+    def aktion_bild_abbrechen(self, _taste):
+        self.DESK["bild_wahl"] = None
+
+    def aktion_pfad_tippen(self, zeichen):
+        self.DESK["bild_wahl"]["pfad"].taste(ord(zeichen))
+
+    def aktion_pfad_feld(self, taste):
+        self.DESK["bild_wahl"]["pfad"].taste_name(taste)
+
+    def aktion_pfad_nehmen(self, _taste):
+        w = self.DESK["bild_wahl"]
+        text = w["pfad"].text.strip()
+        if text:
+            self._bild_hinlegen(text)
+        else:
+            w["pfad"] = None
+
+    def aktion_pfad_zurueck(self, _taste):
+        self.DESK["bild_wahl"]["pfad"] = None
 
     def _bild_hinlegen(self, quelle):
         """Bild in den Desk-Ordner kopieren lassen, dann als neues Element
@@ -513,9 +560,10 @@ class Desk:
         if D["canvas"] is not None:
             D.update(active=True, msg="")
 
-    def _taste_modal(self, ch):
+    def _modal_ergebnis(self, was):
+        """Was ein Modal nach einer Taste meldet: "speichern", "abbrechen"
+        oder None (weiter tippen)."""
         D = self.DESK
-        was = D["modal"].taste(ch)
         if D["modal_neu"] is not None and was in ("speichern", "abbrechen"):
             art, werte = D["modal_neu"], D["modal"].aenderungen()
             grund = self._kachel_anlegen(art, werte) if was == "speichern" else None
@@ -536,21 +584,20 @@ class Desk:
             D["modal"] = None
         return None
 
-    def tasten_text(self):
-        """Hinweiszeile im Kasten (Frage, Meldung oder was gerade geht)."""
+    def status_text(self):
+        """Statuszeile im Kasten: die Frage, die Größe beim Ändern (mit
+        Anschlag), eine Meldung — Tasten zeigt nur die Leiste ganz unten."""
         D = self.DESK
         c = D["canvas"]
         if c and c.modus == "frage":
-            return c.frage["text"] + "  j yes · n no"
+            return c.frage["text"]
         if c and c.modus == "groesse":
             # Größe immer sichtbar, auch wenn eine Grenze anschlägt.
             e = c.element(c.groesse["id"])
             groesse = "%d×%d" % (e["w"], e["h"]) if e else "?"
-            rest = c.groesse["anschlag"] or "←→ width · ↑↓ height · enter keep · esc undo"
-            return "%s · %s" % (groesse, rest)
-        if D["msg"]:
-            return D["msg"]
-        return HINWEIS.get(c.modus if c else "ruhe", "")
+            anschlag = c.groesse["anschlag"]
+            return "%s · %s" % (groesse, anschlag) if anschlag else groesse
+        return D["msg"]
 
     # ── Zeichnen ──────────────────────────────────────────────────────
     def titel(self):
@@ -583,7 +630,6 @@ class Desk:
             z.addclip(top + h - 3, mx + 3, "name: ", 6, C["dim"])
             z.addclip(top + h - 3, mx + 9, text, w - 12, C["bright"])
             z.addclip(top + h - 3, mx + 9 + s, (text[s:s + 1] or " "), 1, C["bright"] | curses.A_REVERSE)
-            z.addclip(top + h - 2, mx + 3, "enter create · esc cancel", w - 6, C["faint"])
         elif D["msg"]:
             z.addclip(top + h - 2, mx + 3, D["msg"], w - 6, C["warn"])
 
@@ -609,10 +655,10 @@ class Desk:
         # will — sonst springt die Zahl voraus (2026-10-10).
         ax, ay = c.anzeige_lage()
         lage = "%d,%d" % (ax + cw // 2, ay + ch_ // 2)
-        hinweis = self.tasten_text()
+        status = self.status_text()
         anschlag = c.modus == "groesse" and c.groesse["anschlag"]
         farbe = C["warn"] if (D["msg"] or c.modus == "frage" or anschlag) else C["faint"]
-        z.addclip(top + h - 2, mx + 2, hinweis, max(0, w - 6 - len(lage)), farbe)
+        z.addclip(top + h - 2, mx + 2, status, max(0, w - 6 - len(lage)), farbe)
         z.addclip(top + h - 2, mx + w - 2 - len(lage), lage, len(lage), C["faint"])
         if D["modal"] is not None:
             self._draw_modal(top, mx, h, w)
@@ -632,7 +678,7 @@ class Desk:
             return self.z.pix_attr(rgb, C["pix_bg"])
         return C.get(FARBEN.get(rolle, rolle), 0)
 
-    def _kasten(self, top, mx, h, w, titel, zeilen, sel, fuss, mh=None):
+    def _kasten(self, top, mx, h, w, titel, zeilen, sel, mh=None):
         """Kleiner Wähler mittig über der Fläche."""
         C, z = self.z.C, self.z
         mw = max(24, min(56, w - 6))
@@ -648,13 +694,12 @@ class Desk:
             gewaehlt = oben + j == sel
             z.addclip(y0 + 1 + j, x0 + 2, ("› " if gewaehlt else "  ") + text, mw - 4,
                       (C["acc"] | curses.A_BOLD) if gewaehlt else C["ink"])
-        z.addclip(y0 + mh - 2, x0 + 2, fuss, mw - 4, C["faint"])
         return y0, x0, mw, mh
 
     def _draw_art_wahl(self, top, mx, h, w):
         wahl = self.DESK["art_wahl"]
         self._kasten(top, mx, h, w, "neu", [a.neu_label for a in wahl["arten"]],
-                     wahl["sel"], "enter take · esc cancel")
+                     wahl["sel"])
 
     def _draw_bild_wahl(self, top, mx, h, w):
         C, z = self.z.C, self.z
@@ -663,10 +708,10 @@ class Desk:
         leer = [] if wahl["quellen"] else ["(keine bilder in ~/Zentrale/Input)"]
         if wahl["pfad"] is None:
             self._kasten(top, mx, h, w, "bild aus Input", leer + zeilen,
-                         wahl["sel"] + len(leer), "enter take · esc cancel")
+                         wahl["sel"] + len(leer))
             return
         y0, x0, mw, mh = self._kasten(top, mx, h, w, "bild: pfad", leer + zeilen,
-                                      len(leer) + len(zeilen) - 1, "enter take · esc back")
+                                      len(leer) + len(zeilen) - 1)
         sicht, (_r, s) = wahl["pfad"].anzeige(max(1, mw - 12), 1)
         text = sicht[0] if sicht else ""
         z.addclip(y0 + mh - 3, x0 + 2, "pfad: ", 6, C["dim"])
@@ -706,5 +751,3 @@ class Desk:
             zeile = sicht[cr] if sicht else ""
             z.addclip(y0 + 1 + cr, x0 + 2 + cs, zeile[cs:cs + 1] or " ", 1,
                       C["bright"] | curses.A_REVERSE)
-        fuss = " · ".join("%s %s" % t for t in m.tasten())
-        z.addclip(y0 + mh - 2, x0 + 2, fuss, mw - 4, C["faint"])

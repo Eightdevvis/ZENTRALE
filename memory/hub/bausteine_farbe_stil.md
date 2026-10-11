@@ -49,16 +49,16 @@ self.modal.zeichne(self.z, y, x, h, w)
 
 - `Farbwaehler(start="#rrggbb" | None)`; `taste(ch)` → None |
   `("fertig", "#rrggbb")` | `("abbruch",)`; `hex`, `rgb`, `zeichne(z, y, x, h, w)`,
-  `mittig(H, W, h, w)`, `tasten()` (für eine Fußzeile).
+  `mittig(H, W, h, w)`, `TASTEN`/`ansicht()` (Tastentabelle, unten).
 - `Stylebox(stil, optionen, titel="stil", text="Beispiel")`; `taste(ch)` →
   None | `("fertig", änderung)` | `("abbruch",)`; danach `ergebnis` (dict, bei
   Abbruch None). Die Änderung anwenden mit **`stil.anwenden(alt, änderung)`**,
   nicht mit `dict.update` (das schriebe None hinein). `zeilen()` und `vorschau(b, h)` sind rein (Tests, andere
   Zeichner). Ist der Farbwähler offen, zeichnet `zeichne` ihn an derselben
-  Stelle, und `tasten()` liefert seine Tasten. **`groesse(H, W)`** → (h, w)
+  Stelle, und `ansicht()` meldet „farbe:…" (seine Tasten). **`groesse(H, W)`** → (h, w)
   aus dem Inhalt (seit 11.10.2026): Liste und Vorschau nebeneinander
   (Vorschau 7 Zeilen, nur Schrift angeboten: 3), sonst untereinander, dazu
-  Leerzeile, Fußzeile, Rahmen; breit genug für die Fußzeile; höchstens H×W.
+  Leerzeile, Hinweiszeile, Rahmen; höchstens H×W.
   Mit offenem Farbwähler 22×72. Vorher setzten die Aufrufer fest 22 Zeilen
   (Kalender `kalender_bedienung._zeichne_advanced`, `stil_probe.py`) — bei 6
   Eigenschaften blieben 11 Zeilen leer.
@@ -128,8 +128,8 @@ self.modal.zeichne(self.z, y, x, h, w)
   F-Tasten nicht als einzige Belegung. Markiert: Regler im Fokus hat links
   ein `▶` und rechts ein inverses `◀` an der Helligkeit (im 24-Bit-Weg steht
   das `▶` in der Fläche selbst), in der Seite steht `▸ kreis` bzw.
-  `▸ helligkeit`, und die Fußzeile beginnt mit dem Ziel von Tab
-  (`tab regler` / `tab kreis`). Die Stylebox reicht Tab an den offenen
+  `▸ helligkeit`, und die Leiste unten nennt das Ziel von Tab
+  (`tab brightness` / `tab circle`). Die Stylebox reicht Tab an den offenen
   Farbwähler durch (sie fragt ihn zuerst), genauso Kalender → advanced →
   Stylebox.
 
@@ -252,3 +252,14 @@ die Box (die Box bleibt offen), sein Esc lässt den alten Wert stehen.
   Hex-Wert stimmt trotzdem.
 - Bei Zoom 16 liegen Nachbarn im 24-Bit-Kreis oft nur noch 1 Stufe (von
   255) auseinander — feiner kann keine Bildschirmfarbe.
+
+## Tasten (Tastentabelle, 2026-10-11)
+
+Farbwähler und Stylebox tragen je eine Tabelle `TASTEN` (Kurzform aus
+`tui/ansichten/tasten.py`) mit `ansicht()` und `aktion_<name>`-Methoden
+(`tui/bausteine/tastenteil.py`). Farbwähler: `kreis`, `regler`, `hex`.
+Stylebox: je Art des Feldes `wahl`, `farbe`, `gesperrt` (`leer` ohne
+Felder), bei offenem Farbwähler `farbe:` + dessen Ansicht. Die Fußzeilen mit
+Tasten (`tasten()`) sind weg — Tasten zeigt nur die Leiste ganz unten; ein
+Gastgeber bindet die Tabelle mit `Tasten.zusammen` ein. `taste(ch)` geht
+weiter (über dieselbe Tabelle), für Gastgeber ohne Tabelle.

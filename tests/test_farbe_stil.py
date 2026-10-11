@@ -871,7 +871,7 @@ def test_tab_und_shift_tab_wechseln_den_fokus():
     assert f.fokus == fw.REGLER
     f.taste(curses.KEY_BTAB)
     assert f.fokus == fw.KREIS
-    assert f.tasten()[0] == ("tab", "regler")
+    assert f.ansicht() == "kreis" and fw.TASTEN["kreis"][0] == ("tab", "fokus", "brightness")
 
 
 def test_regler_im_fokus_hoch_runter_aendert_helligkeit_nicht_den_cursor():
@@ -897,7 +897,7 @@ def test_regler_im_fokus_hoch_runter_aendert_helligkeit_nicht_den_cursor():
     for _ in range(n + 5):
         f.taste(curses.KEY_DOWN)
     assert f.hex == "#000000"
-    assert f.tasten()[:2] == [("tab", "kreis"), ("↑↓", "hell")]
+    assert f.ansicht() == "regler" and fw.TASTEN["regler"][0] == ("tab", "fokus", "circle")
 
 
 def test_kreis_im_fokus_hoch_runter_bewegt_cursor_nicht_helligkeit():
@@ -929,11 +929,11 @@ def test_fokus_ist_im_bild_markiert(echt):
     f = fw.Farbwaehler("#ff8040")
     z = _EchtZ() if echt else _Z()
     f.zeichne(z, 0, 0, 22, 70)
-    assert "▸ kreis" in z.text() and "tab regler" in z.text()
+    assert "▸ kreis" in z.text() and "tab" not in z.text()      # Tasten nur in der Leiste
     f.taste(9)
     z = _EchtZ() if echt else _Z()
     f.zeichne(z, 0, 0, 22, 70)
-    assert "▸ helligkeit" in z.text() and "tab kreis" in z.text()
+    assert "▸ helligkeit" in z.text()
     if echt:
         kreis = z.flaechen[0][2]
         assert any(c[0] == "▶" for zeile in kreis for c in zeile)
@@ -1046,3 +1046,23 @@ def test_stylebox_hoehe_ist_der_inhalt(W):
     assert any("Schrift" in t for t in text) and any("Beispiel" in t for t in text)
     assert h == (7 if W >= 80 else 4 + 1 + 1 + nur.vorschau_h)
     assert voll.groesse(8, W)[0] == 8                   # kleiner Schirm: Obergrenze
+
+
+# ── Tastentabelle (2026-10-11): Hinweise nur noch in der Leiste ─────────────
+def test_stylebox_und_farbwaehler_tragen_ihre_tastentabelle():
+    from tui.ansichten.tasten import Tasten
+    sb = Stylebox(START, ALLES)
+    assert Tasten(Stylebox.TASTEN).fehlende_methoden(sb) == []
+    assert Tasten(fw.TASTEN).fehlende_methoden(fw.Farbwaehler()) == []
+    sb.feld = [f["art"] for f in sb.felder].index("farbe")
+    assert sb.ansicht() == "farbe"
+    sb.taste(ord(" "))
+    assert sb.ansicht() == "farbe:kreis"               # offener Farbwähler: dessen Tasten
+    sb.taste(9)
+    assert sb.ansicht() == "farbe:regler"
+    sb.taste(ord("#"))
+    assert sb.ansicht() == "farbe:hex"
+    sb.taste(27)                                        # Esc schließt nur das Hex-Feld
+    assert sb.ansicht() == "farbe:regler"
+    sb.taste(27)
+    assert sb.ansicht() == "farbe"

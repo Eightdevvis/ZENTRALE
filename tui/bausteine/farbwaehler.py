@@ -23,7 +23,10 @@
 #
 # Baustein-Regeln (tui_bauplan.md „Bausteine"): kennt keinen Aufrufer,
 # speichert nichts. `taste(ch)` → None | ("fertig", "#rrggbb") |
-# ("abbruch",). Gerechnet wird rein (`rad_zellen`, `regler`), gezeichnet
+# ("abbruch",). Die Tasten stehen in EINER Tabelle (TASTEN, Ansichten
+# kreis | regler | hex, 2026-10-11, tui/bausteine/tastenteil.py); ein
+# Gastgeber mit Tastentabelle bindet sie ein, Hinweise zeigt nur die Leiste
+# ganz unten. Gerechnet wird rein (`rad_zellen`, `regler`), gezeichnet
 # über den Kontext der TUI (`zeichne(z, y, x, h, w)`: safe_addstr,
 # pix_attr, draw_box). Zwei Farbwege (2026-10-11): mit 24 Bit (Kontext.echt,
 # tui/echtfarbe.py) malt `rad_echt` exakte Halbblöcke an curses vorbei;
@@ -39,8 +42,10 @@ from functools import lru_cache
 
 try:
     from tui import pixel
+    from tui.bausteine import tastenteil
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
+    from bausteine import tastenteil
 
 import stil as stil_kern                # core/stil.py (Pfad: bausteine/__init__.py)
 
@@ -61,15 +66,23 @@ RESERVE = 8                             # Paare für Muster, Kreis-Marke, Rahmen
 HEX_ZIFFERN = "0123456789abcdefABCDEF"
 MARKE = "○"                             # einspaltig (East-Asian-Width A)
 
-ENTER = (10, 13, curses.KEY_ENTER)
-ZURUECK = (curses.KEY_BACKSPACE, 127, 8)
-ESC = 27
-TAB = (9, curses.KEY_BTAB)              # Tab / Shift+Tab: Fokus Kreis ↔ Regler
 KREIS, REGLER = "kreis", "regler"       # wohin die Pfeile gehen
-HOCH = (curses.KEY_PPAGE, ord("]"))
-RUNTER = (curses.KEY_NPAGE, ord("["))
-REIN = (ord("+"), ord("="))
-RAUS = (ord("-"), ord("_"))
+
+# Tasten (Tastentabelle, 2026-10-11). Ohne Text = verarbeitet, nicht gezeigt.
+_IMMER = [("+/-", "zoom", "zoom"), ("=/_", "zoom"), ("]/[ pgup pgdn", "hell"),
+          ("#", "hex", "hex"), ("enter", "nehmen", "ok"), ("esc", "abbrechen", "back")]
+TASTEN = {
+    "kreis": [("tab", "fokus", "brightness"), ("shift+tab", "fokus"),
+              ("↑↓←→", "pfeil", "colour")] + _IMMER,
+    # ←→ am Regler: nichts (kein heimlicher Kreis-Schritt)
+    "regler": [("tab", "fokus", "circle"), ("shift+tab", "fokus"),
+               ("↑↓", "regler", "brightness")] + _IMMER,
+    # Hex-Feld: Ziffern/a–f tippen; eine andere Taste schließt das Feld und
+    # gilt dann dem Kreis bzw. Regler.
+    "hex": [("type", "hex_tippen", "type hex"), ("⌫", "hex_weg"), ("#", "hex_leeren"),
+            ("enter", "hex_nehmen", "ok"), ("esc", "hex_zu", "close"),
+            ("any key", "hex_sonst")],
+}
 
 
 # ── Geometrie und Farbe (rein) ──────────────────────────────────────────────
@@ -411,75 +424,87 @@ class Farbwaehler:
                             STUFEN[0], (0, 0, 0), "half", seiten)
         return unterscheidbar(zellen, self.farbe_256) >= GRENZE_256
 
+    def __repr__(self):                  # Zustand sichtbar (Tests vergleichen repr)
+        return "Farbwaehler(%r)" % ((self.hex, self.zoom_stufe, self.fokus, self.hex_feld),)
+
+    # ── Tasten ──────────────────────────────────────────────────────────
+    TASTEN = TASTEN
+
+    def ansicht(self):
+        if self.hex_feld is not None:
+            return "hex"
+        return "regler" if self.fokus == REGLER else "kreis"
+
     def taste(self, ch):
         """→ None | ("fertig", "#rrggbb") | ("abbruch",)."""
-        if self.hex_feld is not None:
-            erg = self._taste_hex(ch)
-            if erg != "weiter":
-                return erg
+        return tastenteil.verteilen(self, ch)
+
+    def _los(self):
         self.fehler = self.hinweis = ""
-        if ch == ESC:
-            return ("abbruch",)
-        if ch in ENTER:
-            return ("fertig", self.hex)
-        if ch in TAB:
-            self.fokus = REGLER if self.fokus == KREIS else KREIS
-        elif self.fokus == REGLER and ch in (curses.KEY_UP, curses.KEY_DOWN):
-            self._regler(1 if ch == curses.KEY_UP else -1)
-        elif self.fokus == REGLER and ch in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            pass                        # ←→ am Regler: nichts (kein heimlicher Kreis-Schritt)
-        elif ch == curses.KEY_LEFT:
-            self._pfeil(0, -1)
-        elif ch == curses.KEY_RIGHT:
-            self._pfeil(0, 1)
-        elif ch == curses.KEY_UP:
-            self._pfeil(-1, 0)
-        elif ch == curses.KEY_DOWN:
-            self._pfeil(1, 0)
-        elif ch in REIN:
-            self._zoomen(1)
-        elif ch in RAUS:
-            self._zoomen(-1)
-        elif ch in HOCH or ch in RUNTER:
-            d = self.wert_schritt * (1 if ch in HOCH else -1)
-            self.wert, self._fest = max(0.0, min(1.0, self.wert + d)), None
-        elif ch == ord("#"):
-            self.hex_feld = ""
+
+    def aktion_fokus(self, _taste):
+        self._los()
+        self.fokus = REGLER if self.fokus == KREIS else KREIS
+
+    def aktion_pfeil(self, taste):
+        self._los()
+        self._pfeil(*{"up": (-1, 0), "down": (1, 0), "left": (0, -1), "right": (0, 1)}[taste])
+
+    def aktion_regler(self, taste):
+        self._los()
+        self._regler(1 if taste == "up" else -1)
+
+    def aktion_zoom(self, taste):
+        self._los()
+        self._zoomen(1 if taste in ("+", "=") else -1)
+
+    def aktion_hell(self, taste):
+        self._los()
+        d = self.wert_schritt * (1 if taste in ("]", "pgup") else -1)
+        self.wert, self._fest = max(0.0, min(1.0, self.wert + d)), None
+
+    def aktion_hex(self, _taste):
+        self._los()
+        self.hex_feld = ""
+
+    def aktion_nehmen(self, _taste):
+        self._los()
+        return ("fertig", self.hex)
+
+    def aktion_abbrechen(self, _taste):
+        return ("abbruch",)
+
+    # Hex-Feld
+    def aktion_hex_tippen(self, zeichen):
+        if zeichen not in HEX_ZIFFERN:
+            return self.aktion_hex_sonst(zeichen)
+        if len(self.hex_feld) < 6:
+            self.hex_feld += zeichen.lower()
+            if len(self.hex_feld) == 6:
+                self.setzen("#" + self.hex_feld)     # sofort sehen
         return None
 
-    def _taste_hex(self, ch):
-        """Tasten im Hex-Feld. "weiter" = die Taste gehört dem Kreis."""
-        if ch == ESC:
-            self.hex_feld = None
-            return None
-        if ch in ENTER:
-            if len(self.hex_feld) in (3, 6) and self.setzen("#" + self.hex_feld):
-                self.hex_feld = None
-                return ("fertig", self.hex)
-            self.fehler = "hex: 3 oder 6 zeichen 0–9 a–f"
-            return None
-        if ch in ZURUECK:
-            self.hex_feld = self.hex_feld[:-1]
-            return None
-        if ch == ord("#"):
-            self.hex_feld = ""
-            return None
-        if 0 <= ch < 256 and chr(ch) in HEX_ZIFFERN:
-            if len(self.hex_feld) < 6:
-                self.hex_feld += chr(ch).lower()
-                if len(self.hex_feld) == 6:
-                    self.setzen("#" + self.hex_feld)     # sofort sehen
-            return None
-        self.hex_feld = None            # andere Taste: Feld zu, Taste gilt dem Kreis
-        return "weiter"
+    def aktion_hex_weg(self, _taste):
+        self.hex_feld = self.hex_feld[:-1]
 
-    def tasten(self):
-        """Fußzeile; die erste Taste sagt, wohin Tab den Fokus legt."""
-        if self.fokus == REGLER:
-            vorne = [("tab", "kreis"), ("↑↓", "hell")]
-        else:
-            vorne = [("tab", "regler"), ("pfeile", "farbe")]
-        return vorne + [("+−", "zoom"), ("#", "hex"), ("enter", "ok"), ("esc", "zurück")]
+    def aktion_hex_leeren(self, _taste):
+        self.hex_feld = ""
+
+    def aktion_hex_nehmen(self, _taste):
+        if len(self.hex_feld) in (3, 6) and self.setzen("#" + self.hex_feld):
+            self.hex_feld = None
+            return ("fertig", self.hex)
+        self.fehler = "hex: 3 oder 6 zeichen 0–9 a–f"
+        return None
+
+    def aktion_hex_zu(self, _taste):
+        self.hex_feld = None
+
+    def aktion_hex_sonst(self, taste):
+        """Andere Taste: Feld zu, die Taste gilt dem Kreis (bzw. Regler)."""
+        self.hex_feld = None
+        self._los()
+        return tastenteil.weiter(self, taste)
 
     # ── Bild (rein) ─────────────────────────────────────────────────────
     @staticmethod
@@ -544,8 +569,6 @@ class Farbwaehler:
             z.safe_addstr(iy + 1, ix, "dieses terminal zeigt", C.get("dim", 0))
             z.safe_addstr(iy + 2, ix, "keine farben — # tippt hex", C.get("dim", 0))
         self._zeichne_seite(z, iy, ix + kb + 6, iw - kb - 6, farbig, echt)
-        hinweis = " · ".join("%s %s" % t for t in self.tasten())
-        z.safe_addstr(y + h - 2, ix, hinweis[:iw], C.get("faint", 0))
 
     def _marke(self, kh, kb):
         b, h, seiten = self.geo
