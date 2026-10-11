@@ -1369,28 +1369,18 @@ def erzeugte_einsetzen(an: bool) -> None:
     (aus) — Tests und Prüfstand schalten hiermit um. profil.gross.TOOLS
     entsteht beim Import; wer danach umschaltet, baut mit schema() neu."""
     werkzeug_erzeuger.einsetzen(WERKZEUGE, _NACH_NAME, ERZEUGT, an, _VON_HAND)
-    # Was danach angehängt wurde (Ablage, Tabellen; 2026-10-11), bleibt hinter
-    # den erzeugten Kalender-Werkzeugen — sonst ergäbe aus/an eine andere
-    # Reihenfolge als beim Import (Prompt-Cache, gross.TOOLS).
-    for w in _HINTEN:
-        WERKZEUGE.remove(w)
-        WERKZEUGE.append(w)
-
-
-_HINTEN: list = []
+    for w in globals().get("_HINTEN", ()):    # bleiben hinter den erzeugten (wie beim Import)
+        WERKZEUGE.append(WERKZEUGE.pop(WERKZEUGE.index(w)))
 
 
 erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
 
-# Ablage ersetzen/Papierkorb (2026-10-11, core/werkzeug_ablage.py): auch
-# erzeugt, aber immer da (kein handgeschriebener Zwilling); hinten an.
+# Ablage ersetzen/Papierkorb + Tabellen (2026-10-11, core/werkzeug_ablage.py,
+# core/werkzeug_tabelle.py): immer da, hinten an.
 ERZEUGT_FEST = list(werkzeug_ablage.EINTRAEGE)
-WERKZEUGE += ERZEUGT_FEST
-_NACH_NAME.update({w.name: w for w in ERZEUGT_FEST})
-# Tabellen (2026-10-11, Skill excel, core/werkzeug_tabelle.py): hinten an.
-WERKZEUGE += werkzeug_tabelle.EINTRAEGE
-_HINTEN += ERZEUGT_FEST + list(werkzeug_tabelle.EINTRAEGE)
-_NACH_NAME.update({w.name: w for w in werkzeug_tabelle.EINTRAEGE})
+_HINTEN = ERZEUGT_FEST + list(werkzeug_tabelle.EINTRAEGE)
+WERKZEUGE += _HINTEN
+_NACH_NAME.update({w.name: w for w in _HINTEN})
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht
