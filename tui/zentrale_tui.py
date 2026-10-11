@@ -996,7 +996,7 @@ def bild_zeichnen(u):
 
     # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
     safe_addstr(sep_row, 0, "─" * W, C["faint"])
-    bz.zeichne_zeile(input_row, W, erreichbar=not in_text_entry(z))
+    bz.zeichne_zeile(input_row, W)
 
     # ── Fußleiste: NUR die Tasten, die im Fenster mit dem Fokus wirken ──
     # (seit 07.10.2026, ansichten/fussleiste.py — vorher stand hier fast

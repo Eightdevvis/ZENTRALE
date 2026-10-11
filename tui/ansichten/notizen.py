@@ -257,8 +257,8 @@ class Notizen:
     TASTEN = Tasten({
         "liste": [
             ("↑↓", "waehlen", "select"), ("k/j", "waehlen"),
-            ("enter", "oeffnen", "open"), ("n/N", "neu", "new"),
-            ("d/D", "loeschen", "delete"), ("esc", "zurueck", "back"),
+            ("enter", "oeffnen", "open"), ("n", "neu", "new"), ("N", "neu"),
+            ("d", "loeschen", "delete"), ("D", "loeschen"), ("esc", "zurueck", "back"),
             ("q/Q", "beenden"),
         ],
         "liste:frage": [
@@ -271,8 +271,9 @@ class Notizen:
         "notiz": [
             ("↑↓", "block_waehlen", "block"), ("k/j", "block_waehlen"),
             ("t/l/f", "block_neu", "new text/list/float"), ("T/L/F", "block_neu"),
-            ("e/enter", "bearbeiten", "edit"), ("d/D", "block_loeschen", "delete block"),
-            ("r/R", "titel", "title"), ("n/N", "uebersicht", "overview"),
+            ("e/enter", "bearbeiten", "edit"), ("d", "block_loeschen", "delete block"),
+            ("D", "block_loeschen"), ("r", "titel", "title"), ("R", "titel"),
+            ("n", "uebersicht", "overview"), ("N", "uebersicht"),
             ("esc", "schliessen", "save & close"), ("q/Q", "beenden"),
         ],
         "notiz:frage": [

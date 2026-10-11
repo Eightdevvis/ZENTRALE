@@ -233,10 +233,10 @@ class Befehlszeile:
             {"acc": C["acc"], "num": C["num"], "dim": C["dim"], "faint": C["faint"]},
         )
 
-    def zeichne_zeile(self, input_row, W, erreichbar=True):
-        """Die Zeile selbst (›): offener Befehl, sonst Rückmeldung oder Hinweis.
-        erreichbar=False (Freitext-Fenster wie der Chat, 2026-10-07): dort
-        öffnet '/' die Zeile nicht, also auch kein Hinweis darauf."""
+    def zeichne_zeile(self, input_row, W):
+        """Die Zeile selbst (›): offener Befehl, sonst Rückmeldung. Kein
+        Tasten-Hinweis mehr (2026-10-11): „/ commands" steht in der Leiste
+        darunter, und nur dort, wo '/' die Zeile öffnet — EINE Leiste."""
         z = self.z
         C, addclip, safe_addstr = z.C, z.addclip, z.safe_addstr
         if self.cmd_mode:
@@ -248,5 +248,3 @@ class Befehlszeile:
             safe_addstr(input_row, 1, "›", C["faint"])
             if self.cmd_msg:
                 addclip(input_row, 3, self.cmd_msg, W - 6, C["warn"])
-            else:
-                safe_addstr(input_row, 3, "/ for commands" if erreichbar else "", C["faint"])
