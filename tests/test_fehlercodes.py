@@ -21,6 +21,7 @@ import gedaechtnis
 import input_dateien
 import ki_ablage_adapter
 import ki_pdf_word
+import ki_tabelle
 import ki_werkzeuge
 import skills
 import werkzeug_befund
@@ -28,7 +29,7 @@ import werkzeug_register
 from test_werkzeug_belege import umgebung  # noqa: F401  — Wegwerf-Umgebung
 
 CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-_CODE = re.compile(r"^[KWNADMSPIBZ]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+_CODE = re.compile(r"^[KWNADMSPTIBZ]-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 
 
 def _baeume():
@@ -139,7 +140,9 @@ def _vorbereiten():
     # Ein Dokument im Papierkorb für restore_document (2026-10-11).
     weg = ablage.anlegen("Weg", "x", "text")["id"]
     ablage.papierkorb(weg, True, grund="von Sasha entfernt")
-    return dict(zip(("doc", "pdf", "docx", "weg"), ids + [weg]))
+    x = ki_werkzeuge._verteilen("create_xlsx", {"titel": "X", "blaetter": [{"zeilen": [["a", 1]]}]})
+    xlsx = x.split("(id ", 1)[1].split(")", 1)[0]
+    return dict(zip(("doc", "pdf", "docx", "weg", "xlsx"), ids + [weg, xlsx]))
 
 
 def _faelle(ids):
@@ -182,6 +185,11 @@ def _faelle(ids):
         ("restore_document", {"id": ids["weg"]},
          [(ki_ablage_adapter.AblageAdapter, "nachlesen",
            lambda self, k: {"id": k, "papierkorb": "2026-10-11T00:00:00+00:00"})]),
+        # Tabellen (2026-10-11): nachgelesen stimmt es nicht.
+        ("create_xlsx", {"titel": "T", "blaetter": [{"zeilen": [["a", 1]]}]},
+         [(ki_tabelle, "_nachlesen", lambda *a: None)]),
+        ("edit_xlsx", {"id": ids["xlsx"], "anhaengen": [["b", 2]]},
+         [(ki_tabelle, "_nachlesen", lambda *a: None)]),
         # Browser-Bild (2026-10-09): eine offene Seite als Attrappe.
         ("browser_screenshot", {},
          [(browser_sitzung, "offen", lambda gid: True),

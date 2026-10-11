@@ -865,3 +865,5 @@ import ki_pdf_word  # noqa: E402,F401
 import ki_browser  # noqa: E402,F401
 # Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09): ebenso.
 import ki_nutzer_ordner  # noqa: E402,F401
+# Tabellen (2026-10-11, Skill excel): read_xlsx, create_xlsx, edit_xlsx.
+import ki_tabelle  # noqa: E402,F401

@@ -51,6 +51,7 @@ import werkzeug_gedaechtnis
 import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
 import werkzeug_kalender
 import werkzeug_ablage
+import werkzeug_tabelle
 
 
 SCHIENEN = ("klein", "gross")
@@ -1388,6 +1389,9 @@ erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
 ERZEUGT_FEST = list(werkzeug_ablage.EINTRAEGE)
 WERKZEUGE += ERZEUGT_FEST
 _NACH_NAME.update({w.name: w for w in ERZEUGT_FEST})
+# Tabellen (2026-10-11, Skill excel, core/werkzeug_tabelle.py): hinten an.
+WERKZEUGE += werkzeug_tabelle.EINTRAEGE
+_NACH_NAME.update({w.name: w for w in werkzeug_tabelle.EINTRAEGE})
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht

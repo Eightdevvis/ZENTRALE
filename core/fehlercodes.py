@@ -14,7 +14,8 @@
 #
 # Vorsilben: W allgemein, K Kalender (K-<CODE> des Kalender-Kerns kommen
 # gleichnamig dazu), N Notizen/Gedächtnis, A Ablage, D Download, M
-# Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser, Z Sashas
+# Messreihen, S Skills, P PDF/Word, T Tabellen (Excel/CSV, seit 2026-10-11),
+# I Internet (lesend), B Browser, Z Sashas
 # Nutzerordner (~/Zentrale: unzip, remove_input; read_file und fetch_document auf gross).
 # tests/test_fehlercodes.py hält die
 # Tabelle und den Code deckungsgleich. Angebundene Programme (Anbindungs-
@@ -389,6 +390,61 @@ CODES = {
         "Angeben, was sich ändern soll."),
     "P-ABGELEHNT": (
         "Die Ablage hat die neue Datei abgelehnt (Grund im Ergebnis).",
+        "Den Grund beheben."),
+    # ── Tabellen: Excel/CSV (2026-10-11, core/ki_tabelle.py) ──
+    "T-FALSCHE-ART": (
+        "Das Dokument ist keine Tabelle (.xlsx oder .csv).",
+        "Das passende Werkzeug nehmen (read_document, read_pdf, read_docx)."),
+    "T-DATEI-KAPUTT": (
+        "Die Tabelle ließ sich nicht lesen oder erzeugen (Grund im Ergebnis).",
+        "Sasha sagen; eine kaputte Datei nicht weiter versuchen."),
+    "T-GESPERRT": (
+        "Alte Excel-Datei (.xls) oder mit Passwort geschützt.",
+        "Sasha bitten, sie in Excel/LibreOffice als .xlsx ohne Passwort zu speichern."),
+    "T-BIBLIOTHEK": (
+        "Die Excel-Bibliothek (openpyxl) fehlt auf diesem Rechner.",
+        "Sasha sagen: venv/bin/pip install -r requirements.txt."),
+    "T-ZEIT": (
+        "Die Tabelle hat zu lange gebraucht oder zu viel Speicher (abgebrochen).",
+        "Sasha sagen; vermutlich kaputt oder riesig."),
+    "T-ZU-GROSS": (
+        "Zu groß (über 30 MB, entpackt über 200 MB/Zip-Bombe, oder CSV zu lang).",
+        "Sasha sagen; nicht wiederholen."),
+    "T-BLATT-UNBEKANNT": (
+        "Ein Blatt mit diesem Namen gibt es nicht (die vorhandenen stehen im Ergebnis).",
+        "Einen der genannten Namen nehmen oder blatt weglassen (= das erste)."),
+    "T-BEREICH": (
+        "Der Bereich ist keiner (so: A1:D20).",
+        "Als A1:D20 angeben."),
+    "T-ZELLE": (
+        "Die Zelle ist keine (so: B12) oder liegt außerhalb.",
+        "Als B12 angeben."),
+    "T-FORMEL": (
+        "Die Formel ließe sich nicht sicher speichern: unbekannte Funktion, offenes Anführungszeichen, Zeilenumbruch oder zu lang. Es wurde nichts geschrieben.",
+        "Bekannte Funktionen nehmen (SUM/SUMME, SUMIF/SUMMEWENN, IF/WENN …), Formel in eine Zeile."),
+    "T-CSV-FORMEL": (
+        "Eine CSV speichert keine Formeln.",
+        "Für Rechnendes create_xlsx nehmen; die CSV nur mit Werten."),
+    "T-WERT-UNGUELTIG": (
+        "Ein Zellwert hat eine Form, die nicht in eine Zelle passt (Objekt, Liste, zu lang).",
+        "Nur Zahl, Text, true/false oder null je Zelle."),
+    "T-BLATTNAME": (
+        "Ein Blattname ist zu lang (über 31 Zeichen), enthält verbotene Zeichen ([ ] : * ? / Backslash) oder kommt doppelt vor.",
+        "Kürzeren, eindeutigen Namen ohne diese Zeichen nehmen."),
+    "T-BLAETTER-FEHLEN": (
+        "Keine Blätter oder nur leere Zeilen angegeben.",
+        "blaetter mit zeilen angeben."),
+    "T-ZU-VIEL": (
+        "Zu viel auf einmal (über 100.000 Zellen, über 50 Blätter, oder mehr als ein Blatt in einer CSV).",
+        "In mehreren Schritten oder als xlsx."),
+    "T-NICHTS-ZU-AENDERN": (
+        "Weder aenderungen noch anhaengen angegeben.",
+        "Angeben, was sich ändern soll."),
+    "T-VERLUST": (
+        "Beim Ändern gingen Teile der Tabelle verloren (Diagramme, Bilder, Pivot-Tabellen, Makros, Verknüpfungen) — darum keine geänderte Fassung.",
+        "Sasha sagen, dass er diese Tabelle selbst ändert; lesen geht weiter."),
+    "T-ABGELEHNT": (
+        "Die Ablage hat die Tabelle abgelehnt (Grund im Ergebnis).",
         "Den Grund beheben."),
 }
 

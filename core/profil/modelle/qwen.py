@@ -165,7 +165,13 @@ _GRUPPEN = {
                   r"anschreiben|formular",
                   ("read_pdf", "create_pdf", "combine_pdf", "read_docx", "create_docx",
                    "edit_docx", "create_document", "read_document", "update_document",
-                   "fetch_document")),
+                   "fetch_document",
+                   # 2026-10-11: ersetzen/Papierkorb der Ablage.
+                   "replace_document", "trash_document", "restore_document")),
+    # 2026-10-11, Skill excel: Tabellen erst auf ein passendes Wort.
+    "tabellen": (r"excel|xlsx|csv|tabelle|kosten|budget|summ|formel|tracke|ausgab|"
+                 r"rechne|zelle|spalte",
+                 ("read_xlsx", "create_xlsx", "edit_xlsx")),
     "post": (r"mail|post|nachricht|news|neuigkeit|welt|schlagzeil|zeitung",
              ("read_mail", "read_news")),
     "messreihen": (r"mess|reihe|gewicht|kurve|tracke|protokollier|wert",

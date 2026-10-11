@@ -39,7 +39,8 @@ BEREICH_WOERTER = {
         r"notiz|hausregel|steckbrief|\bziele?\b|dossier|katalog|tagebuch|"
         r"gedächtnis|notiert|festgehalten|vermerkt|gemerkt|merk\w* (ich )?mir|"
         r"aufgeschrieben"),
-    "ablage": re.compile(r"dokument|ablage|\bpdf|datei|\bword\b|docx"),
+    "ablage": re.compile(r"dokument|ablage|\bpdf|datei|\bword\b|docx|excel|xlsx|\bcsv|"
+                         r"papierkorb"),
     "messreihe": re.compile(r"messreihe|messkurve|kurve|messwert"),
     "skill": re.compile(r"\bskills?\b|anleitung"),
     "netz": re.compile(r"internet|im netz|webseite|website|online|recherch|google"),

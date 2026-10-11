@@ -189,14 +189,16 @@ def test_der_schnitt_haelt():
     selbst = {"antwort"}
     # 11.10.2026: Ablage ersetzen/Papierkorb (erzeugt) — eigener Deckel unten.
     ablage_pflege = {"replace_document", "trash_document", "restore_document"}
+    # 11.10.2026: Tabellen (Skill excel) — eigener Deckel unten.
+    tabelle = {"read_xlsx", "create_xlsx", "edit_xlsx"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
         - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen \
-        - ablage_pflege
+        - ablage_pflege - tabelle
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import | input_ | reihen | selbst | ablage_pflege)
+                | fehler | browser | datei_import | input_ | reihen | selbst | ablage_pflege | tabelle)
     # antwort (10.10.2026, Selbstauskunft): ~240 Zeichen. Deckel 300: der
     # Text sagt nur, DASS jede Antwort hierüber geht und allein; was die
     # Felder bedeuten, steht in den Feldern (zählen nicht).
@@ -326,6 +328,13 @@ def test_der_schnitt_haelt():
     besch_pflege = sum(len(t["function"]["description"]) for t in gross.TOOLS
                        if t["function"]["name"] in ablage_pflege)
     assert 0 < besch_pflege < 350
+    # Tabellen (11.10.2026, Skill excel): drei Werkzeuge, ~560 Zeichen.
+    # Deckel 650: create_xlsx sagt, WOFÜR (Listen, die wachsen und rechnen) und
+    # dass Werte nicht berechnet sind; das WIE (Formeln, wann statt PDF) steht
+    # im Skill excel, die Formel-Beispiele in den Feldern.
+    besch_tabelle = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                        if t["function"]["name"] in tabelle)
+    assert 0 < besch_tabelle < 650
 
 
 def test_import_parameter_bleibt_klein():

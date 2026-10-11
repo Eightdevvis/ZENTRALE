@@ -81,6 +81,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
 | `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus |
 | `ablage_ort` | 1 | WO die Ablage liegt (Einstellung `ablage_dir`, Standard ~/Zentrale/Ablage; Köpfe/Fassungen versteckt in `.ablage/dokumente/`) — für Ablage und Abgleich |
+| `tabelle_formel` | 1 | Excel-Formeln: deutsch → Excel-Standard (englisch, Komma) sicher übersetzen, unbekannte Funktionen ablehnen |
 | `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
 | `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `input_dateien` |
 | `melden` | 1 | Meldung auf dem Desktop |
@@ -155,6 +156,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF/Word als Original, Text dazu), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `ablage_text` | 2 | Der Text einer PDF- oder Word-Datei (Anhang, Ablage-Vorschau), gemerkt nach Inhalt |
 | `ablage_sichtbar` | 2 | Die Ablage als Ordner für Sasha: neueste Fassung als lesbare Datei, Einwurf (fremde Datei → Dokument), Änderung → Fassung, Umbenennen/Löschen nachziehen; Stand je Rechner |
+| `tabelle_datei` | 2 | Excel (.xlsx) lesen/anlegen/ändern — openpyxl im begrenzten Kindprozess, Zip-Bomben-Prüfung, Verlust-Prüfung; CSV lesen/schreiben; Tabelle als Text |
 | `textbloecke` | 2 | Kleines Markdown → Blöcke (Überschrift, Absatz, Liste, Tabelle, Code) und Stücke normal/fett — für PDF- und Word-Schreiber |
 | `pdf_datei` | 2 | PDFs lesen (Text je Seite, Tabellen geraten, Formularfelder), zusammenfügen, Seiten herausnehmen — pypdf im begrenzten Kindprozess |
 | `pdf_schreiben` | 2 | Neues PDF aus Markdown: A4, Grundschriften, Umbruch, Tabellen, Seitenzahlen — ohne Fremdbibliothek |
@@ -198,6 +200,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |
 | `werkzeug_ablage` | 3 | Die Ablage als Quelle des Werkzeug-Erzeugers: Schemas von replace_document, trash_document, restore_document und ihr Gate (Sashas Dokumente: jedes Mal fragen) |
 | `ki_ablage_adapter` | 3 | Adapter der Ablage für den Erzeuger: ersetzen (neu + alt in den Papierkorb), wegräumen, zurückholen; Fragen und Sätze |
+| `werkzeug_tabelle` | 3 | Einträge und Gate von read_xlsx, create_xlsx, edit_xlsx (Skill excel); hinten ans Register |
+| `ki_tabelle` | 3 | Was die Tabellen-Werkzeuge tun: Werte/Formeln prüfen, anlegen, ändern (ersetzen, daneben, CSV-Fassung), nachlesen mit Beleg |
 | `werkzeug_nutzer_ordner` | 3 | Einträge und Fragen von find_files, search_files, import_skill, unzip, remove_input (hinten ans Register) und die gross-Fassung von list_files |
 | `ki_nutzer_ordner` | 3 | Was find_files, search_files, import_skill, unzip und remove_input tun: Suchen als Befund mit `vollstaendig`, übernehmen/auspacken/wegräumen mit Beleg |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |

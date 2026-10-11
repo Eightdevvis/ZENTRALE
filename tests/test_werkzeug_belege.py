@@ -117,6 +117,8 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
                   "clear_calendar_source", "set_calendar_style"}
     # Ablage ersetzen/Papierkorb (2026-10-11): belegt in tests/test_ablage_werkzeuge.py.
     abgedeckt |= {"replace_document", "trash_document", "restore_document"}
+    # Tabellen (2026-10-11): belegt in tests/test_tabellen.py.
+    abgedeckt |= {"create_xlsx", "edit_xlsx"}
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     assert schreibend <= abgedeckt, schreibend - abgedeckt
     ids = {}

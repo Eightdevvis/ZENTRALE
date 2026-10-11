@@ -18,6 +18,7 @@ from collections import OrderedDict
 
 import ablage
 import pdf_datei
+import tabelle_datei
 import word_datei
 
 _MERKEN = 32
@@ -26,11 +27,13 @@ _lock = threading.Lock()
 
 
 def art_von(daten: bytes) -> str | None:
-    """"pdf" | "docx" | None — an den ersten Bytes, nicht am Namen."""
+    """"pdf" | "docx" | "xlsx" | None — an den ersten Bytes, nicht am Namen."""
     if pdf_datei.ist_pdf(daten):
         return "pdf"
     if word_datei.ist_docx(daten):
         return "docx"
+    if tabelle_datei.ist_xlsx(daten):        # Excel (2026-10-11, Skill excel)
+        return "xlsx"
     return None
 
 
@@ -45,6 +48,15 @@ def _zerlegen(art: str, daten: bytes) -> dict:
         return {"art": art, "text": "\n\n".join(teile), "fehler": "",
                 "seiten": r.get("seiten_gesamt") or 0, "felder": r.get("felder") or 0,
                 "leer": not teile}
+    if art == "xlsx":
+        try:
+            r = tabelle_datei.lesen(daten)
+        except tabelle_datei.Fehler as e:
+            return {"art": art, "text": "", "fehler": str(e)}
+        text = tabelle_datei.kopf_text(r) + f"\nBlatt „{r['blatt']}“:\n" + tabelle_datei.als_text(r)
+        if r.get("weiter"):
+            text += f"\n[… weiter mit read_xlsx bereich={r['weiter']}]"
+        return {"art": art, "text": text, "fehler": "", "leer": not r["zellen"]}
     try:
         r = word_datei.lesen(daten)
     except word_datei.Fehler as e:
@@ -73,8 +85,8 @@ def text(doc_id, fassung=None) -> dict:
     """Der Text eines pdf/docx-Dokuments der Ablage. Wirft ablage.Unbekannt;
     andere Arten → fehler."""
     k = ablage.kopf(doc_id)
-    if k.get("art") not in ("pdf", "docx"):
-        return {"art": k.get("art"), "text": "", "fehler": "keine PDF- oder Word-Datei"}
+    if k.get("art") not in ablage.DATEIEN:
+        return {"art": k.get("art"), "text": "", "fehler": "keine PDF-, Word- oder Excel-Datei"}
     return aus_bytes(k["art"], ablage.roh(doc_id, fassung))
 
 
@@ -84,4 +96,7 @@ def kopfzeile(erg: dict, doc_id: str) -> str:
         felder = f", Formular mit {erg['felder']} Feldern" if erg.get("felder") else ""
         return (f"(PDF, {erg.get('seiten') or '?'} Seiten{felder} — Original in der "
                 f"Ablage, id {doc_id}; Seiten/Tabellen/Formular: read_pdf)")
+    if erg.get("art") == "xlsx":
+        return (f"(Excel-Tabelle — Original in der Ablage, id {doc_id}; mehr: read_xlsx, "
+                f"ändern: edit_xlsx)")
     return (f"(Word-Datei — Original in der Ablage, id {doc_id}; ändern: edit_docx)")

@@ -58,7 +58,7 @@ def api_ablage_lesen(doc_id):
         # ältere Fassungen (und im Papierkorb) die versteckte.
         d["pfad"] = ((not request.args.get('fassung') and ablage_sichtbar.pfad(doc_id))
                      or ablage.pfad(doc_id, request.args.get('fassung')))
-        if d["kopf"].get("art") in ("pdf", "docx"):
+        if d["kopf"].get("art") in ablage.DATEIEN:
             erg = ablage_text.text(doc_id, request.args.get('fassung'))
             d["text"] = erg.get("text") or ""
             d["text_fehler"] = erg.get("fehler") or ""

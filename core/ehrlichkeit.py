@@ -132,6 +132,8 @@ BEREICH = {
     "read_document": "ablage", "create_pdf": "ablage", "combine_pdf": "ablage",
     "create_docx": "ablage", "edit_docx": "ablage", "read_pdf": "ablage",
     "read_docx": "ablage", "read_file": "ablage",
+    # Tabellen (2026-10-11, Skill excel)
+    "read_xlsx": "ablage", "create_xlsx": "ablage", "edit_xlsx": "ablage",
     "create_series": "messreihe", "log_series": "messreihe",
     "propose_skill": "skill", "edit_skill": "skill", "load_skill": "skill",
     "import_skill": "skill",
@@ -179,6 +181,8 @@ WORTE = {
     "combine_pdf": ("PDF zusammengefügt", "PDF zusammenfügen"),
     "create_docx": ("Word-Datei angelegt", "Word-Datei anlegen"),
     "edit_docx": ("Word-Kopie angelegt", "Word-Kopie anlegen"),
+    "create_xlsx": ("Tabelle angelegt", "Tabelle anlegen"),
+    "edit_xlsx": ("Tabelle geändert", "Tabelle ändern"),
     "create_series": ("Messreihe angelegt", "Messreihe anlegen"),
     "log_series": ("Messwert eingetragen", "Messwert eintragen"),
     "propose_skill": ("Anleitung vorgeschlagen", "Anleitung vorschlagen"),

@@ -68,11 +68,11 @@ def art_fuer(name: str, daten: bytes) -> tuple:
             raise Abgelehnt(erg["fehler"])
         return datei_art, "." + datei_art, erg["text"]
     if daten[:4] == b"\xd0\xcf\x11\xe0":
-        raise Abgelehnt("alte Word-Datei (.doc) oder mit Passwort — bitte als .docx "
-                        "ohne Passwort speichern")
+        raise Abgelehnt("alte Word-/Excel-Datei (.doc, .xls) oder mit Passwort — bitte "
+                        "als .docx bzw. .xlsx ohne Passwort speichern")
     if b"\x00" in daten[:8192]:
         raise Abgelehnt("diese Art Datei kann ich nicht lesen — nur Text, Code, PDF, "
-                        "Word (.docx) und Bilder")
+                        "Word (.docx), Excel (.xlsx) und Bilder")
     try:
         text = daten.decode("utf-8")
     except UnicodeDecodeError:
@@ -159,7 +159,7 @@ def _aufgeloest(v: dict, cloud: bool) -> dict | None:
             mime, roh = ablage.bild_bytes(v["id"])
             return {"art": "bild", "titel": titel, "mime": mime,
                     "daten": base64.b64encode(roh).decode("ascii")}
-        if v.get("art") in ("pdf", "docx"):
+        if v.get("art") in ablage.DATEIEN:
             erg = ablage_text.text(v["id"], v.get("fassung") or 1)
             text = erg["text"] or (f"(nicht lesbar: {erg['fehler']})" if erg["fehler"]
                                    else "(kein Text drin — vermutlich gescannt)")
