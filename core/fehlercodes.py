@@ -17,9 +17,13 @@
 # Messreihen, S Skills, P PDF/Word, I Internet (lesend), B Browser, Z Sashas
 # Nutzerordner (~/Zentrale: unzip, remove_input; read_file und fetch_document auf gross).
 # tests/test_fehlercodes.py hält die
-# Tabelle und den Code deckungsgleich.
+# Tabelle und den Code deckungsgleich. Angebundene Programme (Anbindungs-
+# Beschreibung, seit 2026-10-11) wählen eine eigene Vorsilbe aus 1–3 Buchstaben
+# (KK, NT …); ihre Endungen stehen unten in ANBINDUNG_CODES.
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md): reine Tabelle.
+
+import re
 
 CODES = {
     # ── allgemein ──
@@ -369,8 +373,73 @@ CODES = {
 }
 
 
+# ── Angebundene Programme (2026-10-11, Anbindungs-Pipe) ─────────────────
+# Jede Anbindungs-Beschreibung wählt ihre eigene Vorsilbe (KK, NT …), die
+# Endungen sind für alle gleich. Statt jede Vorsilbe einzeln einzutragen, gilt
+# <VORSILBE>-<ENDUNG> für jede Endung dieser Liste (core/werkzeug_erzeuger/,
+# memory/ki/werkzeug_erzeuger.md). Ein eigener Eintrag in CODES (wie K-…) hat
+# Vorrang.
+ANBINDUNG_CODES = {
+    "PFLICHTFELD": (
+        "Eine nötige Angabe fehlt.",
+        "Die fehlende Angabe von Sasha holen oder aus dem Lesen des Programms nehmen."),
+    "WERT-UNGUELTIG": (
+        "Ein Wert passt nicht zum Feld (Typ, Auswahl, Form wie Uhrzeit HH:MM).",
+        "Den Wert so angeben, wie die Feldbeschreibung es sagt."),
+    "UNBEKANNTES-FELD": (
+        "Ein Feld, das dieses Werkzeug nicht kennt.",
+        "Nur die Felder des Werkzeugs benutzen."),
+    "TITEL-LEER": (
+        "Der Titel ist leer.",
+        "Einen Titel angeben."),
+    "ZEITRAUM-FEHLT": (
+        "Anfang oder Ende des Zeitraums fehlt.",
+        "Beides von Sasha holen; kein Ende annehmen."),
+    "NICHT-GEFUNDEN": (
+        "Das Programm kennt diesen Eintrag nicht (mehr).",
+        "Das Programm mit dem lesenden Werkzeug ansehen und die Kennung von dort nehmen."),
+    "ABGELEHNT": (
+        "Das Programm hat den Wunsch abgelehnt (Begründung im Ergebnis); nichts ist geändert.",
+        "Die Begründung lesen und beheben; nicht blind wiederholen."),
+    "NICHT-ERREICHBAR": (
+        "Das Programm antwortet nicht (nicht gestartet, falsche Adresse, Netz).",
+        "Sasha sagen, dass das Programm nicht erreichbar ist; nicht erneut versuchen."),
+    "ZEITUEBERSCHREITUNG": (
+        "Das Programm hat nicht rechtzeitig geantwortet.",
+        "Nachlesen, ob es angekommen ist, bevor etwas wiederholt wird."),
+    "AUTH-FEHLT": (
+        "Für das Programm ist kein Zugang eingestellt (Einstellung ohne Wert).",
+        "Sasha sagen, dass der Zugang unter den Einstellungen fehlt."),
+    "MEHRDEUTIG": (
+        "Die Kennung trifft mehrere Einträge; geändert wird nichts.",
+        "Sasha fragen, welcher gemeint ist."),
+    "GIBT-ES-SCHON": (
+        "Genau das gibt es schon; es wurde nichts doppelt angelegt.",
+        "Den vorhandenen Eintrag ansehen; ändern statt neu anlegen."),
+    "KENNUNG-UNGUELTIG": (
+        "Die Kennung hat nicht die vorgesehene Form.",
+        "Die Kennung genau so nehmen, wie das lesende Werkzeug sie zeigt."),
+    "KENNUNG-UNBEKANNT": (
+        "Zu dieser Kennung liegt nichts Bekanntes vor.",
+        "Neu lesen und die Kennung von dort nehmen."),
+    "NICHTS-ZU-AENDERN": (
+        "Der Aufruf nennt kein Feld, das sich ändern soll.",
+        "Angeben, was neu sein soll."),
+    "KEIN-RUECKBAU": (
+        "Für diese Aktion kennt die Anbindung keinen Rückbau.",
+        "Sasha sagen; die Aktion lässt sich nicht zurücknehmen."),
+}
+_ANBINDUNG = re.compile(r"^[A-Z][A-Z0-9]{0,2}-(.+)$")
+
+
+def _anbindung_endung(c: str):
+    m = _ANBINDUNG.match(c)
+    return m.group(1) if m and m.group(1) in ANBINDUNG_CODES else None
+
+
 def bekannt(code: str) -> bool:
-    return str(code or "").strip().upper() in CODES
+    c = str(code or "").strip().upper()
+    return c in CODES or _anbindung_endung(c) is not None
 
 
 def erklaeren(code: str) -> str:
@@ -378,6 +447,9 @@ def erklaeren(code: str) -> str:
     c = str(code or "").strip().upper()
     if c.startswith("FEHLER "):
         c = c[7:].strip()
+    if c not in CODES and _anbindung_endung(c):
+        ursache, tun = ANBINDUNG_CODES[_anbindung_endung(c)]
+        return f"{c}\nUrsache: {ursache}\nWas tun: {tun}"
     if c not in CODES:
         aehnlich = [k for k in CODES if c and (c in k or k in c)]
         da = ", ".join(aehnlich[:6]) if aehnlich else "keiner"

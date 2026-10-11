@@ -98,6 +98,9 @@ os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
 os.environ.setdefault("ZENTRALE_SHOP_ORDNER", os.path.join(_DATEN_TMP, "shop"))
 # Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): im Betrieb data/apps/.
 os.environ.setdefault("ZENTRALE_APPS_ORDNER", os.path.join(_DATEN_TMP, "apps"))
+# Anbindungs-Beschreibungen (core/werkzeug_erzeuger/anbindung.py, 2026-10-11):
+# im Betrieb data/anbindungen/. Dazu unten pro Test ein eigener Ordner.
+os.environ.setdefault("ZENTRALE_ANBINDUNGEN_DIR", os.path.join(_DATEN_TMP, "anbindungen"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -333,6 +336,13 @@ def _beispiele_frisch(_test_ordner, monkeypatch):
 def _desk_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(_frisch(_test_ordner, "desk")))
     monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(_frisch(_test_ordner, "apps")))
+    yield
+
+
+# 7e1. Jeder Test hat seine eigenen Anbindungs-Beschreibungen (2026-10-11).
+@pytest.fixture(autouse=True)
+def _anbindungen_frisch(tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ANBINDUNGEN_DIR", str(tmp_path_factory.mktemp("anbindungen")))
     yield
 
 

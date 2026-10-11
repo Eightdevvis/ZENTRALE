@@ -755,3 +755,17 @@ def test_apps_ordner_liegt_im_test_nicht_im_echten_data():
     import apps
     assert os.environ.get("ZENTRALE_APPS_ORDNER"), "ZENTRALE_APPS_ORDNER ist nicht gesetzt"
     assert not os.path.realpath(apps.eigene_ordner()).startswith(os.path.realpath(ROOT))
+
+
+def test_anbindungen_liegen_im_test_nicht_im_echten_data():
+    """Anbindungs-Beschreibungen (core/werkzeug_erzeuger/anbindung.py,
+    2026-10-11): im Betrieb data/anbindungen/ mit dem, was die Werkstatt für
+    Sasha ausgefüllt hat — im Test nie. Und keine Anbindung ist nach dem
+    Start eingeschaltet, solange ein Test sie nicht selbst einschaltet."""
+    from werkzeug_erzeuger import anbindung
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    pfad = os.path.realpath(anbindung.nutzer_ordner())
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        assert not pfad.startswith(os.path.realpath(echt)), pfad
+    assert os.environ.get("ZENTRALE_ANBINDUNGEN_DIR")
+    assert not [n for n in anbindung.auflisten() if anbindung.eingeschaltet(n)]

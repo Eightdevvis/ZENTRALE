@@ -47,6 +47,7 @@ import werkzeug_pdf_word
 import werkzeug_browser
 import werkzeug_nutzer_ordner
 import werkzeug_erzeuger
+import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
 import werkzeug_kalender
 
 
@@ -1352,6 +1353,14 @@ _erweitern("antwort", copy.deepcopy(selbstauskunft.FELDER),
 # byte-gleich und bekommt auf gross Beschreibung, Schema, Ausführer und Frage
 # des Erzeugers; neue Werkzeuge kommen hinten an (nur gross).
 ERZEUGT = werkzeug_erzeuger.werkzeuge(werkzeug_kalender.QUELLE)
+# Angebundene Programme (2026-10-11, Anbindungs-Pipe): Werkzeuge aus den
+# Anbindungs-Beschreibungen, die Sasha eingeschaltet hat (Einstellung
+# anbindung_<name>, Standard aus). Nur gross, hinten an; ein vorhandener Name
+# wird nie überschrieben. werkzeug_erzeuger/aktive.py.
+ANGEBUNDEN = werkzeug_erzeuger.aktive.werkzeuge(_NACH_NAME)
+for _w in ANGEBUNDEN:
+    WERKZEUGE.append(_w)
+    _NACH_NAME[_w.name] = _w
 _VON_HAND = {}          # name → die handgeschriebenen gross-Felder
 
 
