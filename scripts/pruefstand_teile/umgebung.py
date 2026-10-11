@@ -41,7 +41,8 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
                         # 2026-10-10: fehlte — die Messung schrieb 17 Test-Sätze
                         # in Sashas echtes data/klassifikator_beispiele/.
                         ("KLASSIFIKATOR_BEISPIELE", "klassifikator_beispiele"),
-                        ("RUECKMELDUNGEN", "rueckmeldungen"), ("ABGLEICH", "abgleich")):
+                        ("RUECKMELDUNGEN", "rueckmeldungen"), ("ABGLEICH", "abgleich"),
+                        ("ANBINDUNGEN", "anbindungen")):
         os.environ[f"ZENTRALE_{name}_DIR"] = os.path.join(tmp, unter)
     os.environ["ZENTRALE_LOKALE_KI"] = "aus"         # kein Ollama, Chat über die Cloud
     os.environ["ZENTRALE_MAIL"] = "off"
