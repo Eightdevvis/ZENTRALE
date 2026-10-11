@@ -189,6 +189,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
 | `werkzeug_eintrag` | 3 | Wie ein Werkzeug-Eintrag aussieht (die Klasse `Werkzeug`), damit Einträge auch außerhalb des Registers stehen können |
 | `werkzeug_pdf_word` | 3 | Einträge und Fragen der PDF-/Word-Werkzeuge (Skills pdf, word); hinten ans Register gehängt |
+| `werkzeug_gedaechtnis` | 3 | Register-Einträge der Gedächtnis-Werkzeuge seit dem Umbau nach Themen (`archive_note`); hinten ans Register gehängt |
 | `werkzeug_browser` | 3 | Einträge und Fragen der Browser-Werkzeuge; Erlaubnis je Host und Gespräch; hinten ans Register gehängt |
 | `ki_browser` | 3 | Was die Browser-Werkzeuge tun: Seite als Text für die KI (Adresse als Beleg, Inhalt = Daten), Liste, Suchen, Bild in die Ablage |
 | `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |

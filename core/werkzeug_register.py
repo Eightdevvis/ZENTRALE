@@ -47,6 +47,7 @@ import werkzeug_pdf_word
 import werkzeug_browser
 import werkzeug_nutzer_ordner
 import werkzeug_erzeuger
+import werkzeug_gedaechtnis
 import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
 import werkzeug_kalender
 
@@ -1290,18 +1291,8 @@ WERKZEUGE.append(Werkzeug(
 ))
 
 
-# Archivieren (2026-10-11): die KI legt selbst weg, was nicht mehr stimmt — nach
-# _archiv/, nie gelöscht; frei wie write_note, Kernakten lehnt gedaechtnis ab.
-WERKZEUGE.append(Werkzeug(
-    name="archive_note", schreibt=True,
-    beweis="prüft, dass die Datei unter dem Namen nicht mehr liegt",
-    gross=("Legt eine Gedaechtnis-Datei, die nicht mehr stimmt oder doppelt ist, "
-           "ins Archiv (nichts wird geloescht). Vorher lesen; Teile, die noch "
-           "gelten, erst mit write_note in die richtige Datei uebernehmen."),
-    parameter={"type": "object", "required": ["name"], "properties": {
-        "name": {"type": "string", "description": "thema/name aus dem Index."},
-        "thema": {"type": "string", "description": "Optional."}}},
-))
+# Gedächtnis nach Themen (2026-10-11): archive_note. Hinten an, nur gross.
+WERKZEUGE += werkzeug_gedaechtnis.EINTRAEGE
 
 
 # ── Nachschlagen ───────────────────────────────────────────────────────
