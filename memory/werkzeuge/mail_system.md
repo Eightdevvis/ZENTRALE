@@ -551,6 +551,15 @@ im News-System).
     (`Re:`, In-Reply-To/References).
   - `r` = Live-Poll anstoßen, **`z` = Ordnerzahlen jetzt neu zählen** (manueller
     Refresh, umgeht die TTL), `p` = Panel zu. Auto-Refresh ~3s (nur Anzeige).
+  - **Tasten (seit 2026-10-11):** Tastentabelle `Post.TASTEN`
+    (tui/ansichten/tasten.py) — aus ihr verteilt das Panel seine Tasten und
+    liest die Leiste ganz unten; im Kasten stehen keine Tasten-Hinweise mehr.
+    `post.taste` ist der einzige Eingang, auch für den Antwort-Editor
+    (`taste_antwort` ist nur noch ein Verweis). Ansichten: `kategorien`
+    (+ `:leer`) · `ordner:leer` (lädt/leer) · `liste` · `lesen` (Vorschau) ·
+    `lesen:offen` (ausgeklappt) — die drei je auch `…:eingang` (f hakt ab,
+    d löscht nicht) · `einsortieren` · `loeschen:frage` · `antwort` ·
+    `antwort:frage`. Wege in jede Ansicht: `tests/tasten_zustaende/post.py`.
   - **Alle IMAP-Ops laufen im Hintergrund-Worker** (s.o.) — die TUI friert nie
     ein, `esc` greift sofort, der Header zeigt per `⟳ …`, was gerade lädt.
   - **Hybrid-Datenquelle:** Zähler in Ebene 1 kommen LIVE aus den echten IMAP-

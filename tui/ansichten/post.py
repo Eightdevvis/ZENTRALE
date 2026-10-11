@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 
 from .basis import BEENDEN, api_call
+from .tasten import Tasten
 from .text import _wrap
 
 
@@ -447,184 +448,290 @@ class Post:
         MAIL["mails"] = None; MAIL["data"] = None; MAIL["msg"] = ""
         mail_refresh_counts()          # echte Ordnergrößen im Hintergrund holen
 
+    # ── Tasten: EINE Tabelle, aus der Verteilung und Leiste lesen ──────
+    # (tui/ansichten/tasten.py, 2026-10-11). Ohne Text = verarbeitet, aber
+    # nicht gezeigt (vim-Tasten, Großbuchstaben, q, t Thema, p Panel zu …).
+    # Der Antwort-Editor ist eine Ansicht wie jede andere; im Eingang hakt f
+    # ab und d löscht nicht — darum eigene Ansichten „…:eingang".
+    _NEBEN = [                         # überall in Ebene 2, ungezeigt
+        ("p/P", "schliessen"), ("q/Q", "beenden"), ("e/E", "eingang"),
+        ("r/R", "poll"), ("t/T", "thema"), ("X", "abgleich"), ("Z", "zaehlen"),
+    ]
+    _ENDE = [("x", "abgleich", "reconcile"), ("z", "zaehlen", "recount"),
+             ("esc", "zurueck", "back")]
+    _LISTE = [
+        ("↑↓", "m_waehlen", "select"), ("k/j", "m_waehlen"), ("n/N", "m_waehlen"),
+        ("space", "m_waehlen"), ("enter", "m_lesen", "read"), ("→/l", "m_lesen"),
+        ("←/h", "zurueck"), ("v/V/tab", "modus"),
+    ]
+    _LESEN = [("←→", "blaettern", "prev/next")]
+    _ZU = [("v", "modus", "list"), ("V/tab", "modus")]
+    _VORSCHAU = [("↓", "aufklappen", "expand"), ("j/space", "aufklappen")]
+    _OFFEN = [("↑↓", "scrollen", "scroll / fold"), ("k/j/space", "scrollen"),
+              ("pgup pgdn", "seite")]
+    _MIT_D = [("a", "antworten", "reply"), ("A", "antworten"),
+              ("s", "einsortieren", "sort in"), ("S", "einsortieren"),
+              ("d", "loeschen", "delete"), ("D", "loeschen")]
+    # Eingang: f hakt ab (gelesen + einsortieren); d sagt nur, dass es hier
+    # nicht löscht.
+    _MIT_F = [("f", "abhaken", "done"), ("F", "abhaken"),
+              ("a", "antworten", "reply"), ("A", "antworten"),
+              ("s", "einsortieren", "sort in"), ("S", "einsortieren"),
+              ("d/D", "loeschen")]
+    TASTEN = Tasten({
+        "kategorien": [
+            ("↑↓", "k_waehlen", "select"), ("k/j", "k_waehlen"),
+            ("enter", "k_oeffnen", "open"), ("→/l", "k_oeffnen"),
+            ("e", "eingang", "inbox"), ("E", "eingang"),
+            ("r", "poll", "poll"), ("R", "poll"),
+            ("x", "abgleich", "reconcile"), ("X", "abgleich"),
+            ("z", "zaehlen", "recount"), ("Z", "zaehlen"),
+            ("esc", "schliessen", "close"), ("p/P", "schliessen"),
+            ("q/Q", "beenden"), ("t/T", "thema"),
+        ],
+        # noch keine Kategorien (lädt, Backend weg, leer)
+        "kategorien:leer": [
+            ("e", "eingang", "inbox"), ("E", "eingang"),
+            ("r", "poll", "poll"), ("R", "poll"),
+            ("x", "abgleich", "reconcile"), ("X", "abgleich"),
+            ("z", "zaehlen", "recount"), ("Z", "zaehlen"),
+            ("esc", "schliessen", "close"), ("p/P", "schliessen"),
+            ("q/Q", "beenden"), ("t/T", "thema"),
+        ],
+        # Ordner lädt noch oder ist leer
+        "ordner:leer": _ENDE + _NEBEN,
+        "liste": _LISTE + _MIT_D + _ENDE + _NEBEN,
+        "liste:eingang": _LISTE[:6] + _MIT_F + _LISTE[6:] + _ENDE + _NEBEN,
+        # Lesen: eine Mail, Vorschau …
+        "lesen": _LESEN + _VORSCHAU + _MIT_D + _ZU + _ENDE + _NEBEN,
+        "lesen:eingang": _LESEN + _VORSCHAU + _MIT_F + _ZU + _ENDE + _NEBEN,
+        # … oder ausgeklappt (↑ ganz oben klappt wieder ein)
+        "lesen:offen": _LESEN + _OFFEN + _MIT_D + _ZU + _ENDE + _NEBEN,
+        "lesen:offen:eingang": _LESEN + _OFFEN + _MIT_F + _ZU + _ENDE + _NEBEN,
+        # Absender einsortieren: Zielkategorie wählen
+        "einsortieren": [
+            ("↑↓", "ziel_waehlen", "select"), ("k/j", "ziel_waehlen"),
+            ("enter", "ziel_nehmen", "sort in"), ("esc", "ziel_abbrechen", "cancel"),
+        ],
+        "loeschen:frage": [
+            ("j/y/enter", "loeschen_ja", "delete"), ("J/Y", "loeschen_ja"),
+            ("any key", "loeschen_nein", "cancel"),
+        ],
+        # Antwort-Editor (links das Original, rechts der eigene Text)
+        "antwort": [
+            ("type", "a_tippen", "type"), ("enter", "a_zeile", "new line"),
+            ("⌫", "a_weg", "delete"), ("↑↓", "a_original", "scroll original"),
+            ("esc", "a_fertig", "done"),
+        ],
+        "antwort:frage": [
+            ("j/y", "a_senden", "send"), ("J/Y", "a_senden"),
+            ("e", "a_entwurf", "draft"), ("E", "a_entwurf"),
+            ("n", "a_verwerfen", "discard"), ("N", "a_verwerfen"),
+            ("w/esc", "a_weiter", "keep writing"), ("W", "a_weiter"),
+        ],
+    })
+
+    def ansicht(self):
+        """Welche Ansicht der Tabelle gerade offen ist."""
+        MAIL = self.MAIL
+        if MAIL["replying"]:
+            return "antwort:frage" if MAIL["reply_confirm"] else "antwort"
+        if MAIL["level"] != "mails":
+            return "kategorien" if self._kategorien() else "kategorien:leer"
+        if MAIL["picking"]:
+            return "einsortieren"
+        if MAIL["confirmdel"]:
+            return "loeschen:frage"
+        if not MAIL["mails"]:
+            return "ordner:leer"
+        ein = ":eingang" if MAIL["cat"] == MAIL_EINGANG else ""
+        if MAIL["mode2"] == "list":
+            return "liste" + ein
+        return ("lesen:offen" if MAIL["expanded"] else "lesen") + ein
+
     def taste(self, ch):
         """Eine Taste, während das Post-Panel den Fokus hat (früher ein Zweig der
-        Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
-        MAIL, _mail_submit, cycle_theme = self.MAIL, self._mail_submit, self.z.cycle_theme
-        mail_assign, mail_delete = self.mail_assign, self.mail_delete
-        mail_mark_read, mail_open_category = self.mail_mark_read, self.mail_open_category
-        mail_open_eingang, mail_poll = self.mail_open_eingang, self.mail_poll
-        mail_reconcile, mail_reply_open = self.mail_reconcile, self.mail_reply_open
-        stdscr = self.z.stdscr
-        if MAIL["level"] == "mails":                       # Ebene 2: Mails einer Kat.
-            if MAIL["picking"]:                            # Einsortier-Picker offen
-                pcats = [str(c.get("name", "?")) for c in
-                         ((MAIL["data"] or {}).get("categories") or [])]
-                if ch == 27:
-                    MAIL["picking"] = False; MAIL["msg"] = ""
-                elif ch in (curses.KEY_UP, ord("k")):
-                    MAIL["picksel"] = max(0, MAIL["picksel"] - 1)
-                elif ch in (curses.KEY_DOWN, ord("j")):
-                    MAIL["picksel"] = MAIL["picksel"] + 1
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    if 0 <= MAIL["picksel"] < len(pcats):
-                        mail_assign(pcats[MAIL["picksel"]])
-            elif MAIL["confirmdel"]:                       # Lösch-Nachfrage offen
-                if ch in (ord("j"), ord("J"), ord("y"), ord("Y"), 10, 13, curses.KEY_ENTER):
-                    mail_delete()
-                elif ch != -1:
-                    MAIL["confirmdel"] = False; MAIL["msg"] = ""
-            elif ch == 27:                                 # Esc → zurück zu Kategorien
-                MAIL["level"] = "cats"; MAIL["msg"] = ""
-            elif ch in (ord("p"), ord("P")):               # p → Panel ganz zu
-                MAIL["active"] = False
-            elif ch in (ord("q"), ord("Q")):
-                return BEENDEN
-            elif ch in (ord("v"), ord("V"), 9):            # v/Tab → lesen↔liste
-                MAIL["mode2"] = "list" if MAIL["mode2"] == "read" else "read"
-                MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-            elif MAIL["mode2"] == "read" and ch in (curses.KEY_LEFT,
-                                                    curses.KEY_RIGHT):
-                # ←/→ = vorige/nächste Mail im Stapel (gepuffert zusammenfassen,
-                # damit schnelles Durchklicken nicht pro Taste den Body lädt).
-                delta = 1 if ch == curses.KEY_RIGHT else -1
-                stdscr.nodelay(True)
-                while True:
-                    nx = stdscr.getch()
-                    if nx == curses.KEY_RIGHT:
-                        delta += 1
-                    elif nx == curses.KEY_LEFT:
-                        delta -= 1
-                    else:
-                        if nx != -1:
-                            curses.ungetch(nx)
-                        break
-                stdscr.timeout(250)
-                MAIL["msel"] = max(0, MAIL["msel"] + delta)  # Obergrenze beim Zeichnen
-                MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-            elif MAIL["mode2"] == "read" and ch in (curses.KEY_DOWN, ord("j"),
-                                                    ord(" ")):
-                # ↓ aus der Vorschau = ausklappen; im Text = runterscrollen.
-                if not MAIL["expanded"]:
-                    MAIL["expanded"] = True; MAIL["bodyoff"] = 0
-                else:
-                    step = 5 if ch == ord(" ") else 1
-                    stdscr.nodelay(True)
-                    while True:
-                        nx = stdscr.getch()
-                        if nx in (curses.KEY_DOWN, ord("j")):
-                            step += 1
-                        elif nx in (curses.KEY_UP, ord("k")):
-                            step -= 1
-                        else:
-                            if nx != -1:
-                                curses.ungetch(nx)
-                            break
-                    stdscr.timeout(250)
-                    MAIL["bodyoff"] = max(0, MAIL["bodyoff"] + step)
-                MAIL["msg"] = ""
-            elif MAIL["mode2"] == "read" and ch in (curses.KEY_UP, ord("k")):
-                # ↑ = hochscrollen; ganz oben nochmal ↑ → wieder einklappen.
-                if MAIL["expanded"]:
-                    if MAIL["bodyoff"] > 0:
-                        step = 1
-                        stdscr.nodelay(True)
-                        while True:
-                            nx = stdscr.getch()
-                            if nx in (curses.KEY_UP, ord("k")):
-                                step += 1
-                            elif nx in (curses.KEY_DOWN, ord("j")):
-                                step -= 1
-                            else:
-                                if nx != -1:
-                                    curses.ungetch(nx)
-                                break
-                        stdscr.timeout(250)
-                        MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - step)
-                    else:
-                        MAIL["expanded"] = False
-                MAIL["msg"] = ""
-            elif MAIL["mode2"] == "list" and ch in (curses.KEY_LEFT, ord("h")):
-                MAIL["level"] = "cats"; MAIL["msg"] = ""   # Liste: ← zurück
-            elif MAIL["mode2"] == "list" and ch in (
-                    curses.KEY_UP, curses.KEY_DOWN, ord("k"), ord("j"),
-                    ord("n"), ord("N"), ord(" ")):
-                # LISTE: rauf/runter wählt eine Mail (gepuffert zusammenfassen).
-                _DN = (curses.KEY_DOWN, ord("j"), ord("n"), ord(" "))
-                _UP = (curses.KEY_UP, ord("k"), ord("N"))
-                delta = 1 if ch in _DN else -1
-                stdscr.nodelay(True)
-                while True:
-                    nx = stdscr.getch()
-                    if nx in _DN:
-                        delta += 1
-                    elif nx in _UP:
-                        delta -= 1
-                    else:
-                        if nx != -1:
-                            curses.ungetch(nx)
-                        break
-                stdscr.timeout(250)
-                MAIL["msel"] = max(0, MAIL["msel"] + delta)
-                MAIL["bodyoff"] = 0; MAIL["msg"] = ""
-            elif MAIL["mode2"] == "list" and ch in (10, 13, curses.KEY_ENTER,
-                                                    curses.KEY_RIGHT, ord("l")):
-                MAIL["mode2"] = "read"               # aus Liste: gewählte lesen
-                MAIL["expanded"] = False; MAIL["bodyoff"] = 0
-            elif ch == curses.KEY_NPAGE:                   # Bild↓ → Body runter
-                MAIL["bodyoff"] = MAIL["bodyoff"] + 5
-            elif ch == curses.KEY_PPAGE:                   # Bild↑ → Body hoch
-                MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 5)
-            elif ch in (ord("s"), ord("S")):               # einsortieren (Absender)
-                MAIL["picking"] = True; MAIL["picksel"] = 0; MAIL["msg"] = ""
-            elif ch in (ord("f"), ord("F")):               # abhaken (Eingang): gelesen + einsortieren
-                if MAIL["cat"] == MAIL_EINGANG:
-                    mail_mark_read()
-            elif ch in (ord("d"), ord("D")):               # löschen (Papierkorb)
-                if MAIL["cat"] == MAIL_EINGANG:
-                    MAIL["msg"] = "im eingang: f = abhaken (löschen erst nach einsortieren)"
-                else:
-                    MAIL["confirmdel"] = True; MAIL["msg"] = ""
-            elif ch in (ord("a"), ord("A")):               # antworten (Split-Editor)
-                mail_reply_open()                          # auch aus dem Eingang direkt
-            elif ch in (ord("e"), ord("E")):               # e → Eingang öffnen (INBOX + \Seen)
-                mail_open_eingang()
-            elif ch in (ord("r"), ord("R")):
-                mail_poll(); MAIL["data"] = None
-            elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen
-                mail_reconcile()
-            elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
-                _mail_submit(("counts",), "zähle ordner…",
-                             lambda: _do_refresh_counts(force=True))
-                MAIL["msg"] = "zähle neu…"
-            elif ch in (ord("t"), ord("T")):
-                cycle_theme()
-        else:                                              # Ebene 1: Kategorien wählen
-            if ch in (27, ord("p"), ord("P")):             # Esc/p → Panel zu
-                MAIL["active"] = False
-            elif ch in (ord("q"), ord("Q")):
-                return BEENDEN
-            elif ch in (curses.KEY_UP, ord("k")):
-                MAIL["sel"] = max(0, MAIL["sel"] - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                MAIL["sel"] = MAIL["sel"] + 1   # Klemmung beim Zeichnen
-            elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT, ord("l")):
-                d = MAIL["data"] or {}                      # gewählte Kategorie öffnen
-                cl = d.get("categories") if isinstance(d.get("categories"), list) else []
-                if 0 <= MAIL["sel"] < len(cl):
-                    mail_open_category(cl[MAIL["sel"]].get("name"))
-            elif ch in (ord("e"), ord("E")):               # e → Eingang öffnen (INBOX + \Seen)
-                mail_open_eingang()
-            elif ch in (ord("r"), ord("R")):               # r → Live-Poll anstoßen
-                mail_poll(); MAIL["data"] = None
-            elif ch in (ord("x"), ord("X")):               # x → Ordner an Keymap angleichen
-                mail_reconcile()
-            elif ch in (ord("z"), ord("Z")):               # z → Zahlen JETZT neu zählen
-                _mail_submit(("counts",), "zähle ordner…",
-                             lambda: _do_refresh_counts(force=True))
-                MAIL["msg"] = "zähle neu…"
-            elif ch in (ord("t"), ord("T")):
-                cycle_theme()
+        Hauptschleife in run_ui) — auch im Antwort-Editor. Gibt BEENDEN
+        zurück, wenn die TUI enden soll."""
+        if self.MAIL["replying"] and ch is not None and 128 <= ch <= 255:
+            self._utf8(ch)                 # Umlaute: getch liefert UTF-8-Bytes
+            return None
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def taste_antwort(self, ch):
+        """Übergang für die Hauptschleife: der Antwort-Editor ist seit
+        2026-10-11 eine Ansicht von taste()."""
+        return self.taste(ch)
+
+    def _kategorien(self):
+        d = self.MAIL["data"] or {}
+        return d.get("categories") if isinstance(d.get("categories"), list) else []
+
+    def _gepuffert(self, vor, zurueck):
+        """Schnell nachkommende gleiche Tasten zusammenfassen (damit z.B.
+        schnelles Durchklicken nicht pro Taste den Body lädt): +1 je Code aus
+        `vor`, −1 je Code aus `zurueck`; die erste fremde Taste geht zurück."""
+        stdscr, n = self.z.stdscr, 0
+        stdscr.nodelay(True)
+        while True:
+            nx = stdscr.getch()
+            if nx in vor:
+                n += 1
+            elif nx in zurueck:
+                n -= 1
+            else:
+                if nx != -1:
+                    curses.ungetch(nx)
+                break
+        stdscr.timeout(250)
+        return n
+
+    # ── überall ──
+    def aktion_beenden(self, _taste):
+        return BEENDEN
+
+    def aktion_schliessen(self, _taste):
+        self.MAIL["active"] = False
+
+    def aktion_eingang(self, _taste):
+        self.mail_open_eingang()
+
+    def aktion_poll(self, _taste):
+        self.mail_poll(); self.MAIL["data"] = None
+
+    def aktion_abgleich(self, _taste):
+        self.mail_reconcile()
+
+    def aktion_zaehlen(self, _taste):
+        """z: Zahlen JETZT neu zählen."""
+        self._mail_submit(("counts",), "zähle ordner…",
+                          lambda: _do_refresh_counts(force=True))
+        self.MAIL["msg"] = "zähle neu…"
+
+    def aktion_thema(self, _taste):
+        self.z.cycle_theme()
+
+    # ── Ebene 1: Kategorien ──
+    def aktion_k_waehlen(self, taste):
+        MAIL = self.MAIL
+        if taste in ("up", "k"):
+            MAIL["sel"] = max(0, MAIL["sel"] - 1)
+        else:
+            MAIL["sel"] = MAIL["sel"] + 1   # Klemmung beim Zeichnen
+
+    def aktion_k_oeffnen(self, _taste):
+        cl = self._kategorien()
+        if 0 <= self.MAIL["sel"] < len(cl):
+            self.mail_open_category(cl[self.MAIL["sel"]].get("name"))
+
+    # ── Ebene 2: Mails einer Kategorie ──
+    def aktion_zurueck(self, _taste):
+        """esc (und ← in der Liste) → zurück zu den Kategorien."""
+        self.MAIL["level"] = "cats"; self.MAIL["msg"] = ""
+
+    def aktion_modus(self, _taste):
+        """v/Tab: lesen ↔ liste."""
+        MAIL = self.MAIL
+        MAIL["mode2"] = "list" if MAIL["mode2"] == "read" else "read"
+        MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+
+    def aktion_m_waehlen(self, taste):
+        """LISTE: rauf/runter wählt eine Mail (gepuffert zusammengefasst)."""
+        MAIL = self.MAIL
+        runter = (curses.KEY_DOWN, ord("j"), ord("n"), ord(" "))
+        rauf = (curses.KEY_UP, ord("k"), ord("N"))
+        delta = 1 if taste in ("down", "j", "n", "space") else -1
+        delta += self._gepuffert(runter, rauf)
+        MAIL["msel"] = max(0, MAIL["msel"] + delta)
+        MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+
+    def aktion_m_lesen(self, _taste):
+        """aus der Liste: gewählte Mail lesen."""
+        MAIL = self.MAIL
+        MAIL["mode2"] = "read"
+        MAIL["expanded"] = False; MAIL["bodyoff"] = 0
+
+    def aktion_blaettern(self, taste):
+        """←/→ = vorige/nächste Mail im Stapel (gepuffert zusammengefasst)."""
+        MAIL = self.MAIL
+        delta = 1 if taste == "right" else -1
+        delta += self._gepuffert((curses.KEY_RIGHT,), (curses.KEY_LEFT,))
+        MAIL["msel"] = max(0, MAIL["msel"] + delta)  # Obergrenze beim Zeichnen
+        MAIL["expanded"] = False; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+
+    def aktion_aufklappen(self, _taste):
+        """↓ aus der Vorschau = ausklappen."""
+        MAIL = self.MAIL
+        MAIL["expanded"] = True; MAIL["bodyoff"] = 0; MAIL["msg"] = ""
+
+    def aktion_scrollen(self, taste):
+        """Ausgeklappt: ↓ runter (Leertaste 5 Zeilen), ↑ hoch; ganz oben
+        nochmal ↑ → wieder einklappen."""
+        MAIL = self.MAIL
+        runter = (curses.KEY_DOWN, ord("j"))
+        rauf = (curses.KEY_UP, ord("k"))
+        if taste in ("down", "j", "space"):
+            step = (5 if taste == "space" else 1) + self._gepuffert(runter, rauf)
+            MAIL["bodyoff"] = max(0, MAIL["bodyoff"] + step)
+        elif MAIL["bodyoff"] > 0:
+            step = 1 + self._gepuffert(rauf, runter)
+            MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - step)
+        else:
+            MAIL["expanded"] = False
+        MAIL["msg"] = ""
+
+    def aktion_seite(self, taste):
+        """Bild↓/Bild↑ → Body 5 Zeilen."""
+        MAIL = self.MAIL
+        if taste == "pgdn":
+            MAIL["bodyoff"] = MAIL["bodyoff"] + 5
+        else:
+            MAIL["bodyoff"] = max(0, MAIL["bodyoff"] - 5)
+
+    def aktion_einsortieren(self, _taste):
+        """s: Absender einsortieren (Kategorie wählen)."""
+        MAIL = self.MAIL
+        MAIL["picking"] = True; MAIL["picksel"] = 0; MAIL["msg"] = ""
+
+    def aktion_abhaken(self, _taste):
+        """f (Eingang): gelesen + einsortieren."""
+        if self.MAIL["cat"] == MAIL_EINGANG:
+            self.mail_mark_read()
+
+    def aktion_loeschen(self, _taste):
+        """d: in den Papierkorb (mit Nachfrage); im Eingang nicht."""
+        MAIL = self.MAIL
+        if MAIL["cat"] == MAIL_EINGANG:
+            MAIL["msg"] = "im eingang: f = abhaken (löschen erst nach einsortieren)"
+        else:
+            MAIL["confirmdel"] = True; MAIL["msg"] = ""
+
+    def aktion_antworten(self, _taste):
+        """a: antworten (Split-Editor) — auch aus dem Eingang direkt."""
+        self.mail_reply_open()
+
+    # ── Einsortieren: Zielkategorie ──
+    def aktion_ziel_waehlen(self, taste):
+        MAIL = self.MAIL
+        if taste in ("up", "k"):
+            MAIL["picksel"] = max(0, MAIL["picksel"] - 1)
+        else:
+            MAIL["picksel"] = MAIL["picksel"] + 1
+
+    def aktion_ziel_nehmen(self, _taste):
+        pcats = [str(c.get("name", "?")) for c in self._kategorien()]
+        if 0 <= self.MAIL["picksel"] < len(pcats):
+            self.mail_assign(pcats[self.MAIL["picksel"]])
+
+    def aktion_ziel_abbrechen(self, _taste):
+        self.MAIL["picking"] = False; self.MAIL["msg"] = ""
+
+    # ── Lösch-Nachfrage ──
+    def aktion_loeschen_ja(self, _taste):
+        self.mail_delete()
+
+    def aktion_loeschen_nein(self, _taste):
+        self.MAIL["confirmdel"] = False; self.MAIL["msg"] = ""
 
     def draw_mail(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn das Post/Mail-Panel Fokus hat. Zwei Ebenen:
@@ -669,7 +776,6 @@ class Post:
             addclip(by + 1, ix, head, iw, C["bright"])
             if mails is None:
                 addclip(body_top, ix, "lädt Ordner…", iw, C["faint"])
-                addclip(bottom, ix, "esc zurück", iw, C["faint"])
                 return
             n = len(mails)
             MAIL["msel"] = max(0, min(MAIL["msel"], max(0, n - 1)))
@@ -680,7 +786,7 @@ class Post:
                 psel = max(0, min(MAIL["picksel"], max(0, len(pcats) - 1)))
                 MAIL["picksel"] = psel
                 addclip(body_top, ix, "Absender einsortieren in:", iw, C["acc"])
-                pavail = bottom - (body_top + 1) - 1
+                pavail = bottom - body_top        # bis zur untersten Zeile
                 poff = max(0, min(psel - pavail // 2, max(0, len(pcats) - pavail))) \
                     if len(pcats) > pavail else 0
                 for r, name in enumerate(pcats[poff:poff + pavail]):
@@ -688,14 +794,11 @@ class Post:
                     mark = "» " if idx == psel else "  "
                     attr = (C["bright"] | curses.A_REVERSE) if idx == psel else C["bright"]
                     addclip(body_top + 1 + r, ix, mark + name, iw, attr)
-                addclip(bottom, ix, "↑↓ wählen · enter zuordnen · esc abbrechen",
-                        iw, C["faint"])
                 return
 
             if n == 0:
                 # Bei einem Ordner-Fehler den ECHTEN Grund zeigen, nicht „leer".
                 addclip(body_top, ix, MAIL["msg"] or "(Ordner leer)", iw, C["faint"])
-                addclip(bottom, ix, "esc zurück", iw, C["faint"])
                 return
 
             # ── Modus LISTE: Blöckchen (Absender + Titel), auswählbar ──
@@ -721,8 +824,8 @@ class Post:
                     a2 = (C["dim"] | curses.A_REVERSE) if seld else C["dim"]
                     addclip(y, ix, ("» " if seld else "  ") + who, iw, a1)
                     addclip(y + 1, ix, "  " + subj, iw, a2)
-                hint = "wirklich löschen? j/n" if MAIL["confirmdel"] else MAIL["msg"]
-                if hint:                       # Shortcuts liegen unter '/'
+                hint = "wirklich löschen?" if MAIL["confirmdel"] else MAIL["msg"]
+                if hint:                       # Frage oder Rückmeldung (Tasten: Leiste)
                     addclip(bottom, ix, hint, iw, C["faint"])
                 return
 
@@ -760,11 +863,11 @@ class Post:
                     for r, ln in enumerate(lines[:prev_h]):
                         addclip(txt_top + r, ix, ln, iw, C["dim"])
                     if len(lines) > prev_h:
-                        addclip(txt_top + prev_h, ix, "  … (↓ zum Ausklappen)",
+                        addclip(txt_top + prev_h, ix, "  …",
                                 iw, C["faint"])
             if MAIL["confirmdel"]:
-                hint = "wirklich löschen? j/n"
-            else:                              # Shortcuts liegen unter '/'; nur Position/Feedback
+                hint = "wirklich löschen?"
+            else:                              # nur Position/Rückmeldung (Tasten: Leiste)
                 hint = MAIL["msg"] or ("%d/%d" % (MAIL["msel"] + 1, n))
             addclip(bottom, ix, hint, iw, C["faint"])
             return
@@ -797,7 +900,7 @@ class Post:
             attr = (C["bright"] | curses.A_REVERSE) if idx == sel else C["bright"]
             addclip(body_top + r, ix, line, iw, attr)
         src = "live" if live_counts else "lokal"
-        # Shortcuts liegen unter '/'; unten nur Feedback bzw. die Datenquelle.
+        # Tasten stehen in der Leiste; unten nur Feedback bzw. die Datenquelle.
         hint = MAIL["msg"] or ("[%s]" % src)
         addclip(bottom, ix, hint, iw, C["faint"])
 
@@ -895,40 +998,51 @@ class Post:
         _mail_submit(("draft", uid), "speichere entwurf…",
                      lambda p=payload: _do_reply_draft(p, uid=uid, is_eingang=is_eingang))
 
-    def taste_antwort(self, ch):
-        """Eine Taste im Antwort-Editor (früher ein Zweig der Hauptschleife)."""
-        MAIL, mail_reply_draft = self.MAIL, self.mail_reply_draft
-        mail_reply_send = self.mail_reply_send
-        if MAIL["reply_confirm"]:                          # Verlassen-Leiste
-            if ch in (ord("j"), ord("J"), ord("y"), ord("Y")):
-                mail_reply_send()
-            elif ch in (ord("e"), ord("E")):               # e → als Entwurf sichern
-                mail_reply_draft()
-            elif ch in (ord("n"), ord("N")):
-                MAIL["replying"] = False; MAIL["reply_confirm"] = False
-                MAIL["msg"] = "verworfen"
-            elif ch in (ord("w"), ord("W"), 27):
-                MAIL["reply_confirm"] = False
+    # ── Antwort-Editor (Ansichten „antwort" und „antwort:frage") ──
+    def aktion_a_tippen(self, zeichen):
+        self.MAIL["reply_text"] += zeichen
+
+    def _utf8(self, ch):
+        """UTF-8 best effort (Umlaute): Bytes sammeln, bis ein Zeichen fertig ist."""
+        MAIL = self.MAIL
+        buf = MAIL.get("_u8", b"") + bytes([ch & 0xFF])
+        try:
+            MAIL["reply_text"] += buf.decode("utf-8")
+            MAIL["_u8"] = b""
+        except UnicodeDecodeError:
+            MAIL["_u8"] = buf if len(buf) < 4 else b""
+
+    def aktion_a_zeile(self, _taste):
+        self.MAIL["reply_text"] += "\n"
+
+    def aktion_a_weg(self, _taste):
+        self.MAIL["reply_text"] = self.MAIL["reply_text"][:-1]
+
+    def aktion_a_original(self, taste):
+        """↑↓ scrollt das Original (links)."""
+        MAIL = self.MAIL
+        if taste == "up":
+            MAIL["reply_origoff"] = max(0, MAIL["reply_origoff"] - 1)
         else:
-            if ch == 27:                                   # Esc → fertig/senden-Leiste
-                MAIL["reply_confirm"] = True
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                MAIL["reply_text"] = MAIL["reply_text"][:-1]
-            elif ch in (10, 13, curses.KEY_ENTER):
-                MAIL["reply_text"] += "\n"
-            elif ch == curses.KEY_UP:                       # Original (links) scrollen
-                MAIL["reply_origoff"] = max(0, MAIL["reply_origoff"] - 1)
-            elif ch == curses.KEY_DOWN:
-                MAIL["reply_origoff"] = MAIL["reply_origoff"] + 1
-            elif 32 <= ch <= 126:
-                MAIL["reply_text"] += chr(ch)
-            elif ch >= 128:                                # UTF-8 best effort (Umlaute)
-                buf = MAIL.get("_u8", b"") + bytes([ch & 0xFF])
-                try:
-                    MAIL["reply_text"] += buf.decode("utf-8")
-                    MAIL["_u8"] = b""
-                except UnicodeDecodeError:
-                    MAIL["_u8"] = buf if len(buf) < 4 else b""
+            MAIL["reply_origoff"] = MAIL["reply_origoff"] + 1
+
+    def aktion_a_fertig(self, _taste):
+        """esc → senden / Entwurf / verwerfen / weiter?"""
+        self.MAIL["reply_confirm"] = True
+
+    def aktion_a_senden(self, _taste):
+        self.mail_reply_send()
+
+    def aktion_a_entwurf(self, _taste):
+        self.mail_reply_draft()
+
+    def aktion_a_verwerfen(self, _taste):
+        MAIL = self.MAIL
+        MAIL["replying"] = False; MAIL["reply_confirm"] = False
+        MAIL["msg"] = "verworfen"
+
+    def aktion_a_weiter(self, _taste):
+        self.MAIL["reply_confirm"] = False
 
     def draw_reply(self, by, bx, bh, bw):
         """Antwort-Editor: zwei Kästen nebeneinander — links die Original-Mail,
@@ -955,7 +1069,7 @@ class Post:
 
         # Rechter Kasten: dein Editor
         rbx = bx + lw + gap
-        title = "antwort" + ("  · j/e/n?" if MAIL["reply_confirm"] else "")
+        title = "antwort" + ("  · senden?" if MAIL["reply_confirm"] else "")
         draw_box(by, rbx, bh, rw, title)
         rix, riw = rbx + 2, rw - 4
         to = ""
@@ -967,15 +1081,11 @@ class Post:
         addclip(by + 1, rix, "An: " + to, riw, C["dim"])
         addclip(by + 2, rix, "─" * riw, riw, C["faint"])
         ed_top = by + 3
-        ed_h = (by + bh - 2) - ed_top
+        # bis zur untersten Zeile im Kasten (die Tasten stehen in der Leiste)
+        ed_h = (by + bh - 1) - ed_top
         elines = _wrap(MAIL["reply_text"], riw) or [""]
         # Cursor ans Ende; nur das untere Fenster zeigen, wenn länger als Platz.
         estart = max(0, len(elines) - ed_h)
         for r, ln in enumerate(elines[estart:estart + ed_h]):
             cur = "_" if (estart + r == len(elines) - 1) else ""
             addclip(ed_top + r, rix, ln + cur, riw, C["bright"])
-        if MAIL["reply_confirm"]:
-            hint = "j senden · e entwurf · n verwerfen · w weiter"
-        else:
-            hint = "tippen · enter=zeile · esc=fertig/senden"
-        addclip(by + bh - 2, rix, hint[:riw], riw, C["faint"])

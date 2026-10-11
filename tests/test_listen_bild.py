@@ -76,10 +76,9 @@ def test_dieselbe_liste_ist_in_kachel_und_tui_dasselbe_bild():
         kachel = [_text(z) for z in _kachel(lid, w, h, erledigte)["zeilen"]]
         tui = _tui(lst, w, h, showdone=erledigte)
         assert kachel, (w, h)
-        # Kopf: rechts hält die TUI 8 Zellen für „[a neu]" frei (kopf_frei)
-        kopf = tui[0][:w - 8].rstrip().rstrip("…")
-        assert kopf and kachel[0].startswith(kopf), (kopf, kachel[0])
-        for k, t in zip(kachel[1:], tui[1:]):
+        # Seit 2026-10-11 ohne „[a neu]" im Kopf (Tasten nur in der Leiste):
+        # auch der Kopf ist Zeile für Zeile derselbe.
+        for k, t in zip(kachel, tui):
             assert t.rstrip() == k.rstrip(), (w, h, k, t)
         assert all(not t.strip() for t in tui[len(kachel):])
 

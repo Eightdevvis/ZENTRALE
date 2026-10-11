@@ -40,10 +40,20 @@ Einkauf                          Kopf (Pfad der Ebene), Rolle kopf
   Zeilen; sie bildet nur Rollen auf curses-Farben ab (`FARBROLLEN`, neue
   Rolle `auswahl` → `sel` = hell invers). Veredelung, die die Struktur
   nicht ändert: Pixel-Bernstein (oder schattierte Rückfall-Spalten) genau an
-  Zeile und Breite, die die Quelle angibt; `[a neu]` rechts im Kopf (dafür
-  hält die Quelle `kopf_frei` Zellen frei); Tasten-Hinweise hinter dem
-  Leer-Text. Die Wurzel (Projekte/Listen-Zonen) setzt dieselben Kästen
+  Zeile und Breite, die die Quelle angibt. Seit 2026-10-11 keine
+  Tasten-Hinweise mehr im Kasten (`[a neu]`, Tipps hinter dem Leer-Text,
+  „enter anhängen …" sind weg; `kopf_frei` der Quelle bleibt ungenutzt).
+  Die Wurzel (Projekte/Listen-Zonen) setzt dieselben Kästen
   (`listen_bild.kasten`) in ihre zwei Zonen.
+- **Tasten (TUI):** Tastentabelle `Fokus.TASTEN` (tui/ansichten/tasten.py) —
+  aus ihr verteilt die Ansicht ihre Tasten und liest die Leiste ganz unten.
+  Ansichten: `wald` (ganze Liste gewählt) · `wald:ordner` / `wald:punkt`
+  (Projekt-Eintrag mit/ohne Unterpunkte; nur am Blatt hakt space/enter ab) ·
+  `wald:leer` · `wald:frage` · `wald:neu` / `wald:umbenennen` · `liste`
+  (Eintrag gewählt) · `liste:bernstein` (+ `:leer`, enter zeigt das
+  Abgeschlossene) · `liste:leer` · `liste:neu` / `liste:umbenennen` ·
+  `einordnen` (+ `:leer`) · `verschieben` · `verschieben:name`. Wege in jede
+  Ansicht: `tests/tasten_zustaende/fokus.py`.
 - **Wächter:** `tests/test_listen_bild.py` — dieselbe Liste ergibt in Kachel
   und TUI dieselben Zeilen; die Kachel reicht nur durch; `kachel_fokus.py`
   enthält keine Rahmen-/Marker-Zeichen und keine Zeichen-Funktionen;

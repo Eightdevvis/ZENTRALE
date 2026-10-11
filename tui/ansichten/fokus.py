@@ -23,6 +23,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 
 from .basis import BEENDEN, api_call
 from .desk_kacheln import farbe as rolle_farbe
+from .tasten import Tasten
 import listen_baum  # noqa: E402  – core/, eingehängt von basis.kern_pfad
 import listen_bild  # noqa: E402  – das EINE Bild einer Liste (auch die Kachel)
 
@@ -357,415 +358,629 @@ class Fokus:
         L["isel"] = self.l_index_in_container(iid)
         return True
 
+    # ── Tasten: EINE Tabelle, aus der Verteilung und Leiste lesen ──────
+    # (tui/ansichten/tasten.py, 2026-10-11). Ohne Text = verarbeitet, aber
+    # nicht gezeigt (vim-Pfeile, Großbuchstaben, q). Die Wurzel ist je nach
+    # gewähltem Knoten eine andere Ansicht (ganze Liste, Ordner-Eintrag,
+    # Blatt-Eintrag), weil Leertaste, enter und m dort Verschiedenes tun.
+    _WALD = [
+        ("↑↓", "w_waehlen", "select"), ("k/j", "w_waehlen"),
+        ("s", "w_oeffnen_anhaengen", "open + add"), ("S", "w_oeffnen_anhaengen"),
+        ("n", "w_neue_liste", "new list"), ("N", "w_neue_liste"),
+        ("f", "w_fokus", "focus"), ("F", "w_fokus"),
+        ("r", "w_umbenennen", "rename"), ("R", "w_umbenennen"),
+        ("p", "w_projekt", "project"), ("P", "w_projekt"),
+    ]
+    _WALD_ENDE = [
+        (">", "w_einordnen", "place"), ("d", "w_loeschen", "delete"), ("D", "w_loeschen"),
+        ("esc/l", "w_schliessen", "close"), ("L", "w_schliessen"), ("q/Q", "beenden"),
+    ]
+    TASTEN = Tasten({
+        # Wurzel, gewählt ist eine ganze Liste
+        "wald": [("enter/→", "w_oeffnen", "open")] + _WALD + [
+            ("m/M", "w_verschieben")] + _WALD_ENDE,       # m: sagt, dass > es tut
+        # … ein Projekt-Eintrag mit Unterpunkten
+        "wald:ordner": [("enter/→", "w_oeffnen", "open")] + _WALD + [
+            ("m", "w_verschieben", "move item"), ("M", "w_verschieben")] + _WALD_ENDE,
+        # … ein Projekt-Eintrag ohne Unterpunkte (Blatt)
+        "wald:punkt": [("enter/→", "w_oeffnen", "check"), ("space", "w_abhaken")] + _WALD + [
+            ("m", "w_verschieben", "move item"), ("M", "w_verschieben")] + _WALD_ENDE,
+        "wald:leer": [
+            ("n", "w_neue_liste", "new list"), ("N", "w_neue_liste"),
+            ("esc/l", "w_schliessen", "close"), ("L", "w_schliessen"), ("q/Q", "beenden"),
+        ],
+        "wald:frage": [
+            ("j/y/enter", "w_ja", "delete"), ("J/Y", "w_ja"), ("any key", "w_nein", "cancel"),
+        ],
+        "wald:neu": [
+            ("type", "w_tippen", "type name"), ("enter", "w_name_setzen", "create"),
+            ("⌫", "w_zeichen_weg", "delete"), ("esc", "w_name_abbrechen", "cancel"),
+        ],
+        "wald:umbenennen": [
+            ("type", "w_tippen", "type name"), ("enter", "w_name_setzen", "rename"),
+            ("⌫", "w_zeichen_weg", "delete"), ("esc", "w_name_abbrechen", "cancel"),
+        ],
+        # In einer Liste, ein Eintrag gewählt
+        "liste": [
+            ("↑↓", "e_waehlen", "select"), ("k/j", "e_waehlen"),
+            ("enter", "e_oeffnen", "open / check"), ("space", "e_abhaken", "check"),
+            ("a/s", "e_neu", "add"), ("A/S", "e_neu"),
+            ("r", "e_umbenennen", "rename"), ("R", "e_umbenennen"),
+            ("p", "e_projekt", "project"), ("P", "e_projekt"),
+            ("f", "e_fokus", "focus"), ("F", "e_fokus"),
+            (">", "e_einordnen", "place"),
+            ("m", "e_verschieben", "move out"), ("M", "e_verschieben"),
+            ("d", "e_loeschen", "delete"), ("D", "e_loeschen"),
+            ("esc/l", "e_zurueck", "back"), ("L", "e_zurueck"), ("q/Q", "beenden"),
+        ],
+        # … der Bernstein oben gewählt (enter zeigt das Abgeschlossene / zurück)
+        "liste:bernstein": [
+            ("↓", "e_waehlen", "select"), ("j", "e_waehlen"),
+            ("enter", "e_bernstein", "done / open"),
+            ("a", "e_neu", "add"), ("A", "e_neu"),
+            ("esc/l", "e_zurueck", "back"), ("L", "e_zurueck"), ("q/Q", "beenden"),
+        ],
+        # … der Bernstein, darunter nichts (alles erledigt / nichts abgeschlossen)
+        "liste:bernstein:leer": [
+            ("enter", "e_bernstein", "done / open"),
+            ("a", "e_neu", "add"), ("A", "e_neu"),
+            ("esc/l", "e_zurueck", "back"), ("L", "e_zurueck"), ("q/Q", "beenden"),
+        ],
+        # … die Ebene ist ganz leer
+        "liste:leer": [
+            ("a", "e_neu", "add"), ("A", "e_neu"),
+            ("esc/l", "e_zurueck", "back"), ("L", "e_zurueck"), ("q/Q", "beenden"),
+        ],
+        "liste:neu": [
+            ("type", "e_tippen", "type"), ("enter", "e_eintrag_setzen", "add"),
+            ("⌫", "e_zeichen_weg", "delete"), ("esc", "e_eingabe_abbrechen", "done"),
+        ],
+        "liste:umbenennen": [
+            ("type", "e_tippen", "type"), ("enter", "e_eintrag_setzen", "rename"),
+            ("⌫", "e_zeichen_weg", "delete"), ("esc", "e_eingabe_abbrechen", "cancel"),
+        ],
+        # Knoten Forest-weit einordnen (>)
+        "einordnen": [
+            ("↑↓", "p_waehlen", "select"), ("k/j", "p_waehlen"),
+            ("enter", "p_nehmen", "take"),
+            ("esc/l", "p_abbrechen", "cancel"), ("L", "p_abbrechen"), ("q/Q", "beenden"),
+        ],
+        "einordnen:leer": [
+            ("esc/l", "p_abbrechen", "cancel"), ("L", "p_abbrechen"), ("q/Q", "beenden"),
+        ],
+        # Eintrag raus in eine andere Liste (m); Ziel 0 = neue Liste
+        "verschieben": [
+            ("↑↓", "v_waehlen", "select"), ("k/j", "v_waehlen"),
+            ("enter", "v_nehmen", "take"),
+            ("esc/l", "v_abbrechen", "cancel"), ("L", "v_abbrechen"), ("q/Q", "beenden"),
+        ],
+        "verschieben:name": [
+            ("type", "v_tippen", "type name"), ("enter", "v_name_setzen", "create + move"),
+            ("⌫", "v_zeichen_weg", "delete"), ("esc", "v_name_abbrechen", "back"),
+        ],
+    })
+
+    def ansicht(self):
+        """Welche Ansicht der Tabelle gerade offen ist."""
+        L = self.L
+        v = L["view"]
+        if v == "place":
+            return "einordnen" if self._p_ziele() else "einordnen:leer"
+        if v == "move":
+            return "verschieben"
+        if v == "move_new":
+            return "verschieben:name"
+        if v == "view":
+            if L["adding"]:
+                return "liste:umbenennen" if L["imode"] == "rename" else "liste:neu"
+            _pid, vis, cur, has_bar = self._ebene_lage()
+            if has_bar and (L["isel"] == -1 or not vis):
+                return "liste:bernstein" if vis else "liste:bernstein:leer"
+            return "liste" if cur else "liste:leer"
+        # forest
+        if L["adding"]:
+            return "wald:umbenennen" if L["imode"] == "frename" else "wald:neu"
+        if L["confirm"]:
+            return "wald:frage"
+        cur = self._wald_cur()
+        if cur is None:
+            return "wald:leer"
+        if cur.get("iid") is None:
+            return "wald"
+        return "wald:ordner" if cur.get("branch") else "wald:punkt"
+
     def taste(self, ch):
         """Eine Taste, während das Fokus-Werkzeug den Fokus hat (früher ein Zweig
         der Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
+        self._bernstein_klemmen()
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def aktion_beenden(self, _taste):
+        return BEENDEN
+
+    # ── Wurzel (forest): oben die Projekte, unten die anderen Listen ──
+    def _wald_cur(self):
+        """Der gewählte Deskriptor der Wurzel {lid,iid,branch,whole,…} oder None."""
+        rows, _ndiv = self.l_forest_rows()
+        f = self.L["fsel"]
+        return rows[f] if 0 <= f < len(rows) else None
+
+    def _toggle(self, lid, iid):
+        """Einen Eintrag der Wurzel abhaken/wieder öffnen."""
+        try:
+            api_call("/api/lists/%s/items/%d/toggle" % (lid, iid), method="POST")
+            self.l_load()
+        except Exception:
+            self.L["msg"] = "umschalten fehlgeschlagen"
+
+    def aktion_w_waehlen(self, taste):
         L = self.L
-        if L["view"] == "forest":
-            return self._taste_wald(ch)
-        elif L["view"] == "view":
-            return self._taste_ebene(ch)
-        elif L["view"] == "place":  # Knoten (Liste/Eintrag) Forest-weit einordnen
-            return self._taste_einordnen(ch)
-        elif L["view"] == "move":  # Eintrag raus in eine andere Liste
-            return self._taste_verschieben(ch)
-        elif L["view"] == "move_new":  # Name für die neue Ziel-Liste tippen
-            return self._taste_neue_liste(ch)
+        rows, _ndiv = self.l_forest_rows()
+        if rows:
+            d = -1 if taste in ("up", "k") else 1
+            L["fsel"] = (L["fsel"] + d) % len(rows)
 
-    def _taste_wald(self, ch):
-        """Taste in der Wurzel (forest): oben die Projekte, unten die anderen Listen."""
-        L, l_focus_toggle, l_forest_rows = self.L, self.l_focus_toggle, self.l_forest_rows
-        l_load, l_move_targets = self.l_load, self.l_move_targets
-        l_open_desc, l_realnode = self.l_open_desc, self.l_realnode
-        # Zwei-Zonen-Wurzel: oben Projekte, unten andere Listen. cur =
-        # gewählter Deskriptor {lid,iid,branch,whole,…}.
-        rows, _ndiv = l_forest_rows()
-        cur = rows[L["fsel"]] if 0 <= L["fsel"] < len(rows) else None
-        enter = ch in (10, 13, curses.KEY_ENTER)
-        if L["adding"]:                               # neue Liste / umbenennen tippen
-            if ch == 27:
-                L["adding"] = False; L["imode"] = "add"
-                L["fedit"] = None; L["input"] = ""; L["msg"] = ""
-            elif enter:
-                txt = L["input"].strip()
-                if not txt:
-                    L["msg"] = "name fehlt"
-                elif L["imode"] == "frename" and L["fedit"] is not None:
-                    d = L["fedit"]
-                    try:
-                        if d.get("iid") is None:
-                            api_call("/api/lists/%s/rename" % d["lid"], method="POST",
-                                     body={"name": txt})
-                        else:
-                            api_call("/api/lists/%s/items/%d/rename" % (d["lid"], d["iid"]),
-                                     method="POST", body={"text": txt})
-                        L["msg"] = "umbenannt"
-                    except Exception:
-                        L["msg"] = "umbenennen fehlgeschlagen"
-                    L["adding"] = False; L["imode"] = "add"
-                    L["fedit"] = None; L["input"] = ""; l_load()
-                else:                                 # neue Liste anlegen
-                    try:
-                        api_call("/api/lists", method="POST", body={"name": txt})
-                        L["msg"] = "angelegt: " + txt
-                    except Exception:
-                        L["msg"] = "anlegen fehlgeschlagen"
-                    L["adding"] = False; L["input"] = ""; l_load()
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                L["input"] = L["input"][:-1]
-            elif 32 <= ch <= 126 and len(L["input"]) < 80:
-                L["input"] += chr(ch)
-        elif L["confirm"]:                            # Liste löschen? (Nachfrage)
-            if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
-                      10, 13, curses.KEY_ENTER):
-                if cur and cur.get("iid") is None:
-                    try:
-                        api_call("/api/lists/" + str(cur["lid"]), method="DELETE")
-                        L["msg"] = "gelöscht"
-                    except Exception:
-                        L["msg"] = "löschen fehlgeschlagen"
-                L["confirm"] = False; l_load()
-            elif ch != -1:                            # alles andere → abbrechen
-                L["confirm"] = False; L["msg"] = ""
-        elif ch in (27, ord("l"), ord("L")):           # Esc/l → Werkzeug zu
-            L["active"] = False
-        elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
-            return BEENDEN
-        elif ch in (curses.KEY_UP, ord("k")):
-            if rows:
-                L["fsel"] = (L["fsel"] - 1) % len(rows)
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            if rows:
-                L["fsel"] = (L["fsel"] + 1) % len(rows)
-        elif enter or ch == curses.KEY_RIGHT:          # rein / (Blatt) abhaken
-            if cur:
-                if cur.get("iid") is None or cur.get("branch"):
-                    l_open_desc(cur)                   # ganze Liste / Ordner → reindiven
-                else:                                  # Blatt-Eintrag → abhaken
-                    try:
-                        api_call("/api/lists/%s/items/%d/toggle" % (cur["lid"], cur["iid"]),
-                                 method="POST")
-                        l_load()
-                    except Exception:
-                        L["msg"] = "umschalten fehlgeschlagen"
-        elif ch == ord(" "):                           # space: Blatt-Eintrag abhaken
-            if cur and cur.get("iid") is not None and not cur.get("branch"):
-                try:
-                    api_call("/api/lists/%s/items/%d/toggle" % (cur["lid"], cur["iid"]),
-                             method="POST")
-                    l_load()
-                except Exception:
-                    L["msg"] = "umschalten fehlgeschlagen"
-        elif ch in (ord("f"), ord("F")):               # f: diesen Knoten fokussieren
-            if cur:
-                l_focus_toggle(cur)
-        elif ch in (ord("n"), ord("N")):               # neue Liste (inline)
-            L["adding"] = True; L["imode"] = "newlist"
-            L["fedit"] = None; L["input"] = ""; L["msg"] = ""
-        elif ch in (ord("r"), ord("R")):               # umbenennen (Liste/Eintrag, inline)
-            if cur:
-                L["adding"] = True; L["imode"] = "frename"
-                L["fedit"] = {"lid": cur["lid"], "iid": cur["iid"]}
-                L["input"] = str(cur.get("name") or ""); L["msg"] = ""
-        elif ch in (ord("s"), ord("S")):               # reindiven + gleich anhängen
-            if cur:
-                l_open_desc(cur)
-                L["adding"] = True; L["imode"] = "add"
-                L["addparent"] = None; L["edit_iid"] = None
-                L["input"] = ""; L["msg"] = ""
-        elif ch in (ord("d"), ord("D")):               # löschen (Liste → Nachfrage, Eintrag direkt)
-            if cur and cur.get("iid") is None:
-                L["confirm"] = True; L["msg"] = ""
-            elif cur:
-                try:
-                    api_call("/api/lists/%s/items/%d" % (cur["lid"], cur["iid"]),
-                             method="DELETE")
-                    l_load()
-                except Exception:
-                    L["msg"] = "löschen fehlgeschlagen"
-        elif ch in (ord("p"), ord("P")):               # Projekt-Flag an/aus (schiebt in obere Zone)
-            if cur:
-                node = l_realnode(cur)
-                on = not (node.get("project") if node else False)
-                try:
-                    if cur.get("iid") is None:
-                        api_call("/api/lists/%s/project" % cur["lid"], method="POST",
-                                 body={"project": on})
-                    else:
-                        api_call("/api/lists/%s/items/%d/project" % (cur["lid"], cur["iid"]),
-                                 method="POST", body={"project": on})
-                    l_load()
-                except Exception:
-                    L["msg"] = "projekt fehlgeschlagen"
-        elif ch in (ord("m"), ord("M")):               # Eintrag in andere Liste verschieben
-            if cur and cur.get("iid") is not None:
-                L["def"] = next((l for l in L["lists"]
-                                 if isinstance(l, dict) and l.get("id") == cur["lid"]), None)
-                if L["def"] and l_move_targets():
-                    L["move_iid"] = cur["iid"]; L["nsel"] = 0
-                    L["msg"] = ""; L["view"] = "move"
+    def aktion_w_oeffnen(self, _taste):
+        """enter/→: ganze Liste / Ordner → reindiven, Blatt → abhaken."""
+        cur = self._wald_cur()
+        if cur:
+            if cur.get("iid") is None or cur.get("branch"):
+                self.l_open_desc(cur)
+            else:
+                self._toggle(cur["lid"], cur["iid"])
+
+    def aktion_w_abhaken(self, _taste):
+        cur = self._wald_cur()
+        if cur and cur.get("iid") is not None and not cur.get("branch"):
+            self._toggle(cur["lid"], cur["iid"])
+
+    def aktion_w_fokus(self, _taste):
+        cur = self._wald_cur()
+        if cur:
+            self.l_focus_toggle(cur)
+
+    def aktion_w_neue_liste(self, _taste):
+        L = self.L
+        L["adding"] = True; L["imode"] = "newlist"
+        L["fedit"] = None; L["input"] = ""; L["msg"] = ""
+
+    def aktion_w_umbenennen(self, _taste):
+        L, cur = self.L, self._wald_cur()
+        if cur:
+            L["adding"] = True; L["imode"] = "frename"
+            L["fedit"] = {"lid": cur["lid"], "iid": cur["iid"]}
+            L["input"] = str(cur.get("name") or ""); L["msg"] = ""
+
+    def aktion_w_oeffnen_anhaengen(self, _taste):
+        """s: reindiven und gleich einen Eintrag anhängen."""
+        L, cur = self.L, self._wald_cur()
+        if cur:
+            self.l_open_desc(cur)
+            L["adding"] = True; L["imode"] = "add"
+            L["addparent"] = None; L["edit_iid"] = None
+            L["input"] = ""; L["msg"] = ""
+
+    def aktion_w_loeschen(self, _taste):
+        """d: ganze Liste → Nachfrage, Eintrag direkt."""
+        L, cur = self.L, self._wald_cur()
+        if cur and cur.get("iid") is None:
+            L["confirm"] = True; L["msg"] = ""
+        elif cur:
+            try:
+                api_call("/api/lists/%s/items/%d" % (cur["lid"], cur["iid"]),
+                         method="DELETE")
+                self.l_load()
+            except Exception:
+                L["msg"] = "löschen fehlgeschlagen"
+
+    def aktion_w_projekt(self, _taste):
+        """p: Projekt-Flag an/aus (schiebt in die obere Zone)."""
+        L, cur = self.L, self._wald_cur()
+        if not cur:
+            return
+        node = self.l_realnode(cur)
+        on = not (node.get("project") if node else False)
+        try:
+            if cur.get("iid") is None:
+                api_call("/api/lists/%s/project" % cur["lid"], method="POST",
+                         body={"project": on})
+            else:
+                api_call("/api/lists/%s/items/%d/project" % (cur["lid"], cur["iid"]),
+                         method="POST", body={"project": on})
+            self.l_load()
+        except Exception:
+            L["msg"] = "projekt fehlgeschlagen"
+
+    def aktion_w_verschieben(self, _taste):
+        """m: Eintrag in eine andere Liste; auf einer ganzen Liste sagt es,
+        was stattdessen geht (2026-10-07)."""
+        L, cur = self.L, self._wald_cur()
+        if cur and cur.get("iid") is not None:
+            L["def"] = next((l for l in L["lists"]
+                             if isinstance(l, dict) and l.get("id") == cur["lid"]), None)
+            if L["def"] and self.l_move_targets():
+                L["move_iid"] = cur["iid"]; L["nsel"] = 0
+                L["msg"] = ""; L["view"] = "move"
+            else:
+                L["msg"] = "keine andere liste"
+        elif cur:
+            L["msg"] = "m verschiebt einträge — eine ganze liste ordnet > ein"
+
+    def aktion_w_einordnen(self, _taste):
+        """>: Forest-weit einordnen (Liste oder Eintrag)."""
+        L, cur = self.L, self._wald_cur()
+        if cur:
+            L["place_kind"] = "item" if cur.get("iid") is not None else "list"
+            L["place_lid"] = cur["lid"]; L["place_iid"] = cur.get("iid")
+            L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
+
+    def aktion_w_schliessen(self, _taste):
+        self.L["active"] = False
+
+    def aktion_w_ja(self, _taste):
+        """Liste wirklich löschen."""
+        L, cur = self.L, self._wald_cur()
+        if cur and cur.get("iid") is None:
+            try:
+                api_call("/api/lists/" + str(cur["lid"]), method="DELETE")
+                L["msg"] = "gelöscht"
+            except Exception:
+                L["msg"] = "löschen fehlgeschlagen"
+        L["confirm"] = False; self.l_load()
+
+    def aktion_w_nein(self, _taste):
+        self.L["confirm"] = False; self.L["msg"] = ""
+
+    # neue Liste / umbenennen tippen (Wurzel)
+    def aktion_w_tippen(self, zeichen):
+        if len(self.L["input"]) < 80:
+            self.L["input"] += zeichen
+
+    def aktion_w_zeichen_weg(self, _taste):
+        self.L["input"] = self.L["input"][:-1]
+
+    def aktion_w_name_abbrechen(self, _taste):
+        L = self.L
+        L["adding"] = False; L["imode"] = "add"
+        L["fedit"] = None; L["input"] = ""; L["msg"] = ""
+
+    def aktion_w_name_setzen(self, _taste):
+        L = self.L
+        txt = L["input"].strip()
+        if not txt:
+            L["msg"] = "name fehlt"
+        elif L["imode"] == "frename" and L["fedit"] is not None:
+            d = L["fedit"]
+            try:
+                if d.get("iid") is None:
+                    api_call("/api/lists/%s/rename" % d["lid"], method="POST",
+                             body={"name": txt})
                 else:
-                    L["msg"] = "keine andere liste"
-            elif cur:
-                # Die Leiste nennt m — auf einer ganzen Liste sagt es jetzt,
-                # was stattdessen geht, statt stumm zu bleiben (2026-10-07).
-                L["msg"] = "m verschiebt einträge — eine ganze liste ordnet > ein"
-        elif ch == ord(">"):                           # Forest-weit einordnen (Liste/Eintrag)
-            if cur:
-                L["place_kind"] = "item" if cur.get("iid") is not None else "list"
-                L["place_lid"] = cur["lid"]; L["place_iid"] = cur.get("iid")
-                L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
+                    api_call("/api/lists/%s/items/%d/rename" % (d["lid"], d["iid"]),
+                             method="POST", body={"text": txt})
+                L["msg"] = "umbenannt"
+            except Exception:
+                L["msg"] = "umbenennen fehlgeschlagen"
+            L["adding"] = False; L["imode"] = "add"
+            L["fedit"] = None; L["input"] = ""; self.l_load()
+        else:                                 # neue Liste anlegen
+            try:
+                api_call("/api/lists", method="POST", body={"name": txt})
+                L["msg"] = "angelegt: " + txt
+            except Exception:
+                L["msg"] = "anlegen fehlgeschlagen"
+            L["adding"] = False; L["input"] = ""; self.l_load()
 
-    def _taste_ebene(self, ch):
-        """Taste in einer Liste (view): die Einträge der offenen Ebene."""
-        L, l_container, l_focus_toggle = self.L, self.l_container, self.l_focus_toggle
-        l_index_in_container, l_load = self.l_index_in_container, self.l_load
-        l_move_targets, l_sync_def = self.l_move_targets, self.l_sync_def
-        l_vitems = self.l_vitems
-        lid = L["def"]["id"] if L["def"] else None
-        if L["adding"]:                               # Eintrag tippen (neu/sub/umbenennen)
-            if ch == 27:
-                L["adding"] = False; L["addparent"] = None
-                L["edit_iid"] = None; L["imode"] = "add"
-                L["input"] = ""; L["msg"] = ""
-            elif ch in (10, 13, curses.KEY_ENTER):
-                txt = L["input"].strip()
-                if txt and lid:
-                    try:
-                        if L["imode"] == "rename":    # bestehenden Eintrag umbenennen
-                            api_call("/api/lists/%s/items/%d/rename"
-                                     % (lid, L["edit_iid"]), method="POST",
-                                     body={"text": txt})
-                            new_id = L["edit_iid"]
-                        else:                         # neuen Eintrag/Unterpunkt anhängen
-                            body = {"text": txt}
-                            # Ziel-Ebene IMMER frisch aus dem Drill-Pfad
-                            # ableiten (Single Source of Truth = L["path"]),
-                            # NICHT aus einem gemerkten Feld — sonst
-                            # „überblutet" ein Folge-Eintrag in die falsche
-                            # Ebene. "add" = aktuell offene Ebene; "sub" =
-                            # fester Eltern-Eintrag (steht für Serien-Eingabe).
-                            if L["imode"] == "sub":
-                                parent = L["addparent"]
-                            else:                     # "add"
-                                _items, parent, _cr = l_container()
-                            if parent is not None:
-                                body["parent"] = parent
-                            new = api_call("/api/lists/%s/items" % lid, method="POST",
-                                           body=body)
-                            new_id = new.get("id") if new else None
-                        # Umbenennen ist einmalig; neu/sub bleibt offen für
-                        # Schnell-Eingabe mehrerer Einträge in Folge — der
-                        # Eltern-Kontext (Drill-Pfad bzw. sub-addparent)
-                        # bleibt dabei erhalten, wird NICHT zurückgesetzt
-                        # (sonst landet der nächste Eintrag in der Wurzel).
-                        L["input"] = ""; L["edit_iid"] = None
-                        close = (L["imode"] == "rename")
-                        mode_add = (L["imode"] == "add")
-                        if close:
-                            L["adding"] = False; L["imode"] = "add"
-                            L["addparent"] = None
-                        l_load(); l_sync_def()
-                        # Cursor nur beim Anhängen auf der OFFENEN Ebene
-                        # nachziehen; sub/rename lassen die Auswahl stehen.
-                        if mode_add and new_id is not None:
-                            L["isel"] = l_index_in_container(new_id)
-                    except Exception:
-                        L["msg"] = "speichern fehlgeschlagen"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                L["input"] = L["input"][:-1]
-            elif 32 <= ch <= 126 and len(L["input"]) < 80:
-                L["input"] += chr(ch)
+    # ── In einer Liste (view): die Einträge der offenen Ebene ──
+    def _ebene_lage(self):
+        """(container-id, angezeigte Einträge, gewählter Eintrag oder None,
+        Bernsteinleiste da?) der offenen Ebene."""
+        L = self.L
+        items, pid, _cr = self.l_container()      # nur die offene Ebene
+        vis = self.l_vitems()                     # so, wie sie angezeigt wird
+        cur = vis[L["isel"]] if 0 <= L["isel"] < len(vis) else None
+        return pid, vis, cur, l_count(items)[1] > 0
+
+    def _bernstein_klemmen(self):
+        """Steht unter dem Bernstein nichts, ist er gewählt — so zeigt die
+        Auswahl, wofür die Leiste enter anbietet."""
+        L = self.L
+        if L.get("view") == "view" and L.get("def") and not L.get("adding"):
+            _pid, vis, _cur, has_bar = self._ebene_lage()
+            if has_bar and not vis:
+                L["isel"] = -1
+
+    def _lid(self):
+        return self.L["def"]["id"] if self.L["def"] else None
+
+    def aktion_e_zurueck(self, _taste):
+        """esc/l: Ebene zurück, sonst Wurzel. In der Abgeschlossen-Sicht erst
+        raus aus ihr — außer wir stecken in einem selbst erledigten Ordner
+        (dorthin kam man aus der Abgeschlossen-Sicht): dann eine Ebene hoch
+        und dort abgeschlossen bleiben."""
+        L = self.L
+        node = (l_find_item(L["def"].get("items"), L["path"][-1])
+                if L["path"] and L["def"] else None)
+        if L["showdone"] and not (node and l_done(node)):
+            L["showdone"] = False; L["isel"] = -1; L["msg"] = ""
+        elif L["path"]:
+            back = L["path"][-1]
+            L["path"] = L["path"][:-1]
+            L["isel"] = self.l_index_in_container(back)
+            L["msg"] = ""
         else:
-            items, pid, _cr = l_container()      # nur die offene Ebene
-            vis = l_vitems()                     # so, wie sie angezeigt wird
-            cur = vis[L["isel"]] if 0 <= L["isel"] < len(vis) else None
-            has_bar = l_count(items)[1] > 0      # Bernsteinleiste da?
-            if ch in (27, ord("l"), ord("L")):         # Esc/l → Ebene zurück, sonst Wurzel
-                # In der Abgeschlossen-Sicht erst raus aus ihr — außer
-                # wir stecken in einem selbst erledigten Ordner (dorthin
-                # kam man aus der Abgeschlossen-Sicht): dann eine Ebene
-                # hoch und dort abgeschlossen bleiben.
-                node = (l_find_item(L["def"].get("items"), L["path"][-1])
-                        if L["path"] else None)
-                if L["showdone"] and not (node and l_done(node)):
-                    L["showdone"] = False; L["isel"] = -1; L["msg"] = ""
-                elif L["path"]:
-                    back = L["path"][-1]
-                    L["path"] = L["path"][:-1]
-                    L["isel"] = l_index_in_container(back)
-                    L["msg"] = ""
-                else:
-                    L["view"] = "forest"; L["msg"] = ""; l_load()
-            elif ch in (ord("q"), ord("Q")):           # q → ganze TUI beenden
-                return BEENDEN
-            elif ch in (curses.KEY_UP, ord("k")):      # über den ersten → Bernsteinleiste
-                L["isel"] = max(-1 if has_bar else 0, L["isel"] - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                L["isel"] = min(len(vis) - 1, L["isel"] + 1)
-            elif ch in (10, 13, curses.KEY_ENTER) and L["isel"] == -1:
-                # Enter auf dem Bernstein: Abgeschlossenes zeigen / zurück
-                L["showdone"] = not L["showdone"]; L["msg"] = ""
-                L["isel"] = 0 if l_vitems() else -1
-            elif ch in (10, 13, curses.KEY_ENTER):     # Enter: Ordner rein, sonst abhaken
-                kids = cur.get("items") if cur else None
-                if cur and isinstance(kids, list) and kids:
-                    L["path"] = L["path"] + [cur["id"]]; L["isel"] = 0; L["msg"] = ""
-                elif cur and lid:
-                    try:
-                        api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
-                                 method="POST")
-                        l_load(); l_sync_def()
-                        L["msg"] = l_toggle_msg(cur)
-                    except Exception:
-                        L["msg"] = "umschalten fehlgeschlagen"
-            elif ch == ord(" "):                       # space: Blatt abhaken
-                kids = cur.get("items") if cur else None
-                if cur and isinstance(kids, list) and kids:
-                    L["msg"] = "ordner hakt sich selbst ab"   # abgeleitet, nicht direkt
-                elif cur and lid:
-                    try:
-                        api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]),
-                                 method="POST")
-                        l_load(); l_sync_def()
-                        L["msg"] = l_toggle_msg(cur)
-                    except Exception:
-                        L["msg"] = "umschalten fehlgeschlagen"
-            elif ch in (ord("a"), ord("A")):           # neuer Eintrag in DIESER Ebene
-                L["showdone"] = False                  # Neues ist offen → offene Sicht
-                L["adding"] = True; L["imode"] = "add"
-                L["addparent"] = pid; L["edit_iid"] = None
+            L["view"] = "forest"; L["msg"] = ""; self.l_load()
+
+    def aktion_e_waehlen(self, taste):
+        """↑ über den ersten → Bernsteinleiste."""
+        L = self.L
+        _pid, vis, _cur, has_bar = self._ebene_lage()
+        if taste in ("up", "k"):
+            L["isel"] = max(-1 if has_bar else 0, L["isel"] - 1)
+        else:
+            L["isel"] = min(len(vis) - 1, L["isel"] + 1)
+
+    def aktion_e_bernstein(self, _taste):
+        """enter auf dem Bernstein: Abgeschlossenes zeigen / zurück."""
+        L = self.L
+        L["showdone"] = not L["showdone"]; L["msg"] = ""
+        L["isel"] = 0 if self.l_vitems() else -1
+
+    def _e_toggle(self, cur):
+        L, lid = self.L, self._lid()
+        if not lid:
+            return
+        try:
+            api_call("/api/lists/%s/items/%d/toggle" % (lid, cur["id"]), method="POST")
+            self.l_load(); self.l_sync_def()
+            L["msg"] = l_toggle_msg(cur)
+        except Exception:
+            L["msg"] = "umschalten fehlgeschlagen"
+
+    def aktion_e_oeffnen(self, _taste):
+        """enter: Ordner rein, sonst abhaken."""
+        L = self.L
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        kids = cur.get("items") if cur else None
+        if cur and isinstance(kids, list) and kids:
+            L["path"] = L["path"] + [cur["id"]]; L["isel"] = 0; L["msg"] = ""
+        elif cur:
+            self._e_toggle(cur)
+
+    def aktion_e_abhaken(self, _taste):
+        """space: Blatt abhaken; ein Ordner hakt sich selbst ab."""
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        kids = cur.get("items") if cur else None
+        if cur and isinstance(kids, list) and kids:
+            self.L["msg"] = "ordner hakt sich selbst ab"   # abgeleitet, nicht direkt
+        elif cur:
+            self._e_toggle(cur)
+
+    def aktion_e_neu(self, taste):
+        """a: neuer Eintrag in DIESER Ebene; s: Unterpunkt zum gewählten."""
+        L = self.L
+        pid, _vis, cur, _bar = self._ebene_lage()
+        if taste in ("s", "S"):
+            if cur:
+                L["adding"] = True; L["imode"] = "sub"
+                L["addparent"] = cur["id"]; L["edit_iid"] = None
                 L["input"] = ""; L["msg"] = ""
-            elif ch in (ord("s"), ord("S")):           # Unterpunkt zum gewählten Eintrag
-                if cur:
-                    L["adding"] = True; L["imode"] = "sub"
-                    L["addparent"] = cur["id"]; L["edit_iid"] = None
-                    L["input"] = ""; L["msg"] = ""
-            elif ch in (ord("r"), ord("R")):           # gewählten Eintrag umbenennen
-                if cur:
-                    L["adding"] = True; L["imode"] = "rename"
-                    L["edit_iid"] = cur["id"]; L["addparent"] = None
-                    L["input"] = str(cur.get("text") or ""); L["msg"] = ""
-            elif ch in (ord("m"), ord("M")):           # Eintrag raus in eine andere Liste
-                if cur and l_move_targets():
-                    L["move_iid"] = cur["id"]; L["nsel"] = 0
-                    L["msg"] = ""; L["view"] = "move"
-                elif cur:
-                    L["msg"] = "keine andere liste"
-            elif ch == ord(">"):                       # diesen Punkt in einen Knoten einordnen (Forest-weit)
-                if cur and lid:
-                    L["place_kind"] = "item"
-                    L["place_lid"] = lid; L["place_iid"] = cur["id"]
-                    L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
-            elif ch in (ord("p"), ord("P")):           # diesen Eintrag als Projekt an/aus
-                if cur and lid:
-                    try:
-                        api_call("/api/lists/%s/items/%d/project" % (lid, cur["id"]),
-                                 method="POST", body={"project": not cur.get("project")})
-                        l_load(); l_sync_def()
-                    except Exception:
-                        L["msg"] = "projekt fehlgeschlagen"
-            elif ch in (ord("d"), ord("D")):
-                if cur and lid:
-                    try:
-                        api_call("/api/lists/%s/items/%d" % (lid, cur["id"]),
-                                 method="DELETE")
-                        l_load(); l_sync_def()
-                    except Exception:
-                        L["msg"] = "löschen fehlgeschlagen"
-            elif ch in (ord("f"), ord("F")):           # diesen Eintrag fokussieren
-                if cur and lid:
-                    l_focus_toggle({"lid": lid, "iid": cur["id"]})
-                    l_sync_def()
-                    L["isel"] = l_index_in_container(cur["id"])  # klebt jetzt oben
+            return
+        L["showdone"] = False                  # Neues ist offen → offene Sicht
+        L["adding"] = True; L["imode"] = "add"
+        L["addparent"] = pid; L["edit_iid"] = None
+        L["input"] = ""; L["msg"] = ""
 
-    def _taste_einordnen(self, ch):
-        """Taste beim Einordnen (place): Knoten (Liste/Eintrag) Forest-weit einordnen"""
-        L, l_forest_targets, l_load = self.L, self.l_forest_targets, self.l_load
-        l_sync_def = self.l_sync_def
-        tg = l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
+    def aktion_e_umbenennen(self, _taste):
+        L = self.L
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur:
+            L["adding"] = True; L["imode"] = "rename"
+            L["edit_iid"] = cur["id"]; L["addparent"] = None
+            L["input"] = str(cur.get("text") or ""); L["msg"] = ""
+
+    def aktion_e_verschieben(self, _taste):
+        """m: Eintrag raus in eine andere Liste."""
+        L = self.L
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur and self.l_move_targets():
+            L["move_iid"] = cur["id"]; L["nsel"] = 0
+            L["msg"] = ""; L["view"] = "move"
+        elif cur:
+            L["msg"] = "keine andere liste"
+
+    def aktion_e_einordnen(self, _taste):
+        """>: diesen Punkt in einen Knoten einordnen (Forest-weit)."""
+        L, lid = self.L, self._lid()
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur and lid:
+            L["place_kind"] = "item"
+            L["place_lid"] = lid; L["place_iid"] = cur["id"]
+            L["nsel"] = 0; L["msg"] = ""; L["view"] = "place"
+
+    def aktion_e_projekt(self, _taste):
+        L, lid = self.L, self._lid()
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur and lid:
+            try:
+                api_call("/api/lists/%s/items/%d/project" % (lid, cur["id"]),
+                         method="POST", body={"project": not cur.get("project")})
+                self.l_load(); self.l_sync_def()
+            except Exception:
+                L["msg"] = "projekt fehlgeschlagen"
+
+    def aktion_e_loeschen(self, _taste):
+        L, lid = self.L, self._lid()
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur and lid:
+            try:
+                api_call("/api/lists/%s/items/%d" % (lid, cur["id"]), method="DELETE")
+                self.l_load(); self.l_sync_def()
+            except Exception:
+                L["msg"] = "löschen fehlgeschlagen"
+
+    def aktion_e_fokus(self, _taste):
+        L, lid = self.L, self._lid()
+        _pid, _vis, cur, _bar = self._ebene_lage()
+        if cur and lid:
+            self.l_focus_toggle({"lid": lid, "iid": cur["id"]})
+            self.l_sync_def()
+            L["isel"] = self.l_index_in_container(cur["id"])  # klebt jetzt oben
+
+    # Eintrag tippen (neu/sub/umbenennen)
+    def aktion_e_tippen(self, zeichen):
+        if len(self.L["input"]) < 80:
+            self.L["input"] += zeichen
+
+    def aktion_e_zeichen_weg(self, _taste):
+        self.L["input"] = self.L["input"][:-1]
+
+    def aktion_e_eingabe_abbrechen(self, _taste):
+        L = self.L
+        L["adding"] = False; L["addparent"] = None
+        L["edit_iid"] = None; L["imode"] = "add"
+        L["input"] = ""; L["msg"] = ""
+
+    def aktion_e_eintrag_setzen(self, _taste):
+        L, lid = self.L, self._lid()
+        txt = L["input"].strip()
+        if not (txt and lid):
+            return
+        try:
+            if L["imode"] == "rename":    # bestehenden Eintrag umbenennen
+                api_call("/api/lists/%s/items/%d/rename" % (lid, L["edit_iid"]),
+                         method="POST", body={"text": txt})
+                new_id = L["edit_iid"]
+            else:                         # neuen Eintrag/Unterpunkt anhängen
+                body = {"text": txt}
+                # Ziel-Ebene IMMER frisch aus dem Drill-Pfad ableiten (Single
+                # Source of Truth = L["path"]), NICHT aus einem gemerkten Feld
+                # — sonst „überblutet" ein Folge-Eintrag in die falsche Ebene.
+                # "add" = aktuell offene Ebene; "sub" = fester Eltern-Eintrag
+                # (steht für Serien-Eingabe).
+                if L["imode"] == "sub":
+                    parent = L["addparent"]
+                else:                     # "add"
+                    _items, parent, _cr = self.l_container()
+                if parent is not None:
+                    body["parent"] = parent
+                new = api_call("/api/lists/%s/items" % lid, method="POST", body=body)
+                new_id = new.get("id") if new else None
+            # Umbenennen ist einmalig; neu/sub bleibt offen für Schnell-Eingabe
+            # mehrerer Einträge in Folge — der Eltern-Kontext (Drill-Pfad bzw.
+            # sub-addparent) bleibt dabei erhalten, wird NICHT zurückgesetzt
+            # (sonst landet der nächste Eintrag in der Wurzel).
+            L["input"] = ""; L["edit_iid"] = None
+            close = (L["imode"] == "rename")
+            mode_add = (L["imode"] == "add")
+            if close:
+                L["adding"] = False; L["imode"] = "add"
+                L["addparent"] = None
+            self.l_load(); self.l_sync_def()
+            # Cursor nur beim Anhängen auf der OFFENEN Ebene nachziehen;
+            # sub/rename lassen die Auswahl stehen.
+            if mode_add and new_id is not None:
+                L["isel"] = self.l_index_in_container(new_id)
+        except Exception:
+            L["msg"] = "speichern fehlgeschlagen"
+
+    # ── Einordnen (place): Knoten (Liste/Eintrag) Forest-weit einordnen ──
+    def _p_ziele(self):
+        L = self.L
+        return self.l_forest_targets(L["place_kind"], L["place_lid"], L["place_iid"])
+
+    def aktion_p_waehlen(self, taste):
+        L = self.L
+        if taste in ("up", "k"):
+            L["nsel"] = max(0, L["nsel"] - 1)
+        else:
+            L["nsel"] = min(max(0, len(self._p_ziele()) - 1), L["nsel"] + 1)
+
+    def aktion_p_abbrechen(self, _taste):
+        L = self.L
+        L["view"] = "view" if L["place_kind"] == "item" else "forest"
+        L["place_iid"] = None; L["msg"] = ""
+
+    def aktion_p_nehmen(self, _taste):
+        L = self.L
+        tg = self._p_ziele()
         back = "view" if L["place_kind"] == "item" else "forest"
-        if ch in (27, ord("l"), ord("L")):             # Esc/l → abbrechen
-            L["view"] = back; L["place_iid"] = None; L["msg"] = ""
-        elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
-            return BEENDEN
-        elif ch in (curses.KEY_UP, ord("k")):
-            L["nsel"] = max(0, L["nsel"] - 1)
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            L["nsel"] = min(max(0, len(tg) - 1), L["nsel"] + 1)
-        elif ch in (10, 13, curses.KEY_ENTER):
-            if tg and 0 <= L["nsel"] < len(tg):
-                t = tg[L["nsel"]]
-                try:
-                    if L["place_kind"] == "list":
-                        api_call("/api/lists/%s/nest" % L["place_lid"], method="POST",
-                                 body={"into": t["lid"], "parent": t["iid"]})
-                    else:
-                        api_call("/api/lists/%s/items/%d/move" % (L["place_lid"], L["place_iid"]),
-                                 method="POST", body={"into": t["lid"], "parent": t["iid"]})
-                    L["msg"] = "eingeordnet"
-                except Exception:
-                    L["msg"] = "einordnen fehlgeschlagen"
-                L["view"] = back; L["place_iid"] = None
-                l_load()
-                if back == "view":
-                    l_sync_def()
+        if not (tg and 0 <= L["nsel"] < len(tg)):
+            return
+        t = tg[L["nsel"]]
+        try:
+            if L["place_kind"] == "list":
+                api_call("/api/lists/%s/nest" % L["place_lid"], method="POST",
+                         body={"into": t["lid"], "parent": t["iid"]})
+            else:
+                api_call("/api/lists/%s/items/%d/move" % (L["place_lid"], L["place_iid"]),
+                         method="POST", body={"into": t["lid"], "parent": t["iid"]})
+            L["msg"] = "eingeordnet"
+        except Exception:
+            L["msg"] = "einordnen fehlgeschlagen"
+        L["view"] = back; L["place_iid"] = None
+        self.l_load()
+        if back == "view":
+            self.l_sync_def()
 
-    def _taste_verschieben(self, ch):
-        """Taste beim Verschieben (move): Eintrag raus in eine andere Liste"""
-        L, l_load, l_move_targets = self.L, self.l_load, self.l_move_targets
-        l_sync_def = self.l_sync_def
-        lid = L["def"]["id"] if L["def"] else None
-        targets = l_move_targets()
-        nopts = 1 + len(targets)       # 0 = neue Liste, dann die Ziele
-        if ch in (27, ord("l"), ord("L")):             # Esc/l → zurück zu den Einträgen
-            L["view"] = "view"; L["move_iid"] = None; L["msg"] = ""
-        elif ch in (ord("q"), ord("Q")):
-            return BEENDEN
-        elif ch in (curses.KEY_UP, ord("k")):
+    # ── Verschieben (move): Eintrag raus in eine andere Liste ──
+    def aktion_v_waehlen(self, taste):
+        L = self.L
+        if taste in ("up", "k"):
             L["nsel"] = max(0, L["nsel"] - 1)
-        elif ch in (curses.KEY_DOWN, ord("j")):
+        else:
+            nopts = 1 + len(self.l_move_targets())    # 0 = neue Liste, dann die Ziele
             L["nsel"] = min(max(0, nopts - 1), L["nsel"] + 1)
-        elif ch in (10, 13, curses.KEY_ENTER):
-            if L["nsel"] == 0:                         # → in eine NEUE Liste (Name tippen)
-                it = l_find_item(L["def"].get("items"), L["move_iid"]) if L["def"] else None
-                L["input"] = str(it.get("text") or "") if it else ""
-                L["view"] = "move_new"; L["msg"] = ""
-            elif 1 <= L["nsel"] < nopts and lid:
-                dest = targets[L["nsel"] - 1]
-                try:
-                    api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
-                             method="POST", body={"into": dest["id"]})
-                    L["msg"] = "verschoben"
-                except Exception:
-                    L["msg"] = "verschieben fehlgeschlagen"
-                L["view"] = "view"; L["move_iid"] = None
-                l_load(); l_sync_def()
 
-    def _taste_neue_liste(self, ch):
-        """Taste bei move_new: Name für die neue Ziel-Liste tippen"""
-        L, l_load, l_sync_def = self.L, self.l_load, self.l_sync_def
-        lid = L["def"]["id"] if L["def"] else None
-        if ch == 27:
-            L["view"] = "move"; L["input"] = ""; L["msg"] = ""
-        elif ch in (10, 13, curses.KEY_ENTER):
-            name = L["input"].strip()
-            if not name:
-                L["msg"] = "name fehlt"
-            elif lid:
-                try:
-                    new = api_call("/api/lists", method="POST", body={"name": name})
-                    api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
-                             method="POST", body={"into": new["id"]})
-                    L["msg"] = "verschoben → " + name
-                    L["view"] = "view"; L["move_iid"] = None; L["input"] = ""
-                    l_load(); l_sync_def()
-                except Exception:
-                    L["msg"] = "verschieben fehlgeschlagen"
-        elif ch in (curses.KEY_BACKSPACE, 127, 8):
-            L["input"] = L["input"][:-1]
-        elif 32 <= ch <= 126 and len(L["input"]) < 40:
-            L["input"] += chr(ch)
+    def aktion_v_abbrechen(self, _taste):
+        L = self.L
+        L["view"] = "view"; L["move_iid"] = None; L["msg"] = ""
+
+    def aktion_v_nehmen(self, _taste):
+        L, lid = self.L, self._lid()
+        targets = self.l_move_targets()
+        if L["nsel"] == 0:                         # → in eine NEUE Liste (Name tippen)
+            it = l_find_item(L["def"].get("items"), L["move_iid"]) if L["def"] else None
+            L["input"] = str(it.get("text") or "") if it else ""
+            L["view"] = "move_new"; L["msg"] = ""
+        elif 1 <= L["nsel"] <= len(targets) and lid:
+            dest = targets[L["nsel"] - 1]
+            try:
+                api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
+                         method="POST", body={"into": dest["id"]})
+                L["msg"] = "verschoben"
+            except Exception:
+                L["msg"] = "verschieben fehlgeschlagen"
+            L["view"] = "view"; L["move_iid"] = None
+            self.l_load(); self.l_sync_def()
+
+    # Name für die neue Ziel-Liste tippen (move_new)
+    def aktion_v_tippen(self, zeichen):
+        if len(self.L["input"]) < 40:
+            self.L["input"] += zeichen
+
+    def aktion_v_zeichen_weg(self, _taste):
+        self.L["input"] = self.L["input"][:-1]
+
+    def aktion_v_name_abbrechen(self, _taste):
+        L = self.L
+        L["view"] = "move"; L["input"] = ""; L["msg"] = ""
+
+    def aktion_v_name_setzen(self, _taste):
+        L, lid = self.L, self._lid()
+        name = L["input"].strip()
+        if not name:
+            L["msg"] = "name fehlt"
+        elif lid:
+            try:
+                new = api_call("/api/lists", method="POST", body={"name": name})
+                api_call("/api/lists/%s/items/%d/move" % (lid, L["move_iid"]),
+                         method="POST", body={"into": new["id"]})
+                L["msg"] = "verschoben → " + name
+                L["view"] = "view"; L["move_iid"] = None; L["input"] = ""
+                self.l_load(); self.l_sync_def()
+            except Exception:
+                L["msg"] = "verschieben fehlgeschlagen"
 
     def draw_list_tool(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn das Listen-/Fokus-Werkzeug Fokus hat.
@@ -773,47 +988,35 @@ class Fokus:
         ◆ Fokus), Status allein im Bernstein oben — Aussehen und Aufbau der
         Ebenen-Sicht kommen aus core/listen_bild.py (dasselbe Bild wie die
         Kachel), die Wurzel setzt deren Kästen in ihre zwei Zonen."""
-        C, L, addclip, draw_box = self.z.C, self.L, self.z.addclip, self.z.draw_box
+        C, L, addclip = self.z.C, self.L, self.z.addclip
         l_container, l_forest_rows = self.l_container, self.l_forest_rows
         l_forest_targets, l_move_targets = self.l_forest_targets, self.l_move_targets
         kasten_render = self.kasten_render
         safe_addstr = self.z.safe_addstr
         ix, iw = bx + 2, bw - 4
-        bottom = by + bh - 2          # Hinweiszeile unten in der Box
+        # Unterste Zeile: nur Rückmeldungen (L["msg"]). Die Tasten stehen seit
+        # 2026-10-11 allein in der Leiste ganz unten (Tastentabelle TASTEN).
+        bottom = by + bh - 2
         if iw < 8:
             return
 
         if L["view"] == "view" and L["def"]:
             # Das Bild der Ebene kommt ganz aus listen_bild (wie die Kachel);
-            # hier nur malen, dazu Tasten-Hinweise und der Pixel-Bernstein.
+            # hier nur malen, dazu der Pixel-Bernstein.
+            self._bernstein_klemmen()
             items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
             bild = listen_bild.ebene(items, iw, list_bottom - by, pfad=crumbs,
-                                     nur_erledigte=L["showdone"], auswahl=L["isel"],
-                                     kopf_frei=8)
+                                     nur_erledigte=L["showdone"], auswahl=L["isel"])
             self._malen(by + 1, ix, bild["zeilen"])
-            safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
             if bild["bernstein"]:
                 self._bernstein(by + 1 + bild["bernstein"]["zeile"], bx, ix, bild["bernstein"])
-            total = bild["bernstein"]["total"] if bild["bernstein"] else 0
-            leer = bild["leer"]
-            if leer:                                # Tasten-Hinweis hinter den Text der Quelle
-                tipp = {"abgeschlossen": " — esc zurück",
-                        "erledigt": " — enter auf den bernstein zeigt's",
-                        "leer": " — 'a' hängt was an"}[leer["art"]]
-                n = len(listen_bild.LEER_TEXT[leer["art"]])
-                addclip(by + 1 + leer["zeile"], ix + n, tipp, iw - n, C["faint"])
             if L["adding"]:
                 lbl = {"sub": "unterpunkt", "rename": "umbenennen"}.get(L["imode"], "neu")
-                tip = "enter umbenennen" if L["imode"] == "rename" else "enter anhängen"
                 addclip(input_row, ix, lbl + ": " + L["input"] + "_", iw, C["bright"])
-                addclip(bottom, ix, (tip + " · esc abbrechen  " + L["msg"]).strip(), iw, C["faint"])
-            elif L["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
+            if L["msg"]:
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
-            elif L["isel"] == -1 and total:    # auf dem Bernstein: sagen, was enter tut
-                addclip(bottom, ix, "enter: zurück zu den offenen" if L["showdone"]
-                        else "enter: abgeschlossene zeigen", iw, C["amber"])
 
         elif L["view"] == "place":         # Knoten (Liste/Eintrag) Forest-weit einordnen
             if L["place_kind"] == "list":
@@ -839,7 +1042,7 @@ class Fokus:
                     addclip(yy, ix, "%s %s%s" % ("›" if sel else " ", mark, t["label"]),
                             iw, C["bright"] if sel else C["dim"])
                     yy += 1
-            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+            if L["msg"]:                       # nur Rückmeldung (Tasten: Leiste)
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
 
         elif L["view"] == "move" and L["def"]:   # Eintrag raus in eine andere Liste
@@ -858,13 +1061,14 @@ class Fokus:
                 addclip(yy, ix, "%s %s" % ("›" if sel else " ", label),
                         iw, C["bright"] if sel else C["dim"])
                 yy += 1
-            if L["msg"]:                       # Shortcuts liegen unter '/'; nur Feedback
+            if L["msg"]:                       # nur Rückmeldung (Tasten: Leiste)
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
 
         elif L["view"] == "move_new":            # Name für die neue Ziel-Liste
             addclip(by + 1, ix, "NEUE LISTE (ziel)", iw, C["bright"])
             addclip(by + 3, ix, "name: " + L["input"] + "_", iw, C["bright"])
-            addclip(bottom, ix, ("enter anlegen+verschieben · esc zurück  " + L["msg"]).strip(), iw, C["faint"])
+            if L["msg"]:
+                addclip(bottom, ix, L["msg"], iw, C["faint"])
 
         else:  # "forest" — Wurzel: oben Projekte, Trennlinie, unten andere Listen
             rows, ndiv = l_forest_rows()
@@ -874,15 +1078,12 @@ class Fokus:
                 addclip(by + 1, ix, "LISTE LÖSCHEN", iw, C["bright"])
                 addclip(by + 3, ix, "»%s« wirklich löschen?" % nm[:max(4, iw - 22)],
                         iw, C["bright"])
-                addclip(by + 5, ix, "j/enter = ja · sonst abbrechen", iw, C["faint"])
                 return
             addclip(by + 1, ix, "LISTEN · FOKUS", iw, C["bright"])
-            safe_addstr(by + 1, bx + bw - 9, "[n neu]", C["acc"])
             input_row = by + bh - 3
             grid_bottom = (input_row - 1) if L["adding"] else bottom
             if not rows:
-                addclip(by + 3, ix, "noch nichts — 'n' legt eine liste an",
-                        iw, C["faint"])
+                addclip(by + 3, ix, "noch nichts", iw, C["faint"])
             else:
                 # Token-Stream: Zonen-Label (1 Zeile) + Kasten (3 Zeilen). Ein
                 # zeilenbasiertes Fenster (auf Token-Grenze eingerastet) hält den
@@ -928,24 +1129,10 @@ class Fokus:
                     safe_addstr(grid_bottom, ix + iw - 5, "+", C["faint"])
             if L["adding"]:                        # neue Liste / umbenennen tippen
                 lbl = "umbenennen" if L["imode"] == "frename" else "neue liste"
-                tip = ("enter umbenennen" if L["imode"] == "frename"
-                       else "enter anlegen")
                 addclip(input_row, ix, lbl + ": " + L["input"] + "_",
                         iw, C["bright"])
-                addclip(bottom, ix, (tip + " · esc abbrechen  "
-                                     + L["msg"]).strip(), iw, C["faint"])
-            elif L["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
+            if L["msg"]:
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
-
-            if L["confirm"] and L["lists"]:        # Mini-Dialog über die Liste legen
-                nm = str(L["lists"][L["sel"]].get("name") or "")
-                q = "»%s« löschen?" % nm[:18]
-                dw = min(iw, max(len(q), 16) + 4)
-                dx = bx + (bw - dw) // 2
-                dy = by + bh // 2 - 2
-                draw_box(dy, dx, 4, dw, "LÖSCHEN", C["warn"])
-                addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
-                addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
 
     def _malen(self, y, x, zeilen, y_max=None):
         """Neutrale Zeilen (Stücke [text, rolle], core/listen_bild.py) ab
