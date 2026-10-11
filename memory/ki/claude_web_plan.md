@@ -92,7 +92,7 @@ Ebenen stehen vor den Funktionen.
    Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden
    sich aus `ki_werkzeuge` an. Ein neues Werkzeug ist ein Eintrag plus seine
    Funktion — dieselbe Idee wie die Anbieter-Tabelle („eine Zeile, kein
-   Umbau"). Anleitung: [ki_system.md](ki_system.md), „Das Werkzeug-Register".
+   Umbau"). Anleitung: [werkzeuge.md](werkzeuge.md), „Das Werkzeug-Register".
 6. **Ausgabe** — die Events sind der Vertrag zwischen Kern und TUI. Neu:
    `ablage` (ein Dokument entstand → TUI zeigt es in einer Liste, öffnet es
    im Pager/Editor), `titel` (Gespräch bekam einen Namen), `gestoppt`.
@@ -302,7 +302,7 @@ weiterhin nicht abschalten (nur Sasha, jetzt in der TUI).
   dateien, lauf_id) → {ausgabe, fehler, rc, dauer_s, dateien_neu,
   abgebrochen, ordner}` über bubblewrap; `als_text()` fürs Modell,
   `aufraeumen()`, `verfuegbar()`. Was abgeschottet ist und was nicht:
-  [ki_system.md](ki_system.md), Abschnitt „Sandbox".
+  [sandbox.md](sandbox.md).
 - **Werkzeug `run_code`** im Register (nur `gross`, hinten an, immer
   gegatet). Schnappschuss neu gezogen: nur der neue Eintrag, `klein`
   byte-gleich.
@@ -536,7 +536,7 @@ Sashas Worte vom 07.10. und was daraus gebaut ist (TUI-Teil — Esc/Strg+C,
   `core/zug.py`, nur im Speicher); immer = `ai_config` `immer_erlaubt`;
   `/erlaubnis` im Chat listet und nimmt zurück (`/api/erlaubnis`). Kein
   „immer" für Kernakten, Löschen/Überschreiben und `save_from_sandbox`.
-  Details: [ki_system.md](ki_system.md), „Geltungsbereiche".
+  Details: [erlaubnis_gate.md](erlaubnis_gate.md), „Geltungsbereiche".
 - **/modell zeigt alles** („alle die available is"): `core/modell_liste.py`
   holt die Liste vom Anbieter, 24 h Cache pro Rechner unter `~/.cache`,
   Rückfall `providers.py`, nur Chat-Modelle (Wortliste). In der TUI-Auswahl
@@ -594,7 +594,7 @@ hineinkopieren), die offenen Skills von Anthropic übernehmen, `kurz` ist kein
 Skill („skills sind eher komplexere abläufe"), `recherche` ist ein Kandidat
 zum Ersetzen (Claude im Web recherchiert selbst). Ausführlich:
 [gedaechtnis_dateien.md](gedaechtnis_dateien.md) „Skills",
-[ki_system.md](ki_system.md) „Skills" und „Sandbox".
+[skills.md](skills.md) und [sandbox.md](sandbox.md).
 
 - **Format** (`core/skill_format.py`, Schicht 2): Ordner `<name>/` mit
   `SKILL.md` (YAML-Kopf `name`, `description`, fremde Felder erlaubt) und
@@ -733,9 +733,9 @@ Claude Web"; Pixelstil: [../system/pixelstil.md](../system/pixelstil.md).
   Gesprächen mit Dokument ist ▤.
 - **Skill-Liste**: Beschreibungen vollständig, Hinweis „Liste zu lang" in
   Customize → Skills, Kürzen nur noch als letzte Rettung und nur die
-  längsten (ki_system.md, „Skills").
+  längsten ([skills.md](skills.md)).
 - **Stopp bei Claude** bucht die bis dahin erzeugte Ausgabe geschätzt mit
-  (ki_system.md, „Gestoppt = geschätzt gebucht").
+  ([anbieter_modelle.md](anbieter_modelle.md), „Gestoppt = geschätzt gebucht").
 - **Offen, für später:** bei sehr vielen Skills ein Werkzeug „Skill suchen"
   statt einer langen Liste im Kopf.
 
@@ -792,7 +792,7 @@ Nach dem Vorbild von Claudes „morning", in ZENTRALEs Form; nur auf Abruf
 Sasha: „bewertungen für uns um unser eigenes system zu verbessern.. ja safe.
 machs rein, so dass ich nen kommentar hinzufügen könnte wenn ich wollte. also
 am besten einfach so n kleines modal das aufgeht." Wofür und was nicht:
-[ki_system.md](ki_system.md) „Bewertungen"; Bedienung:
+[chat_bedienung.md](chat_bedienung.md) „Bewertungen"; Bedienung:
 [../system/tui_bauplan.md](../system/tui_bauplan.md) „Bewerten".
 
 - **Speicher** `core/rueckmeldungen.py` (Schicht 2):
@@ -837,7 +837,7 @@ Anlass: Sashas Kalender-Testlauf (Gespräch `20261008-132404`, „die KI muss
 ehrlich sein in dem was funktioniert und was nicht"). Die Fallen und ihre
 Ursachen: Ehrlichkeit war nur eine Bitte, Werkzeuge sagten „OK" statt des
 Ist-Zustands und erlaubten ungenaue Massen-Eingriffe. Ausführlich:
-[ki_system.md](ki_system.md) „Belegt oder gesagt" und „Kalender ohne Fallen".
+[werkzeuge.md](werkzeuge.md) „Belegt oder gesagt" und [ki_kalender.md](ki_kalender.md).
 
 - **Status maschinenlesbar:** jedes Werkzeug-Ergebnis beginnt mit
   `[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]` (`teilweise` seit 09.10. abgeschafft)
@@ -982,8 +982,8 @@ Prompt und Auto-Save der Antwort in sein Gedächtnis. Tests:
 ### Browser für die KI (2026-10-09)
 
 Anlass: das LSF (Vorlesungsverzeichnis, QIS/HIS) ist baumnavigiert —
-`fetch_url` sah nur das Menü. Ausführlich: [ki_system.md](ki_system.md),
-Abschnitt „Browser"; Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_browser.md).
+`fetch_url` sah nur das Menü. Ausführlich: [browser.md](browser.md);
+Einrichten: [../betrieb/ki_browser.md](../betrieb/ki_browser.md).
 
 - **Acht Werkzeuge** (nur `gross`, hinten an): `browser_open`, `browser_click`,
   `browser_type`, `browser_find`, `browser_read`, `browser_back`,
@@ -1025,8 +1025,7 @@ Zip auch nicht übernehmen. Gebaut (nur `gross`):
   Gemessen: 0 Falschtreffer in 73 Antworten, 1 echter Fall (Chefkoch).
 - Schnappschuss neu: drei Einträge hinten an `gross`, `list_files` auf gross
   neu beschrieben, `klein` byte-gleich.
-  Details: [ki_system.md](ki_system.md), „Nutzerordner, Suchen, Claude-Skills
-  übernehmen"; [ehrlichkeit_live.md](ehrlichkeit_live.md), Prüfer 4.
+  Details: [nutzerordner.md](nutzerordner.md); [ehrlichkeit_live.md](ehrlichkeit_live.md), Prüfer 4.
 
 ### Zips auspacken und Input/ aufräumen (2026-10-09)
 
@@ -1042,7 +1041,7 @@ ordner nich zur halde wird". Gebaut (nur `gross`):
   (remove_input)." + offene Zusage `input_aufraeumen: <datei>` im Umschlag,
   bis remove_input lief oder Sasha nein sagte (core/input_aufraeumen.py).
 - Elf `Z-`-Codes; Schnappschuss: zwei Einträge hinten an `gross`, `klein`
-  byte-gleich. Details: [ki_system.md](ki_system.md), „Nutzerordner …".
+  byte-gleich. Details: [nutzerordner.md](nutzerordner.md).
 
 ### Prüfstand: Kosten getrennt, vier neue Fälle, sparen (2026-10-09)
 

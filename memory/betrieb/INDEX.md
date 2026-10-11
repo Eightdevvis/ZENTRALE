@@ -33,4 +33,4 @@ Der Push selbst ist harmlos — gefährlich ist nur, WAS im Commit steckt.
 **Neu seit 2026-08:** ZENTRALE ist nicht mehr zwangsläufig offline. Der
 Cloud-Kern ist ein Opt-in, das die Offline-Eigenschaft für den Chat bewusst
 bricht — was dann rausgeht (auch Tool-Ergebnisse, nicht nur die Frage), steht
-in [sicherheit.md](sicherheit.md) und [../ki/ki_system.md](../ki/ki_system.md).
+in [sicherheit.md](sicherheit.md) und [../ki/anbieter_modelle.md](../ki/anbieter_modelle.md) („Isolations-Invariante").

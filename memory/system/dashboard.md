@@ -931,7 +931,7 @@ liegt dafür auf Tab; A/B/C nur zum Anschauen — siehe [kalender_ansichten_vors
   über Lock). Bei Backend-Ausfall: Header zeigt `[backend ?]`, kein Crash.
 - `--selftest` gibt einen Text-Snapshot ohne curses aus (Verifikation ohne TTY).
 - Backend läuft ohne lokale KI (`ZENTRALE_LOKALE_KI=aus`: kein Ollama, Cloud-Chat
-  bleibt erlaubt, siehe `../ki/ki_system.md` → Lokal-Regel). Start: `zentrale-tui`
+  bleibt erlaubt, siehe `../ki/anbieter_modelle.md` → Lokal-Regel). Start: `zentrale-tui`
   fährt Backend (stdout → Logdatei, nicht ins Terminal) + TUI hoch. Siehe
   `memory/betrieb/starten.md`. Env `ZENTRALE_URL` überschreibt das Backend-Ziel (Default
   `http://localhost:5000`).
@@ -1234,7 +1234,7 @@ sagen (Hintergrund: `memory/ki/grounding_recherche.md`).
 
 Tippt die KI in ihrer Antwort den Marker `[[bild: stichwort]]` (Backend-
 Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
-`memory/ki/ki_system.md`), übernimmt das gematchte ASCII-Bild den Kern **auf Zeit**:
+`memory/ki/chat_bedienung.md`), übernimmt das gematchte ASCII-Bild den Kern **auf Zeit**:
 
 - **Transport:** Das Backend zieht den Marker aus dem Antworttext und
   yieldet das Bild **inline** im SSE-Antwort-Stream → Event `data.ascii`
@@ -1251,7 +1251,7 @@ Pipeline + Begründung der Marker-statt-Tool-Entscheidung siehe
 ### KI-Reflexion im Kern (sichtbares Thinking)
 
 Denkt die KI vor einer Antwort (adaptives Thinking, `core/ai.py`
-`_should_think` → nur Verständnis-/Verifikations-Turns, siehe `memory/ki/ki_system.md`),
+`_should_think` → nur Verständnis-/Verifikations-Turns, siehe `memory/ki/anbieter_modelle.md`),
 **tickert ihr innerer Monolog live in den Kern** — sichtbares „ich schau kurz
 nach…" statt totem Warten (so wird die ~3× Latenz UX-Gewinn statt -Verlust).
 
@@ -1290,7 +1290,7 @@ Schließt am Sendungsende (`done` + letzter Satz) oder bei `stopSpeaking`; bei
 Zwei Auslöser, dieselbe Leiste: das Backend fängt ein bestätigungspflichtiges
 Schreib-Tool ab (Auto-Gate, Default JA/NEIN) **oder** die KI ruft selbst
 `frage_knopf` mit eigenen Labels (Backend-Mechanik + Begründung siehe
-`memory/ki/ki_system.md`). Der Chat-IIFE tauscht die Konsolen-Eingabe gegen die Knöpfe:
+`memory/ki/erlaubnis_gate.md`). Der Chat-IIFE tauscht die Konsolen-Eingabe gegen die Knöpfe:
 
 - **Transport:** SSE-Event `data.permission {frage, optionen}` (parallel zu
   `token` und `ascii` im selben `/api/chat`-Stream; `optionen` fehlt beim

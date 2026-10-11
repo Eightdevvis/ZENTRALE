@@ -16,7 +16,7 @@ Personalisierung, visuelle Phase.
 
 Periodisch gefetchte, KI-moderierte Weltpolitik-Sendung. Kern-Modul:
 `core/news.py`. KI-Tool: `read_news` (in der `klein`-Schiene weiterhin
-`lies_news` — siehe „Zwei Schienen" in `memory/ki/ki_system.md`; der Kern
+`lies_news` — siehe „Zwei Schienen" in `memory/ki/prompt_aufbau.md`; der Kern
 normalisiert über `profil.kanonisch()`). Eingeführt 2026-06-07.
 
 ## Idee
@@ -338,7 +338,7 @@ Tuning-Konstanten: `NEWS_CLUSTER_SIM=0.64` (Average-Linkage, gemessen),
     der Ehrlichkeits-Guard im `_AUFHOL_PROMPT` verhindert Halluzination.
     **War blockiert** weil DuckDuckGo den Scraper geblockt hat — **gelöst durch
     Such-Backend-Swap auf SearXNG** (self-hosted, `localhost:8888`, JSON;
-    Implementierung + Container-Befehl siehe [../ki/ki_system.md](../ki/ki_system.md)).
+    Implementierung + Container-Befehl siehe [../ki/internet_netz.md](../ki/internet_netz.md)).
     End-to-End-Lauf 2026-06-08 verifiziert: 7 SearXNG-Suchen → LLM →
     4187-Zeichen-Rückblick, alle Calls im Internet-Panel sichtbar (expliziter
     `push_internet_log`, da localhost-Hop sonst unsichtbar wäre).

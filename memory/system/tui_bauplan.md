@@ -334,7 +334,7 @@ die TUI gilt:
 - Die Erlaubnis-Frage zeigt die Knöpfe aus dem Backend („1) ja, nur dieses
   mal 2) ja, für dieses gespräch 3) ja, immer 4) nein"); j/n/Ziffer/Esc wie
   bisher — kein neuer Code in `chat.py`, die Knöpfe kamen schon als
-  `optionen`. Regeln: `memory/ki/ki_system.md`, „Geltungsbereiche".
+  `optionen`. Regeln: `memory/ki/erlaubnis_gate.md`, „Geltungsbereiche".
 - `/permissions` (früher `/erlaubnis`, `tui/ansichten/chat_erlaubnis.py`, Mixin
   `ErlaubnisSteuerung`): listet im Verlauf, was ohne Frage erlaubt ist, und
   öffnet eine Auswahl zum Zurücknehmen.
@@ -506,7 +506,7 @@ Inneres (Skizze: `chat_layout.py`).
 Sasha: „bewertungen für uns um unser eigenes system zu verbessern … so dass
 ich nen kommentar hinzufügen könnte wenn ich wollte. also am besten einfach so
 n kleines modal das aufgeht." Speicher und Wofür: `core/rueckmeldungen.py`,
-[../ki/ki_system.md](../ki/ki_system.md) „Bewertungen".
+[../ki/chat_bedienung.md](../ki/chat_bedienung.md) „Bewertungen".
 
 - **Unter jeder Antwort** „copy · retry · good · bad" (`verlauf.py`; Ziele
   `("gut", i)` / `("schlecht", i)`). Wörter statt 👍/👎: Emoji sind zwei
@@ -548,7 +548,7 @@ n kleines modal das aufgeht." Speicher und Wofür: `core/rueckmeldungen.py`,
 
 Sasha: nicht nur sehen, welches Werkzeug lief, sondern was es zurückgab und
 wie die Antwort darauf weiterging. Speicher und was drinsteht:
-[../ki/ki_system.md](../ki/ki_system.md) „Ablauf-Protokoll".
+[../ki/transparenz.md](../ki/transparenz.md) „Ablauf-Protokoll".
 
 - **Unter jeder Antwort mit Protokoll** „copy · retry · trace › · good ·
   bad" (Ziel `("trace", i)`); alte Antworten und die lokale KI haben keins,

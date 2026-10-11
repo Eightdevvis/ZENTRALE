@@ -111,7 +111,7 @@ nachdenken"**, **„kalender-action"**, usw. Dockt bewusst an die alte
 - **8k-Kontext:** zwei Streams interleaved fressen Tokens. logic-Turns
   vermutlich aus der sichtbaren History droppen/zusammenfassen — sonst
   verdrängen sie die Sprach-Regel (das „Chinesisch blutet durch"-Problem,
-  s. `memory/ki/ki_system.md` / `OLLAMA_NUM_CTX`).
+  s. `memory/ki/anbieter_modelle.md` „Warmup" / `OLLAMA_NUM_CTX`).
 - **Persona-Bleed:** zwei Sprecher in einem Fenster → Risiko, dass der KI
   `logic`s robotischer Ton an Sasha durchrutscht oder sie verwechselt wer was
   sagte. Dieser Codebase kämpft schon dokumentiert gegen Identity-Bleed /

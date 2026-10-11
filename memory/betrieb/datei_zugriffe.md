@@ -4,7 +4,7 @@
 die KI NUR noch Input/ und Output/ des Nutzerordners (`~/Zentrale`) — kein
 ZENTRALE-Code, kein `data/`, kein ~/codicus (gehört später zur Coder-App).
 Was unten steht (Whitelist + ~/codicus), gilt nur noch für die lokale
-Schiene `klein`. Einzelheiten: `memory/ki/ki_system.md`, „Reichweite von
+Schiene `klein`. Einzelheiten: `memory/ki/nutzerordner.md`, „Reichweite von
 gross".
 
 **Stand 2026-09-18:** `core/context.py` entscheidet in einer Funktion
@@ -125,7 +125,7 @@ ignoriert – lokaler Inhalt, kein Repo-Material.
 
 | Pfad           | Grund                                                       |
 |----------------|-------------------------------------------------------------|
-| `data/ascii/`  | handgepflegte ASCII-Bibliothek für den Bild-Marker `[[bild: name]]` – Inhalt, kein Privatkram. `.txt` (`# tags:`-Zeile + Art). Ordner per Env `ZENTRALE_ASCII_DIR` überschreibbar. Siehe `memory/ki/ki_system.md`. |
+| `data/ascii/`  | handgepflegte ASCII-Bibliothek für den Bild-Marker `[[bild: name]]` – Inhalt, kein Privatkram. `.txt` (`# tags:`-Zeile + Art). Ordner per Env `ZENTRALE_ASCII_DIR` überschreibbar. Siehe `memory/ki/chat_bedienung.md`. |
 | `tutor/langs/<lang>/` (Repo language-tutor) | gehört dem Tutor-Repo: Sprache getrackt, Lernstand ignoriert — dessen `.gitignore` und `docs/bauplan.md` Abschnitt 4. |
 | `*.example`    | `data/ai_config.json.example` – Vorlage ohne Secrets (die Tutor-Vorlage `tutor/data/tutor_config.json.example` liegt seit 2026-10-09 im Repo `language-tutor`). |
 

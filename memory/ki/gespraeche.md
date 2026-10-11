@@ -119,7 +119,7 @@ Siehe [../system/tui_bauplan.md](../system/tui_bauplan.md), Abschnitt
 Phase 3 des Plans. Sasha: „mein kopf kann sich thematisch viel besser
 orientieren als datiert. solang der assistant eh einfach crossgespräche
 suchen kann wie claude web." Die KI sucht mit `search_chats(query)` und liest
-mit `read_chat(id, query?, anzahl?)` nach ([ki_system.md](ki_system.md),
+mit `read_chat(id, query?, anzahl?)` nach ([werkzeuge.md](werkzeuge.md),
 „Frühere Gespräche"). Code: `core/chat_suche.py` (Schicht 2).
 
 - **Was:** alle Gespräche aus `gespraeche.liste()` und

@@ -38,7 +38,7 @@ auf einem Linux-PC. Sensoren und Zeitgeber erzeugen Events, der Core
 verarbeitet sie, die Fronten zeigen alles an. Zwei Dinge verlassen das Haus
 nur bewusst: die gegatete Internet-Pipe der KI (Tools `web_search`/`fetch_url`,
 jeder Call per Knopf bestätigt, sichtbar im Internet-Monitor) und der
-Cloud-Kern als Opt-in (`memory/ki/ki_system.md`). Die KI hat Lese-Zugriff auf eine
+Cloud-Kern als Opt-in (`memory/ki/anbieter_modelle.md`). Die KI hat Lese-Zugriff auf eine
 Whitelist von Dateien (`memory/betrieb/datei_zugriffe.md`) und ein persistentes
 Gedächtnis (`memory/ki/gedaechtnis_dateien.md`).
 

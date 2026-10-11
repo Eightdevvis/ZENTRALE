@@ -538,7 +538,7 @@ def api_erlaubnis_zuruecknehmen():
 
 # /api/memory und /api/memory/<id> entfielen mit dem Legacy-LTM-Pfad.
 # Graph-Stats werden über graph.stats() bzw. den Konzept-Browser
-# bereitgestellt (siehe memory/ki/ki_system.md).
+# bereitgestellt (siehe memory/ki/konzept_graph.md).
 
 
 @bp.route('/api/ai/status')

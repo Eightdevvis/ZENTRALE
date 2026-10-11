@@ -21,7 +21,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 Lesen darf sie fast alles (Kalender, Mail, News). **Schreibende** Aktionen —
 Termin eintragen, löschen, pausieren — laufen immer durch das Erlaubnis-Gate:
 Python fängt den Tool-Call ab und fragt, bevor irgendetwas passiert. Nicht
-modellgetrieben. Siehe [../ki/ki_system.md](../ki/ki_system.md).
+modellgetrieben. Siehe [../ki/erlaubnis_gate.md](../ki/erlaubnis_gate.md).
 
 Die **Listen** gehören Sasha (`data/lists.json`) — bis auf die eine Liste
 `zentrale`, den Feature-Tracker (`data/features.json`). Den pflegt seit

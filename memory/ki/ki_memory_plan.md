@@ -252,7 +252,7 @@ Ablauf:
 - [x] **F** – `_CAPABILITIES_PROMPT` als Selbstbild + Anti-Konfabulation
       bei leerem LTM.
 - [x] **G** – **Konzept-Graph ersetzt LTM/STM/Profil-Schichten als
-      primary memory.** Siehe `memory/ki/ki_system.md`.
+      primary memory.** Siehe `memory/ki/konzept_graph.md`.
 
 Phase G hat die Designprinzipien-Festlegung "Kein Graph" umgeworfen –
 in der Praxis sind assoziative und zeitbasierte Queries der Hauptfall,

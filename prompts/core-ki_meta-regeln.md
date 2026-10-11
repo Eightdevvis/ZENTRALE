@@ -15,7 +15,7 @@ Satz Meta-Regeln in `core/profil/gross.py`: 2.945 → ~1.100 Zeichen. Raus sind
 dort die Anti-Konfabulations-Belehrungen ("nur reale Wörter") und die
 Tool-Ermahnungen 8+9 — die stehen jetzt in der Beschreibung des jeweiligen
 Tools, wo das Modell sie liest, wenn es zählt. Geblieben ist die
-Subjekt-Grenze. Hintergrund: „Zwei Schienen" in `memory/ki/ki_system.md`.
+Subjekt-Grenze. Hintergrund: „Zwei Schienen" in `memory/ki/prompt_aufbau.md`.
 
 Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 

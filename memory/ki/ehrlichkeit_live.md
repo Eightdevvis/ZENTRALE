@@ -70,8 +70,7 @@ Tutor.
    - TUI: „offen: …" leise unter der letzten Antwort (Feld `offen`).
    - **Werkzeug-Zusagen** (seit 2026-10-09): ein Werkzeug darf selbst eine
      Zusage eintragen (`zusagen.merken`, Feld `art`) — heute nur „Input
-     aufräumen" (`core/input_aufraeumen.py`, s. [ki_system.md](ki_system.md),
-     „Nutzerordner …"). Sie verfallen nicht und werden nicht von beliebigen
+     aufräumen" (`core/input_aufraeumen.py`, s. [nutzerordner.md](nutzerordner.md)). Sie verfallen nicht und werden nicht von beliebigen
      Werkzeugen abgehakt, nur von ihrem eigenen Ablauf (remove_input lief,
      Datei weg, Sasha sagte in einer Knopf-Frage nein).
 
@@ -317,7 +316,7 @@ AB mit genauem fehlercode!"* — deshalb gibt es keinen Status `teilweise`
 mehr; jedes schreibende Werkzeug endet ERLEDIGT (Satz aus dem nachgelesenen
 Stand) oder ABGEBROCHEN mit Code (`core/fehlercodes.py`, `explain_error`).
 Die Erledigt-Zeile kennt damit nur ✓, ✗ und „– von dir abgelehnt". Details:
-[ki_system.md](ki_system.md), „Belegt oder gesagt".
+[werkzeuge.md](werkzeuge.md), „Belegt oder gesagt".
 
 ## Grenzen
 

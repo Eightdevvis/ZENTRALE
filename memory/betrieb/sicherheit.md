@@ -8,7 +8,7 @@ Remote-Unlock über Dropbear im Initramfs ist eingerichtet und funktioniert
 Bewusst akzeptierte Lücken: Evil Maid (`/boot` unverschlüsselt),
 Disk-PW = User-PW. Seit 2026-06 gibt es einen gewollten Ausgangskanal
 (KI-Tools `web_search`/`fetch_url`, hart gegated), seit 2026-08 optional den
-Cloud-Kern (`memory/ki/ki_system.md`). Seit 2026-10-08 braucht das Backend
+Cloud-Kern (`memory/ki/anbieter_modelle.md`). Seit 2026-10-08 braucht das Backend
 von anderen Geräten einen Zugangsschlüssel ([zugang.md](zugang.md)). Offen: Firewall, SSH-Hardening,
 Notfall-Passphrase auf Papier, Live-USB.
 
@@ -68,7 +68,7 @@ starten** (Python oder Shell). Ohne Abschottung hieße das: Keys aus
 `data/ai_config.json` lesen, `~/.ssh` kopieren, ins Netz schicken, Dateien
 löschen — angestoßen auch durch Prompt-Injection aus einer geholten Seite.
 
-Mitigationen (Details: `memory/ki/ki_system.md`, Abschnitt „Sandbox"):
+Mitigationen (Details: `memory/ki/sandbox.md`):
 - **Gate:** jeder Lauf wird bestätigt; die Frage zeigt Sprache + Anfang des
   Codes.
 - **bubblewrap:** das Programm sieht weder `/home` (Repo, `data/`, Keys,
@@ -297,7 +297,7 @@ sudo cryptsetup luksKillSlot /dev/nvme0n1p3 <slot-nr>
   angewendet.
 - **2026-06-07** — erster gewollter Ausgangskanal: KI-Web-Tools mit hartem
   Gate.
-- **2026-08** — Cloud-Kern als Opt-in (`memory/ki/ki_system.md`): bricht die
+- **2026-08** — Cloud-Kern als Opt-in (`memory/ki/anbieter_modelle.md`): bricht die
   Offline-Eigenschaft für den Chat bewusst; was rausgeht, auch
   Tool-Ergebnisse.
 - **2026-09-14** — Wachplan: Suspend statt Aus, Dropbear nur noch für den

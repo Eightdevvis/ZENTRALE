@@ -97,7 +97,7 @@ höhere Bitrate per `audioBitsPerSecond` im MediaRecorder-Constructor.
 - Beim POST an `/api/chat` wird der Flag als `via_mic` mitgesendet, was
   serverseitig den `_MIC_INPUT_HINT` im System-Prompt aktiviert.
 
-Backend-Reaktion: siehe `memory/ki/ki_system.md` → System-Prompt-Komposition.
+Backend-Reaktion: siehe `memory/ki/prompt_aufbau.md` → System-Prompt-Komposition.
 
 ## Sprachausgabe im Chat-Modus (Auto-Speak)
 

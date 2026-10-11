@@ -423,7 +423,7 @@ außerdem `ablauf` tragen: eine Liste von Einträgen `{art, zeit, t, …}` (art:
 `warnung` (`text`), `quellen` (`liste`, seit 10.10.), `auftrag` (`punkte`,
 seit 10.10.), `fehler`,
 `gestoppt`, `antwort`, `kosten`; je Eintrag höchstens 50.000 Zeichen) —
-das Ablauf-Protokoll des Zugs ([../ki/ki_system.md](../ki/ki_system.md),
+das Ablauf-Protokoll des Zugs ([../ki/transparenz.md](../ki/transparenz.md),
 „Ablauf-Protokoll"). Nur zum Nachlesen; das Handy muss es weder schreiben
 noch lesen, und es geht nie an die KI. Ebenfalls seit 09.10. (abends): ein
 abgebrochener Zug (Fehler, Rundengrenze, gestoppt ohne Text) steht als

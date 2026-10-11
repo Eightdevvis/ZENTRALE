@@ -91,7 +91,7 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
   (`done=true`). Nicht früher abbrechen, sonst gehen Tool-Calls verloren.
   Tool-Loop ist via `max_rounds = 5` gegen Endlosschleifen abgesichert.
 - Cloud-API-Fallen (`temperature` → 400, `thinking: disabled` verliert
-  Tool-Calls): `memory/ki/ki_system.md` → Modell-Parameter.
+  Tool-Calls): `memory/ki/anbieter_modelle.md` → „Fallen der aktuellen API".
 
 ### Tutor vs. Chat
 
@@ -119,7 +119,7 @@ ZENTRALE-seitig gilt:
   Aufrufer in ZENTRALE `tools=`; wer das wieder tut, muss diese Gates kennen.
 
 Umgekehrt gilt für den **Cloud-Kern**: lokal sieht alles von Cloud, Cloud
-nichts von lokal (eigener Store; `memory/ki/ki_system.md` → Isolations-Invariante).
+nichts von lokal (eigener Store; `memory/ki/anbieter_modelle.md` → Isolations-Invariante).
 
 Wer hier etwas ändert (ein Tool-Set an einen Cloud-Pfad hängen, die Gates
 lockern), weicht diese Trennung bewusst auf – im Zweifel sein lassen.

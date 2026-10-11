@@ -4,7 +4,7 @@
 einen ersten Pass, Phasen 1–3 (Datensammlung, LoRA, DPO) sind nicht
 angefangen — kein Commit seit dem Cloud-Umstieg (08/2026) betrifft ihn.
 Seither gibt es zwei Prompt-Schienen (`core/profil/klein.py` für das lokale
-9b, `gross.py` für Frontier-Modelle, `ki_system.md`); die Persona lebt in
+9b, `gross.py` für Frontier-Modelle, `prompt_aufbau.md`); die Persona lebt in
 `profil/klein.py:_SYSTEM_PROMPT` (re-exportiert als `ai._SYSTEM_PROMPT`), und
 das Faktenwissen liegt nicht mehr im Graphen, sondern im Datei-Gedächtnis.
 ⚠ prüfen: ob der Fine-Tuning-Weg nach dem Cloud-Umstieg noch verfolgt
@@ -21,8 +21,8 @@ steht nirgends.
 
 ## Was hier nicht steht
 
-- Memory-System: → `memory/ki/ki_memory_plan.md` (archiviert) und `memory/ki/ki_system.md`.
-- Tool-Use, Capabilities-Prompt: → `memory/ki/ki_system.md`.
+- Memory-System: → `memory/ki/ki_memory_plan.md` (archiviert), `memory/ki/gedaechtnis_dateien.md` und `memory/ki/konzept_graph.md`.
+- Tool-Use, Capabilities-Prompt: → `memory/ki/werkzeuge.md`, `memory/ki/prompt_aufbau.md`.
 - Persona-Inhalt selbst (Tonfall, Vorlieben): wird im Code in
   `core/profil/klein.py:_SYSTEM_PROMPT` (lokal) bzw. `gross.py` (Cloud)
   gepflegt, nicht hier.

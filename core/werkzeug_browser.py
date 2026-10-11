@@ -4,7 +4,7 @@
 # Sasha. werkzeug_register hängt EINTRAEGE hinten an seine Liste; ausgeführt
 # wird in core/ki_browser.py, der Browser selbst ist core/browser_sitzung.py.
 #
-# 2026-10-09 (memory/ki/ki_system.md, „Browser"). Nur gross: das lokale qwen
+# 2026-10-09 (memory/ki/browser.md). Nur gross: das lokale qwen
 # ist darauf nicht gemessen. Die Beschreibungen bleiben kurz (sie reisen in
 # jedem Zug im gecachten Kopf mit); das WIE steht im Skill „browser".
 #

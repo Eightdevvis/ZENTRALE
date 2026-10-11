@@ -400,7 +400,7 @@ f01 7/9, 13 unbelegt, 1 falsch. Ordner `…/pruefstand/nachher2/2026-10-08_2224/
 - **„da war nichts zu löschen, Irrtum meinerseits"** (Zug 4) — falsch: sie
   HATTE nyam in Zug 2 gelöscht, die Antwort sagte es nur nicht, und der
   Verlauf trug keine Werkzeuge. Jetzt: Werkzeug-Spur im Verlauf
-  ([ki_system.md](ki_system.md)). Haiku hat diesen echten Fehler übersehen.
+  ([prompt_aufbau.md](prompt_aufbau.md)). Haiku hat diesen echten Fehler übersehen.
 - **Pause wieder aufgeschoben** („trag ich erst ein, wenn ich das Enddatum
   weiß") — die KI wählt das bewusst, das Werkzeug kann es jetzt anders. Das
   allgemeine Mittel („offene Versprechen" erkennen und im nächsten Zug

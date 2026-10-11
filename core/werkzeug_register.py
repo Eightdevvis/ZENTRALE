@@ -9,7 +9,7 @@
 # abgeleitet in gross.py), Ausführung in ki_werkzeuge._verteilen, Erlaubnis in
 # erlaubnis.py. Jedes neue Werkzeug wuchs an allen dreien, und nichts merkte,
 # wenn eine davon fehlte. Jetzt beziehen profil, erlaubnis und ki_werkzeuge
-# ihre Listen von hier. Wie man ein Werkzeug anlegt: memory/ki/ki_system.md.
+# ihre Listen von hier. Wie man ein Werkzeug anlegt: memory/ki/werkzeuge.md.
 #
 # KI-Kern (Schicht 3, memory/system/bauplan_kern.md).
 #

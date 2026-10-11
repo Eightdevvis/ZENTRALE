@@ -1,8 +1,7 @@
 # Browser der KI einrichten (Chromium ohne Fenster)
 
 Seit 2026-10-09 kann die KI Webseiten in einem echten Browser bedienen
-(`browser_open` & Co., [../ki/ki_system.md](../ki/ki_system.md) Abschnitt
-„Browser"). Das braucht zwei Dinge auf dem Rechner, auf dem das **Backend**
+(`browser_open` & Co., [../ki/browser.md](../ki/browser.md)). Das braucht zwei Dinge auf dem Rechner, auf dem das **Backend**
 läuft — nicht auf dem, an dem du tippst.
 
 Fehlt eins davon, passiert nichts Schlimmes: die KI bekommt „Browser nicht

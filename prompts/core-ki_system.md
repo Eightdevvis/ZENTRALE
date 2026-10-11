@@ -16,7 +16,7 @@ Browser-Dashboard, die TUI würde die Marker als rohen Text zeigen) und
 Modelle). Abgeleitet, nicht kopiert: zwei Kopien wären zwei Persönlichkeiten,
 je nachdem welches Backend läuft. `gross` bekommt außerdem weder
 `ANTWORT_SUFFIX` noch `_ASCII_MARKER_PROMPT` noch `_DASHBOARD_VIEW`.
-Hintergrund: „Zwei Schienen" in `memory/ki/ki_system.md`.
+Hintergrund: „Zwei Schienen" in `memory/ki/prompt_aufbau.md`.
 
 Deutscher Prompt, vollständig und wörtlich aus dem Code kopiert.
 

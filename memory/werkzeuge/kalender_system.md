@@ -110,7 +110,7 @@ Public API:
   Kennungen `#r3f9c`, Belege) und `core/ki_kalender_aendern.py` (genau EIN
   Eintrag, nur genannte Felder, nachgelesen). Kein Löschen per Teilstring
   mehr ohne Prüfung, dass es genau einen trifft. Siehe
-  [../ki/ki_system.md](../ki/ki_system.md) „Kalender ohne Fallen"; was der
+  [../ki/ki_kalender.md](../ki/ki_kalender.md); was der
   Kern dafür noch braucht: [../ki/claude_web_plan.md](../ki/claude_web_plan.md) §7.
 - `imprint_for_prompt(tage=None)` – „was heute/morgen ansteht" als fertiger
   Prompt-Block, nur SICHTBARE Layer. Ersetzt den gelöschten `auto_capture`
@@ -699,7 +699,7 @@ aufgeräumt, der Toggle blendet alles **ein**.
 
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel, Historie)
 
-(Der Konzept-Graph ist seit 18.08.2026 abgeschaltet — `../ki/ki_system.md`;
+(Der Konzept-Graph ist seit 18.08.2026 abgeschaltet — `../ki/konzept_graph.md`;
 das Muster gilt sinngemäß mit dem Datei-Gedächtnis.)
 
 User: „wie war Geige letzte Woche?"

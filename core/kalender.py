@@ -1,7 +1,7 @@
 # core/calendar.py
 #
 # Kalender-System mit Layer-Struktur – zeitliche Klammer um den
-# assoziativen Graph (siehe memory/ki/ki_system.md).
+# assoziativen Graph (siehe memory/ki/konzept_graph.md).
 #
 # Idee: der Konzept-Graph ist assoziativ und gut darin "wer mag was,
 # wer kennt wen, was hängt mit was zusammen" abzubilden. Was er

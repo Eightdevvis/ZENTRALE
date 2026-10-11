@@ -307,7 +307,7 @@ eine `klein`-Beschreibung — ausgeführt werden sie ohnehin schon (`ki_werkzeug
 ## Skills (seit 2026-10-07)
 
 Phase 4 des [Claude-Web-Plans](claude_web_plan.md); Werkzeuge und Prompt:
-[ki_system.md](ki_system.md), Abschnitt „Skills". Hier steht, wie sie als
+[skills.md](skills.md). Hier steht, wie sie als
 Dateien liegen.
 
 **Was ein Skill ist:** eine Anleitung für eine bestimmte Art Aufgabe. Die
@@ -363,7 +363,7 @@ wochenplan/
 - `edit_skill` lässt die alte Fassung als `SKILL.md.bak` daneben.
 
 **Die Liste im Prompt** (`skills.prompt_block`, Details in
-[ki_system.md](ki_system.md) „Skills"): je aktivem Skill Name + volle
+[skills.md](skills.md)): je aktivem Skill Name + volle
 Beschreibung, höchstens 6.000 Zeichen. Wird sie länger (seit 2026-10-08):
 Hinweis in Customize → Skills („Liste zu lang …") — Sasha schaltet aus, was
 er nicht braucht; nur als letzte Rettung werden die längsten Beschreibungen

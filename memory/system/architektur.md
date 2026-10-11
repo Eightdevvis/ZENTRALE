@@ -13,7 +13,7 @@ schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor 
 `hub_bauplan.md`): eigener Prozess, eigener Schlüssel, eigenes Budget;
 ZENTRALE startet ihn und schickt ihm Ereignisse (`memory/tutor/INDEX.md`). „Lokal &
 offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
-der Cloud-Kern als Opt-in (2026-08, `memory/ki/ki_system.md`) brechen es
+der Cloud-Kern als Opt-in (2026-08, `memory/ki/anbieter_modelle.md`) brechen es
 bewusst. Bausteine docken per Konvention an (KI-Tool in `ai.py` + Route in
 `app.py`), keine Plugin-Registry. **Seit 2026-10-05 hat der Kern einen
 Bauplan mit Drift-Test:** [bauplan_kern.md](bauplan_kern.md) legt für jedes
@@ -167,7 +167,7 @@ Weitere `core/`-Module, die oben nicht einzeln stehen: `anwesenheit.py`,
 `takt.py`, `melden.py` (→ `takt.md`, `anwesenheit_und_ring.md`,
 `../betrieb/systemeinheit.md`), `aussenposten.py`, `datasync.py`
 (→ `topologie.md`), `gedaechtnis.py`, `cloud.py`, `cloud_openai.py`,
-`usage.py` (→ `../ki/ki_system.md`), `notes.py`, `prices.py`, `theme.py`
+`usage.py` (→ `../ki/anbieter_modelle.md`), `notes.py`, `prices.py`, `theme.py`
 (→ `dashboard.md`).
 
 Skripte in `scripts/` ohne eigenen Doku-Ort (Stand 2026-10-11):
@@ -209,7 +209,7 @@ an:
 1. **KI-Tool:** ein Eintrag im Werkzeug-Register (`core/werkzeug_register.py`:
    Schema, Beschreibung je Schiene, Erlaubnis + Frage) und die Funktion in
    `core/ki_werkzeuge.py` mit `@ausfuehrer("name")` (seit 2026-10-07; Anleitung
-   in [memory/ki/ki_system.md](../ki/ki_system.md), „Das Werkzeug-Register").
+   in [memory/ki/werkzeuge.md](../ki/werkzeuge.md), „Das Werkzeug-Register").
 2. **Front:** eine REST-Route im passenden Bereich unter `ui/routen/` (oder
    einem neuen Bereich, eingetragen in `ui/routen/__init__.py`), die 1:1 an die
    Baustein-Funktion delegiert. Routen sind reine Adapter (keine Business-Logik,
