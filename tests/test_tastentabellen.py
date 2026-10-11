@@ -125,6 +125,25 @@ def test_tabelle_verteilt_neutrale_namen():
     assert s.TASTEN.eintraege("start") == [("↑↓", "move"), ("alt+←", "back"), ("q", "quit")]
 
 
+def test_teile_bringen_ihre_tabelle_mit():
+    class Teil:
+        TASTEN = tasten.Tasten({"liste": [("enter", "nehmen", "take")]})
+        def __init__(self): self.log = []
+        def aktion_nehmen(self, t): self.log.append(t)
+
+    class Ganz:
+        def __init__(self):
+            self.teil, self.offen = Teil(), False
+        TASTEN = tasten.Tasten.zusammen({"start": [("esc", "zu", "close")]},
+                                        {"teil": (Teil.TASTEN, lambda p: p.teil)})
+        def aktion_zu(self, t): pass
+
+    g = Ganz()
+    assert sorted(g.TASTEN.ansichten()) == ["start", "teil:liste"]
+    g.TASTEN.verteilen(g, "teil:liste", 10)
+    assert g.teil.log == ["enter"] and g.TASTEN.fehlende_methoden(g) == []
+
+
 def test_freitext_und_jede_taste():
     s = _Spiel(); s.modus = "tippen"
     s.taste(ord("a")); s.taste(32); s.taste(27); s.taste(curses.KEY_DOWN)
@@ -182,7 +201,7 @@ def test_horcher_hoert_ab_wenn_keine_tabelle_da_ist():
 @pytest.mark.parametrize("name", NAMEN)
 def test_jede_aktion_hat_eine_methode(welt, name):
     p = _programm(welt(), name)
-    fehlt = [a for a in p.TASTEN.aktionen() if not callable(getattr(p, "aktion_" + a, None))]
+    fehlt = p.TASTEN.fehlende_methoden(p)
     assert not fehlt, "%s: aktion ohne methode: %s" % (name, fehlt)
 
 

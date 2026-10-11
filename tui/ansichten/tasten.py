@@ -148,7 +148,35 @@ def _als_objekt(e):
 class Tasten:
     """Eine Tastentabelle: zeigt (eintraege) und verteilt (verteilen)."""
 
+    @classmethod
+    def zusammen(cls, eigene, teile):
+        """Tabelle eines Programms, das Teile mit eigener Tabelle hat (Chat mit
+        Gesprächsliste/Gedächtnis …, Desk mit Farbwähler-Modal …).
+        eigene = Tabelle wie bei Tasten(…); teile = {name: (Tasten, weg)} mit
+        weg(programm) → das Objekt, das die aktion_-Methoden des Teils hat.
+        Die Ansichten eines Teils heißen „name:ansicht"."""
+        tab = dict(eigene)
+        ziele = {}
+        for name, (teil, weg) in teile.items():
+            for a, liste in teil._daten.items():
+                tab[name + ":" + a] = [dict(e) for e in liste]
+                ziele[name + ":" + a] = weg
+        t = cls(tab)
+        t._ziele = ziele
+        return t
+
+    def ziel(self, programm, ansicht):
+        """Wessen aktion_-Methoden in dieser Ansicht gelten."""
+        weg = self._ziele.get(ansicht)
+        return weg(programm) if weg else programm
+
+    def fehlende_methoden(self, programm):
+        """[(ansicht, aktion)] ohne Methode am Ziel (ein Test verlangt [])."""
+        return [(a, e["aktion"]) for a, liste in self._daten.items() for e in liste
+                if not callable(getattr(self.ziel(programm, a), "aktion_" + e["aktion"], None))]
+
     def __init__(self, tabelle):
+        self._ziele = {}
         daten = {a: [_als_objekt(e) for e in liste] for a, liste in tabelle.items()}
         fehler = tt.pruefen(daten)
         if fehler:
@@ -208,4 +236,4 @@ class Tasten:
         if aktion == self._frei.get(ansicht) and (len(name) == 1 or name == "space") \
                 and self._karte[ansicht].get(name) is None:
             name = " " if name == "space" else name
-        return getattr(programm, "aktion_" + aktion)(name)
+        return getattr(self.ziel(programm, ansicht), "aktion_" + aktion)(name)
