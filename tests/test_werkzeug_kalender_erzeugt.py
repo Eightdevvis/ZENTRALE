@@ -403,6 +403,21 @@ def test_stil_entfernen_und_ohne_felder():
     assert _stand() == vorher
 
 
+def test_stil_kennt_kein_none():
+    """11.10.2026, Sasha: nur „nicht gesetzt" — kein none im Werkzeug; ein
+    none wird abgelehnt und schreibt nichts."""
+    import werkzeug_kalender
+    w = next(a for a in werkzeug_kalender.AKTIONEN if a["name"] == "set_calendar_style")
+    for feld in ("rahmen", "muster"):
+        f = w["inputSchema"]["properties"][feld]
+        assert "none" not in f["enum"] and "none" not in f["description"]
+    k = _termin()
+    vorher = _stand()
+    r = tun("set_calendar_style", kennung=k, rahmen="none")
+    assert r.status != "ok", r
+    assert _stand() == vorher
+
+
 def test_stil_ungueltig_schreibt_nichts():
     k = _termin()
     vorher = _stand()

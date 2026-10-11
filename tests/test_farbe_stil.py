@@ -61,8 +61,8 @@ def test_pruefen_saeubert_und_lehnt_ab():
         stil.pruefen({"border-style": "groove"})
     with pytest.raises(ValueError):
         stil.pruefen({"color": "#ffffff"}, namen=["border-style"])
-    assert stil.unterschied({"color": "#ffffff"}, {"color": "#ffffff", "border-style": "none"}) == \
-        {"border-style": "none"}
+    assert stil.unterschied({"color": "#ffffff"}, {"color": "#ffffff", "border-style": "dotted"}) == \
+        {"border-style": "dotted"}
     assert stil.unterschied({"color": "#ffffff"}, {}) == {"color": None}   # entfernt
 
 
@@ -405,13 +405,28 @@ def test_keine_ist_eine_echte_wahl_im_kreis():
     assert sb.taste(ENTER) == ("fertig", {"border-style": None})
 
 
+def test_wortschatz_ohne_none():
+    """11.10.2026, Sasha: nur „nicht gesetzt" — kein none im Wortschatz
+    und im Schema (KI-Werkzeug: test_werkzeug_kalender_erzeugt)."""
+    assert "none" not in [w for w, _ in stil.RAHMEN]
+    assert "none" not in [w for w, _ in stil.MUSTER]
+    s = stil.schema()["properties"]
+    for name in ("border-style", stil.MUSTER_EIGENSCHAFT):
+        assert "none" not in [w["const"] for w in s[name]["oneOf"]]
+
+
 def test_altes_none_ist_lesbar_und_heisst_keine():
-    """11.10.2026: CSS none („keiner"/„keins") wird nicht mehr angeboten,
-    alte Stile damit bleiben gültig, zeigen ‹ keine › und fallen beim Nehmen weg."""
+    """11.10.2026: CSS none („keiner"/„keins") gibt es nicht mehr; alte
+    Stile damit bleiben lesbar und werden zu „nicht gesetzt" (fallen weg)."""
     alt = {"border-style": "none", "--zentrale-muster": "None", "color": "#ffffff"}
-    assert stil.pruefen(alt) == {"border-style": "none", "--zentrale-muster": "none",
-                                 "color": "#ffffff"}            # Lesen bleibt rückwärtskompatibel
-    assert stil.wert_pruefen("background-color", "none")[1]    # nur Rahmen/Muster
+    assert stil.pruefen(alt) == {"color": "#ffffff"}           # gelesen = nicht gesetzt
+    assert stil.pruefen(alt, entfernen=True) == {"border-style": None, "--zentrale-muster": None,
+                                                 "color": "#ffffff"}
+    assert stil.anwenden(alt, {}) == {"color": "#ffffff"}
+    assert stil.anwenden({"border-style": "dashed"}, {"border-style": "none"}) == {}
+    assert stil.wert_pruefen("border-style", "none")[1]        # als Wert abgelehnt
+    assert stil.wert_pruefen("background-color", "none")[1]
+    assert stil.als_css(stil.pruefen(alt)) == "color: #ffffff"   # .ics schreibt nichts dafür
     assert stil.alt_nichts("border-style", "none") and not stil.alt_nichts("border-style", "solid")
     sb = Stylebox(alt, ALLES)
     texte = {z["name"]: z["text"] for z in sb.zeilen()}

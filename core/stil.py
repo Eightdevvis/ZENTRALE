@@ -34,21 +34,22 @@ MUSTER_EIGENSCHAFT = "--zentrale-muster"
 
 # Rahmen: CSS border-style, nur was ein Terminal zeichnen kann.
 RAHMEN = (("solid", "durchgezogen"), ("dashed", "gestrichelt"),
-          ("dotted", "gepunktet"), ("double", "doppelt"), ("none", "keiner"))
+          ("dotted", "gepunktet"), ("double", "doppelt"))
 
 # Innenmuster (`--zentrale-muster`): Name → Anzeigename. Was ein Browser
 # daraus macht, steht in der Doku (CSS-Abbildung); die TUI hat ihre Zeichen
 # in der Stylebox.
-MUSTER = (("none", "keins"), ("punkte", "Punkte"), ("raster", "Raster"),
+MUSTER = (("punkte", "Punkte"), ("raster", "Raster"),
           ("dicht", "dicht"), ("streifen", "Streifen"), ("schraeg", "schräg"),
           ("karo", "Karo"))
 
-# Nur EIN „nichts" (11.10.2026, Sasha): nicht gesetzt (‹ keine ›, die
-# Eigenschaft fehlt). Das alte „none" („keiner"/„keins") wird nicht mehr
-# angeboten — weder im Schema noch in der Stylebox. Gelesen wird es weiter
-# (alte Stile, .ics): wert_pruefen nimmt es an, Oberflächen behandeln es als
-# nicht gesetzt (alt_nichts). RAHMEN/MUSTER bleiben vollständig, weil das
-# KI-Werkzeug set_calendar_style (core/werkzeug_kalender.py) sie so reicht.
+# Nur EIN „nichts" (11.10.2026, Sasha: „ich dachte eigentlich dass wir auch
+# mit ausdrücklich nicht gesetzt arbeiten"): nicht gesetzt (‹ keine ›, die
+# Eigenschaft fehlt). „none" gibt es im Wortschatz nicht mehr — weder in
+# RAHMEN/MUSTER noch im Schema, in der Stylebox oder im KI-Werkzeug
+# set_calendar_style. Alte Stile damit (.ics, gespeicherte Einträge) bleiben
+# lesbar: `pruefen` und `anwenden` lassen ein altes none still weg (=
+# nicht gesetzt); `wert_pruefen` lehnt es als Wert ab.
 NICHTS = "none"
 ALT_NICHTS = frozenset({"border-style", MUSTER_EIGENSCHAFT})
 
@@ -56,10 +57,6 @@ ALT_NICHTS = frozenset({"border-style", MUSTER_EIGENSCHAFT})
 def alt_nichts(name, wert):
     """Ist das ein altes „none", das heute „nicht gesetzt" heißt?"""
     return name in ALT_NICHTS and str(wert or "").strip().lower() == NICHTS
-
-
-def _ohne_nichts(paare):
-    return tuple((w, t) for w, t in paare if w != NICHTS)
 
 
 def _farbe(titel):
@@ -77,11 +74,11 @@ def _wahl(titel, paare, vorgabe=None):
 # Alle Eigenschaften, die ZENTRALE kennt — als Schema-Stücke. Reihenfolge =
 # Reihenfolge in Dialogen, wenn der Aufrufer nur „alle" sagt.
 EIGENSCHAFTEN = {
-    "border-style": _wahl("Rahmen", _ohne_nichts(RAHMEN), "solid"),
+    "border-style": _wahl("Rahmen", RAHMEN, "solid"),
     "border-color": _farbe("Rahmenfarbe"),
     "background-color": _farbe("Fläche"),
     "color": _farbe("Schrift"),
-    MUSTER_EIGENSCHAFT: _wahl("Muster", _ohne_nichts(MUSTER)),     # ohne: kein Muster
+    MUSTER_EIGENSCHAFT: _wahl("Muster", MUSTER),     # ohne: kein Muster
     # Icon hochladen gibt es noch nicht: das Feld steht da, ist aber
     # gesperrt (readOnly ist ein Standard-Schlüsselwort), 2026-10-10.
     "background-image": {"type": "string", "title": "Icon",
@@ -151,8 +148,6 @@ def wert_pruefen(name, wert):
     if "oneOf" in s:
         erlaubt = [w["const"] for w in s["oneOf"]]
         w = wert.strip().lower()
-        if alt_nichts(name, w):                 # altes „none": lesbar, nicht angeboten
-            return w, None
         return (w, None) if w in erlaubt else (
             None, "%s: eins von %s" % (s["title"], ", ".join(erlaubt)))
     if s.get("pattern") and not re.fullmatch(s["pattern"], wert.strip()):
@@ -165,7 +160,8 @@ def pruefen(stil, namen=None, entfernen=False):
     Eigenschaften außerhalb von `namen` (falls gegeben) oder mit falschem
     Wert → ValueError mit einem deutschen Satz. `entfernen=True` prüft eine
     Änderung (Rückgabe der Stylebox): dort heißt None „Eigenschaft
-    entfernen" und bleibt None."""
+    entfernen" und bleibt None. Ein altes „none" bei Rahmen/Muster heißt
+    nicht gesetzt: im Stil fällt es weg, in einer Änderung wird es None."""
     if not isinstance(stil, dict):
         raise ValueError("stil muss ein dict sein")
     erlaubt = set(EIGENSCHAFTEN if namen is None else namen)
@@ -173,6 +169,10 @@ def pruefen(stil, namen=None, entfernen=False):
     for name, wert in stil.items():
         if name not in erlaubt:
             raise ValueError("nicht angeboten: %s" % name)
+        if alt_nichts(name, wert):              # altes „none" = nicht gesetzt
+            if entfernen:
+                raus[name] = None
+            continue
         if wert is None and entfernen:
             raus[name] = None
             continue
@@ -198,10 +198,12 @@ def anwenden(alt, aenderung):
     """Eine Änderung (z. B. die Rückgabe der Stylebox) auf einen Stil → neues
     dict; `alt` bleibt unberührt. Wert None = Eigenschaft entfernen.
     Aufrufer nehmen das statt `dict.update`: update würde None als Wert
-    hineinschreiben (2026-10-10, Kalender: „Eigenschaft entfernen")."""
-    raus = dict(alt or {})
+    hineinschreiben (2026-10-10, Kalender: „Eigenschaft entfernen"). Ein
+    altes „none" (Rahmen/Muster) heißt nicht gesetzt — in `alt` wie in der
+    Änderung fällt es weg (11.10.2026)."""
+    raus = {k: v for k, v in (alt or {}).items() if not alt_nichts(k, v)}
     for name, wert in (aenderung or {}).items():
-        if wert is None:
+        if wert is None or alt_nichts(name, wert):
             raus.pop(name, None)
         else:
             raus[name] = wert
