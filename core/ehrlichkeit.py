@@ -260,6 +260,8 @@ def erledigt_zeile(liste: list) -> str:
             teile.append(f"✓ {geklappt}{wen}")
         elif st == "abgelehnt":
             teile.append(f"– {versucht}: von dir abgelehnt{wen}")
+        elif st == "keine_antwort":
+            teile.append(f"– {versucht}: keine Antwort (Zeit abgelaufen){wen}")
         else:
             teile.append(f"✗ {versucht} ging nicht{wen}")
     return " · ".join(teile)
@@ -378,7 +380,9 @@ def tat_lief(art: str, schreibend: bool, protokoll: list) -> bool:
         if not schreibend:
             if namen is not None or not s.schreibt:
                 return True
-        elif s.schreibt and s.status in ("ok", "abgelehnt"):
+        elif s.schreibt and s.status in ("ok", "abgelehnt", "keine_antwort"):
+            # keine_antwort (Gate-Zeitablauf, 2026-10-11): das Programm hat
+            # gefragt; die KI soll danach im Text nachfragen dürfen.
             return True
     return False
 

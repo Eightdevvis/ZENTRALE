@@ -364,6 +364,14 @@ def run_tool(name: str, args: dict, *, tutor_mode: bool, active_exec,
     # (Tutor) gaten wir nicht.
     if not tutor_mode and erlaubnis.braucht_erlaubnis(name, args):
         erlaubt = yield from _ask_permission(name, args)
+        if erlaubt is None:
+            # Zeit abgelaufen (2026-10-11): Zeitablauf ist keine Ablehnung.
+            # Das Werkzeug läuft nicht, aber die Wahrheit ist: keine Antwort.
+            return ("result", werkzeug_befund.mit_kopf(Befund(
+                    f"Sasha hat nicht geantwortet (Zeit abgelaufen) — nichts "
+                    f"gemacht ('{name}' wurde nicht ausgeführt); frag im Text "
+                    f"nach, ob du es tun sollst. Sag nicht, er habe es "
+                    f"abgelehnt.", werkzeug_befund.KEINE_ANTWORT)), False)
         if not erlaubt:
             # Der zweite Satz galt bis 10/2026 nur lokal. Der Fall ist aber
             # überall derselbe: sie notiert "Zahnarzt eingetragen" und ruft im
@@ -480,7 +488,8 @@ def _ask_buttons(args: dict):
 
 def _ask_permission(name: str, args: dict):
     """Erlaubnis-Gate: JA/NEIN-Dialog vor einem schreibenden Tool.
-    Generator — mit `yield from` aufrufen. True = ausführen."""
+    Generator — mit `yield from` aufrufen. True = ausführen, False = Sasha
+    hat Nein gesagt, None = keine Antwort (Zeit abgelaufen, gestoppt)."""
     import state
     # Geltungsbereiche (2026-10-07, core/erlaubnis.py): schon „immer" oder
     # „für dieses Gespräch" erlaubt → nicht fragen, aber im Log sichtbar.
@@ -494,13 +503,18 @@ def _ask_permission(name: str, args: dict):
     frage = erlaubnis.frage(name, args)
     opts = erlaubnis.optionen(name, args)
     state.push_log(f"AI →  ERLAUBNIS? {frage[:160]}")
-    state.request_permission(options=opts)
+    # timeout_default=None: Zeitablauf ist kein Nein (siehe run_tool).
+    state.request_permission(options=opts, timeout_default=None)
     # optionen + geltung: neu seit 2026-10-07. Ein Client, der nur „frage"
     # kennt, darf weiter "ja"/"nein" schicken (/api/permission_answer nimmt
     # die alten Wörter an); geltung sagt maschinenlesbar, was jeder Knopf heißt.
     yield {"permission": {"frage": frage, "optionen": opts, "erlaubnis": True,
                           "geltung": erlaubnis.geltungen(name, args) + [erlaubnis.NEIN]}}
     antwort_ = state.wait_permission()    # BLOCKIERT bis Klick/Timeout
+    if antwort_ is None:
+        state.push_log("AI ←  ERLAUBNIS: keine Antwort (Zeit abgelaufen)")
+        zug_ablauf.frage(frage, opts, None, art="erlaubnis")
+        return None
     geltung = erlaubnis.deuten(antwort_)
     state.push_log(f"AI ←  ERLAUBNIS: {antwort_}")
     zug_ablauf.frage(frage, opts, antwort_, art="erlaubnis")

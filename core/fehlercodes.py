@@ -276,6 +276,11 @@ CODES = {
         "Das Verschieben in den Papierkorb ging nicht (Grund im Ergebnis). Nichts verschoben.",
         "Sasha sagen; nicht wiederholen."),
     # ── Internet (lesend) ──
+    "I-SUCHE-AUS": (
+        "Die Websuche läuft gerade nicht: SearXNG nicht erreichbar und die Ausweichsuche "
+        "lieferte nichts oder einen Fehler. Das heißt NICHT, dass es nichts zu finden gäbe.",
+        "Nicht weiter umformulieren oder erneut suchen. Sasha sagen, dass die Suche gerade "
+        "aus ist; fetch_url mit bekannter Adresse geht weiter."),
     "I-KEIN-TEXT": (
         "Die Seite war erreichbar, aber ohne lesbaren Text (Skript-Seite, Bild, leer).",
         "Eine andere Quelle suchen; nicht so tun, als stünde dort etwas."),

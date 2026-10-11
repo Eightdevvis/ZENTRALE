@@ -116,4 +116,5 @@ Tests: `scripts/test_net_internet.py` (48 Cases, untracked).
 - **2026-06-07** — Internet-Pipe mit hartem Gate; rechtes Panel wird
   Transparenz-Monitor statt Alarm.
 - **2026-06-08** — SearXNG statt DDG-Scraping.
+- **2026-10-11** — Suche ehrlich: SearXNG aus + Ausweichsuche leer/Fehler = ABGEBROCHEN `I-SUCHE-AUS` (nicht „Keine Treffer"); danach 60 s lang sofort derselbe Abbruch ohne Netz (`web.suche`). „Keine Treffer" nur, wenn SearXNG lief.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.

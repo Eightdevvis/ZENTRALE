@@ -283,7 +283,7 @@ def kopfzeile(e: dict) -> str:
         return " · ".join(teile)
     if art == "frage":
         a = e.get("antwort")
-        return f"Frage an Sasha → {a if a is not None else '(keine Antwort)'}"
+        return f"Frage an Sasha → {a if a is not None else '(keine Antwort, Zeit abgelaufen)'}"
     if art == "pruefung":
         runde = f"Korrekturrunde {e['runde']}" if e.get("runde") else "neue Runde"
         return f"Prüfung: {len(e.get('befunde') or [])} Befund(e), {runde}"

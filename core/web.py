@@ -26,6 +26,7 @@
 # was rein- und rausgeht. Kein versteckter Traffic, kein Sonder-Logging nötig.
 
 import re
+import time
 import json as _json
 import html as _html
 from urllib.parse import urlencode, urlparse, parse_qs, unquote
@@ -215,6 +216,33 @@ def duenn(text: str) -> str | None:
             f"sag das so, statt einen Grund zu raten.]")
 
 
+# Wiederholungsbremse: nach einem Abbruch „Suche aus" liefert jede weitere
+# Suche eine Weile sofort denselben Abbruch (ohne Netz). Zeitbasiert, weil
+# web.py den Zug nicht kennt; 60 s decken einen Zug sicher ab, und danach
+# darf es wieder probiert werden (SearXNG könnte gestartet worden sein).
+_AUS_SEKUNDEN = 60
+_aus_bis = [0.0]
+_aus_grund = [""]
+
+
+def _suche_aus_noch() -> bool:
+    return time.monotonic() < _aus_bis[0]
+
+
+def suche_aus_zuruecksetzen() -> None:
+    _aus_bis[0] = 0.0
+
+
+def _suche_aus(grund: str, neu: bool = True) -> Befund:
+    if neu:
+        _aus_bis[0] = time.monotonic() + _AUS_SEKUNDEN
+        _aus_grund[0] = grund
+    return abgebrochen(
+        "Websuche", "I-SUCHE-AUS",
+        "Websuche gerade nicht verfügbar (SearXNG nicht erreichbar, "
+        f"Ausweichsuche lieferte nichts) [{grund}]", "nichts gesucht")
+
+
 def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     """
     Web-Suche für das KI-Tool `web_suche`. Gibt ein menschen-/modell-lesbares
@@ -230,6 +258,10 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     query = (query or "").strip()
     if not query:
         return "[Fehler: leere Suchanfrage]"
+    # Wiederholungsbremse (2026-10-11): war die Suche eben schon aus, nicht
+    # erneut versuchen — am 11.10. suchte die KI 9x mit neuen Wörtern.
+    if _suche_aus_noch():
+        return _suche_aus(_aus_grund[0], neu=False)
     try:
         results = _searxng_search(query, max_results)
     except Exception as e_searx:
@@ -237,8 +269,12 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
         try:
             results = _ddg_search(query, max_results)
         except Exception as e_ddg:
-            return (f"[Fehler bei der Web-Suche: SearXNG: {e_searx}; "
-                    f"DDG-Fallback: {e_ddg}]")
+            return _suche_aus(f"SearXNG: {e_searx}; Ausweichsuche: {e_ddg}")
+        if not results:
+            # DDG-Scraping liefert bei Blockade oft leer. Ohne laufendes
+            # SearXNG ist „leer" deshalb KEIN Beleg für „nichts gefunden"
+            # (2026-10-11, Sasha: ganz oder gar nicht).
+            return _suche_aus(f"SearXNG: {e_searx}; Ausweichsuche: leer")
     if not results:
         return f"Keine Treffer für '{query}'."
 

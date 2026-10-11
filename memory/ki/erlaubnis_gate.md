@@ -63,9 +63,13 @@ Rückfrage-Werkzeug, das die KI gezielt einsetzt.
 Das funktioniert nur, weil Flask **multi-threaded** läuft
 (`app.run(threaded=True)`, explizit) – sonst käme der Antwort-Request am
 blockierten Stream nicht vorbei → Deadlock. `wait_permission` (180 s Timeout)
-gibt den bei `request_permission` gesetzten `timeout_default` zurück: beim Gate
-**„nein"** (sicher – keine Antwort erlaubt nie eine Schreib-Aktion), bei
-`frage_knopf` `None` → Ergebnis `[ergebnis: keine_antwort]` (seit 2026-10-08,
+gibt den bei `request_permission` gesetzten `timeout_default` zurück: bei
+Gate **und** `frage_knopf` `None` (seit 2026-10-11 auch beim Gate; vorher „nein").
+Zeitablauf ist kein Nein: das Werkzeug läuft nicht, das Ergebnis ist
+`[ergebnis: keine_antwort]` („Sasha hat nicht geantwortet … frag im Text nach"),
+die Erledigt-Zeile sagt „keine Antwort (Zeit abgelaufen)", der Zug-Ablauf
+„(keine Antwort, Zeit abgelaufen)". Ein echtes Nein bleibt `abgelehnt`. Grund:
+Zeitablauf ist keine Ablehnung. Bei `frage_knopf` Ergebnis `[ergebnis: keine_antwort]` (seit 2026-10-08,
 s. „Belegt oder gesagt" in [werkzeuge.md](werkzeuge.md)). Log: `AI → ERLAUBNIS?`/`FRAGE …`
 bzw. `AI ← ERLAUBNIS:`/`WAHL: …`. Frontend-Details (perm-bar, N-Knopf-Nav):
 [memory/system/dashboard.md](../system/dashboard.md). Tutor-Modus: beides aus (fremdes Tool-Set). Neues
@@ -114,4 +118,5 @@ läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
 - **2026-06** — Auto-Gate und `frage_knopf`.
 - **2026-10-07** — Geltungsbereiche einmal / dieses Gespräch / immer.
 - **2026-10-08** — `ask_choice` ohne Antwort → `keine_antwort`.
+- **2026-10-11** — Gate-Zeitablauf = `keine_antwort`, nicht `abgelehnt`.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
