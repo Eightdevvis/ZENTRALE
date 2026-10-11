@@ -22,7 +22,7 @@ import kacheln
 import lists
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt")   # /api/kachel* deckt /api/kacheln mit
+PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten")   # /api/kachel* deckt /api/kacheln mit
 METHODEN = {"get", "put", "post", "delete", "patch"}
 
 
@@ -237,3 +237,22 @@ def test_jedes_parameter_ist_json_schema_und_seine_vorgaben_passen(liste_und_gra
                         werte.pop(n, None)
         werte = {n: w for n, w in werte.items() if w is not None}
         Draft202012Validator(s, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(werte)
+
+
+def test_tastentabellen_passen(spec, client, monkeypatch):
+    """GET /api/tasten (2026-10-11) und die Tabellen der TUI-Programme haben
+    dieselbe Form wie das Schema."""
+    import apps
+    monkeypatch.setattr(apps, "installiert", lambda: [
+        {"name": "geige", "tasten": {"start": [{"taste": "enter", "aktion": "spielen", "text": "play"},
+                                               {"taste": "k", "aktion": "spielen"}]}},
+        {"name": "ohne"}])
+    r = client.get("/api/tasten")
+    assert r.status_code == 200
+    antwort = r.get_json()
+    assert [a["app"] for a in antwort] == ["geige"]
+    schema = spec["paths"]["/api/tasten"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    v = Draft202012Validator(dict(schema, components=spec["components"]))
+    assert not [e.message for e in v.iter_errors(antwort)]
+    from tui.ansichten import notizen
+    passt(spec, "Tastentabelle", notizen.Notizen.TASTEN.daten())

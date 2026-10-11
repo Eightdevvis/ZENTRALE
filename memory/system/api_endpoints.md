@@ -495,6 +495,16 @@ Vorlagen ([werkstatt.md](../hub/werkstatt.md)). Genau in `openapi.yaml`.
 | `/api/werkstatt/vorlagen` | GET | `{vorlagen: [{id, titel, text}]}` (heute nur `desk`). |
 | `/api/werkstatt/bilder` | GET | `{bilder: [{name, pfad}]}` — Bilder in `~/Zentrale/Input`. |
 
+## Tastentabellen (seit 2026-10-11)
+
+`core/tastentabelle.py` über `ui/routen/tasten.py`: welche Tasten eine App
+in welcher Ansicht nimmt (aus `[tasten]` im app.toml). Genau in `openapi.yaml`
+(Schemas `Tastentabelle`, `TastenEintrag`).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/tasten` | GET | `[{app, tasten: {ansicht: [{taste, aktion, text?}]}}]` — nur Apps mit gültiger Tabelle. |
+
 ## Kacheln (seit 2026-10-10)
 
 `core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede

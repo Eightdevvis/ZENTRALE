@@ -161,6 +161,32 @@ Ort: `<apps_ordner>/<slug>/` (Standard `data/apps/`, abgeglichen). Gefunden
 Prozess-Apps). Adresse `zentrale://<slug>/` — der TUI-Router öffnet den Desk.
 Sie haben keine `rechte`, abonnieren also nichts.
 
+## Tastentabelle: welche Tasten in welcher Ansicht (gebaut 2026-10-11)
+
+Sasha: die Leiste ganz unten zeigt nur, was in der offenen Ansicht geht, und
+niemand schreibt sie von Hand. Jede App sagt es mit einer **Tastentabelle**
+(`core/tastentabelle.py`, JSON; Schema in `openapi.yaml`):
+
+```toml
+[[tasten.liste]]                 # Ansicht "liste"
+taste = "↑↓"                     # Beschriftung = woraus die Oberfläche die Tasten liest
+aktion = "waehlen"
+text = "select"                  # englisch; ohne text: genommen, nicht gezeigt
+[[tasten.liste]]
+taste = "d"
+aktion = "loeschen"
+text = "delete"
+```
+
+`GET /api/tasten` liefert die Tabellen aller installierten Apps. Die
+eingebauten TUI-Programme tragen dasselbe Format im Code und **verteilen ihre
+Tasten über genau diese Tabelle** (`tui/ansichten/tasten.py`) — Anzeige und
+Verhalten können nicht auseinanderlaufen. Die Oberfläche fragt beim
+Verkabeln einmal (der Horcher, `tui/ansichten/horcher.py`) und merkt sich die
+Einträge je Ansicht; wer keine Tabelle hat, wird abgehört (Tasten probieren
+in einer Wegwerf-Umgebung, ohne Namen). Einzelheiten:
+[tui_bauplan.md](../system/tui_bauplan.md) „Tastentabelle".
+
 ## Kacheln (entschieden 2026-10-09)
 
 Anlass: Desk View (Fläche je Projekt, JSON-Canvas-Dateien, in der TUI) legt

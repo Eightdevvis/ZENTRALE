@@ -132,6 +132,18 @@ def eintraege(tabelle, ansicht):
             if e.get("text")]
 
 
+def katalog(manifeste):
+    """`GET /api/tasten`: [{app, tasten}] aller Apps, deren app.toml eine
+    gültige Tastentabelle trägt (Reihenfolge wie die Manifeste). Apps ohne
+    Tabelle fehlen — die hört eine Oberfläche selbst ab."""
+    raus = []
+    for m in manifeste:
+        t = aus_manifest(m)
+        if t is not None:
+            raus.append({"app": m.get("_slug") or m.get("name"), "tasten": t})
+    return raus
+
+
 def aus_manifest(m):
     """[tasten] eines app.toml → Tastentabelle, oder None (keine oder kaputt;
     kaputt mit Zeile im Log — dann wird abgehört)."""

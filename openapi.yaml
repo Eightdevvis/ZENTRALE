@@ -33,6 +33,8 @@ tags:
     description: Selbst gebaute Apps aus Vorlagen (core/werkstatt.py)
   - name: shop
     description: Schaufenster — Katalog, holen, Besitz (core/shop.py)
+  - name: tasten
+    description: Tastentabellen der Apps — welche Tasten in welcher Ansicht (core/tastentabelle.py)
 
 paths:
   /api/kacheln:
@@ -604,6 +606,32 @@ paths:
                         name: {type: string, description: relativ zu Input/}
                         pfad: {type: string}
 
+  /api/tasten:
+    get:
+      tags: [tasten]
+      operationId: tastentabellen
+      summary: Welche Tasten jede App in welcher Ansicht nimmt
+      description: >
+        Aus `[tasten]` im app.toml jeder installierten App. Eine Oberfläche
+        fragt das einmal beim Verkabeln und zeigt in ihrer Leiste nur die
+        Einträge der gerade offenen Ansicht. Apps ohne (gültige) Tabelle
+        fehlen — die hört die Oberfläche selbst ab. Die eingebauten
+        TUI-Programme tragen dasselbe Format im Code.
+      responses:
+        "200":
+          description: Die Tabellen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [app, tasten]
+                  properties:
+                    app: {type: string}
+                    tasten: {$ref: "#/components/schemas/Tastentabelle"}
+                  additionalProperties: false
+
 components:
   responses:
     Ungueltig:
@@ -1105,3 +1133,34 @@ components:
               properties:
                 art: {const: motiv}
                 motiv: {type: string}
+
+    Tastentabelle:
+      type: object
+      description: >
+        Ansicht → Einträge (core/tastentabelle.py). Was hier steht, nimmt die
+        App in dieser Ansicht; was angezeigt wird, steht hier. Eine Taste hat
+        je Ansicht nur eine Aktion.
+      additionalProperties:
+        type: array
+        items: {$ref: "#/components/schemas/TastenEintrag"}
+
+    TastenEintrag:
+      type: object
+      required: [taste, aktion]
+      properties:
+        taste:
+          type: string
+          description: >
+            Beschriftung wie in der Leiste; daraus liest die Oberfläche die
+            Tasten: „a/s" = zwei, „↑↓" = zwei, „pgup pgdn" = zwei, `alt+…`,
+            `ctrl+x`, `f1`–`f12`, enter esc tab space ⌫ del home end pgup pgdn.
+            „type" = Freitext, „any key" = jede übrige Taste.
+          examples: ["↑↓", "a/s", "enter", "alt+←→", "type"]
+        aktion:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          description: Name der Handlung in der App
+        text:
+          type: [string, "null"]
+          description: kurz, englisch; fehlt er, wird die Taste genommen, aber nicht angezeigt
+      additionalProperties: false
