@@ -257,6 +257,9 @@ def test_seite_hat_keine_skripte_und_laedt_nichts_nach():
 def test_fraunces_nur_fuer_die_ueberschrift():
     seite = bild.seite(mb.rueckfall(_g()), [], "OPEN", date(2026, 10, 8))
     assert "data:font/woff2;base64," in seite
+    # Die eingebettete Schrift (~26 kB base64) vorher kappen: die Regex lief
+    # sonst über den ganzen Blob und brauchte ~11 s (memory/betrieb/tests.md).
+    seite = re.sub(r"base64,[A-Za-z0-9+/=]+", "base64,X", seite)
     regeln = re.findall(r'([^{}]+)\{[^{}]*font-family:"Fraunces"', seite)
     assert [r.strip() for r in regeln if not r.strip().endswith("@font-face")] == ["h1"]
 

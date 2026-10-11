@@ -351,3 +351,36 @@ def pty_supported():
         return True
     except OSError:
         return False
+
+
+# ── Warten auf den Schirm statt fester Schlafzeiten ────────────────────────
+#
+# PTY-Tests schliefen früher fest (2,5 s Start, 1,2 s nach Enter, 0,35 s pro
+# Taste) — teuer und trotzdem nicht sicher, wenn die Maschine voll ist.
+# Diese zwei Helfer warten auf das, was man wirklich braucht
+# (memory/betrieb/tests.md, Regel „keine festen Sleeps in PTY-Tests").
+
+def warte_auf(bedingung, frist=15.0, schritt=0.03):
+    """Bis `bedingung()` wahr ist, höchstens `frist` s. -> ob es geklappt hat."""
+    ende = time.monotonic() + frist
+    while time.monotonic() < ende:
+        if bedingung():
+            return True
+        time.sleep(schritt)
+    return bool(bedingung())
+
+
+def warte_auf_antwort(laenge, vorher, ruhe=0.08, frist=0.5):
+    """Nach einer Taste: warten, bis die TUI geantwortet hat (`laenge()` ist
+    über `vorher` gewachsen) und danach `ruhe` s nichts mehr kam — höchstens
+    `frist` s. Kommt gar keine Antwort (Taste ändert nichts am Bild), endet
+    es nach `frist`."""
+    ende = time.monotonic() + frist
+    stand, seit = laenge(), time.monotonic()
+    while time.monotonic() < ende:
+        time.sleep(0.02)
+        jetzt = laenge()
+        if jetzt != stand:
+            stand, seit = jetzt, time.monotonic()
+        elif stand > vorher and time.monotonic() - seit >= ruhe:
+            return

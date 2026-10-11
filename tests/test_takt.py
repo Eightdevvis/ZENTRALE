@@ -22,8 +22,9 @@ import pytest
 import kalender
 import takt
 
-# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
-pytestmark = pytest.mark.kalender_beide
+# Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
+# Speicher (Marke kalender_beide, tests/conftest.py Punkt 8); die übrigen
+# einmal — dort wäre der zweite Lauf derselbe (memory/betrieb/tests.md).
 
 
 @pytest.fixture
@@ -40,15 +41,18 @@ def _um(h, m):
 
 # ── Die Schwellen ─────────────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_eine_stunde_vorher_stoesst_an(welt):
     a = welt.faellig(_um(16, 45))
     assert a and "Geigenstunde" in a["auftrag"]
 
 
+@pytest.mark.kalender_beide
 def test_eine_halbe_stunde_vorher_stoesst_an(welt):
     assert welt.faellig(_um(17, 15)) is not None
 
 
+@pytest.mark.kalender_beide
 def test_dazwischen_wird_geschwiegen(welt):
     """Der Sinn der Schwellen: zweimal, nicht dauernd."""
     assert welt.faellig(_um(16, 20)) is None
@@ -56,17 +60,20 @@ def test_dazwischen_wird_geschwiegen(welt):
     assert welt.faellig(_um(17, 5)) is None
 
 
+@pytest.mark.kalender_beide
 def test_kurz_davor_kommt_nichts_mehr(welt):
     """Fuenf Minuten vorher hilft eine Mahnung niemandem mehr."""
     assert welt.faellig(_um(17, 40)) is None
 
 
+@pytest.mark.kalender_beide
 def test_ein_verspaeteter_tick_holt_nach(welt):
     """Der Treiber laeuft im Minutentakt, aber ein Rechner schlaeft mal
     kurz. Ohne Nachlauf faellt der Anstoss dann stillschweigend aus."""
     assert welt.faellig(_um(16, 47)) is not None
 
 
+@pytest.mark.kalender_beide
 def test_der_nachlauf_bleibt_knapp(welt):
     """Zu grosszuegig, und die Stunden-Mahnung kaeme bei 40 Minuten an —
     also direkt vor der halbstuendigen. Dann sind es doch wieder zwei
@@ -76,12 +83,14 @@ def test_der_nachlauf_bleibt_knapp(welt):
 
 # ── Jeder Anstoss genau einmal ────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_gemerkter_anstoss_kommt_nicht_wieder(welt):
     a = welt.faellig(_um(16, 45))
     welt.merken(a["marke"], _um(16, 45))
     assert welt.faellig(_um(16, 46)) is None
 
 
+@pytest.mark.kalender_beide
 def test_der_zustand_ueberlebt_einen_neustart(welt):
     """Im Speicher zu merken hiesse: nach jedem Backend-Neustart mahnt sie
     alles noch einmal."""
@@ -94,6 +103,7 @@ def test_der_zustand_ueberlebt_einen_neustart(welt):
     assert takt.faellig(_um(16, 46)) is None
 
 
+@pytest.mark.kalender_beide
 def test_die_halbe_stunde_kommt_trotz_der_ganzen(welt):
     """Die beiden Schwellen sind getrennte Anstoesse — sonst waere die
     zweite durch die erste erledigt."""
@@ -104,6 +114,7 @@ def test_die_halbe_stunde_kommt_trotz_der_ganzen(welt):
 
 # ── Schweigeregeln ────────────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_nachts_wird_geschwiegen(tmp_path, monkeypatch):
     monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
     monkeypatch.setattr(takt, "_DATA_DIR", str(tmp_path / "takt"))
@@ -111,18 +122,21 @@ def test_nachts_wird_geschwiegen(tmp_path, monkeypatch):
     assert takt.faellig(datetime(2026, 8, 19, 5, 0)) is None
 
 
+@pytest.mark.kalender_beide
 def test_mindestabstand_zwischen_zwei_anstoessen(welt):
     """Auch verschiedene Anstoesse duerfen nicht im Minutenabstand kommen."""
     welt.merken("irgendwas", _um(16, 40))
     assert welt.faellig(_um(16, 45)) is None
 
 
+@pytest.mark.kalender_beide
 def test_ohne_termin_kein_anstoss(tmp_path, monkeypatch):
     monkeypatch.setattr(kalender, "CAL_PATH", tmp_path / "cal.json")
     monkeypatch.setattr(takt, "_DATA_DIR", str(tmp_path / "takt"))
     assert takt.faellig(_um(16, 45)) is None
 
 
+@pytest.mark.kalender_beide
 def test_morgen_ist_kein_countdown_fall(tmp_path, monkeypatch):
     """Am Abend ist der naechste Termin einer von morgen. Ihn hier zu
     behandeln hiesse, um 22 Uhr an die Vorlesung um 8 zu erinnern — das
@@ -133,6 +147,7 @@ def test_morgen_ist_kein_countdown_fall(tmp_path, monkeypatch):
     assert takt.faellig(datetime(2026, 8, 18, 21, 0)) is None
 
 
+@pytest.mark.kalender_beide
 def test_ein_kaputter_kalender_laesst_es_bleiben(welt, monkeypatch):
     """Lieber still als laut falsch."""
     def kaputt(*a, **k):
@@ -143,6 +158,7 @@ def test_ein_kaputter_kalender_laesst_es_bleiben(welt, monkeypatch):
 
 # ── Der Auftrag ───────────────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_der_auftrag_ist_ein_auftrag_keine_fertige_nachricht(welt):
     """Was gesagt wird, formuliert das Modell — es kennt den Verlauf und
     weiss, ob Sasha gerade mitten in etwas steckt. Der Code entscheidet
@@ -298,6 +314,7 @@ def test_unbekannte_lage_wird_wie_abgewandt_behandelt(monkeypatch):
 
 # ── Aufraeumen ────────────────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_alte_tageszustaende_werden_entsorgt(welt):
     """Sonst waechst der Ordner um eine Datei pro Tag, fuer immer."""
     for tag in range(1, 16):

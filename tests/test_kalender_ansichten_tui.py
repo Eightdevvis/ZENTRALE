@@ -26,7 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _tui_fuzz import PYBIN, ROOT, _set_winsize, pty_supported  # noqa: E402
+from _tui_fuzz import (PYBIN, ROOT, _set_winsize, pty_supported,  # noqa: E402
+                       warte_auf, warte_auf_antwort)
 
 from tui.ansichten import kalender_beispiel as kb  # noqa: E402
 
@@ -123,13 +124,16 @@ def _lauf(tmp_path, schritte):
     threading.Thread(target=drain, daemon=True).start()
     stuecke = {}
     try:
-        time.sleep(2.5)
+        # Auf den Schirm warten statt fest zu schlafen (memory/betrieb/tests.md).
+        warte_auf(lambda: b"ZENTRALE" in buf)
+        time.sleep(0.2)
+        vorher = len(buf)
         os.write(master, b"\r")              # Kalender aus dem Rad öffnen
-        time.sleep(1.2)
+        warte_auf_antwort(lambda: len(buf), vorher, ruhe=0.3, frist=3.0)
         for tasten, name in schritte:
             vorher = len(buf)
             os.write(master, tasten)
-            time.sleep(1.2)
+            warte_auf_antwort(lambda: len(buf), vorher, ruhe=0.3, frist=2.5)
             stuecke[name] = _strip(bytes(buf[vorher:]).decode("utf-8", "replace"))
     finally:
         stop.set()

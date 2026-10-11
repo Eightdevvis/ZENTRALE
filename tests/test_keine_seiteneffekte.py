@@ -54,7 +54,10 @@ def test_ein_fuzz_lauf_laesst_die_echte_theme_datei_in_ruhe(tmp_path):
     r = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/test_tui_fuzz.py", "-q",
          "--tb=no", "-p", "no:cacheprovider"],
-        cwd=ROOT, capture_output=True, text=True, timeout=900)
+        cwd=ROOT, capture_output=True, text=True, timeout=900,
+        # Kleine Runde reicht: 2 Seeds × 2 Backends × 1500 Tasten drücken 't'
+        # zigfach. Der volle Fuzzer läuft ohnehin selbst in der Suite.
+        env={**os.environ, "ZTUI_FUZZ_SESSIONS": "2"})
     nachher = (open(ECHT_THEME).read(), os.stat(ECHT_THEME).st_mtime_ns)
     assert nachher == vorher, (
         "Der Fuzz-Lauf hat Sashas echte Theme-Datei veraendert "

@@ -19,7 +19,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _tui_fuzz import PYBIN, ROOT, _set_winsize, pty_supported  # noqa: E402
+from _tui_fuzz import (PYBIN, ROOT, _set_winsize, pty_supported,  # noqa: E402
+                       warte_auf, warte_auf_antwort)
 
 from tui.ansichten import kalender_beispiel as kb  # noqa: E402
 
@@ -90,6 +91,7 @@ def _lauf(tmp_path, tasten):
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     fehlerlog = tmp_path / "frame-fehler.log"
+    buf = bytearray()
     master, slave = pty.openpty()
     _set_winsize(slave, 46, 150)
     env = dict(os.environ, TERM="xterm-256color", ZENTRALE_NO_AUDIO="1",
@@ -113,19 +115,25 @@ def _lauf(tmp_path, tasten):
             try:
                 r, _, _ = select.select([master], [], [], 0.1)
                 if r:
-                    os.read(master, 65536)
+                    buf.extend(os.read(master, 65536))
             except OSError:
                 break
 
     threading.Thread(target=drain, daemon=True).start()
     try:
-        time.sleep(2.5)
+        # Auf den Schirm warten statt fest zu schlafen (memory/betrieb/tests.md):
+        # erster Frame steht → Enter; Kalender gemalt → jede Taste, bis die
+        # TUI darauf geantwortet hat; am Ende, bis Ruhe ist.
+        warte_auf(lambda: b"ZENTRALE" in buf)
+        time.sleep(0.2)
+        vorher = len(buf)
         os.write(master, b"\r")             # Kalender öffnen (startet in A)
-        time.sleep(1.2)
+        warte_auf_antwort(lambda: len(buf), vorher, ruhe=0.2, frist=3.0)
         for t in tasten:
+            vorher = len(buf)
             os.write(master, t)
-            time.sleep(0.35)
-        time.sleep(1.0)
+            warte_auf_antwort(lambda: len(buf), vorher)
+        warte_auf_antwort(lambda: len(buf), len(buf) - 1, ruhe=0.3, frist=1.0)
     finally:
         stop.set()
         srv.shutdown()

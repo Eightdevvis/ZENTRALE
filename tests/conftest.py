@@ -250,10 +250,43 @@ def _keine_echten_cloud_calls(request, monkeypatch):
 os.environ.setdefault("ZENTRALE_KALENDER_GIT_SPIEGEL", "aus")
 
 
+# 7-0. EIN Wegwerf-Ordner pro Test, darin je ein Unterordner pro Umlenkung.
+#
+# Bis 10.10.2026 holte sich jede der Umlenkungs-Fixtures unten ihren Ordner
+# selbst per `tmp_path_factory.mktemp()` — 9 Aufrufe bei JEDEM Test. pytest
+# liest bei jedem mktemp den ganzen Basetemp-Ordner (make_numbered_dir sucht
+# die nächste freie Nummer), der am Ende der Suite 30–37 Tsd. Einträge hatte:
+# die Kosten wuchsen quadratisch, ein reiner 0,04-s-Test kostete im vollen
+# Lauf 0,34 s, die Suite brauchte 16+ Minuten (memory/betrieb/tests.md).
+#
+# Jetzt: einmal pro Sitzung ein Wurzelordner (der einzige mktemp), pro Test
+# ein frischer Ordner per tempfile.mkdtemp darin (zufälliger Name, kein
+# Verzeichnis-Scan), die Unterordner per mkdir. Die Schutzwirkung ist
+# dieselbe: jede Umlenkung ist pro Test frisch, leer und isoliert.
+# Regel (tests/test_testarchitektur.py prüft sie): Funktions-Fixtures rufen
+# nie tmp_path_factory.mktemp auf.
+@pytest.fixture(scope="session")
+def _sitzungs_wurzel(tmp_path_factory):
+    return tmp_path_factory.mktemp("umlenkungen", numbered=False)
+
+
 @pytest.fixture(autouse=True)
-def _kalender_nie_in_echten_daten(tmp_path_factory, monkeypatch):
+def _test_ordner(_sitzungs_wurzel):
+    import pathlib
+    return pathlib.Path(tempfile.mkdtemp(prefix="t", dir=_sitzungs_wurzel))
+
+
+def _frisch(test_ordner, name):
+    """Leerer Unterordner `name` im Ordner des laufenden Tests."""
+    ordner = test_ordner / name
+    ordner.mkdir()
+    return ordner
+
+
+@pytest.fixture(autouse=True)
+def _kalender_nie_in_echten_daten(_test_ordner, monkeypatch):
     import kalender
-    ordner = tmp_path_factory.mktemp("kalender_default")
+    ordner = _frisch(_test_ordner, "kalender_default")
     monkeypatch.setattr(kalender, "CAL_PATH", ordner / "ai_calendar.json")
     monkeypatch.setattr(kalender, "ICS_DIR", None)
     yield
@@ -265,9 +298,9 @@ def _kalender_nie_in_echten_daten(tmp_path_factory, monkeypatch):
 # frischen Ordner sähe ein Test das aktive Gespräch und die Erinnerungen des
 # vorigen. Der Ordner liegt (wie oben per Env) nie in Sashas data/.
 @pytest.fixture(autouse=True)
-def _gespraeche_frisch(tmp_path_factory, monkeypatch):
+def _gespraeche_frisch(_test_ordner, monkeypatch):
     import gespraeche
-    monkeypatch.setattr(gespraeche, "_DIR", str(tmp_path_factory.mktemp("gespraeche")))
+    monkeypatch.setattr(gespraeche, "_DIR", str(_frisch(_test_ordner, "gespraeche")))
     gespraeche._cache.clear()
     yield
     gespraeche._cache.clear()
@@ -275,39 +308,39 @@ def _gespraeche_frisch(tmp_path_factory, monkeypatch):
 
 # 7c. Jeder Test hat seine eigene Ablage (core/ablage.py, 2026-10-07).
 @pytest.fixture(autouse=True)
-def _ablage_frisch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_ABLAGE_DIR", str(tmp_path_factory.mktemp("ablage")))
+def _ablage_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ABLAGE_DIR", str(_frisch(_test_ordner, "ablage")))
     yield
 
 
 # 7d. Jeder Test hat seine eigenen Bewertungen (core/rueckmeldungen.py, 2026-10-08).
 @pytest.fixture(autouse=True)
-def _rueckmeldungen_frisch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_RUECKMELDUNGEN_DIR", str(tmp_path_factory.mktemp("rueckmeldungen")))
+def _rueckmeldungen_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_RUECKMELDUNGEN_DIR", str(_frisch(_test_ordner, "rueckmeldungen")))
     yield
 
 
 # 7d2. Jeder Test hat seine eigenen Klassifikator-Beispiele (2026-10-10).
 @pytest.fixture(autouse=True)
-def _beispiele_frisch(tmp_path_factory, monkeypatch):
+def _beispiele_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR",
-                       str(tmp_path_factory.mktemp("klassifikator_beispiele")))
+                       str(_frisch(_test_ordner, "klassifikator_beispiele")))
     yield
 
 
 # 7e. Jeder Test hat seine eigenen Desks (core/desk.py, 2026-10-09).
 @pytest.fixture(autouse=True)
-def _desk_frisch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(tmp_path_factory.mktemp("desk")))
-    monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(tmp_path_factory.mktemp("apps")))
+def _desk_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(_frisch(_test_ordner, "desk")))
+    monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(_frisch(_test_ordner, "apps")))
     yield
 
 
 # 7e2. Jeder Test hat seinen eigenen Besitz im Schaufenster (core/shop.py,
 # 2026-10-10).
 @pytest.fixture(autouse=True)
-def _shop_frisch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_SHOP_ORDNER", str(tmp_path_factory.mktemp("shop")))
+def _shop_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_SHOP_ORDNER", str(_frisch(_test_ordner, "shop")))
     yield
 
 
@@ -318,10 +351,10 @@ def _shop_frisch(tmp_path_factory, monkeypatch):
 # schriebe in data/lists.json. Wie beim Kalender: jeder Test bekommt einen
 # leeren Ordner; Tests, die selbst umbiegen, gewinnen.
 @pytest.fixture(autouse=True)
-def _listen_und_graphen_nie_in_echten_daten(tmp_path_factory, monkeypatch):
+def _listen_und_graphen_nie_in_echten_daten(_test_ordner, monkeypatch):
     import graphs
     import lists
-    ordner = tmp_path_factory.mktemp("listen_graphen")
+    ordner = _frisch(_test_ordner, "listen_graphen")
     monkeypatch.setattr(lists, "_DATA_DIR", str(ordner))
     monkeypatch.setattr(lists, "_REGISTRY", str(ordner / "lists.json"))
     monkeypatch.setattr(lists, "_FEATURES", str(ordner / "features.json"))

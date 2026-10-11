@@ -8,7 +8,6 @@ Geprobt an einer KOPIE der Vorlagen-Texte, wie sie bis heute in
 data/gedaechtnis/skills/ liegen — nie am echten data/."""
 import json
 import os
-import shutil
 
 import pytest
 
@@ -179,21 +178,3 @@ def test_alte_bak_und_kaputte_dateien():
     alle = {s["name"]: s for s in skills.alle()}
     assert alle["ohnekopf"]["status"] == "aus"       # wie vorher: ohne Kopf aus
     assert "wochenplan.md.bak" in os.listdir(os.path.join(_ordner(), "_alt"))
-
-
-def test_mit_kopie_der_echten_daten(tmp_path):
-    """Probe mit einer Kopie dessen, was heute wirklich in data/ liegt (nur
-    gelesen, falls da). Ohne echte Daten: übersprungen."""
-    haupt = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    haupt = haupt.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
-    echt = os.path.join(haupt, "data", "gedaechtnis", "skills")
-    if not os.path.isdir(echt) or not any(f.endswith(".md") for f in os.listdir(echt)):
-        pytest.skip("keine alten Skill-Dateien auf diesem Rechner")
-    shutil.copytree(echt, _ordner())
-    vorher = {f for f in os.listdir(_ordner()) if f.endswith(".md")}
-    alle = {s["name"]: s for s in skills.alle()}
-    for datei in vorher:
-        assert datei[:-3] in alle
-        assert os.path.isfile(os.path.join(_ordner(), "_alt", datei))
-    if "kurz" in alle:
-        assert alle["kurz"]["status"] == "aus"

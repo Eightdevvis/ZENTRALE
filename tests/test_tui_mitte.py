@@ -69,9 +69,20 @@ def _strip_ansi(s):
     return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][B0]|\x1b[=>]", "", s)
 
 
-def _lauf(tasten=b"", nach=1.5, groesse=(40, 140)):
-    """Die TUI kurz laufen lassen, nach 2 s `tasten` schicken
-    -> alles, was ueber den Schirm ging."""
+# Woran man sieht, dass die TUI steht und Tasten annimmt: der erste Frame
+# der Startseite ist gemalt (der Kasten-Titel steht in jeder Fenstergröße).
+_BEREIT = "ZENTRALE"
+
+
+def _lauf(tasten=b"", nach=1.5, groesse=(40, 140), bis=(), frist=15.0):
+    """Die TUI laufen lassen, sobald sie steht `tasten` schicken
+    -> alles, was ueber den Schirm ging.
+
+    Kein fester Schlaf mehr (memory/betrieb/tests.md): gewartet wird auf den
+    ersten Frame, dann — wenn `bis` Texte nennt — nur so lange, bis alle auf
+    dem Schirm stehen (höchstens `frist` s; fehlt einer, sagt das die
+    Prüfung im Test). Ohne `bis` (Prüfungen, dass etwas NICHT kommt) bleibt
+    das feste Fenster `nach`."""
     import fcntl
     import pty
     import select
@@ -109,12 +120,30 @@ def _lauf(tasten=b"", nach=1.5, groesse=(40, 140)):
                 break
 
     threading.Thread(target=drain, daemon=True).start()
+    def schirm():
+        return _strip_ansi(bytes(buf).decode("utf-8", "replace"))
+
+    def warte(*texte):
+        ende = time.monotonic() + frist
+        while time.monotonic() < ende:
+            jetzt = schirm()
+            # ein Tupel heißt: einer der Texte reicht (z. B. "POST"/"P O S T")
+            if all(any(a in jetzt for a in (t if isinstance(t, tuple) else (t,)))
+                   for t in texte):
+                return
+            time.sleep(0.05)
+
     try:
-        time.sleep(2.5)
+        warte(_BEREIT)
         if tasten:
+            time.sleep(0.2)              # erster Frame steht, Eingabe ist scharf
             os.write(master, tasten)
-        time.sleep(nach)
-        text = _strip_ansi(bytes(buf).decode("utf-8", "replace"))
+        if bis:
+            warte(*bis)
+            time.sleep(0.3)              # Rest des Frames, falls er noch läuft
+        else:
+            time.sleep(nach)
+        text = schirm()
     finally:
         stop.set()
         srv.shutdown()
@@ -134,7 +163,8 @@ def _lauf(tasten=b"", nach=1.5, groesse=(40, 140)):
 
 @pytest.fixture(scope="module")
 def schirm():
-    return _lauf()
+    return _lauf(bis=("alt+←→ wheel", "space ai chat", "netz", "post", "tutor",
+                      "✦ APPS", ("KLAVIER", "K L A V I E R")))
 
 
 def _befehle():
@@ -172,7 +202,7 @@ def test_keine_buchstaben_leiste_mehr(schirm):
 
 def test_pfeil_rechts_dreht_weiter():
     """Pfeil rechts dreht direkt das gewählte App-Rad -> post steht vorn."""
-    schirm = _lauf(b"\x1bOC")
+    schirm = _lauf(b"\x1bOC", bis=(("POST", "P O S T"),))
     assert "POST" in schirm or "P O S T" in schirm
 
 
@@ -180,7 +210,7 @@ def test_pfeil_links_dreht_rueckwaerts_ueber_den_anfang():
     """Vom klavier nach links landet man hinten bei der letzten App
     (seit 03.10.2026 elektronik), nicht am Rand. Mit Farben klappt dort das
     Pixel-Symbol auf (Schriftzug ELEKTRONIK), ohne den gewohnten Rahmen."""
-    schirm = _lauf(b"\x1bOD")
+    schirm = _lauf(b"\x1bOD", bis=(("ELEKTRONIK", "E L E K T R O N I K"),))
     assert "ELEKTRONIK" in schirm or "E L E K T R O N I K" in schirm
 
 
@@ -286,7 +316,7 @@ def test_startseite_ist_eine_galaxie(schirm):
 
 
 def test_alt_pfeil_rechts_waehlt_technik():
-    assert "✦ TECHNIK" in _lauf(b"\x1b[1;3C", nach=2.5)   # die Galaxie dreht 1,6 s
+    assert "✦ TECHNIK" in _lauf(b"\x1b[1;3C", bis=("✦ TECHNIK",))   # die Galaxie dreht 1,6 s
 
 
 def test_pfeil_allein_wechselt_das_rad_nicht():
@@ -310,7 +340,7 @@ def test_galaxie_gewaehltes_mittig_anderes_draussen():
 
 
 def test_technik_rad_oeffnet_die_systemansicht():
-    schirm = _lauf(b"\x1b[1;3C\r")
+    schirm = _lauf(b"\x1b[1;3C\r", bis=("TECHNIK · SYSTEM", "EXTERNAL", "TELEMETRIE"))
     assert "TECHNIK · SYSTEM" in schirm
     assert "EXTERNAL" in schirm and "TELEMETRIE" in schirm
 
@@ -319,7 +349,8 @@ def test_technik_rad_oeffnet_die_systemansicht():
 def test_technik_zeigt_den_abgleich(groesse):
     """Die Zeile zum Abgleich über die Mitte (2026-10-08) steht in der
     Systemansicht — und nichts stürzt ab, auch nicht im kleinen Fenster."""
-    schirm = _lauf(b"\x1b[1;3C\r", nach=2.5, groesse=groesse)
+    schirm = _lauf(b"\x1b[1;3C\r", groesse=groesse,
+                   bis=("TECHNIK · SYSTEM", "ABGLEICH", "über die Mitte"))
     assert "TECHNIK · SYSTEM" in schirm
     assert "ABGLEICH" in schirm and "über die Mitte" in schirm
     assert "Traceback" not in schirm
@@ -327,7 +358,7 @@ def test_technik_zeigt_den_abgleich(groesse):
 
 def test_dashboard_an_holt_die_alten_spalten_zurueck(tmp_path, monkeypatch):
     monkeypatch.setenv("ZENTRALE_DASHBOARD_FILE", str(tmp_path / "dashboard"))
-    schirm = _lauf(b"/dashboard an\r")
+    schirm = _lauf(b"/dashboard an\r", bis=("LIFESTYLE", "OUTBOUND"))
     assert "LIFESTYLE" in schirm and "OUTBOUND" in schirm
     assert (tmp_path / "dashboard").read_text().strip() == "an"
 
@@ -503,6 +534,6 @@ def test_auge_denkt():
 
 
 def test_ki_chat_zeigt_das_auge():
-    schirm = _lauf(b" ")
+    schirm = _lauf(b" ", bis=("frag die ki",))
     assert "frag die ki" in schirm
     assert any(chr(c) in schirm for c in range(0x1FB00, 0x1FB3C))   # Sextanten = Pixelbild

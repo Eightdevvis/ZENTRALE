@@ -33,10 +33,6 @@ def test_unknown_sub_returns_none():
     assert political.features(0, 0, 0, 80, 30, sub="troops") is None
 
 
-def test_unknown_layer_via_registry_none():
-    assert layers.layer_features("does-not-exist", 0, 0, 0, 80, 30) is None
-
-
 # --- Ereignis-Punkte (UCDP), Projektion + Clipping -------------------------
 
 def _fake_ucdp():

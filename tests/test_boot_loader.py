@@ -119,11 +119,18 @@ def test_status_line_robust(bad):
     assert isinstance(status_line(bad, 0), str)
 
 
-@pytest.mark.parametrize("width", [-9, -1, 0, 1, 3, 47, 500])
-@pytest.mark.parametrize("height", [-2, 0, 1, 7])
-@pytest.mark.parametrize("tick", [-3, 0, 1, 7, 123456])
-@pytest.mark.parametrize("fade", [-1.0, 0.0, 0.5, 1.0, 2.0, None, "x"])
-def test_render_wirft_nie(width, height, tick, fade):
+def test_render_wirft_nie():
     # Property: keine Argument-Kombination bringt die Render-Funktionen zu Fall.
-    flower_field(width, height, tick, fade)
-    status_line("Abgleich", tick)
+    # Ein Test mit Schleife statt 980 Parametrize-Fällen (Regel in
+    # memory/betrieb/tests.md): die Fälle bedeuten einzeln nichts, die
+    # Meldung nennt trotzdem die Kombination, die geworfen hat.
+    import itertools
+    for width, height, tick, fade in itertools.product(
+            [-9, -1, 0, 1, 3, 47, 500], [-2, 0, 1, 7], [-3, 0, 1, 7, 123456],
+            [-1.0, 0.0, 0.5, 1.0, 2.0, None, "x"]):
+        try:
+            flower_field(width, height, tick, fade)
+            status_line("Abgleich", tick)
+        except Exception as e:
+            pytest.fail(f"width={width} height={height} tick={tick} "
+                        f"fade={fade!r}: {type(e).__name__}: {e}")

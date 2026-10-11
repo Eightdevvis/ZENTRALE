@@ -20,7 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _tui_fuzz import pty_supported, _set_winsize, PYBIN, ROOT  # noqa: E402
+from _tui_fuzz import (pty_supported, _set_winsize, PYBIN, ROOT,  # noqa: E402
+                       warte_auf, warte_auf_antwort)
 
 pytestmark = pytest.mark.skipif(
     not pty_supported(), reason="braucht Linux-PTY mit Controlling-TTY")
@@ -113,20 +114,29 @@ def _run(rows, cols):
                 break
 
     threading.Thread(target=drain, daemon=True).start()
+    def schirm():
+        return _strip_ansi(bytes(buf).decode("utf-8", "replace"))
+
+    # Gewartet wird auf den Schirm, nicht fest (memory/betrieb/tests.md).
+    alles = FRAGE.split() + " ".join(OPTIONEN).split() + ["hallo"]
     try:
-        time.sleep(2.5)                      # erster Frame
+        warte_auf(lambda: "ZENTRALE" in schirm())          # erster Frame
+        time.sleep(0.2)
         os.write(master, b" ")               # KI-Chat auf (space, seit dem Rad)
-        time.sleep(0.6)
+        warte_auf(lambda: "frag die ki" in schirm(), frist=5)
         os.write(master, b"hallo\r")         # Frage senden → Stream läuft
-        time.sleep(2.5)
+        warte_auf(lambda: "loeschen" in schirm(), frist=8)  # Frage ist da
+        warte_auf_antwort(lambda: len(buf), 0, ruhe=0.3, frist=2.0)
         # curses zeichnet nur Änderungen — ein Resize erzwingt einen VOLLEN
         # Frame, sonst steht die Frage nur im (längst vergangenen) Delta.
         _set_winsize(master, rows, cols - 1)
-        time.sleep(0.8)
+        vorher = len(buf)
+        warte_auf_antwort(lambda: len(buf), vorher, ruhe=0.2, frist=2.0)
         del buf[:]                           # ab hier nur noch der letzte Frame
         _set_winsize(master, rows, cols)
-        time.sleep(1.5)
-        text = _strip_ansi(bytes(buf).decode("utf-8", "replace"))
+        warte_auf(lambda: all(w in schirm() for w in alles), frist=5)
+        warte_auf_antwort(lambda: len(buf), 0, ruhe=0.2, frist=1.0)
+        text = schirm()
     finally:
         stop.set()
         if p.poll() is None:

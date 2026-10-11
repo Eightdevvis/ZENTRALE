@@ -31,8 +31,9 @@ import ai
 import graph
 import kalender
 
-# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
-pytestmark = pytest.mark.kalender_beide
+# Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
+# Speicher (Marke kalender_beide, tests/conftest.py Punkt 8); die übrigen
+# einmal — dort wäre der zweite Lauf derselbe (memory/betrieb/tests.md).
 
 HEUTE = date.today()
 MORGEN = HEUTE + timedelta(days=1)
@@ -144,6 +145,7 @@ def test_gefragter_fakt_ueberlebt_die_kuerzung(tmp_path, ohne_embeddings):
 
 # ── Falle 3: nichts wissen ≠ nichts geplant ────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_leerer_kalender_sagt_leer_statt_zu_schweigen(leerer_kalender):
     """„Nichts geplant" und „weiß ich nicht" sind verschiedene Antworten.
 
@@ -164,6 +166,7 @@ def test_leerer_graph_erfindet_nichts(tmp_path, ohne_embeddings):
 
 # ── Falle 4: heute und morgen dürfen nicht verschwimmen ────────────────
 
+@pytest.mark.kalender_beide
 def test_jeder_tag_traegt_seinen_wochentag(leerer_kalender):
     """Zwei Tage in einem Block: jeder mit Datum UND Wochentag.
 
@@ -183,6 +186,7 @@ def test_jeder_tag_traegt_seinen_wochentag(leerer_kalender):
     assert MORGEN.strftime("%d.%m.%Y") in rest.split("Zahnarzt")[0]
 
 
+@pytest.mark.kalender_beide
 def test_imprint_nennt_seine_spanne(leerer_kalender):
     """Ein leerer Block muss sagen, WORÜBER er leer ist.
 
@@ -196,6 +200,7 @@ def test_imprint_nennt_seine_spanne(leerer_kalender):
 
 # ── Falle 5: der Cache darf nicht veralten ─────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_neuer_termin_aendert_den_gecachten_kopf(leerer_kalender):
     """Die Kehrseite der Cache-Entscheidung.
 
@@ -211,6 +216,7 @@ def test_neuer_termin_aendert_den_gecachten_kopf(leerer_kalender):
     assert "Zahnarzt" in nachher
 
 
+@pytest.mark.kalender_beide
 def test_gecachter_kopf_traegt_keine_uhrzeit(leerer_kalender):
     """Und die andere Kehrseite: eine Uhrzeit im gecachten Teil würde ihn
     bei JEDEM Turn neu schreiben — der Cache wäre dann reine
@@ -224,6 +230,7 @@ def test_gecachter_kopf_traegt_keine_uhrzeit(leerer_kalender):
 
 # ── Falle 6: Widerspruch muss sichtbar bleiben ─────────────────────────
 
+@pytest.mark.kalender_beide
 def test_widerspruch_zwischen_graph_und_kalender_bleibt_erkennbar(
         tmp_path, leerer_kalender, ohne_embeddings, monkeypatch):
     """Wenn eine Altlast im Graphen etwas behauptet, das der Kalender nicht
@@ -280,6 +287,7 @@ def test_limit_landet_nicht_bei_den_faehigkeiten(tmp_path, ohne_embeddings):
 
 # ── Falle 8: der Imprint darf nicht wie Allwissen aussehen ─────────────
 
+@pytest.mark.kalender_beide
 def test_imprint_macht_seine_grenze_explizit(leerer_kalender):
     """Er klebt zwei Tage. Ohne benannte Grenze antwortet ein Modell auch
     für nächste Woche daraus — das war 2026-06 der Grund, das Glue

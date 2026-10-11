@@ -29,8 +29,9 @@ import pytest
 import ai
 import kalender
 
-# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
-pytestmark = pytest.mark.kalender_beide
+# Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
+# Speicher (Marke kalender_beide, tests/conftest.py Punkt 8); die übrigen
+# einmal — dort wäre der zweite Lauf derselbe (memory/betrieb/tests.md).
 
 
 @pytest.fixture
@@ -77,6 +78,7 @@ def test_read_time_braucht_keine_freigabe():
     assert "read_time" not in ai.PERMISSION_REQUIRED_TOOLS
 
 
+@pytest.mark.kalender_beide
 def test_read_time_nennt_uhrzeit_und_naechsten_termin(cal):
     cal.add_routine("routinen", "Geigenstunde", "FREQ=DAILY", time="23:59")
     antwort = ai._execute_tool("read_time", {})
@@ -84,6 +86,7 @@ def test_read_time_nennt_uhrzeit_und_naechsten_termin(cal):
     assert "Geigenstunde" in antwort
 
 
+@pytest.mark.kalender_beide
 def test_read_time_ohne_termin_behauptet_keinen(cal):
     antwort = ai._execute_tool("read_time", {})
     assert "nichts mehr an" in antwort
@@ -91,18 +94,21 @@ def test_read_time_ohne_termin_behauptet_keinen(cal):
 
 # ── Der naechste Termin ───────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_naechster_termin_zaehlt_die_minuten(cal):
     cal.add_entry("termine", "2026-08-18", "Zahnarzt", time="09:00")
     n = cal.naechster_termin(datetime(2026, 8, 18, 8, 0))
     assert (n["label"], n["minuten"], n["morgen"]) == ("Zahnarzt", 60, False)
 
 
+@pytest.mark.kalender_beide
 def test_naechster_termin_ueberspringt_was_vorbei_ist(cal):
     cal.add_entry("termine", "2026-08-18", "Zahnarzt", time="09:00")
     cal.add_entry("termine", "2026-08-18", "Geige", time="17:45")
     assert cal.naechster_termin(datetime(2026, 8, 18, 12, 0))["label"] == "Geige"
 
 
+@pytest.mark.kalender_beide
 def test_naechster_termin_greift_auf_morgen_ueber(cal):
     """Abends ist die naechste Verabredung eine von morgen — sonst saehe
     ein Anstoss um 23:00 nie, dass um 8:00 etwas ansteht."""
@@ -112,6 +118,7 @@ def test_naechster_termin_greift_auf_morgen_ueber(cal):
     assert n["minuten"] == 600
 
 
+@pytest.mark.kalender_beide
 def test_ganztags_erzeugt_keinen_countdown(cal):
     """Ein Eintrag ohne Uhrzeit hat keinen Abstand — ihn mit 0 Minuten zu
     fuehren hiesse, staendig 'jetzt gleich' zu melden."""
@@ -119,5 +126,6 @@ def test_ganztags_erzeugt_keinen_countdown(cal):
     assert cal.naechster_termin(datetime(2026, 8, 18, 9, 0)) is None
 
 
+@pytest.mark.kalender_beide
 def test_leerer_kalender_gibt_nichts_vor(cal):
     assert cal.naechster_termin(datetime(2026, 8, 18, 9, 0)) is None

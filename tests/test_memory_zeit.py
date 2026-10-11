@@ -36,8 +36,9 @@ import consolidation
 import graph
 import kalender
 
-# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
-pytestmark = pytest.mark.kalender_beide
+# Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
+# Speicher (Marke kalender_beide, tests/conftest.py Punkt 8); die übrigen
+# einmal — dort wäre der zweite Lauf derselbe (memory/betrieb/tests.md).
 
 
 @pytest.fixture
@@ -253,6 +254,7 @@ def test_auto_capture_gibt_es_nicht_mehr():
 
 # ── Imprint: lesen statt schreiben ─────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_imprint_zeigt_heute_und_morgen(tmp_kalender):
     """Was der Spiegel durch Schreiben erreichen wollte, holt der Imprint
     durch Lesen: der nahe Horizont steht im Prompt, ohne Tool-Runde."""
@@ -265,6 +267,7 @@ def test_imprint_zeigt_heute_und_morgen(tmp_kalender):
     assert "Abreise" in text
 
 
+@pytest.mark.kalender_beide
 def test_imprint_endet_nicht_am_uebermorgen(tmp_kalender):
     """Der Block ist der NAHE Horizont. Was weiter weg liegt, gehört ins
     Tool — sonst antwortet das Modell faul aus dem geklebten Block."""
@@ -276,6 +279,7 @@ def test_imprint_endet_nicht_am_uebermorgen(tmp_kalender):
     assert "read_calendar" in text
 
 
+@pytest.mark.kalender_beide
 def test_imprint_zeigt_nur_was_sasha_auch_sieht(tmp_kalender):
     """Die Asymmetrie, die den ganzen Schaden ermöglicht hat: der
     erlebt-Layer ist fuer Sasha ausgeblendet, der Tool-Pfad las ihn
@@ -285,6 +289,7 @@ def test_imprint_zeigt_nur_was_sasha_auch_sieht(tmp_kalender):
     assert "Sport" not in kalender.imprint_for_prompt()
 
 
+@pytest.mark.kalender_beide
 def test_leerer_tag_sagt_das_auch(tmp_kalender):
     """'Nichts geplant' und 'weiß ich nicht' sind verschiedene Antworten."""
     text = kalender.imprint_for_prompt()
@@ -316,6 +321,7 @@ def test_gecachter_kopf_bleibt_ueber_turns_gleich(monkeypatch):
             == cloud._static_system(None, tutor_mode=False))
 
 
+@pytest.mark.kalender_beide
 def test_imprint_blickt_nicht_zurueck(tmp_kalender):
     """Vergangenes darf den Cache nicht vollmüllen — der Block fängt heute
     an, nicht gestern."""

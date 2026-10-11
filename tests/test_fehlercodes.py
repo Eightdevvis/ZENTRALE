@@ -84,10 +84,7 @@ def test_jeder_code_ist_erklaert():
 
 
 def test_kalender_kern_codes_sind_mit_k_davor_erklaert():
-    try:
-        import kalender_kennung
-    except ImportError:
-        pytest.skip("core/kalender_kennung.py noch nicht da")
+    import kalender_kennung
     for code in kalender_kennung.CODES:
         assert "K-" + code in fehlercodes.CODES, code
 

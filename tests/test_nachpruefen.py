@@ -27,8 +27,9 @@ import pytest
 import gedaechtnis
 import kalender
 
-# Läuft gegen BEIDE Kalender-Speicher (alte JSON und .ics), tests/conftest.py Punkt 8.
-pytestmark = pytest.mark.kalender_beide
+# Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
+# Speicher (Marke kalender_beide, tests/conftest.py Punkt 8); die übrigen
+# einmal — dort wäre der zweite Lauf derselbe (memory/betrieb/tests.md).
 
 
 EINTRAG = "## Fraktal-Rendering\n- thema: fraktale, shader\n- status: idee"
@@ -113,6 +114,7 @@ def test_eine_unbeteiligte_notiz_geht_normal_durch(mem):
 
 # ── Der Beweis im Kalender ────────────────────────────────────────────
 
+@pytest.mark.kalender_beide
 def test_der_termin_wird_zurueckgelesen(cal):
     import ai
     antwort = ai._execute_tool(
@@ -123,6 +125,7 @@ def test_der_termin_wird_zurueckgelesen(cal):
     assert "Zahnarzt" in antwort and "09:00" in antwort
 
 
+@pytest.mark.kalender_beide
 def test_die_zweite_gleichnamige_routine_faellt_auf(cal):
     """Der Geigenstunden-Fall vom 18.08.2026: sie legte eine ZWEITE Regel
     an, statt die erste zu aendern, und merkte es erst, als Sasha fragte."""
@@ -139,6 +142,7 @@ def test_die_zweite_gleichnamige_routine_faellt_auf(cal):
     assert "edit_calendar_routine" in antwort
 
 
+@pytest.mark.kalender_beide
 def test_ein_erfolg_ohne_deckung_wird_benannt(cal, monkeypatch):
     """Der wichtigste Fall: das Werkzeug meldet Erfolg, aber es steht
     nichts da. Dann sagt das Ergebnis das ausdruecklich, statt einen Erfolg
