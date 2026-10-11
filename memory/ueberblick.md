@@ -77,8 +77,10 @@ Hub-Schnittstelle reden. Reihenfolge laut 09.10.:
    überall. Vorbedingung Zugangsschutz ✅ (`memory/betrieb/zugang.md`, Vorgabe
    noch „melden", nicht „an"). App gebaut, aber: Mitte nicht angeschlossen,
    kein Gerätelauf (`memory/system/zen_mobile.md` → „Offen").
-   ⚠ prüfen: Fahrplan sagt „dünner Client der Backend-API", gebaut ist ein
-   eigener Knoten, der Claude selbst anspricht und über die Mitte abgleicht.
+   Ziel (Sasha, 11.10.): das Handy hat **dasselbe Gedächtnis wie der PC**.
+   Gebaut als eigener Knoten (spricht Claude selbst, gleicht über die Mitte
+   ab), weil der PC nach Plan schläft; die frühere Idee „dünner Client der
+   Backend-API" ist damit verworfen.
 4. **ZENTRALE Code** — nur Ausblick, nicht bauen
    (`memory/ki/claude_web_plan.md` §6b).
 
