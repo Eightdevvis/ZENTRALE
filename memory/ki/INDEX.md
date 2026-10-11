@@ -43,6 +43,7 @@ Messungen dazu existiert.
 | **Prüfstand** — arbeitet die Cloud-KI ehrlich und richtig? Fälle aus Sashas Alltag (YAML) über den echten Weg gegen Wegwerf-Daten: Endzustand, Belegpflicht (jede Behauptung mit Zitat), Metriken, verdeckte Fälle, Ist-Stand vom 08.10.; Kosten im eigenen Topf, sparen (früh abbrechen, Richter im Batch, abspielen) | [pruefstand.md](pruefstand.md) |
 | **Werkzeug-Erzeuger** — KI-Werkzeuge aus dem Schema einer Quelle (MCP-Form + `x-zentrale`) mit einer Schutzschicht für alle; Kalender als erste Quelle (Phasen, Gruppe, Ebene); wie man eine Quelle oder einen MCP-Server anbindet, was ein sauberer Adapter ist; Einstellung `werkzeuge_erzeugt`; **Anbindungs-Beschreibung** (ein Programm per JSON statt Python anbinden: Format, Stufen, Probefahrt `scripts/anbindung_probe.py`, Beispiel, Kalender über HTTP) | [werkzeug_erzeuger.md](werkzeug_erzeuger.md) |
 | **Modell-Profile** — eine eigene Umgebung je Modell (Prompt, Werkzeuge, Pflicht-Werkzeug, Zusatz-Prüfer) über der Schiene; das qwen-Profil für den Budget-Rückfall, was half, was nicht, Zahlen, Quellen | [modell_profile.md](modell_profile.md) |
+| **Zukunftsvisionen** — Sashas Ideen für später, nicht gebaut: Klassifikator „was mache ich gerade / wie viel freie Zeit“, Gesundheits-/Aktivitäts-/Krankheits-Logbuch | [zukunftsvisionen.md](zukunftsvisionen.md) |
 
 ## Wo sonst noch KI drinsteckt
 
