@@ -407,3 +407,53 @@ Anbinden einer neuen Quelle, was „sauber" für einen Adapter heißt:
 [werkzeug_erzeuger.md](../ki/werkzeug_erzeuger.md). Offen: Messung mit
 echten Modellen (Prüfstand inkl. neuer Fälle f12 Phase, f13 Gruppe), dann
 der handgeschriebene gross-Weg weg; danach ein fremder Kalender.
+
+## Anbindungs-Pipe der Werkstatt (Sasha, 2026-10-11)
+
+Sasha: „wir preppen jetzt die werkstatt und dann wenn wir ein neues
+programm, einen neuen baustein usw anbinden wollen … können wir die pipe
+ausprobieren, ob die werkstatt das schaffen könnte. aber dafür müssten wir
+erstmal die coding ai fit machen.. das stell ich mir aber schwer vor".
+
+**Kern-Idee: die Werkstatt schreibt keinen Code, sie füllt eine Beschreibung
+aus.** Der Kalender-Adapter (core/ki_kalender_adapter.py) ist heute Python;
+fast alles darin lässt sich aber als feste, prüfbare Beschreibung sagen. Ein
+**allgemeiner Adapter** (einmal gebaut) führt solche Beschreibungen aus; der
+Werkzeug-Erzeuger (oben) macht daraus die KI-Werkzeuge mit allen
+Schutzschichten.
+
+Eine **Anbindungs-Beschreibung** (offenes Format: JSON/YAML, Aktionen als
+MCP-Werkzeug-Definitionen bzw. OpenAPI-Operationen) sagt je Aktion:
+- Art (lesen | anlegen | ändern | löschen), Bereich, Wörter für Frage und
+  Erledigt-Zeile;
+- Aufruf (MCP-Werkzeug oder HTTP-Methode + Pfad) und wo die Kennung in der
+  Antwort steht;
+- **Nachlesen** (Aufruf per Kennung) und **Vergleich** (welche Felder wie
+  normalisiert verglichen werden, z. B. Uhrzeit, Zeitzone);
+- **Zurückbauen** (anlegen → löschen; ändern → alten Stand zurückschreiben;
+  löschen → nur mit Wiederherstellen-Aufruf, sonst gar nicht frei).
+
+**Stufen, automatisch ermittelt:**
+1. Schema + Kennung + Nachlesen + Zurückbauen → volle Schutzschicht.
+2. Schema ohne Nachlesen → Lesen frei; Schreiben fragt jedes Mal, Ergebnis
+   „nicht belegt", kein Zurückbauen.
+3. Kein Schema (GUI) → nur Browser/Bildschirm; nicht für schwache Modelle.
+
+**Die Pipe:**
+1. *Ansehen* — die KI liest die Selbstbeschreibung (MCP-Liste, OpenAPI, Doku).
+2. *Ausfüllen* — sie schreibt die Anbindungs-Beschreibung (streng geprüftes
+   Format → auch schwächere Modelle schaffen das; Formularwerk, keine
+   Programmierung).
+3. *Probefahrt* — Prüfstand gegen eine Test-Kopie/Test-Konto des Programms:
+   je Aktion anlegen → nachlesen → zurückbauen; Bericht je Aktion.
+4. *Freigabe* durch Sasha; bis dahin Stufe 2 (Lesen frei, Schreiben mit
+   Rückfrage, „nicht belegt").
+
+**Codicus** (die Coder-App, ≠ Ordner ~/codicus) wird nur für Fälle
+gebraucht, die echten eigenen Code verlangen. Bis es Codicus gibt,
+übernimmt das Claude Code.
+
+**Reihenfolge:** (a) allgemeiner Adapter für MCP + OpenAPI nach den Regeln
+oben; (b) Probe: den eigenen Kalender einmal per Beschreibung statt per
+Python anbinden und auf dem Prüfstand vergleichen; (c) Werkstatt-Ansicht für
+Ansehen/Ausfüllen/Probefahrt/Freigabe (gehört zur Werkstatt-Sitzung).
