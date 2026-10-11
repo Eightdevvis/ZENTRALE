@@ -142,6 +142,14 @@ def test_ziele_block_hat_ueberschrift_hinweis_und_keinen_yaml_kopf():
     assert "name:" not in block and "metadata" not in block
 
 
+def test_ziele_block_ueberschriften_liegen_unter_deine_ziele():
+    gedaechtnis.kernakte_schreiben("ziele", "## Körper\n\n- **Spagat** lernen.")
+    block = gedaechtnis.kopf_block()
+    teil = block[block.index("## Deine Ziele"):]
+    assert "\n### Körper\n" in teil and "\n## Körper" not in teil
+    assert "## Körper" in open(gedaechtnis.kern_pfad("ziele")).read()   # Datei unverändert
+
+
 def test_ziele_block_folgt_der_datei_ohne_zwischenspeicher():
     gedaechtnis.kernakte_schreiben("ziele", "- Eins")
     assert "Eins" in gedaechtnis.kopf_block()

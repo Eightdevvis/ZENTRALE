@@ -842,6 +842,10 @@ def _ziele_block() -> str:
         return ""
     if len(z) > ZIELE_KOPF_MAX:
         z = _ziele_kurz(z) + "\n\nVollständig: person/ziele (nachlesen)"
+    # Überschriften der Datei eine Ebene tiefer (2026-10-11): sonst stehen
+    # „## Körper“ & Co. gleichrangig neben „## Deine Ziele“ und sehen für die
+    # KI wie eigene Abschnitte des Kopfs aus. Die Datei selbst bleibt, wie sie ist.
+    z = re.sub(r"(?m)^(#{1,5}) ", r"#\1 ", z)
     return ("## Deine Ziele\nSashas Ziele. Beziehe sie ein, wenn sie zum "
             "Gespräch passen — nicht ungefragt in jede Antwort.\n" + z)
 
