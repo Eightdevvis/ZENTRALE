@@ -172,7 +172,7 @@ def test_neu_typ_liste_ist_das_normale_formular_mit_quelle():
     _liste_waehlen(f)
     assert f.felder[0].text == "todo"                    # Titel vorbelegt
     assert "Rückfall" in dict((b, h) for b, _w, _a, h in f.zeilen())["Titel"]
-    zeile = dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"]
+    zeile = kw.kalender_advanced.zusammenfassung(next(x for x in f.felder if x.art == "advanced").adv)
     assert zeile == "typ liste: todo · stil keine"
     f.felder[0].text = ""                                # leer = Name der Liste
     _feld(f, "von").text, _feld(f, "bis").text = "10", "12"
@@ -255,7 +255,7 @@ def _typ_normal(f):
 def test_bearbeiten_typ_normal_fragt_titel_uebernehmen():
     roh = dict(QUELL_TERMIN, layer="termine")
     f = kw.formular_bearbeiten(roh, TAG, TAG)
-    assert dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"].startswith("typ liste: todo")
+    assert kw.kalender_advanced.zusammenfassung(next(x for x in f.felder if x.art == "advanced").adv).startswith("typ liste: todo")
     _typ_normal(f)
     assert f.taste(19) == "fertig"
     p = f.plan()

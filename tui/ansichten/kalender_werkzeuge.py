@@ -493,7 +493,9 @@ class Formular:
         w = self.roh_werte()
         for k, f in enumerate(self.sichtbar()):
             if f.art == "advanced":
-                wert = kalender_advanced.zusammenfassung(f.adv)
+                # Keine Vorschau mehr in der Zeile, nur der Hinweis (Sasha,
+                # 11.10.2026: „ohne vorschau … einfach nur mini erklärung").
+                wert = ADVANCED_HINWEIS
             elif f.art == "wahl":
                 wert = "‹ %s ›" % f.roh()
             else:
@@ -594,6 +596,9 @@ def _gruppe_aufruf(roh, w) -> list:
 # sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil.
 ADVANCED_HILFE = "enter öffnet: typ (normal/liste) und stylebox"
 _QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
+
+
+ADVANCED_HINWEIS = "see for more options"
 
 
 def _advanced_feld(roh, titel_feld, quellen=None) -> Feld:
@@ -760,8 +765,11 @@ def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
     felder = _termin_felder(tag, heute, quellen=quellen)
     # committed (Standard) oder uncommitted — umschalten später mit u
-    felder.append(Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
-                       optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
+    # Advanced bleibt die letzte Zeile (Sasha, 11.10.2026: „advanced ganz
+    # unten im formular") — Verbindlich davor einreihen.
+    adv = len(felder) - 1 if felder and felder[-1].art == "advanced" else len(felder)
+    felder.insert(adv, Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
+                            optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
     return Formular("neuer termin", felder, plan)
 
 

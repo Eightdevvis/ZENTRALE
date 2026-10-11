@@ -312,3 +312,13 @@ def test_monat_enter_leiht_die_tagesliste(tmp_path, monkeypatch):
     assert b.W["dialog"] is None
     k.k_stil_weiter(); k.k_stil_weiter()           # B → C → A
     assert k.K["stil"] == "A" and b.tag() == date(2026, 10, 7)
+
+
+def test_advanced_ist_letzte_zeile_nur_mit_hinweis():
+    """Sasha, 11.10.2026: „advanced ganz unten im formular … ohne vorschau,
+    stattdessen einfach nur mini erklärung"."""
+    from datetime import date
+    for f in (kw.formular_neu(date(2026, 10, 6), date(2026, 10, 6)),):
+        assert f.felder[-1].art == "advanced"
+        zeile = [(b, w) for b, w, _a, _h in f.zeilen()][-1]
+        assert zeile == ("Advanced", kw.ADVANCED_HINWEIS)

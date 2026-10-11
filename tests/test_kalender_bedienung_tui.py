@@ -220,12 +220,13 @@ def test_listen_termin_ueber_advanced(tmp_path):
     """Sasha, 11.10.2026: der Listen-Termin ist ein Termintyp, keine eigene
     Taste mehr. a, Von/Bis, Tab bis „Advanced", Enter öffnet das Fenster,
     → Typ liste, ↓ Zeile Liste, Enter „welche Liste?", Enter nimmt, ↑ Typ,
-    Enter übernimmt; Tab auf „Verbindlich", Enter speichert. Titel leer =
-    Name der Liste. A ist wieder ein zweites a."""
+    Enter übernimmt; Strg-S speichert (Advanced ist seit 11.10.2026 die
+    letzte Zeile, hinter „Verbindlich"). Titel leer = Name der Liste. A ist
+    wieder ein zweites a."""
     rechts, runter, hoch = b"\x1bOC", b"\x1bOB", b"\x1bOA"
     tasten = ([b"A", b"\t", b"\t", b"\t"] + [c.encode() for c in "10:00"] + [b"\t"]
-              + [c.encode() for c in "11:00"] + [b"\t"] * 4
-              + [b"\r", rechts, runter, b"\r", b"\r", hoch, b"\r", b"\t", b"\r"])
+              + [c.encode() for c in "11:00"] + [b"\t"] * 5
+              + [b"\r", rechts, runter, b"\r", b"\r", hoch, b"\r", b"\x13"])
     w, fehler = _lauf(tmp_path, tasten)
     assert fehler == "", fehler
     body = [b for m, p, b in w if p == "/api/calendar/entry"][0]

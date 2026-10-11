@@ -67,7 +67,7 @@ def test_neu_hat_kein_feld_stylebox_mehr_nur_advanced():
     namen = [x.name for x in f.felder]
     assert "stil" not in namen and "liste" not in namen and namen.count("advanced") == 1
     assert _feld(f, "advanced").beschriftung == "Advanced"
-    assert dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"] == "typ normal · stil keine"
+    assert kw.kalender_advanced.zusammenfassung(next(x for x in f.felder if x.art == "advanced").adv) == "typ normal · stil keine"
 
 
 def test_enter_oeffnet_die_stylebox_fertig_uebernimmt_esc_laesst():
@@ -89,7 +89,7 @@ def test_enter_oeffnet_die_stylebox_fertig_uebernimmt_esc_laesst():
     assert f.box.unter is None and f.box.stil == {"border-style": "dashed"}
     assert f.taste(19) == "weiter" and f.box is None           # Strg-S: übernehmen
     assert _stil(f) == {"border-style": "dashed"}
-    zeile = dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"]
+    zeile = kw.kalender_advanced.zusammenfassung(next(x for x in f.felder if x.art == "advanced").adv)
     assert zeile == "typ normal · stil ┌╌┐"
 
 

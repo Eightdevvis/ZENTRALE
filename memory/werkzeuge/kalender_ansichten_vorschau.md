@@ -601,3 +601,8 @@ bleibt aber gesperrt."
   - Ohne Stil alles wie vorher. uncommitted MIT Stil: der Stil gewinnt (kein
     Glas) — offen, ob Sasha dort lieber Glas sähe.
 - Tests: `tests/test_kalender_stil_tui.py`.
+- **Advanced ganz unten, ohne Vorschau (11.10.2026):** Sasha: „advanced ganz
+  unten im formular haben und ohne vorschau rechts nebendran, stattdessen
+  einfach nur mini erklärung". Die Zeile zeigt nur `ADVANCED_HINWEIS`
+  („see for more options"); was gewählt ist, steht im Fenster selbst.
+  „Verbindlich" (nur im Neu-Formular) rückt davor.
