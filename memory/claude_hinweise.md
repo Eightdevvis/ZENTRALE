@@ -95,24 +95,10 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 
 ### Tutor vs. Chat
 
-- Beide fahren auf derselben Straße: der Chat über `kern.chat()`, der Tutor
-  über `kern.fahren()` (`tutor/anbieter.py`, seit 2026-10-08) — dieselben drei
-  Wege, dieselbe Werkzeug-Schleife.
-- Unterschied: anderer System-Prompt + andere Tool-Liste
-  (`tutor.tools.tools_for(lang)`) – die Standard-Tools sind im Tutor-Modus
-  **deaktiviert**, nicht zusätzlich aktiv.
-- `tutor/session.py` hat eine eigene History (getrennt von der
-  Chat-History), damit sich Lernkontext und allgemeine Konversation
-  nicht vermischen.
-- Die aktive Sprache kommt **nur** aus dem aktiven Spielstand
-  (`tutor/staende.py`); `tutor_config` kennt kein `lang`. Alle Datenpfade über
-  `staende.pfad(root, lang)`, unter `stand_lock`.
-- `introduce_new(word, reading="", lang=None)` legt ein **neues** Wort an – die KI
-  wählt das Wort selbst, es gibt keinen Pool aus dem geschöpft wird. Der Parameter
-  heißt `reading`, nicht `pinyin` (was `reading` bedeutet, sagt das
-  Sprach-Profil); `pinyin` wird beim Lesen alter Einträge als Alias toleriert
-  (`tools._read()`). Zählen tut nie die KI: `spoken`/`listened` kommen
-  deterministisch aus Eingabe und Drill.
+- Der Tutor ist seit 2026-10-09 ausgezogen (eigenes Repo `language-tutor`,
+  eigener Server, eigene Schleifen); `kern.fahren()`/`kern.fahrzeug()` sind
+  mit ihm aus `core/kern.py` verschwunden. Wie er fährt, steht in dessen
+  `docs/`; was in ZENTRALE bleibt: [tutor/INDEX.md](tutor/INDEX.md).
 
 ### Cloud→Lokal-Trennung (HARTE Invariante)
 
@@ -133,8 +119,8 @@ mehr nicht, nie die Core-KI. Durchgesetzt durch:
   im lokalen Memory.
 - Dieselben Gates in `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode =
   tools is not None`): kein Graph, kein Gate, keine Bild-Marker, kein
-  Jetzt-Block. `kern.fahren()` macht aus `tools=None` immer eine Liste — nie
-  rutscht ein Tutor-Zug in den vollen Chat.
+  Jetzt-Block. (Die Tutor-Seite dieser Trennung lebt seit 09.10. im Repo
+  `language-tutor`; `tutor.tools`/`_ALLOWED` oben sind dort.)
 
 Umgekehrt gilt für den **Cloud-Kern**: lokal sieht alles von Cloud, Cloud
 nichts von lokal (eigener Store; `memory/ki/ki_system.md` → Isolations-Invariante).

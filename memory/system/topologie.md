@@ -219,7 +219,11 @@ syncen):
 | `zentrale-sync-boot` | **Einmaliger Abgleich beim Start** (siehe unten). Kein Daemon. |
 | `zentrale-launch` | Wrapper hinter den Startern `zentrale`/`zentrale-tui` (beide starten die TUI direkt); hängt den Boot-Sync ein. |
 
-### Abgleich über die Mitte (gebaut 2026-10-08, löst den rsync-Weg ab)
+### Abgleich über die Mitte (gebaut 2026-10-08, aktiv erst nach `umstellen mitte`)
+
+**Stand 2026-10-11:** Vorgabe ist noch rsync (`core/abgleich.py` `weg()`,
+Einstellung `abgleich_weg`); auf Sashas Rechnern ist nicht umgestellt.
+Ablauf und Umstellung: `memory/betrieb/abgleich.md`.
 
 Sasha: *„der sync zum pc war immer iwie etwas cursed"*. Neu: kein Rechner
 redet mehr direkt mit dem anderen, jeder gleicht nur mit einer **Mitte** ab

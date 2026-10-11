@@ -26,7 +26,7 @@ Adapter: Grundaktionen              ──┴→ werkzeug_erzeuger.werkzeuge(que
 | Erzeuger | `core/werkzeug_erzeuger/__init__.py` | `Quelle`, `werkzeuge()`, `einsetzen()` ins Register, `zuschneiden()` je Modellprofil, Einstellung `werkzeuge_erzeugt` |
 | Schema | `core/werkzeug_erzeuger/schema.py` | Aktion prüfen, Fassung fürs Modell (ohne `x-zentrale`), Argumente prüfen |
 | Schutzschicht | `core/werkzeug_erzeuger/harness.py` | Ausführer jedes erzeugten Werkzeugs; Ja/Nein-Frage aus den Feldern |
-| Kalender-Schemas | `core/werkzeug_kalender.py` | die 11 Aktionen des Kalenders |
+| Kalender-Schemas | `core/werkzeug_kalender.py` | die 15 Aktionen des Kalenders |
 | Kalender-Adapter | `core/ki_kalender_adapter.py` | jede Aktion auf `kalender_kennung`, was nachgelesen dastehen muss |
 
 **Die Schutzschicht** (für JEDES erzeugte Werkzeug gleich, `harness.ausfuehren`):
@@ -124,6 +124,7 @@ Das Modell sieht reines JSON Schema — `x-zentrale` wird entfernt.
 | `set_calendar_phase`, `edit_calendar_phase`, `delete_calendar_phase` | | neu: Tagesrhythmus (Motiv, über Mitternacht, ab jetzt / ein Tag / Zeitraum) |
 | `set_calendar_group` | ändern | neu: Gruppe eines Eintrags |
 | `set_calendar_layer` | ändern | neu: fest (`termine`) ↔ vielleicht (`uncommitted`) |
+| `set_calendar_style` | ändern | neu: Aussehen eines Eintrags per Kennung (Rahmen, Rahmen-/Hintergrund-/Schriftfarbe, Muster; `entfernen: ja` = zurück auf Standard) |
 | `read_calendar_sources` | lesen | neu: wählbare Listen/Projekte mit `quelle_art`/`quelle_id` (Kern `kalender_quelle.auswahl`) — die KI erfindet keine id |
 | `set_calendar_source`, `clear_calendar_source` | ändern | neu: Titel live aus Liste/Projekt setzen bzw. lösen (`titel_uebernehmen`) |
 

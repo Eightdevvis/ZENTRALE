@@ -6,7 +6,8 @@ Vorwahl `chat_backend` in `data/ai_config.json` (`auto|local|cloud`; seit
 2026-08-15 bewusst **`cloud`**, daheim wie unterwegs). Cloud = `core/cloud.py`
 (Anthropic, Drop-in für `ai.chat_stream()`, Code-Default `claude-sonnet-5`,
 adaptives Denken, Prompt-Cache statisch vorn) oder `core/cloud_openai.py`
-(zweiter Dialekt für qwen/openai/mistral); lokal = Ollama `qwen3.5:9b`
+(zweiter Dialekt für qwen/openai/grok/gemini/deepseek/groq/mistral, Liste
+`providers.PROVIDERS`); lokal = Ollama `qwen3.5:9b`
 (`think=false`, Prompt-Schiene `profil/klein`, Cloud nimmt `profil/gross`;
 qwen über die Cloud bekommt darüber sein Modell-Profil `profil/modelle/qwen`,
 Einstellung `modell_profile` → [modell_profile.md](modell_profile.md)).
@@ -26,8 +27,10 @@ Code-Default ist `claude-sonnet-5` (`providers.py` `default_model`, Rückfall
 in `cloud._model()`), Denk-Tiefe `low` (`ai_backends.chat_effort`). Beides
 überschreibt `data/ai_config.json` (`chat_models` pro Anbieter,
 `chat_effort`) — Daten, nicht im Repo, also pro Knoten nachsehen.
-`claude-haiku-4-5` (`cheap_model`) nutzt nur der Cloud-Graph-Extraktor, der
-mit dem Graphen aus ist.
+`claude-haiku-4-5` (`cheap_model`) nutzen alle Einmal-Aufrufe über
+`core/billig.py`: Gesprächstitel, Datei-Gedächtnis, Klassifikator,
+Morgenblick und der (abgeschaltete) Graph-Extraktor. Der Prüfstand-Richter
+geht ebenfalls durch `billig.einmal`, nimmt aber bewusst das Chat-Modell.
 
 ## Architektur
 
@@ -1477,9 +1480,9 @@ Event legt `/api/chat` pro Zug an (`state.chat_zug_beginnen`),
 `/api/chat/stop` setzt es. Takt und Tutor übergeben keins und sind nicht
 stoppbar. Ausführlich: [claude_web_plan.md](claude_web_plan.md) Abschnitt 7.
 
-Der Tutor hat seit 2026-10-08 keine eigenen Schleifen mehr: er fährt über
-`kern.fahrzeug()`/`kern.fahren()` dieselben Wege (`tutor/anbieter.py`,
-[../tutor/INDEX.md](../tutor/INDEX.md)).
+Der Tutor ist seit 2026-10-09 ein eigenes Repo (`language-tutor`) mit
+eigenen Schleifen; `kern.fahrzeug()`/`kern.fahren()` sind mit ihm aus
+`core/kern.py` raus ([../tutor/INDEX.md](../tutor/INDEX.md)).
 
 ### Prompt-Cache: statisch vorn, Wechselndes ganz hinten
 
@@ -1740,7 +1743,8 @@ wer denkt.
   dafür gibt es nicht (das frühere `ZENTRALE_CLOUD_MODEL` griff nie und ist
   seit 10/2026 raus).
 - **Rundengrenze:** `ai_backends.runden_grenze(modell)` — `runden_grenzen`
-  in der Config (`{"qwen3.5:9b": 5}`), sonst 8. Gilt für alle Wege.
+  in der Config (`{"qwen3.5:9b": 5}`), sonst `STANDARD_RUNDEN = 100`
+  (seit 09.10., nur Notbremse gegen Endlosschleifen). Gilt für alle Wege.
 - **Denk-Tiefe:** `ai_backends.chat_effort()`, Default `low` —
   `ZENTRALE_CHAT_EFFORT` oder `chat_effort` in der Config.
 - `max_tokens 16000` (`ZENTRALE_CLOUD_MAX_TOKENS`).

@@ -3,8 +3,9 @@
 Event-getriebenes Dashboard mit eigenem KI-Assistenten (Laptop, Linux-PC,
 Raspberry Pi; später Handy als weiterer Knoten). Die KI läuft über die
 Cloud (Claude, andere Anbieter per Einstellung) mit lokalem Ollama als
-Option. Sashas Daten bleiben auf seinen Rechnern; abgeglichen wird über
-eine Mitte (`memory/betrieb/abgleich.md`; Fahrplan: `memory/ueberblick.md`). Ein
+Option. Sashas Daten bleiben auf seinen Rechnern; abgeglichen wird heute
+noch per rsync, die Mitte ist gebaut und greift erst nach `umstellen mitte`
+(`memory/betrieb/abgleich.md`; Fahrplan: `memory/ueberblick.md`). Ein
 Gedächtnis, ein Assistent — egal von welchem Gerät.
 
 ## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
@@ -58,7 +59,9 @@ habe, hat ihn nachhaltig verwirrt.
   beim gemeinsamen Aufräumen am 04.10.2026), und nur für diese Session.
 - **Alle anderen Listen** (`data/lists.json`) gehören ohnehin Sasha.
 - Technik zum Zwei-Dateien-Modell und zum Sync (`data/*.json` ungetrackt,
-  newest-wins, Push-on-write): `memory/system/topologie.md`.
+  newest-wins, Push-on-write — der rsync-Weg, heute noch Vorgabe):
+  `memory/system/topologie.md`; der Weg über die Mitte (gebaut, aktiv erst
+  nach `umstellen mitte`): `memory/betrieb/abgleich.md`.
 
 ## Wo die Doku liegt
 
@@ -79,7 +82,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 
 | Bereich | Was drinsteht | Index |
 |---|---|---|
-| KI | denkt: lokal + Cloud, Graph-Memory, Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
+| KI | denkt: lokal + Cloud, Datei-Gedächtnis (Graph seit 18.08. aus), Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
 | Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
 | System | gebaut: Architektur, Events, Topologie, API, Dashboard, Tastatur | `memory/system/INDEX.md` |
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |

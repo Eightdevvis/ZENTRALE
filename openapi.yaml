@@ -1,13 +1,13 @@
 # openapi.yaml — die HTTP-Schnittstelle des Hubs (Kacheln, Katalog, Desk,
-# Schaufenster).
+# Schaufenster, Werkstatt).
 #
 # OpenAPI 3.1 (Sasha 2026-10-10: Standards statt Eigenformat, „openapi als
 # Vorbild"). Diese Datei ist die Autorität für die Routen unten; die Tabelle
 # in memory/system/api_endpoints.md zeigt nur hierher. Schemas sind JSON
 # Schema 2020-12 — derselbe Dialekt wie `parameter` im Katalog.
 # tests/test_openapi.py hält Routen und Datei gleich (jede Route unter
-# /api/kachel*, /api/kacheln, /api/desk*, /api/shop* steht hier und
-# umgekehrt), prüft die Datei selbst und echte Antworten gegen ihre Schemas.
+# /api/kachel*, /api/kacheln, /api/desk*, /api/shop*, /api/werkstatt* steht
+# hier und umgekehrt), prüft die Datei selbst und echte Antworten gegen ihre Schemas.
 openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:

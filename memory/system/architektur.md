@@ -170,6 +170,16 @@ Weitere `core/`-Module, die oben nicht einzeln stehen: `anwesenheit.py`,
 `usage.py` (→ `../ki/ki_system.md`), `notes.py`, `prices.py`, `theme.py`
 (→ `dashboard.md`).
 
+Skripte in `scripts/` ohne eigenen Doku-Ort (Stand 2026-10-11):
+
+| Skript | Was |
+|---|---|
+| `cloud_smoke.py` | Live-Rauchtest des Cloud-Kerns, beide Dialekte, gestaffelt: Erreichbarkeit, Prompt-Cache, Tool-Loop, Erlaubnis-Gate. Kostet echte Cents. |
+| `gedaechtnis_probe.py` | Live-Probe gegen das echte Cloud-Modell mit Fallen, isoliert in einem Wegwerf-Ordner. Baut auf dem **Konzept-Graphen** auf — seit dem Abschalten (18.08.) vermutlich tot. |
+| `test_graph_memory.py` | Test-Harness für den Konzept-Graphen (temp-Graph, Extraktion). Graph aus seit 18.08. → **vermutlich tot**. |
+| `transkript_testmuell.py` | Findet alten Testmüll im echten Transkript (`data/ai_transcripts/`); entfernt nur mit `--entfernen`, vorher Sicherung. |
+| `tts_ab.py` | A/B-Vergleich deutscher Piper-Stimmen: derselbe Satz nach `/tmp/tts_ab/<stimme>.wav`, lädt fehlende Stimmen nach. |
+
 ## Eckpfeiler-Entscheidungen
 
 - **Lokal & offline als Default**: Ollama/Whisper/TTS laufen alle auf

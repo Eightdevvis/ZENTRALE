@@ -1,8 +1,15 @@
 # Kalender-System (Layer-Modell)
 
-**Stand 2026-10-06:** Neu: die Speicherschicht ist austauschbar — alte JSON
-(Default, bis Sasha umlegt) oder iCalendar-Ordner `data/kalender/` (eine .ics
-pro Termin). Alles Folgende gilt für beide; Abbildung, Absicherung und Umzug
+**Stand 2026-10-11:** Die Speicherschicht ist austauschbar — alte JSON
+(Code-Default) oder iCalendar-Ordner `data/kalender/` (eine .ics pro Termin);
+auf Sashas Rechnern ist seit Oktober **.ics live** (`kalender_speicher: ics`).
+Seit 09./10.10. dazu (alles in [kalender_ics_bauplan.md](kalender_ics_bauplan.md),
+TUI-Seite in [kalender_ansichten_vorschau.md](kalender_ansichten_vorschau.md)):
+**Kennungen** statt Titel-Treffer; Ebene **`uncommitted`** (vielleicht-Termine
+neben `termine`); **Tagesrhythmus** `rhythmus` (Phasen mit Motiv, auch über
+Mitternacht); **Gruppen** (CATEGORIES); **Quellen** (Titel live aus einer Liste
+oder einem Projekt); **Stil** (Rahmen, Farben, Muster je Eintrag). Die Ebene
+`routinen` ist seit 07.10. in `termine` aufgegangen. Alles Folgende gilt für beide; Abbildung, Absicherung und Umzug
 stehen in [kalender_ics_bauplan.md](kalender_ics_bauplan.md).
 
 **Stand 2026-09-18:** `core/kalender.py` hält Termine in Layern (`termine`,
@@ -27,10 +34,10 @@ Teil bleibt unabhängig wartbar.
 ## Datenmodell
 
 Das Daten-Dict, mit dem `core/kalender.py` rechnet — egal, welcher Speicher
-darunter liegt. Gespeichert wird es heute noch als `data/ai_calendar.json`;
-nach dem Umzug als `.ics` ([kalender_ics_bauplan.md](kalender_ics_bauplan.md)),
-dann ohne die Ebene `erlebt` (Archiv) und mit drei Feldern, die nur von außen
-kommen: `seit` (Anfang einer Routine), `enden` (Ende pro Tag einer Spanne),
+darunter liegt. Gespeichert wird es auf Sashas Rechnern als `.ics`
+([kalender_ics_bauplan.md](kalender_ics_bauplan.md)), mit dem Code-Default
+`json` als `data/ai_calendar.json`. Im .ics-Speicher ohne die Ebene
+`erlebt` (Archiv) und mit drei Feldern, die nur von außen kommen: `seit` (Anfang einer Routine), `enden` (Ende pro Tag einer Spanne),
 `abweichungen` (am Handy verschobene Einzeltermine einer Routine). Format:
 
 ```json

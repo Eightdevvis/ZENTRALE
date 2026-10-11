@@ -1,17 +1,18 @@
 # REST API Endpoints
 
-**Stand 2026-10-06:** Alle Endpoints bedient die Routen-Schicht — `ui/app.py`
+**Stand 2026-10-11:** Alle Endpoints bedient die Routen-Schicht — `ui/app.py`
 hängt die Bereiche aus `ui/routen/` ein, je ein Modul pro Bereich (siehe
 `memory/system/bauplan_kern.md`, Abschnitt *Routen*) — reiner Adapter auf
-`core/`), Streaming per SSE. Die Fronten (TUI, Zimmer, Browser) sind reine
-HTTP-Clients. Direkte Nutzeraktionen (Kalender schreiben, Listen, Graphen,
-Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
+`core/`), Streaming per SSE. Die Front ist die TUI, ein reiner HTTP-Client
+(das Zimmer gehört seit 09.10. zum Repo `language-tutor`, die Browser-Front
+ist archiviert, `memory/archive/browser_front.md`). Direkte Nutzeraktionen
+(Kalender schreiben, Listen, Graphen, Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
 Chat hängt an Kill-Switches (`/api/ai/backends`). Die `/api/tutor/*`-Routen
 gibt es hier seit 2026-10-09 nicht mehr — sie gehören dem Tutor-Server der
 App `language-tutor` (`memory/tutor/INDEX.md`). Mail-Endpoints: Details in
 `memory/werkzeuge/mail_system.md`, Notizen in `memory/werkzeuge/notizen_system.md`.
-Diese Liste hat **keinen** Drift-Test; zuletzt gegen `ui/routen/`
-abgeglichen 2026-09-18.
+Diese Liste hat **keinen** Drift-Test (nur `openapi.yaml` hat einen); zuletzt
+gegen `ui/routen/` abgeglichen 2026-10-11 (jede Route steht drin).
 
 ## Zugang (vor ALLEN Routen, `ui/routen/zugang.py`, seit 2026-10-08)
 
@@ -363,6 +364,38 @@ auch ohne lokale KI. Datums-Arithmetik macht Python
 | `/api/calendar/routine/skip` | POST | EINZELNES Routine-Vorkommen deaktivieren/aktivieren (reversibel, pro Tag). Body `{layer, label, day, off}` (`off=true` deaktiviert). Speichert die Datumsliste `aus` an der Routine; das Vorkommen bleibt sichtbar, aber als `deaktiviert` markiert. Antwort `{changed:bool}`. 400 ohne label/day. |
 | `/api/calendar/routine` | POST   | Neue WÖCHENTLICHE Routine anlegen (ohne RRULE-Tipperei). Body `{label, byday, time?, ende?, ort?, layer?}`; `byday` = ein/mehrere Wochentage `MO..SU` (Liste ODER kommagetrennt) → `FREQ=WEEKLY;BYDAY=…`. Antwort `{ok:true}`. 400 ohne label/byday. Krummere Wiederholungen bleiben dem KI-Tool vorbehalten. |
 | `/api/calendar/routine` | DELETE | GANZE Routine löschen (alle Vorkommen weg) — Gegenstück zum einzelnen Deaktivieren. Body `{layer, label}`, Label-Match wie sonst. Antwort `{deleted:n}`. 400 ohne label. |
+
+**Bearbeiten seit Oktober** (`ui/routen/kalender.py`, Kern
+`kalender_bearbeiten` bzw. `kalender_kennung`). Ablehnung = `400 {error, code}`
+(Fehlerhandler für `KalenderAbgelehnt`/`KalenderGesperrt`). Antworten mit
+Eintrag = das Dict aus `kalender_kennung.eintrag` (kennung, art, layer,
+kategorie, bei Phasen motiv, bei Quellen `titel_live` & Co.).
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/calendar/routine` | PUT | ALLE Vorkommen einer Routine ändern. Body `{layer, label, day, time?, new:{label?, time?, ende?, ort?, wiederholung?:{freq, intervall, bis, wochentage}}}`; day/time wählen die Routine. |
+| `/api/calendar/routine/abweichung` | POST | NUR dieses Vorkommen ändern. Body `{layer, label, day, time?, new:{tag?, time?, ende?, label?, ort?}}`. |
+| `/api/calendar/routine/zeitraum` | POST | Alle Vorkommen in [von, bis] einer Routine/Phase ändern. Body `{kennung, von, bis, time?, ende?, label?, ort?}`; `""` = dort wieder wie die Regel. |
+| `/api/calendar/spanne` | POST | Mehrtägig anlegen. Body `{layer?, von, bis, label, start_zeit?, end_zeit?, tageszeit?:[von,bis], ort?, kategorie?, kategorie_name?, quelle?:{art,id}, stil?}`. |
+| `/api/calendar/spanne` | PUT | Alle Tage einer Spanne. Body `{layer?, von, label, new:{label?, ort?, verschieben?, bis?}}`; `verschieben` keine Zahl → 400. |
+| `/api/calendar/spanne/tag` | POST | Uhrzeit EINES Tages einer Spanne. Body `{layer?, von, label, day, time?, ende?}`; leer = ganztägig. |
+| `/api/calendar/konflikte` | POST | Vor dem Speichern prüfen (Logik der KI-Rückfrage). Body `{layer?, day, label, time?, ende?}` → `{konflikte:[zeile]}`; schreibt nichts. |
+| `/api/calendar/eintrag` | DELETE | GENAU einen Einmal-Termin (oder Spanne am Start-Tag) löschen, exakter Titel, bei Gleichnamigen die Uhrzeit. Body `{layer?, day, label, time?}`. |
+| `/api/calendar/eintrag` | PUT | Einmal-Termin ändern, Rest bleibt. Body `{layer?, day, label, time?, new:{day?, label?, time?, ende?, ort?}}`. |
+| `/api/calendar/ebene` | POST | Eintrag per Kennung zwischen `termine` und `uncommitted` verschieben. Body `{kennung, ziel?}`; ohne ziel umschalten. |
+| `/api/calendar/motive` | GET | Fester Motiv-Katalog für Phasen `{motive:[{schluessel, name, was}], ebene}`. |
+| `/api/calendar/phasen` | GET | Alle Phasen (Tagesrhythmus) wie gespeichert, mit Kennung, Regel, Abweichungen. |
+| `/api/calendar/phase` | POST | Phase anlegen. Body `{label, time, motiv, ende?, rrule? (Standard FREQ=DAILY), von?, bis?, ort?, kategorie?, kategorie_name?}`. |
+| `/api/calendar/phase` | PUT | Phase ab jetzt ändern. Body `{kennung, …gleiche Felder}`; `""` löscht ein Feld, fehlend = unverändert. |
+| `/api/calendar/phase` | DELETE | Body `{kennung}` → `{ok:true}`. |
+| `/api/calendar/kategorien` | GET | Fester Gruppen-Katalog `{kategorien:[{schluessel, name}]}` inkl. keine/custom. |
+| `/api/calendar/kategorie` | POST | Gruppe eines Eintrags. Body `{kennung, kategorie, kategorie_name?}`. |
+| `/api/calendar/kategorie/kurs` | POST | Gruppe für alle Einträge eines Kurses. Body `{schluessel, kategorie, kategorie_name?, probe?}`; `probe` = nur zeigen. |
+| `/api/calendar/quellen` | GET | Wählbare Titel-Quellen `{listen:[…], projekte:[…]}`, je `{art, id, name, titel, zustand}`. |
+| `/api/calendar/quelle` | GET | `?art=liste\|projekt&id=…&n=4` → `{name, zustand, punkte}` (Vorschau der ersten n offenen Punkte). |
+| `/api/calendar/quelle` | POST | Titel live aus Liste/Projekt. Body `{kennung, art, id, label?}` (`label` = Rückfall-Titel). |
+| `/api/calendar/quelle` | DELETE | Quelle lösen. Body `{kennung, titel_uebernehmen?}` (schreibt vorher den aktuellen Titel fest). |
+| `/api/calendar/stil` | POST | Aussehen des Kastens. Body `{kennung, stil:{css: wert}}` ERSETZT den Stil, `{}` entfernt ihn; Codes `STIL-UNGUELTIG`, `IST-PHASE`, `KENNUNG-UNBEKANNT`. |
 
 GET-Antwort: `{view, ref, today, label, start, end, days:{iso:[entries]}, alarms}`;
 bei `view=month` zusätzlich `month, first, last` (echte Monatsgrenzen, damit die

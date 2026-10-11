@@ -88,8 +88,9 @@ erstellt = "2026-10-10T17:34:30"
   wieder aus.
 - `ansichten/rad_wahl.py`: Enter auf einem Rad öffnet über eine Tabelle
   (`OEFFNEN`) statt einer if-Kette; eine eigene App (`app:<slug>`) geht über
-  ihre Adresse an den Router. Der Shop-Platz ruft `u.shop.oeffnen()` —
-  fehlt die Ansicht noch, steht „shop kommt gleich" in der Befehlszeile.
+  ihre Adresse an den Router. Der Shop-Platz ruft `u.shop.oeffnen()` — die
+  Ansicht gibt es seit 10.10. (`tui/ansichten/shop.py`, [shop.md](shop.md));
+  „shop kommt gleich" ist nur noch der Rückfall, falls sie fehlt.
 - Routen: [api_endpoints.md](api_endpoints.md), genau in `openapi.yaml`.
 
 ## Später (nicht gebaut)
@@ -98,7 +99,9 @@ erstellt = "2026-10-10T17:34:30"
 - **Agent-Macher**: eigener Platz im Erschaffen-Rad.
 - **Mehr Vorlagen** (`VORLAGEN` + ein Weg in `anlegen()` und ein Öffner in
   `eigene_apps._oeffner`).
-- **Bauteile-Shop**: Vorlagen, Symbole, Kacheln kaufen; Symbole aus dem
-  Besitz erscheinen schon jetzt beim Symbol-Schritt, sobald der Shop
-  `GET /api/shop/besitz` liefert (Liste oder `{icons: [{name, motiv}]}`).
+- **Bauteile-Shop**: Vorlagen und Kacheln kaufen. Symbole gibt es schon: das
+  Schaufenster steht (10.10.), und Symbole aus dem Besitz erscheinen beim
+  Symbol-Schritt — `GET /api/shop/besitz?kategorie=icons` liefert eine
+  schema.org-`ItemList` von `OwnershipInfo`; die Werkstatt liest daraus
+  `typeOfGood.additionalProperty` `pixel_motiv`.
 - **Atelier**: Symbole selbst zeichnen statt aus einem Bild.

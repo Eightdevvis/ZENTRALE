@@ -75,7 +75,12 @@ Hausregeln/Steckbrief hinter die Erlaubnis-Abfrage, und — wenn alles steht —
 die „Straße" weiter: Ollama als normaler Anbieter in der Anbieter-Liste und
 `fahrzeug()` als die eine Stelle, die Anbieter, Modell und Schiene auflöst.
 
-**Straße, Stand 2026-10-08:** `kern.fahrzeug(anbieter, modell)` löst Anbieter +
+**Nachtrag 2026-10-09:** `kern.fahrzeug()`/`kern.fahren()` sind mit dem
+Tutor-Auszug (259883e) aus `core/kern.py` entfernt — einziger Nutzer war der
+Tutor, der jetzt im Repo `language-tutor` eigene Schleifen hat. Der Absatz
+darunter ist Historie.
+
+**Straße, Stand 2026-10-08 (Historie):** `kern.fahrzeug(anbieter, modell)` löst Anbieter +
 Modell zu einem `Fahrzeug(anbieter, art, modell)` auf (`local` = Ollama,
 Eintrag `providers.LOKAL_EINTRAG`, abrufbar über `providers.eintrag()`;
 `PROVIDERS` selbst bleibt die Cloud-Liste, weil Keys, Budget-Rückfall und

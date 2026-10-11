@@ -16,11 +16,11 @@ geändert.
 `nutzer_name`/`nutzer_pronomen`); mit den Standardwerten kommt genau der Text
 heraus, der hier steht.
 
-> **Keine Tutor-Prompts.** Die liegen seit dem Herauslösen des Tutors in
-> `tutor/prompts/` und in `tutor/langs/<sprache>/`. Das Projekt ist am Stück
+> **Keine Tutor-Prompts.** Die liegen seit dem Auszug des Tutors (2026-10-09)
+> im Repo `language-tutor` (`tutor/prompts/`, `tutor/langs/<sprache>/`). Das Projekt ist am Stück
 > rausziehbar, seine Prompts gehören dazu. Der frühere Tutor-Teil dieses
 > README (inklusive der Warnung, chinesische Persona-Prompts **nicht**
-> ins Deutsche zurückzuspielen) steht jetzt in `tutor/prompts/README.md`.
+> ins Deutsche zurückzuspielen) steht dort in `tutor/prompts/README.md`.
 
 ## Welche Schiene steht hier?
 
@@ -31,6 +31,14 @@ Prompt** (`core/profil/`):
 |---|---|---|
 | `klein` | qwen3.5:9b und Verwandte, lokal über Ollama | `core/profil/klein.py` |
 | `gross` | Claude, GPT, Gemini & Co. über den Cloud-Pfad | `core/profil/gross.py` |
+
+**Dritte Ebene seit 2026-10-09: Modell-Profile** (`core/profil/modelle/`). Ein
+Profil legt sich für EIN Modell über `gross` und darf System-Text,
+Werkzeug-Auswahl und -Beschreibungen, Temperatur, Pflicht-Werkzeug und einen
+Zusatz-Prüfer überschreiben. Heute gibt es eins: `qwen.py` (+
+`zusatzpruefer.py`); wer welches bekommt, sagt die Einstellung
+`modell_profile`. Ohne Profil kommt die Schiene byte-gleich zurück. Auch davon
+gibt es hier keine Abschrift — Doku: `memory/ki/modell_profile.md`.
 
 **Die Dateien hier zitieren `klein`** — die ausführliche Fassung mit allen
 Krücken für kleine Modelle. `gross` **kopiert die Persona nicht**, sondern

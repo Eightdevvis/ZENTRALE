@@ -12,8 +12,10 @@
 # ── Aufbau (seit 2026-10-06) ──────────────────────────────────────────
 # Hier steht nur noch: die App anlegen, die Bereiche einhängen, den Takt-
 # Thread anwerfen (core/takt_treiber.py), der Start. Die Routen selbst liegen nach Bereich in ui/routen/
-# (zustand, erfassung, klavier, listen, notizen, karte, kalender, ki,
-# stimme, tutor, mail). Vorher standen alle 89 Routen in dieser einen Datei
+# (zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender,
+# ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick,
+# abgleich, desk, kachel, shop, werkstatt — die Liste führt
+# ui/routen/__init__.py BEREICHE; tutor ist seit 2026-10-09 ausgezogen). Vorher standen alle 89 Routen in dieser einen Datei
 # (2.400 Zeilen) — jede Änderung, egal woran, ging durch dieselbe Datei.
 # Neue Routen gehören in ihren Bereich, nie zurück hierher
 # (memory/system/bauplan_kern.md).

@@ -1,16 +1,23 @@
 # Kalender auf iCalendar (.ics) — Bauplan und Umstieg
 
-**Stand 2026-10-06:** Gebaut und getestet, aber **nicht live**. Der Kalender
+**Stand 2026-10-11:** Auf Sashas Rechnern seit Oktober **live als .ics**
+(`kalender_speicher: ics` in `data/ai_config.json`, Ordner `data/kalender/`
+mit `termine/`, `rhythmus/`, `uncommitted/`; Google-Sync live seit 07.10.,
+Abschnitt „Stand Sync" unten). Der **Code-Default** bleibt `json`
+(`core/kalender_speicher.py` `modus()`) — ein frischer Knoten ohne Einstellung
+läuft also auf der alten JSON (`data/ai_calendar.json`).
+
+**Stand 2026-10-06 (Historie):** Gebaut und getestet. Der Kalender
 kann seine Daten wahlweise in der alten JSON (`data/ai_calendar.json`) oder
 als iCalendar-Ordner (`data/kalender/`, eine `.ics` pro Termin, vdir-Format)
 halten. Umgeschaltet wird mit der Einstellung `kalender_speicher`
-(`json` | `ics`, Default `json`). Sasha legt um — mit
+(`json` | `ics`, Default `json`), umgezogen mit
 `scripts/kalender_migrieren.py`, Schritte unten unter „Was Sasha tun muss".
 Die öffentlichen Funktionen von `core/kalender.py` sind unverändert; nur die
 Speicherschicht darunter ist getauscht. Die Prüfung an einer Kopie der
 echten Daten (06.10.2026) war fehlerfrei. Google-Sync per vdirsyncer ist
-vorbereitet (`deploy/vdirsyncer.config.example`, `scripts/kalender_sync.py`),
-aber nicht eingerichtet.
+vorbereitet (`deploy/vdirsyncer.config.example`, `scripts/kalender_sync.py`)
+— eingerichtet am 07.10.
 
 ## Kennungen und Ablehnungen (09.10.2026)
 
