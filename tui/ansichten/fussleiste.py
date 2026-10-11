@@ -8,22 +8,22 @@
 # Woher die Einträge kommen (eintraege):
 #   1. Überlagerungen der Hauptschleife zuerst: Reminder-Kästchen, Hilfe,
 #      offene Befehlszeile.
-#   2. Eine Ansicht mit eigenem `tasten()` (heute der Chat — er hat Unter-
-#      zustände wie Gesprächsliste, Gedächtnis, laufende Antwort) liefert sie
-#      selbst. Eine NEUE Ansicht baut einfach `tasten()` und trägt sich in
-#      ANSICHTEN unten ein.
-#   3. Sonst die Tabelle befehle.CTX_KEYS zum Kontext aus current_ctx() —
-#      dieselbe, die '/' zeigt. Eine Tabelle, zwei Anzeigen.
+#   2. Das fokussierte Programm (fenster.aktives_programm) in seiner gerade
+#      offenen Ansicht — nachgeschlagen beim Horcher (horcher.py), der jedes
+#      Programm beim Verkabeln einmal nach seiner Tastentabelle gefragt hat
+#      (seit 2026-10-11; dieselbe Tabelle verteilt die Tasten, tasten.py).
+#   3. Übergang: ein Programm ohne Tabelle liefert noch selbst (tasten())
+#      oder steht in befehle.CTX_KEYS.
 #   Wo die Befehlszeile aufgeht (kein Freitext-Feld), steht zuletzt „/ commands".
 #
 # Ein Eintrag ist (taste, was), englisch beschriftet (Sasha, 07.10.2026).
-# codes() sagt, welche Tastencodes eine Beschriftung meint — davon lebt
-# tests/test_fussleiste.py: jede beworbene Taste muss im Fenster etwas tun.
+# Die Beschriftung liest core/tastentabelle.namen(); codes() macht daraus
+# Tastencodes — davon lebt tests/test_fussleiste.py: jede beworbene Taste
+# muss im Fenster etwas tun.
 
-import curses
-
-from .befehle import CTX_KEYS
-from .fenster import current_ctx, in_text_entry
+from . import tasten as T
+from .befehle import CTX_KEYS, CTX_TITLES
+from .fenster import aktives_programm, current_ctx, in_text_entry
 
 TRENNER = " · "
 
@@ -31,47 +31,13 @@ TRENNER = " · "
 # kennen, sonst schlägt der Test an.
 KEINE_TASTE = {"type", "any key"}
 
-_PFEILE = {"↑": curses.KEY_UP, "↓": curses.KEY_DOWN,
-           "←": curses.KEY_LEFT, "→": curses.KEY_RIGHT}
-_NAMEN = {
-    "enter": [10], "esc": [27], "tab": [9], "space": [32],
-    "shift+tab": [curses.KEY_BTAB], "⌫": [curses.KEY_BACKSPACE],
-    "del": [curses.KEY_DC], "home": [curses.KEY_HOME], "end": [curses.KEY_END],
-    "pgup": [curses.KEY_PPAGE], "pgdn": [curses.KEY_NPAGE],
-    "alt+enter": [27, 13], "f6": [curses.KEY_F6],
-}
-
-
-def _token(t):
-    """Ein Wort einer Beschriftung -> [Tastenfolge, …]; None = unbekannt."""
-    if t in _NAMEN:
-        return [_NAMEN[t]]
-    if t and all(c in _PFEILE for c in t):
-        return [[_PFEILE[c]] for c in t]
-    if t.startswith("alt+") and t[4:] and all(c in _PFEILE for c in t[4:]):
-        return [[27, _PFEILE[c]] for c in t[4:]]
-    if t.startswith("ctrl+") and len(t) == 6 and t[5].isalpha():
-        return [[ord(t[5].lower()) - 96]]
-    if len(t) == 1:
-        return [[ord(t)]]
-    return None
-
-
 def codes(taste):
     """Beschriftung -> Liste von Tastenfolgen (jede eine Liste von Codes),
     die alle beworben sind. None: keine Taste (Befehl '/…' oder „type").
     Wirft ValueError bei einer Beschriftung, die niemand lesen kann."""
     if taste in KEINE_TASTE or (taste.startswith("/") and len(taste) > 1):
         return None
-    folgen = []
-    for wort in taste.split():
-        # „a/s" = zwei Tasten; „/" allein ist die Taste Schrägstrich.
-        for t in ([wort] if wort == "/" else wort.split("/")):
-            f = _token(t)
-            if f is None:
-                raise ValueError("unbekannte taste %r in %r" % (t, taste))
-            folgen += f
-    return folgen
+    return [T.codes(n) for n in T.tt.namen(taste)]
 
 
 def tasten_der_zeile(eintraege):
@@ -109,15 +75,28 @@ def eintraege(u):
         return [("any key", "close help")]
     if bz.cmd_mode:
         return [("enter", "run"), ("⌫", "delete"), ("esc", "cancel")]
-    ck = current_ctx(z)
-    ansicht = ansicht_mit_tasten(u, ck)
-    if ansicht is not None:
-        liste = list(ansicht.tasten())
-    else:
-        liste = tasten_der_zeile(CTX_KEYS.get(ck, []))
+    liste = list(programm_tasten(u)[1])
     if not in_text_entry(z):
         liste.append(("/", "commands"))
     return liste
+
+
+def programm_tasten(u):
+    """(titel, [(taste, was)]) des fokussierten Programms in seiner Ansicht —
+    für die Leiste und das '/'-Fenster. Ohne Befehle der Befehlszeile."""
+    z = u.z
+    name = aktives_programm(z)
+    p = getattr(u, name, None)
+    horcher = getattr(z, "horcher", None)
+    if horcher is not None and horcher.kennt(name) and hasattr(p, "ansicht") \
+            and horcher.herkunft(name) != "ohne":
+        return name, horcher.eintraege(name, p.ansicht())
+    # ── Übergang: Programme ohne Tastentabelle ──
+    ck = current_ctx(z)
+    ansicht = ansicht_mit_tasten(u, ck)
+    if ansicht is not None:
+        return CTX_TITLES.get(ck, ck), list(ansicht.tasten())
+    return CTX_TITLES.get(ck, ck) if ck else name, tasten_der_zeile(CTX_KEYS.get(ck, []))
 
 
 # Kontext → Name der Ansicht im Bündel, die ihre Tasten selbst liefert.

@@ -7,6 +7,7 @@
 import curses
 
 from .basis import BEENDEN, api_call
+from .tasten import Tasten
 
 
 def n_block_empty(blk):
@@ -251,183 +252,270 @@ class Notizen:
         """Startseite → Notiz-Werkzeug, direkt in eine Notiz."""
         self.NOTE["active"] = True; self.n_open()
 
+    # ── Tasten: EINE Tabelle, aus der Verteilung und Leiste lesen ──────
+    # (tasten.py, 2026-10-11). Ohne Text = verarbeitet, aber nicht gezeigt.
+    TASTEN = Tasten({
+        "liste": [
+            ("↑↓", "waehlen", "select"), ("k/j", "waehlen"),
+            ("enter", "oeffnen", "open"), ("n/N", "neu", "new"),
+            ("d/D", "loeschen", "delete"), ("esc", "zurueck", "back"),
+            ("q/Q", "beenden"),
+        ],
+        "liste:frage": [
+            ("j/y/enter", "ja", "delete"), ("J/Y", "ja"), ("any key", "nein", "cancel"),
+        ],
+        "titel": [
+            ("type", "tippen", "type title"), ("enter", "titel_setzen", "set"),
+            ("⌫", "zeichen_weg", "delete"), ("esc", "titel_abbrechen", "cancel"),
+        ],
+        "notiz": [
+            ("↑↓", "block_waehlen", "block"), ("k/j", "block_waehlen"),
+            ("t/l/f", "block_neu", "new text/list/float"), ("T/L/F", "block_neu"),
+            ("e/enter", "bearbeiten", "edit"), ("d/D", "block_loeschen", "delete block"),
+            ("r/R", "titel", "title"), ("n/N", "uebersicht", "overview"),
+            ("esc", "schliessen", "save & close"), ("q/Q", "beenden"),
+        ],
+        "notiz:frage": [
+            ("j/y/enter", "block_ja", "delete"), ("J/Y", "block_ja"),
+            ("any key", "block_nein", "cancel"),
+        ],
+        "block:text": [
+            ("type", "text_tippen", "type"), ("enter", "text_zeile", "new line"),
+            ("⌫", "text_weg", "delete"), ("esc", "fertig", "done"),
+        ],
+        "block:liste": [
+            ("type", "puffer_tippen", "type"), ("enter", "eintrag_setzen", "new item"),
+            ("↑↓", "eintrag_waehlen", "item"), ("tab", "haken", "check"),
+            ("del", "eintrag_weg", "remove"), ("⌫", "puffer_weg", "delete"),
+            ("esc", "fertig", "done"),
+        ],
+        "block:float": [
+            ("type", "puffer_tippen", "type"), ("enter", "eintrag_setzen", "set"),
+            ("←→", "eintrag_waehlen", "select"), ("↑↓", "eintrag_waehlen"),
+            ("del", "eintrag_weg", "remove"), ("⌫", "puffer_weg", "delete"),
+            ("esc", "fertig", "done"),
+        ],
+    })
+
+    def ansicht(self):
+        """Welche Ansicht der Tabelle gerade offen ist."""
+        NOTE = self.NOTE
+        if NOTE["view"] == "list":
+            return "liste:frage" if NOTE["confirm"] else "liste"
+        if NOTE["titling"]:
+            return "titel"
+        if NOTE["layer"] == 1:
+            return "notiz:frage" if NOTE["bconfirm"] else "notiz"
+        blk = self._block()
+        if blk is None:
+            return "notiz"
+        return {"list": "block:liste", "float": "block:float"}.get(blk["type"], "block:text")
+
     def taste(self, ch):
-        """Eine Taste, während das Notiz-Werkzeug den Fokus hat (früher ein Zweig
-        der Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
-        NOTE, n_add_block, n_commit_float = self.NOTE, self.n_add_block, self.n_commit_float
-        n_commit_list, n_enter_edit = self.n_commit_list, self.n_enter_edit
-        n_load_list, n_loadbuf, n_new = self.n_load_list, self.n_loadbuf, self.n_new
-        n_save = self.n_save
-        n = NOTE["note"]
-        blocks = (n.get("blocks") if n else None) or []
-        if NOTE["view"] == "list":                          # ── Übersicht ──
-            if NOTE["confirm"]:
-                if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
-                          10, 13, curses.KEY_ENTER):
-                    if NOTE["notes"]:
-                        gone = NOTE["notes"][NOTE["sel"]]["id"]
-                        try:
-                            api_call("/api/notes/" + gone, method="DELETE")
-                            NOTE["msg"] = "gelöscht"
-                        except Exception:
-                            NOTE["msg"] = "löschen fehlgeschlagen"
-                        if NOTE["note"] and NOTE["note"].get("id") == gone:
-                            NOTE["note"] = None             # aktuelle Notiz war es
-                    NOTE["confirm"] = False; n_load_list()
-                elif ch != -1:
-                    NOTE["confirm"] = False; NOTE["msg"] = ""
-            elif ch == 27:                                  # Esc → zurück/zu
-                if NOTE["note"]:
-                    NOTE["view"] = "edit"; NOTE["msg"] = ""
-                else:
-                    NOTE["active"] = False
-            elif ch in (ord("q"), ord("Q")):
-                return BEENDEN
-            elif ch in (curses.KEY_UP, ord("k")):
-                NOTE["sel"] = max(0, NOTE["sel"] - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                NOTE["sel"] = min(max(0, len(NOTE["notes"]) - 1), NOTE["sel"] + 1)
-            elif ch in (10, 13, curses.KEY_ENTER):
-                if NOTE["notes"]:
-                    try:
-                        full = api_call("/api/notes/" + NOTE["notes"][NOTE["sel"]]["id"])
-                    except Exception:
-                        full = None
-                    if full is not None:
-                        n_enter_edit(full)
-            elif ch in (ord("n"), ord("N")):
-                n_new()
-            elif ch in (ord("d"), ord("D")):
-                if NOTE["notes"]:
-                    NOTE["confirm"] = True; NOTE["msg"] = ""
-        elif NOTE["titling"]:                               # ── Titel tippen ──
-            if ch == 27:
-                NOTE["titling"] = False; NOTE["msg"] = ""
-            elif ch in (10, 13, curses.KEY_ENTER):
-                if n is not None:
-                    n["title"] = NOTE["buf"].strip(); n_save(); n_load_list()
-                NOTE["titling"] = False; NOTE["msg"] = "titel gesetzt"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                NOTE["buf"] = NOTE["buf"][:-1]
-            elif 32 <= ch <= 126 and len(NOTE["buf"]) < 60:
-                NOTE["buf"] += chr(ch)
-        elif NOTE["layer"] == 1:                            # ── Ebene 1: navigieren/anlegen ──
-            if NOTE["bconfirm"]:                            # Block-Lösch-Nachfrage offen
-                if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
-                          10, 13, curses.KEY_ENTER):
-                    if blocks and 0 <= NOTE["bsel"] < len(blocks):
-                        del blocks[NOTE["bsel"]]
-                        NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
-                        n_save()
-                    NOTE["bconfirm"] = False; NOTE["msg"] = "gelöscht"
-                elif ch != -1:                             # alles andere → abbrechen
-                    NOTE["bconfirm"] = False; NOTE["msg"] = ""
-            elif ch == 27:
-                n_save(); NOTE["active"] = False
-            elif ch in (ord("q"), ord("Q")):
-                n_save(); return BEENDEN
-            elif ch in (ord("n"), ord("N")):
-                n_save(); n_load_list()
-                NOTE["view"] = "list"; NOTE["sel"] = 0
-                NOTE["confirm"] = False; NOTE["msg"] = ""
-            elif ch in (curses.KEY_UP, ord("k")):
-                NOTE["bsel"] = max(0, NOTE["bsel"] - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                NOTE["bsel"] = min(max(0, len(blocks) - 1), NOTE["bsel"] + 1)
-            elif ch in (ord("t"), ord("T")):
-                n_add_block("text")
-            elif ch in (ord("l"), ord("L")):
-                n_add_block("list")
-            elif ch in (ord("f"), ord("F")):
-                n_add_block("float")
-            elif ch in (ord("r"), ord("R")):
-                if n is not None:
-                    NOTE["titling"] = True; NOTE["buf"] = str(n.get("title") or "")
-            elif ch in (ord("d"), ord("D")):
-                if blocks and 0 <= NOTE["bsel"] < len(blocks):
-                    if n_block_empty(blocks[NOTE["bsel"]]):
-                        del blocks[NOTE["bsel"]]           # leer → sofort weg
-                        NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
-                        n_save()
-                    else:
-                        NOTE["bconfirm"] = True; NOTE["msg"] = ""  # befüllt → nachfragen
-            elif ch in (ord("e"), 10, 13, curses.KEY_ENTER):
-                if blocks and 0 <= NOTE["bsel"] < len(blocks):
-                    NOTE["layer"] = 2
-                    blk = blocks[NOTE["bsel"]]
-                    if blk["type"] in ("list", "float"):
-                        seq = blk.get("items") if blk["type"] == "list" else blk.get("terms")
-                        NOTE["esel"] = len(seq or [])       # auf den 'neu'-Slot
-                    else:
-                        NOTE["esel"] = 0
-                    NOTE["buf"] = ""
-        else:                                               # ── Ebene 2: Block bearbeiten ──
-            blk = blocks[NOTE["bsel"]] if (blocks and 0 <= NOTE["bsel"] < len(blocks)) else None
-            if blk is None:
-                NOTE["layer"] = 1
-            elif blk["type"] == "text":
-                if ch == 27:
-                    n_save(); NOTE["layer"] = 1
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    blk["text"] = blk.get("text", "") + "\n"
-                elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                    blk["text"] = blk.get("text", "")[:-1]
-                elif 32 <= ch <= 126:
-                    blk["text"] = blk.get("text", "") + chr(ch)
-            elif blk["type"] == "list":
-                items = blk.setdefault("items", [])
-                if ch == 27:
-                    n_commit_list(blk); n_save(); NOTE["layer"] = 1
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    n_commit_list(blk)
-                    NOTE["esel"] = len(blk["items"]); NOTE["buf"] = ""
-                elif ch == curses.KEY_UP:
-                    n_commit_list(blk)
-                    NOTE["esel"] = max(0, NOTE["esel"] - 1); n_loadbuf(blk)
-                elif ch == curses.KEY_DOWN:
-                    n_commit_list(blk)
-                    NOTE["esel"] = min(len(blk["items"]), NOTE["esel"] + 1); n_loadbuf(blk)
-                elif ch == 9:                               # Tab → haken
-                    if NOTE["esel"] < len(items):
-                        items[NOTE["esel"]]["done"] = not items[NOTE["esel"]].get("done")
-                        n_save()
-                elif ch == curses.KEY_DC:                   # Entf → weg
-                    if NOTE["esel"] < len(items):
-                        del items[NOTE["esel"]]
-                        NOTE["esel"] = min(NOTE["esel"], len(items)); n_loadbuf(blk); n_save()
-                elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                    if NOTE["buf"]:
-                        NOTE["buf"] = NOTE["buf"][:-1]
-                    elif NOTE["esel"] < len(items):
-                        del items[NOTE["esel"]]
-                        NOTE["esel"] = min(NOTE["esel"], len(items)); n_loadbuf(blk); n_save()
-                elif 32 <= ch <= 126:
-                    NOTE["buf"] += chr(ch)
-            elif blk["type"] == "float":
-                terms = blk.setdefault("terms", [])
-                if ch == 27:
-                    n_commit_float(blk); n_save(); NOTE["layer"] = 1
-                elif ch in (10, 13, curses.KEY_ENTER):
-                    n_commit_float(blk)
-                    NOTE["esel"] = len(blk["terms"]); NOTE["buf"] = ""
-                elif ch in (curses.KEY_LEFT, curses.KEY_UP):
-                    n_commit_float(blk)
-                    NOTE["esel"] = max(0, NOTE["esel"] - 1); n_loadbuf(blk)
-                elif ch in (curses.KEY_RIGHT, curses.KEY_DOWN):
-                    n_commit_float(blk)
-                    NOTE["esel"] = min(len(blk["terms"]), NOTE["esel"] + 1); n_loadbuf(blk)
-                elif ch == curses.KEY_DC:
-                    if NOTE["esel"] < len(terms):
-                        del terms[NOTE["esel"]]
-                        NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
-                elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                    if NOTE["buf"]:
-                        NOTE["buf"] = NOTE["buf"][:-1]
-                    elif NOTE["esel"] < len(terms):
-                        del terms[NOTE["esel"]]
-                        NOTE["esel"] = min(NOTE["esel"], len(terms)); n_loadbuf(blk); n_save()
-                elif 32 <= ch <= 126:
-                    NOTE["buf"] += chr(ch)
+        """Eine Taste, während das Notiz-Werkzeug den Fokus hat. Gibt BEENDEN
+        zurück, wenn die TUI enden soll."""
+        if self.NOTE["layer"] == 2 and self._block() is None:   # Block weg → Ebene 1
+            self.NOTE["layer"] = 1
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def _bloecke(self):
+        n = self.NOTE["note"]
+        return (n.get("blocks") if n else None) or []
+
+    def _block(self):
+        blocks, i = self._bloecke(), self.NOTE["bsel"]
+        return blocks[i] if 0 <= i < len(blocks) else None
+
+    # ── Übersicht ──
+    def aktion_waehlen(self, taste):
+        NOTE = self.NOTE
+        if taste in ("up", "k"):
+            NOTE["sel"] = max(0, NOTE["sel"] - 1)
+        else:
+            NOTE["sel"] = min(max(0, len(NOTE["notes"]) - 1), NOTE["sel"] + 1)
+
+    def aktion_oeffnen(self, _taste):
+        NOTE = self.NOTE
+        if NOTE["notes"]:
+            try:
+                full = api_call("/api/notes/" + NOTE["notes"][NOTE["sel"]]["id"])
+            except Exception:
+                full = None
+            if full is not None:
+                self.n_enter_edit(full)
+
+    def aktion_neu(self, _taste):
+        self.n_new()
+
+    def aktion_loeschen(self, _taste):
+        if self.NOTE["notes"]:
+            self.NOTE["confirm"] = True; self.NOTE["msg"] = ""
+
+    def aktion_zurueck(self, _taste):
+        NOTE = self.NOTE
+        if NOTE["note"]:
+            NOTE["view"] = "edit"; NOTE["msg"] = ""
+        else:
+            NOTE["active"] = False
+
+    def aktion_beenden(self, _taste):
+        if self.NOTE["view"] != "list":
+            self.n_save()
+        return BEENDEN
+
+    def aktion_ja(self, _taste):
+        NOTE = self.NOTE
+        if NOTE["notes"]:
+            gone = NOTE["notes"][NOTE["sel"]]["id"]
+            try:
+                api_call("/api/notes/" + gone, method="DELETE")
+                NOTE["msg"] = "gelöscht"
+            except Exception:
+                NOTE["msg"] = "löschen fehlgeschlagen"
+            if NOTE["note"] and NOTE["note"].get("id") == gone:
+                NOTE["note"] = None                     # aktuelle Notiz war es
+        NOTE["confirm"] = False; self.n_load_list()
+
+    def aktion_nein(self, _taste):
+        self.NOTE["confirm"] = False; self.NOTE["msg"] = ""
+
+    # ── Titel tippen ──
+    def aktion_tippen(self, zeichen):
+        if len(self.NOTE["buf"]) < 60:
+            self.NOTE["buf"] += zeichen
+
+    def aktion_titel_setzen(self, _taste):
+        NOTE, n = self.NOTE, self.NOTE["note"]
+        if n is not None:
+            n["title"] = NOTE["buf"].strip(); self.n_save(); self.n_load_list()
+        NOTE["titling"] = False; NOTE["msg"] = "titel gesetzt"
+
+    def aktion_zeichen_weg(self, _taste):
+        self.NOTE["buf"] = self.NOTE["buf"][:-1]
+
+    def aktion_titel_abbrechen(self, _taste):
+        self.NOTE["titling"] = False; self.NOTE["msg"] = ""
+
+    # ── Ebene 1: navigieren/anlegen ──
+    def aktion_block_waehlen(self, taste):
+        NOTE = self.NOTE
+        if taste in ("up", "k"):
+            NOTE["bsel"] = max(0, NOTE["bsel"] - 1)
+        else:
+            NOTE["bsel"] = min(max(0, len(self._bloecke()) - 1), NOTE["bsel"] + 1)
+
+    def aktion_block_neu(self, taste):
+        self.n_add_block({"t": "text", "l": "list", "f": "float"}[taste.lower()])
+
+    def aktion_bearbeiten(self, _taste):
+        NOTE, blk = self.NOTE, self._block()
+        if blk is None:
+            return
+        NOTE["layer"] = 2
+        if blk["type"] in ("list", "float"):
+            seq = blk.get("items") if blk["type"] == "list" else blk.get("terms")
+            NOTE["esel"] = len(seq or [])               # auf den 'neu'-Slot
+        else:
+            NOTE["esel"] = 0
+        NOTE["buf"] = ""
+
+    def _block_weg(self):
+        NOTE, blocks = self.NOTE, self._bloecke()
+        del blocks[NOTE["bsel"]]
+        NOTE["bsel"] = min(NOTE["bsel"], max(0, len(blocks) - 1))
+        self.n_save()
+
+    def aktion_block_loeschen(self, _taste):
+        blk = self._block()
+        if blk is None:
+            return
+        if n_block_empty(blk):
+            self._block_weg()                           # leer → sofort weg
+        else:
+            self.NOTE["bconfirm"] = True; self.NOTE["msg"] = ""   # befüllt → nachfragen
+
+    def aktion_titel(self, _taste):
+        n = self.NOTE["note"]
+        if n is not None:
+            self.NOTE["titling"] = True; self.NOTE["buf"] = str(n.get("title") or "")
+
+    def aktion_uebersicht(self, _taste):
+        NOTE = self.NOTE
+        self.n_save(); self.n_load_list()
+        NOTE["view"] = "list"; NOTE["sel"] = 0
+        NOTE["confirm"] = False; NOTE["msg"] = ""
+
+    def aktion_schliessen(self, _taste):
+        self.n_save(); self.NOTE["active"] = False
+
+    def aktion_block_ja(self, _taste):
+        if self._block() is not None:
+            self._block_weg()
+        self.NOTE["bconfirm"] = False; self.NOTE["msg"] = "gelöscht"
+
+    def aktion_block_nein(self, _taste):
+        self.NOTE["bconfirm"] = False; self.NOTE["msg"] = ""
+
+    # ── Ebene 2: Block bearbeiten ──
+    def aktion_text_tippen(self, zeichen):
+        blk = self._block()
+        blk["text"] = blk.get("text", "") + zeichen
+
+    def aktion_text_zeile(self, _taste):
+        self.aktion_text_tippen("\n")
+
+    def aktion_text_weg(self, _taste):
+        blk = self._block()
+        blk["text"] = blk.get("text", "")[:-1]
+
+    def _folge(self, blk):
+        """Die Einträge eines Listen- oder Float-Blocks."""
+        return blk.setdefault("items" if blk["type"] == "list" else "terms", [])
+
+    def _uebernehmen(self, blk):
+        (self.n_commit_list if blk["type"] == "list" else self.n_commit_float)(blk)
+
+    def aktion_fertig(self, _taste):
+        blk = self._block()
+        if blk["type"] in ("list", "float"):
+            self._uebernehmen(blk)
+        self.n_save(); self.NOTE["layer"] = 1
+
+    def aktion_puffer_tippen(self, zeichen):
+        self.NOTE["buf"] += zeichen
+
+    def aktion_eintrag_setzen(self, _taste):
+        blk = self._block()
+        self._uebernehmen(blk)
+        self.NOTE["esel"] = len(self._folge(blk)); self.NOTE["buf"] = ""
+
+    def aktion_eintrag_waehlen(self, taste):
+        NOTE, blk = self.NOTE, self._block()
+        self._uebernehmen(blk)
+        if taste in ("up", "left"):
+            NOTE["esel"] = max(0, NOTE["esel"] - 1)
+        else:
+            NOTE["esel"] = min(len(self._folge(blk)), NOTE["esel"] + 1)
+        self.n_loadbuf(blk)
+
+    def aktion_haken(self, _taste):
+        NOTE, items = self.NOTE, self._folge(self._block())
+        if NOTE["esel"] < len(items):
+            items[NOTE["esel"]]["done"] = not items[NOTE["esel"]].get("done")
+            self.n_save()
+
+    def aktion_eintrag_weg(self, _taste):
+        NOTE, blk = self.NOTE, self._block()
+        seq = self._folge(blk)
+        if NOTE["esel"] < len(seq):
+            del seq[NOTE["esel"]]
+            NOTE["esel"] = min(NOTE["esel"], len(seq)); self.n_loadbuf(blk); self.n_save()
+
+    def aktion_puffer_weg(self, taste):
+        if self.NOTE["buf"]:
+            self.NOTE["buf"] = self.NOTE["buf"][:-1]
+        else:
+            self.aktion_eintrag_weg(taste)
 
     def n_drawblock(self, blk, sy, rh, focus, editing, ix, iw, atop, abot):
         """Einen Block-Kasten zeichnen, vertikal an [atop,abot] geklippt."""
@@ -534,11 +622,11 @@ class Notizen:
                             C["bright"] if sel else C["dim"])
                     safe_addstr(yy, bx + bw - 2 - len(meta), meta, C["faint"])
                     yy += 1
+            # Tasten stehen in der Leiste ganz unten (Tastentabelle, 2026-10-11).
             if NOTE["confirm"]:
-                addclip(bottom, ix, "wirklich löschen? j/n", iw, C["bright"])
+                addclip(bottom, ix, "wirklich löschen?", iw, C["bright"])
             else:
-                addclip(bottom, ix, ("enter öffnen · n neu · d löschen · esc zu  " + NOTE["msg"]).strip(),
-                        iw, C["faint"])
+                addclip(bottom, ix, NOTE["msg"], iw, C["faint"])
             return
 
         n = NOTE["note"]                              # ── eine Notiz ──
@@ -548,8 +636,7 @@ class Notizen:
         if NOTE["titling"]:
             addclip(by + 1, ix, "titel: " + NOTE["buf"] + "_", iw, C["bright"])
         else:
-            addclip(by + 1, ix, str(n.get("title") or "ohne titel"), iw - 10, C["bright"])
-            safe_addstr(by + 1, bx + bw - 11, "[r titel]", C["faint"])
+            addclip(by + 1, ix, str(n.get("title") or "ohne titel"), iw, C["bright"])
         safe_addstr(by + 2, ix, "─" * iw, C["faint"])
 
         area_top, area_bottom = by + 3, by + bh - 3
@@ -565,21 +652,14 @@ class Notizen:
         NOTE["scroll"] = max(0, NOTE["scroll"])
 
         if not blocks:
-            addclip(area_top, ix, "leer — t text · l liste · f float", iw, C["faint"])
+            addclip(area_top, ix, "leer", iw, C["faint"])
         for bi, (blk, ry, rh, editing) in enumerate(layout):
             sy = area_top + ry - NOTE["scroll"]
             if sy + rh - 1 < area_top or sy > area_bottom:
                 continue
             n_drawblock(blk, sy, rh, bi == NOTE["bsel"], editing, ix, iw, area_top, area_bottom)
 
-        if NOTE["bconfirm"]:
-            tip = "block löschen? j/n"
-        elif NOTE["layer"] == 2 and blocks:
-            tip = {"text": "tippen · enter zeile · esc fertig",
-                   "list": "tippen · enter neu · tab haken · entf weg · esc fertig",
-                   "float": "tippen · enter setzen · ←→ wählen · entf weg · esc fertig"
-                   }.get(blocks[NOTE["bsel"]]["type"], "esc fertig")
-        else:
-            tip = "↑↓ block · t/l/f neu · e bearb · d weg · n übersicht · esc zu"
-        addclip(by + bh - 2, ix, (tip + ("  " + NOTE["msg"] if NOTE["msg"] else "")).strip(),
-                iw, C["faint"])
+        # Tasten stehen in der Leiste ganz unten (Tastentabelle, 2026-10-11);
+        # hier nur noch Frage oder Rückmeldung.
+        frage = "block löschen?" if NOTE["bconfirm"] else NOTE["msg"]
+        addclip(by + bh - 2, ix, frage, iw, C["bright"] if NOTE["bconfirm"] else C["faint"])

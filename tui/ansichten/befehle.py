@@ -405,14 +405,14 @@ class Befehlszeile:
             self.cmd_buf += chr(ch)
         return None
 
-    def zeichne_overlay(self, ck, top, bot, W):
+    def zeichne_overlay(self, ctx, top, bot, W):
         """Das Befehls-Overlay (klappt über den Body nach oben auf), nur bei
-        offener Zeile oder stehender Hilfe. ck = current_ctx() der Schleife."""
+        offener Zeile oder stehender Hilfe. ctx = (titel, [(taste, was)]) des
+        fokussierten Programms (fussleiste.programm_tasten) oder None."""
         if not (self.cmd_mode or self.help_latched):
             return
         z = self.z
         C, addclip, safe_addstr = z.C, z.addclip, z.safe_addstr
-        ctx = (CTX_TITLES.get(ck, ck), CTX_KEYS.get(ck, [])) if ck else None
         ov_title, rows = overlay_rows(self.cmd_buf, self.help_latched, ctx)
         ov_w = min(W - 4, 56)
         ov_h = len(rows) + 2

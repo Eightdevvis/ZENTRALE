@@ -783,7 +783,7 @@ def taste_verteilen(u, ch):
         # Im Chat stoppt es die Antwort und beendet NIE die TUI; überall
         # sonst bleibt es, was es war: sauber beenden (main() fängt das
         # KeyboardInterrupt wie früher das echte SIGINT).
-        if current_ctx(z) == "ai" and not (bz.cmd_mode or bz.help_latched
+        if ansichten.fenster.aktives_programm(z) == "chat" and not (bz.cmd_mode or bz.help_latched
                                            or erinnerung.nag_active):
             chat.taste(ch)
             return None
@@ -1062,7 +1062,7 @@ def bild_zeichnen(u):
 
     # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
     if bz.cmd_mode or bz.help_latched:
-        bz.zeichne_overlay(current_ctx(z), top, bot, W)
+        bz.zeichne_overlay(fussleiste.programm_tasten(u), top, bot, W)
 
     # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
     safe_addstr(sep_row, 0, "─" * W, C["faint"])
@@ -1074,7 +1074,7 @@ def bild_zeichnen(u):
     # tut). Eine KI-Antwort, die im Hintergrund fertig wurde, meldet sich
     # auf der Startseite mit ● an der Leertaste.
     eintr = fussleiste.eintraege(u)
-    if chat.ungelesen() and current_ctx(z) == "home":
+    if chat.ungelesen() and ansichten.fenster.aktives_programm(z) == "startseite":
         eintr = [(t, w + " ●" if t == "space" else w) for t, w in eintr]
     addclip(footer_row, 0, fussleiste.zeile(eintr, W - 1), W - 1, C["faint"])
 
@@ -1256,6 +1256,9 @@ def run_ui(stdscr, store):
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
         DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop,
         WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene)
+    # Jedes Programm beim Horcher anmelden: er fragt einmal nach den Tasten
+    # je Ansicht, die Leiste schlägt danach nur noch nach (2026-10-11).
+    ansichten.fenster.verkabeln(z, u)
 
     while True:
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge

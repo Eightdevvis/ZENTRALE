@@ -309,6 +309,7 @@ def welt(monkeypatch, tmp_path):
         u.bz = A.befehle.Befehlszeile(z)
         u.app_start = A.app_start.AppStart(z, u.bz)
         u.aufrufe, u.nebenwirkung = aufrufe, nebenwirkung
+        A.fenster.verkabeln(z, u)            # wie run_ui: Horcher fragt jedes Programm
         return u
     return bauen
 
@@ -683,7 +684,9 @@ GEGENTEIL = {curses.KEY_UP: curses.KEY_DOWN, curses.KEY_DOWN: curses.KEY_UP,
              curses.KEY_HOME: curses.KEY_END, curses.KEY_END: curses.KEY_HOME,
              # Kalender 0/$ = Wochenanfang/-ende: am Montag bzw. Sonntag steht
              # man schon dort (fiel am Sonntag, 11.10.2026, als rot auf).
-             ord("0"): ord("$"), ord("$"): ord("0")}
+             ord("0"): ord("$"), ord("$"): ord("0"),
+             # vim-Zweitbelegung der Pfeile (Tastentabellen, 2026-10-11)
+             ord("k"): ord("j"), ord("j"): ord("k")}
 
 
 def drueck(u, folge):
