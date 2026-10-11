@@ -171,7 +171,7 @@ Hub `core/kacheln.py` mit `QUELLEN` (ein Modul je Quelle, im Prozess, Anfrage
 und Antwort durch `json.dumps`/`loads`), Form/Fehler `core/kachel_form.py`,
 erste Quelle `core/kachel_kalender.py` (App `kalender`, Art `ausschnitt`),
 Routen `POST /api/kachel` und `POST /api/kachel/aktion`
-([api_endpoints.md](api_endpoints.md)), in der TUI Holen im Hintergrund aus
+([api_endpoints.md](../system/api_endpoints.md)), in der TUI Holen im Hintergrund aus
 dem Puffer. **Neutral gemacht 2026-10-10** (die Schnittstelle kennt keine
 Oberfläche mehr): Adressen, Katalog und Farbrollen — die drei Abschnitte
 unten, alle gebaut. **Listen (`fokus`) und Graphen (`graph`) gebaut

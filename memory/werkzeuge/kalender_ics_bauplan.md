@@ -237,7 +237,7 @@ den Termin (seinen Container/Kasten im Kalender) angewendet."
   Ein altes `border-style: none` / `--zentrale-muster: none` heißt seit
   11.10.2026 **nicht gesetzt**: `stil.pruefen` lässt es beim Lesen weg, also
   schreibt der Schreiber dafür nichts (es gibt kein `none` mehr im
-  Wortschatz, [bausteine_farbe_stil.md](../system/bausteine_farbe_stil.md)).
+  Wortschatz, [bausteine_farbe_stil.md](../hub/bausteine_farbe_stil.md)).
 - **Setzen:** `kalender_kennung.stil_setzen(k, stil)` ERSETZT den Stil (die
   TUI schickt ihn ganz), `{}` entfernt ihn; ein Schreibvorgang.
   `kalender.add_entry/add_span/add_routine(..., stil={…})` und

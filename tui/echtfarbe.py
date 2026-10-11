@@ -20,7 +20,7 @@
 # (ein Wort, wie ~/.config/zentrale/theme). auto = an, wenn COLORTERM
 # truecolor oder 24bit sagt (xfce4-terminal/VTE setzen das; tmux reicht es
 # mit `terminal-features *:RGB` durch).
-# Doku: memory/system/bausteine_farbe_stil.md.
+# Doku: memory/hub/bausteine_farbe_stil.md.
 
 import os
 import time
