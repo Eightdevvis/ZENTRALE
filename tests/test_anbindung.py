@@ -612,7 +612,11 @@ def test_kalender_kern_loeschen_stellt_alle_felder_wieder_her(_kalender_speicher
     _ausfuehren(quelle, "kk_delete_entry", {"kennung": "2026-11-03|A"})
     assert a.lesen_eintrag(nl, "2026-11-03|A") is None
     a.zurueckbauen(_aktion(besch, "kk_delete_entry"), "2026-11-03|A", {}, vorher)
-    assert a.lesen_eintrag(nl, "2026-11-03|A") == vorher
+    # Seit 7f6bf4a vergibt der Kern beim Anlegen eine echte Kennung (uid) — ein
+    # über die HTTP-Route wiederhergestellter Termin bekommt eine neue. Alle
+    # Felder außer der Kennung müssen gleich sein.
+    ohne = lambda e: {k: v for k, v in (e or {}).items() if k not in ("uid", "kennung")}
+    assert ohne(a.lesen_eintrag(nl, "2026-11-03|A")) == ohne(vorher)
 
 
 # ══ Dateien, Einschalten, Register ════════════════════════════════════
