@@ -1,0 +1,119 @@
+{
+  "format": "zentrale-anbindung/1",
+  "name": "notizen",
+  "titel": "Notizen (Test-Server)",
+  "beschreibung": "Ein winziger MCP-Server mit Notiz-Speicher (tests/fixtures/mcp_notizen.py) — der Fall, wie ein fremdes Programm per MCP angebunden wird.",
+  "praefix": "NT",
+  "bereich": "notiz",
+  "transport": {"art": "mcp", "kommando": ["{python}", "tests/fixtures/mcp_notizen.py"], "zeitlimit": 10},
+  "nachlesen": {
+    "notiz": {
+      "aufruf": {"werkzeug": "get_note", "argumente": {"id": "{kennung}"}},
+      "nicht_da": [{"mcp_fehler": true, "text_enthaelt": "not found"}],
+      "zeile": "Notiz „{e.title}“"
+    }
+  },
+  "fehler": [
+    {"wenn": {"mcp_fehler": true, "text_enthaelt": "not found"}, "code": "NICHT-GEFUNDEN", "grund": "Diese Notiz gibt es nicht."}
+  ],
+  "aktionen": [
+    {
+      "name": "nt_create_note",
+      "description": "Legt eine neue Notiz an (Titel Pflicht).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string", "description": "Titel der Notiz.", "x-zentrale": {"wort": "Titel", "fehlt": "TITEL-LEER"}},
+          "text": {"type": "string", "description": "Inhalt.", "x-zentrale": {"wort": "Text"}},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Schlagwörter.", "x-zentrale": {"wort": "Schlagwörter"}}
+        },
+        "required": ["title"]
+      },
+      "x-zentrale": {"art": "anlegen", "alltag": "Notizen anlegen", "worte": ["Notiz angelegt", "Notiz anlegen"], "frage": "eine Notiz anlegen"},
+      "aufruf": {"werkzeug": "create_note", "argumente": {"title": "{title}", "text": "{text}", "tags": "{tags}"}},
+      "kennung_aus": {"antwort": "/id"},
+      "nachlesen": "notiz",
+      "vergleich": {"title": {"norm": "text"}, "text": {"norm": "text"}, "tags": {"norm": "liste-ungeordnet"}},
+      "zurueck": {"loeschen": {"werkzeug": "delete_note", "argumente": {"id": "{kennung}"}}},
+      "probe": {"argumente": {"title": "Probe", "text": "Hallo  Welt", "tags": ["b", "a"]}}
+    },
+    {
+      "name": "nt_edit_note",
+      "description": "Ändert Titel, Text oder Schlagwörter einer Notiz (Kennung aus nt_list_notes).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kennung": {"type": "string", "description": "Kennung der Notiz.", "x-zentrale": {"ziel": true}},
+          "title": {"type": "string", "description": "Neuer Titel.", "x-zentrale": {"wort": "Titel"}},
+          "text": {"type": "string", "description": "Neuer Inhalt.", "x-zentrale": {"wort": "Text"}},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Neue Schlagwörter.", "x-zentrale": {"wort": "Schlagwörter"}}
+        },
+        "required": ["kennung"]
+      },
+      "x-zentrale": {"art": "aendern", "alltag": "Notizen ändern", "worte": ["Notiz geändert", "Notiz ändern"], "frage": "die Notiz ändern"},
+      "aufruf": {"werkzeug": "update_note", "argumente": {"id": "{kennung}", "title": "{title}", "text": "{text}", "tags": "{tags}"}},
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "notiz",
+      "vergleich": {"title": {"norm": "text"}, "text": {"norm": "text"}, "tags": {"norm": "liste-ungeordnet"}},
+      "zurueck": {"schreiben": {"werkzeug": "update_note", "argumente": {"id": "{kennung}", "title": "{alt.title}", "text": "{alt.text}", "tags": "{alt.tags}"}}},
+      "probe": {"vorher": "nt_create_note", "argumente": {"title": "Geändert", "tags": ["x"]}}
+    },
+    {
+      "name": "nt_delete_note",
+      "description": "Löscht eine Notiz (lässt sich wiederherstellen).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"kennung": {"type": "string", "description": "Kennung der Notiz.", "x-zentrale": {"ziel": true}}},
+        "required": ["kennung"]
+      },
+      "x-zentrale": {"art": "loeschen", "alltag": "Notizen löschen", "worte": ["Notiz gelöscht", "Notiz löschen"], "frage": "die Notiz löschen"},
+      "aufruf": {"werkzeug": "delete_note", "argumente": {"id": "{kennung}"}},
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "notiz",
+      "zurueck": {"wiederherstellen": {"werkzeug": "restore_note", "argumente": {"id": "{kennung}", "title": "{alt.title}", "text": "{alt.text}", "tags": "{alt.tags}"}}},
+      "probe": {"vorher": "nt_create_note", "argumente": {}}
+    },
+    {
+      "name": "nt_purge_note",
+      "description": "Löscht eine Notiz endgültig (ohne Wiederherstellen).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"kennung": {"type": "string", "description": "Kennung der Notiz.", "x-zentrale": {"ziel": true}}},
+        "required": ["kennung"]
+      },
+      "x-zentrale": {"art": "loeschen", "alltag": "Notizen endgültig löschen", "frage": "die Notiz endgültig löschen"},
+      "aufruf": {"werkzeug": "purge_note", "argumente": {"id": "{kennung}"}},
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "notiz",
+      "zurueck": {"keins": true},
+      "probe": {"vorher": "nt_create_note", "argumente": {}}
+    },
+    {
+      "name": "nt_read_note",
+      "description": "Liest eine Notiz mit Titel und Text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"id": {"type": "string", "description": "Kennung der Notiz."}},
+        "required": ["id"]
+      },
+      "x-zentrale": {"art": "lesen"},
+      "aufruf": {"werkzeug": "get_note", "argumente": {"id": "{id}"}},
+      "ausgabe": {"zeile": "Notiz #{id}: {e.title} – {e.text}"},
+      "fehler": [{"wenn": {"mcp_fehler": true, "text_enthaelt": "not found"}, "code": "NICHT-GEFUNDEN", "grund": "Diese Notiz gibt es nicht."}],
+      "probe": {"vorher": "nt_create_note", "kennung_in": "id", "erwartet": "Probe", "argumente": {}}
+    },
+    {
+      "name": "nt_list_notes",
+      "description": "Listet alle Notizen (mit Kennung); optional gefiltert nach einem Wort im Titel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"suche": {"type": "string", "description": "Wort im Titel."}},
+        "required": []
+      },
+      "x-zentrale": {"art": "lesen"},
+      "aufruf": {"werkzeug": "list_notes", "argumente": {"suche": "{suche}"}},
+      "ausgabe": {"eintraege": "/notes", "zeile": "#{e.id} {e.title}", "leer": "Keine Notizen."},
+      "probe": {"vorher": "nt_create_note", "erwartet": "Probe", "argumente": {}}
+    }
+  ]
+}

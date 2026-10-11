@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
-from werkzeug_befund import abgebrochen, erledigt
+from werkzeug_befund import OK, Befund, abgebrochen, erledigt
 
 from . import schema
 
@@ -54,6 +54,9 @@ class Ergebnis:
     subjekt   f(eintrag) -> Satzanfang, statt adapter.beschreiben
     nachsatz  hinter Verb und Kennung (Text oder f(eintrag))
     zusatz    Hinweise hinter dem Satz, kein Beleg (Text oder f(eintrag))
+    unbelegt  die Quelle kann nicht nachlesen (Anbindung ohne Beleg-Stufe,
+              2026-10-11): ausgeführt, aber das Ergebnis sagt ehrlich „NICHT
+              belegt"; kein Nachlesen, kein Zurücknehmen
     text      nur bei lesen: das fertige Ergebnis"""
     kennung: str | None = None
     verlangt: dict = field(default_factory=dict)
@@ -64,6 +67,7 @@ class Ergebnis:
     subjekt: Callable[[dict], str] | None = None
     nachsatz: str | Callable[[dict], str] = ""
     zusatz: str | Callable[[dict], str] = ""
+    unbelegt: bool = False
     text: str | None = None
 
 
@@ -100,6 +104,8 @@ def ausfuehren(quelle, aktion: dict, args: dict):
         if art == "lesen":
             return erg.text if isinstance(erg, Ergebnis) else erg
         art = erg.art or art
+        if erg.unbelegt:
+            return _unbelegt(was, art, erg)
         return _belegen(quelle, art, erg)
     except Ablehnung as e:
         nichts = (aktion.get(schema.X) or {}).get("nichts") or NICHTS[art]
@@ -113,6 +119,20 @@ class _NichtZurueck(Exception):
     def __init__(self, grund):
         super().__init__(grund)
         self.grund = grund
+
+
+# Für Adapter: „ob es geklappt hat, ist unklar“ (Zeitüberschreitung NACH dem
+# Senden) — nie „nichts geändert“ behaupten. Gleicher Ausgang wie ein
+# gescheitertes Zurücknehmen.
+Ungewiss = _NichtZurueck
+
+
+def _unbelegt(was: str, art: str, erg: Ergebnis):
+    """Stufe ohne Beleg: ehrlich sagen, dass nicht nachgelesen wurde."""
+    zusatz = _wert(erg.zusatz, {})
+    text = (f"{was} AUSGEFÜHRT – aber NICHT belegt: ZENTRALE kann bei diesem Programm "
+            f"nicht nachlesen, ob es so dasteht.")
+    return Befund((text + (" " + zusatz if zusatz else "")).strip(), OK, beleg="")
 
 
 def _belegen(quelle, art: str, erg: Ergebnis):
@@ -179,4 +199,7 @@ def frage(quelle, aktion: dict, args: dict) -> str:
             continue
         teile.append(f"{fx.get('wort') or name} {wert}")
     satz = x.get("frage") or f"„{aktion['name']}“ ausführen"
-    return f"Soll ich {satz}{ziel}" + (": " + ", ".join(teile) if teile else "") + "?"
+    nach = getattr(adapter, "frage_zusatz", None)
+    zusatz = (nach(aktion["name"]) if nach else "") or ""
+    return (f"Soll ich {satz}{ziel}" + (": " + ", ".join(teile) if teile else "") + "?"
+            + (" " + zusatz if zusatz else ""))

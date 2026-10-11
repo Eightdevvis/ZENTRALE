@@ -29,6 +29,12 @@
 #   frage(name, args) -> str | None         eigene Ja/Nein-Frage (optional)
 #   ziel(kennung) -> str                    was eine Kennung meint (Frage)
 #   was(name, args) -> str                  Satzanfang eines Abbruchs
+#   frage_zusatz(name) -> str               Satz hinter der Ja/Nein-Frage
+#                                           (Anbindungen ohne Beleg-Stufe)
+#
+# Neue Programme brauchen keinen eigenen Adapter in Python: der ALLGEMEINE
+# Adapter (allgemein.py) führt eine Anbindungs-Beschreibung aus
+# (anbindung.schema.json, anbindung.py; memory/ki/werkzeug_erzeuger.md).
 #
 # Prompt-Cache: die Schemas einer Quelle sind Konstanten; werkzeuge() baut
 # daraus bei jedem Aufruf dieselben Bytes. Das Register ruft es einmal beim
@@ -42,7 +48,7 @@ from dataclasses import dataclass
 from werkzeug_eintrag import Werkzeug
 
 from . import harness, schema
-from .harness import Ablehnung, Ergebnis, passt  # noqa: F401  — öffentlich
+from .harness import Ablehnung, Ergebnis, Ungewiss, passt  # noqa: F401  — öffentlich
 from .schema import SchemaFehler  # noqa: F401
 
 

@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zentrale:anbindung:1",
+  "title": "Anbindungs-Beschreibung (zentrale-anbindung/1)",
+  "description": "Sagt dem allgemeinen Adapter, wie ein Programm angesprochen wird, und dem Werkzeug-Erzeuger, welche KI-Werkzeuge daraus werden. Jede Aktion ist eine MCP-Werkzeug-Definition (name, description, inputSchema, annotations) plus x-zentrale und die Teile der Anbindung. Schlüssel stehen NIE in der Datei: Auth verweist nur auf den Namen einer Einstellung.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "name", "praefix", "bereich", "transport", "aktionen"],
+  "properties": {
+    "format": {"const": "zentrale-anbindung/1"},
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,30}$",
+             "description": "Kurzname der Anbindung; auch Dateiname und Name der Einstellung anbindung_<name>."},
+    "titel": {"type": "string", "maxLength": 80},
+    "beschreibung": {"type": "string", "maxLength": 600},
+    "praefix": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,2}$",
+                "description": "Vorsilbe der Fehlercodes (KK-NICHT-GEFUNDEN). Alle Werkzeugnamen beginnen mit ihr in Kleinbuchstaben und '_' (kk_add_entry)."},
+    "bereich": {"enum": ["kalender", "notiz", "ablage", "messreihe", "skill", "netz"],
+                "description": "Wie Sasha den Bereich liest (Erledigt-Zeile, Ehrlichkeits-Prüfer)."},
+    "zeitzone": {"type": "string", "description": "IANA-Name, z. B. Europe/Berlin; nötig, wenn ein Vergleich 'zeitpunkt' nennt."},
+    "transport": {"$ref": "#/$defs/transport"},
+    "nachlesen": {
+      "type": "object",
+      "description": "Benannte Nachlese-Aufrufe; Aktionen verweisen mit ihrem Namen darauf.",
+      "additionalProperties": {"$ref": "#/$defs/nachlesen"}
+    },
+    "fehler": {"type": "array", "items": {"$ref": "#/$defs/fehlerregel"},
+               "description": "Regeln für alle Aktionen; die der Aktion gelten zuerst."},
+    "aktionen": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/aktion"}}
+  },
+  "$defs": {
+    "bezeichner": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+    "einstellung": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$",
+                    "description": "NAME einer Einstellung (ai_config.setting), nie ein Schlüssel."},
+    "zeiger": {"type": "string", "pattern": "^(/.*)?$",
+               "description": "JSON-Pointer (RFC 6901); '*' = alle Werte dieser Ebene. Platzhalter {…} sind erlaubt."},
+    "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$"},
+    "transport": {
+      "type": "object",
+      "required": ["art"],
+      "properties": {"art": {"enum": ["http", "mcp", "python"]}},
+      "allOf": [
+        {"if": {"properties": {"art": {"const": "http"}}},
+         "then": {"required": ["basis"], "additionalProperties": false,
+                  "properties": {
+                    "art": {}, "basis": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+                    "zeitlimit": {"type": "integer", "minimum": 1, "maximum": 60},
+                    "auth": {"type": "object", "additionalProperties": false,
+                             "required": ["art", "einstellung"],
+                             "properties": {"art": {"enum": ["bearer", "kopfzeile"]},
+                                            "einstellung": {"$ref": "#/$defs/einstellung"},
+                                            "kopfzeile": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]*$"}}}}}},
+        {"if": {"properties": {"art": {"const": "mcp"}}},
+         "then": {"required": ["kommando"], "additionalProperties": false,
+                  "properties": {
+                    "art": {}, "kommando": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+                    "umgebung": {"type": "object", "propertyNames": {"pattern": "^[A-Z][A-Z0-9_]*$"},
+                                 "additionalProperties": {"$ref": "#/$defs/einstellung"},
+                                 "description": "Umgebungsvariable des Servers → NAME der Einstellung, die den Wert liefert."},
+                    "zeitlimit": {"type": "integer", "minimum": 1, "maximum": 60}}}},
+        {"if": {"properties": {"art": {"const": "python"}}},
+         "then": {"required": ["modul"], "additionalProperties": false,
+                  "properties": {"art": {}, "modul": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$"}}}}
+      ]
+    },
+    "aufruf": {
+      "description": "Ein Aufruf. http: Methode + Pfad (+ Abfrage, Body); mcp: Werkzeugname (+ Argumente); python: Funktionsname. Texte dürfen Platzhalter enthalten ({day}, {kennung.label}).",
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["methode", "pfad"],
+         "properties": {"methode": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
+                        "pfad": {"type": "string", "pattern": "^/"},
+                        "abfrage": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean"]}},
+                        "body": {"type": "object"}}},
+        {"type": "object", "additionalProperties": false, "required": ["werkzeug"],
+         "properties": {"werkzeug": {"type": "string", "minLength": 1},
+                        "argumente": {"type": "object"}}},
+        {"type": "object", "additionalProperties": false, "required": ["funktion"],
+         "properties": {"funktion": {"$ref": "#/$defs/bezeichner"},
+                        "argumente": {"type": "object"}}}
+      ]
+    },
+    "wenn": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "status": {"oneOf": [{"type": "integer"}, {"type": "array", "items": {"type": "integer"}, "minItems": 1}]},
+        "mcp_fehler": {"type": "boolean"},
+        "text_enthaelt": {"type": "string", "minLength": 1},
+        "antwort": {"$ref": "#/$defs/zeiger"},
+        "gleich": {},
+        "vorhanden": {"type": "boolean"}
+      },
+      "dependentRequired": {"gleich": ["antwort"], "vorhanden": ["antwort"]}
+    },
+    "fehlerregel": {
+      "type": "object", "additionalProperties": false, "required": ["wenn", "code"],
+      "properties": {"wenn": {"$ref": "#/$defs/wenn"}, "code": {"$ref": "#/$defs/code"},
+                     "grund": {"type": "string"}, "grund_aus": {"$ref": "#/$defs/zeiger"}}
+    },
+    "nachlesen": {
+      "type": "object", "additionalProperties": false, "required": ["aufruf"],
+      "properties": {
+        "aufruf": {"$ref": "#/$defs/aufruf"},
+        "teile": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bezeichner"},
+                  "description": "Hat das Programm keine eigene Kennung: die Kennung besteht aus diesen Angaben, mit '|' verbunden (auch {kennung.<teil>})."},
+        "eintraege": {"$ref": "#/$defs/zeiger"},
+        "wo": {"type": "object", "additionalProperties": {"type": "string"},
+               "description": "Feld → Vorlage; genau EIN Eintrag muss in allen Feldern passen."},
+        "zeile": {"type": "string", "description": "Satzanfang aus dem Nachgelesenen ({e.label} …)."},
+        "nicht_da": {"type": "array", "items": {"$ref": "#/$defs/wenn"}, "minItems": 1}
+      }
+    },
+    "vergleich": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["norm"],
+        "properties": {"norm": {"enum": ["text", "zahl", "datum", "uhrzeit", "zeitpunkt", "liste-ungeordnet", "wahrheit"]},
+                       "feld": {"$ref": "#/$defs/zeiger"},
+                       "muster": {"type": "string", "description": "Ausdruck mit einer Gruppe, der aus dem Feld den verglichenen Teil holt."}}
+      }
+    },
+    "zurueck": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["loeschen"],
+         "properties": {"loeschen": {"$ref": "#/$defs/aufruf"}}},
+        {"type": "object", "additionalProperties": false, "required": ["schreiben"],
+         "properties": {"schreiben": {"$ref": "#/$defs/aufruf"}}},
+        {"type": "object", "additionalProperties": false, "required": ["wiederherstellen"],
+         "properties": {"wiederherstellen": {"$ref": "#/$defs/aufruf"}}},
+        {"type": "object", "additionalProperties": false, "required": ["keins"],
+         "properties": {"keins": {"const": true}}}
+      ]
+    },
+    "kennung_aus": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["antwort"],
+         "properties": {"antwort": {"$ref": "#/$defs/zeiger"}}},
+        {"type": "object", "additionalProperties": false, "required": ["argument"],
+         "properties": {"argument": {"$ref": "#/$defs/bezeichner"}}},
+        {"type": "object", "additionalProperties": false, "required": ["teile"],
+         "properties": {"teile": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bezeichner"}}}}
+      ]
+    },
+    "ausgabe": {
+      "type": "object", "additionalProperties": false, "required": ["zeile"],
+      "properties": {"eintraege": {"$ref": "#/$defs/zeiger"},
+                     "kopf": {"type": "string"},
+                     "zeile": {"type": "string"},
+                     "leer": {"type": "string"},
+                     "hoechstens": {"type": "integer", "minimum": 1, "maximum": 200}}
+    },
+    "aktion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "inputSchema", "x-zentrale", "aufruf"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,40}$"},
+        "description": {"type": "string", "minLength": 10, "maxLength": 600},
+        "inputSchema": {"type": "object", "required": ["type"], "properties": {"type": {"const": "object"}}},
+        "annotations": {"type": "object"},
+        "x-zentrale": {
+          "type": "object", "additionalProperties": false, "required": ["art"],
+          "properties": {
+            "art": {"enum": ["lesen", "anlegen", "aendern", "loeschen"]},
+            "alltag": {"type": "string"},
+            "worte": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+            "frage": {"type": "string"},
+            "immer_erlaubbar": {"type": "boolean"},
+            "beweis": {"type": "string"},
+            "nichts": {"type": "string"},
+            "einfach": {"type": "string"}
+          }
+        },
+        "aufruf": {"$ref": "#/$defs/aufruf"},
+        "kennung_aus": {"$ref": "#/$defs/kennung_aus"},
+        "nachlesen": {"$ref": "#/$defs/bezeichner"},
+        "vergleich": {"$ref": "#/$defs/vergleich"},
+        "zurueck": {"$ref": "#/$defs/zurueck"},
+        "ausgabe": {"$ref": "#/$defs/ausgabe"},
+        "fehler": {"type": "array", "items": {"$ref": "#/$defs/fehlerregel"}},
+        "probe": {
+          "type": "object", "additionalProperties": false, "required": ["argumente"],
+          "properties": {"vorher": {"type": "string", "description": "Name der Aktion (anlegen), die das Probe-Objekt für ändern/löschen/lesen anlegt."},
+                         "kennung_in": {"$ref": "#/$defs/bezeichner", "description": "Nur lesen mit 'vorher': das Argument, in das die Kennung des Probe-Objekts kommt."},
+                         "erwartet": {"type": "string", "description": "Nur lesen: Text, der im Ergebnis vorkommen muss."},
+                         "argumente": {"type": "object"}}
+        }
+      }
+    }
+  }
+}
