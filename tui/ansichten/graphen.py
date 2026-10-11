@@ -5,10 +5,10 @@
 # 06.10.2026 Closures in run_ui (tui/zentrale_tui.py), die Typ-/Reihen-Helfer
 # auf Modulebene dort; siehe memory/system/tui_bauplan.md.
 
-import curses
 from datetime import date, timedelta
 
 from .basis import BEENDEN, _num, api_call, fmt_clock, parse_clock
+from .tasten import Tasten
 import graph_reihen  # noqa: E402  – core/, eingehängt von basis.kern_pfad
 
 
@@ -358,178 +358,287 @@ class Graphen:
         G["msg"] = "diesen graphen gibt es nicht mehr"
         return True
 
+    # ── Tasten (Tastentabelle, 2026-10-11) ──────────────────────────────
+    # EINE Tabelle für Verteilung UND Leiste (tasten.py). Jede Ansicht hat
+    # nur, was dort wirkt: die Liste ohne Graphen kein ↑↓, das Solo je Typ
+    # seine Eingabe (Zahl/Uhrzeit tippen, 1–5 sofort), die Periode zweistufig.
+    _SOLO = [("↑↓", "solo_graph", "graph"), ("←→", "solo_tag", "day")]
+    TASTEN = Tasten({
+        "liste": [
+            ("↑↓", "waehlen", "select"), ("k/j", "waehlen"),
+            ("enter", "solo", "open"), ("n", "neu", "new"), ("N", "neu"),
+            ("←→", "zeit", "time"), ("p", "vorhersage", "predict"), ("P", "vorhersage"),
+            ("r", "erinnerung", "reminder"), ("R", "erinnerung"),
+            ("d", "loeschen", "delete"), ("D", "loeschen"),
+            ("esc", "zu", "close"), ("g/G", "zu"), ("q/Q", "beenden"),
+        ],
+        "liste:leer": [
+            ("n", "neu", "new"), ("N", "neu"),
+            ("esc", "zu", "close"), ("g/G", "zu"), ("q/Q", "beenden"),
+        ],
+        "liste:frage": [
+            ("j/y/enter", "ja", "delete"), ("J/Y", "ja"), ("any key", "nein", "cancel"),
+        ],
+        "neu": [
+            ("type", "name_tippen", "type name"), ("tab", "typ", "type"),
+            ("enter", "anlegen", "create"), ("⌫", "zeichen_weg", "delete"),
+            ("esc", "zurueck", "back"),
+        ],
+        "erinnerung": [
+            ("type", "uhr_tippen", "HH:MM"), ("enter", "erinnerung_an", "set"),
+            ("⌫", "zeichen_weg", "delete"), ("esc", "zurueck", "back"),
+        ],
+        "solo:zahl": [
+            ("type", "wert_tippen", "type value"), ("enter", "eintragen", "save"),
+            ("⌫", "zeichen_weg", "delete"),
+        ] + _SOLO + [("esc", "solo_zu", "all graphs")],
+        "solo:zeit": [
+            ("type", "uhr_tippen", "HH:MM"), ("enter", "eintragen", "save"),
+            ("⌫", "zeichen_weg", "delete"),
+        ] + _SOLO + [("esc", "solo_zu", "all graphs")],
+        "solo:periode": [
+            ("type", "uhr_tippen", "from HH:MM"), ("enter", "eintragen", "to"),
+            ("⌫", "zeichen_weg", "delete"),
+        ] + _SOLO + [("esc", "solo_zu", "all graphs")],
+        "solo:periode:bis": [
+            ("type", "uhr_tippen", "to HH:MM"), ("enter", "eintragen", "save"),
+            ("⌫", "zeichen_weg", "delete"),
+        ] + _SOLO + [("esc", "solo_zu", "back to from")],
+        "solo:skala": [("1/2/3/4/5", "skala", "rate")] + _SOLO
+                      + [("esc", "solo_zu", "all graphs")],
+    })
+    _SOLO_TYP = {"number": "solo:zahl", "time": "solo:zeit", "scale": "solo:skala",
+                 "period": "solo:periode"}
+
+    def ansicht(self):
+        G = self.G
+        v = G["view"]
+        if v == "list":
+            if G["confirm"]:
+                return "liste:frage"
+            return "liste" if G["graphs"] else "liste:leer"
+        if v == "new":
+            return "neu"
+        if v == "remind":
+            return "erinnerung"
+        typ = G["def"].get("type") if G["def"] else "number"
+        a = self._SOLO_TYP.get(typ, "solo:zahl")
+        return a + ":bis" if a == "solo:periode" and G["pstage"] == 1 else a
+
     def taste(self, ch):
         """Eine Taste, während das Graph-Werkzeug den Fokus hat (früher ein Zweig
         der Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
-        G, g_load, g_load_vals, g_save = self.G, self.g_load, self.g_load_vals, self.g_save
-        if G["view"] == "list":
-            if G["confirm"]:                              # Lösch-Nachfrage offen
-                if ch in (ord("y"), ord("Y"), ord("j"), ord("J"),
-                          10, 13, curses.KEY_ENTER):
-                    try:
-                        api_call("/api/graphs/" + G["graphs"][G["sel"]]["id"], method="DELETE")
-                        G["msg"] = "gelöscht"
-                    except Exception:
-                        G["msg"] = "löschen fehlgeschlagen"
-                    G["confirm"] = False
-                    g_load()
-                elif ch != -1:                            # alles andere → abbrechen
-                    G["confirm"] = False; G["msg"] = ""
-            elif ch in (27, ord("g"), ord("G")):           # Esc/g → Werkzeug zu
-                G["active"] = False
-            elif ch in (ord("q"), ord("Q")):               # q → ganze TUI beenden
-                return BEENDEN
-            elif ch in (curses.KEY_UP, ord("k")):
-                G["sel"] = max(0, G["sel"] - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                G["sel"] = min(max(0, len(G["graphs"]) - 1), G["sel"] + 1)
-            elif ch == curses.KEY_LEFT:                    # kombigraph in vergangenheit pannen
-                G["gscroll"] = G.get("gscroll", 0) + 7; G["msg"] = ""
-            elif ch == curses.KEY_RIGHT:                   # … zurück richtung heute
-                G["gscroll"] = max(0, G.get("gscroll", 0) - 7); G["msg"] = ""
-            elif ch in (10, 13, curses.KEY_ENTER):
-                if G["graphs"]:
-                    self.g_waehlen()
-            elif ch in (ord("n"), ord("N")):
-                G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
-            elif ch in (ord("d"), ord("D")):
-                if G["graphs"]:
-                    G["confirm"] = True; G["msg"] = ""
-            elif ch in (ord("p"), ord("P")):              # vorhersage-ergänzung an/aus
-                if G["graphs"]:
-                    cur = G["graphs"][G["sel"]]
-                    try:
-                        api_call("/api/graphs/%s/predict" % cur["id"], method="POST",
-                                 body={"predict": not cur.get("predict")})
-                        g_load()
-                    except Exception:
-                        G["msg"] = "predict fehlgeschlagen"
-            elif ch in (ord("r"), ord("R")):              # tages-reminder an/aus
-                if G["graphs"]:
-                    cur = G["graphs"][G["sel"]]
-                    if cur.get("remind"):                 # an → direkt aus
-                        try:
-                            api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
-                                     body={"remind": False})
-                            g_load(); G["msg"] = "reminder aus"
-                        except Exception:
-                            G["msg"] = "reminder fehlgeschlagen"
-                    else:                                 # aus → uhrzeit eintippen
-                        G["input"] = cur.get("remind_at") or "20:00"
-                        G["msg"] = ""; G["view"] = "remind"
-        elif G["view"] == "remind":
-            # Uhrzeit für den Tages-Reminder eintippen (HH:MM), enter setzt an.
-            if ch == 27:
-                G["view"] = "list"; G["msg"] = ""
-            elif ch in (10, 13, curses.KEY_ENTER):
-                if G["graphs"]:
-                    cur = G["graphs"][G["sel"]]
-                    try:
-                        api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
-                                 body={"remind": True, "at": G["input"].strip()})
-                        g_load(); G["msg"] = "reminder an " + G["input"].strip()
-                        G["view"] = "list"
-                    except Exception:
-                        G["msg"] = "uhrzeit ungültig (HH:MM)"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                G["input"] = G["input"][:-1]
-            elif (48 <= ch <= 57 or ch == ord(":")) and len(G["input"]) < 5:
-                G["input"] += chr(ch)
-        elif G["view"] == "new":
-            if ch == 27:
-                G["view"] = "list"; G["msg"] = ""
-            elif ch == 9:                                  # Tab → Typ zyklieren
-                ids = [t[0] for t in GRAPH_TYPES]
-                G["newtype"] = ids[(ids.index(G["newtype"]) + 1) % len(ids)]
-            elif ch in (10, 13, curses.KEY_ENTER):
-                name = G["input"].strip()
-                if not name:
-                    G["msg"] = "name fehlt"
-                else:
-                    try:
-                        g = api_call("/api/graphs", method="POST",
-                                     body={"name": name, "type": G["newtype"]})
-                        g_load()
-                        for i, x in enumerate(G["graphs"]):
-                            if g and x["id"] == g.get("id"):
-                                G["sel"] = i
-                        G["view"] = "list"; G["msg"] = "angelegt: " + name
-                    except Exception:
-                        G["msg"] = "anlegen fehlgeschlagen"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                G["input"] = G["input"][:-1]
-            elif 32 <= ch <= 126 and len(G["input"]) < 40:
-                G["input"] += chr(ch)
-        elif G["view"] == "view":
-            typ = G["def"].get("type") if G["def"] else "number"
-            enter = ch in (10, 13, curses.KEY_ENTER)
-            backsp = ch in (curses.KEY_BACKSPACE, 127, 8)
-            if ch == 27:                                   # Esc: bei period erst bis→von zurück
-                if typ == "period" and G["pstage"] == 1:
-                    G["pstage"] = 0; G["input2"] = ""; G["msg"] = ""
-                else:                                      # zurück zur Übersicht (alle zeigen)
-                    G["view"] = "list"; G["shown"] = set()
-                    G["input"] = ""; G["input2"] = ""
-                    G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
-                    G["gscroll"] = 0                       # übersicht startet bei heute
-            elif ch in (curses.KEY_UP, curses.KEY_DOWN):    # solo-Graph wechseln (↑↓)
-                if G["graphs"]:
-                    step = -1 if ch == curses.KEY_UP else 1
-                    G["sel"] = max(0, min(len(G["graphs"]) - 1, G["sel"] + step))
-                    G["def"] = G["graphs"][G["sel"]]
-                    G["shown"] = {G["def"]["id"]}
-                    G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
-                    G["dayoff"] = 0; G["msg"] = ""
-                    g_load_vals()
-            elif ch == curses.KEY_LEFT:                     # Ziel-Tag einen zurück
-                G["dayoff"] = min(365, G.get("dayoff", 0) + 1); G["msg"] = ""
-            elif ch == curses.KEY_RIGHT:                    # … wieder vor (max heute)
-                G["dayoff"] = max(0, G.get("dayoff", 0) - 1); G["msg"] = ""
-            elif typ == "scale":
-                if ord("1") <= ch <= ord("5"):             # 1–5 trägt sofort ein
-                    g_save(int(chr(ch)))
-            elif typ == "number":
-                if enter:
-                    txt = G["input"].strip()
-                    if txt:
-                        try:
-                            g_save(float(txt)); G["input"] = ""
-                        except ValueError:
-                            G["msg"] = "keine zahl"
-                elif backsp:
-                    G["input"] = G["input"][:-1]
-                elif (48 <= ch <= 57 or ch in (ord("."), ord("-"))) and len(G["input"]) < 12:
-                    G["input"] += chr(ch)
-            elif typ == "time":
-                if enter:
-                    m = parse_clock(G["input"])
-                    if m is None:
-                        G["msg"] = "zeit? HH:MM"
-                    else:
-                        g_save(m); G["input"] = ""
-                elif backsp:
-                    G["input"] = G["input"][:-1]
-                elif (48 <= ch <= 57 or ch == ord(":")) and len(G["input"]) < 5:
-                    G["input"] += chr(ch)
-            elif typ == "period":
-                cur = "input" if G["pstage"] == 0 else "input2"
-                if enter:
-                    if G["pstage"] == 0:
-                        if parse_clock(G["input"]) is None:
-                            G["msg"] = "von? HH:MM"
-                        else:
-                            G["pstage"] = 1; G["msg"] = ""
-                    else:
-                        s, e = parse_clock(G["input"]), parse_clock(G["input2"])
-                        if e is None:
-                            G["msg"] = "bis? HH:MM"
-                        else:
-                            g_save(s, end=e)
-                            G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
-                elif backsp:
-                    G[cur] = G[cur][:-1]
-                elif (48 <= ch <= 57 or ch == ord(":")) and len(G[cur]) < 5:
-                    G[cur] += chr(ch)
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def _feld(self):
+        """Welcher Puffer gerade getippt wird (Periode: von, dann bis)."""
+        G = self.G
+        return "input2" if G["view"] == "view" and G["pstage"] == 1 else "input"
+
+    # Liste
+    def aktion_waehlen(self, taste):
+        G = self.G
+        if taste in ("up", "k"):
+            G["sel"] = max(0, G["sel"] - 1)
+        else:
+            G["sel"] = min(max(0, len(G["graphs"]) - 1), G["sel"] + 1)
+
+    def aktion_zeit(self, taste):
+        """Kombigraph in die Vergangenheit pannen (←) bzw. zurück Richtung heute."""
+        G = self.G
+        if taste == "left":
+            G["gscroll"] = G.get("gscroll", 0) + 7
+        else:
+            G["gscroll"] = max(0, G.get("gscroll", 0) - 7)
+        G["msg"] = ""
+
+    def aktion_solo(self, _taste):
+        if self.G["graphs"]:
+            self.g_waehlen()
+
+    def aktion_neu(self, _taste):
+        G = self.G
+        G["view"] = "new"; G["input"] = ""; G["newtype"] = "number"; G["msg"] = ""
+
+    def aktion_loeschen(self, _taste):
+        G = self.G
+        if G["graphs"]:
+            G["confirm"] = True; G["msg"] = ""
+
+    def aktion_vorhersage(self, _taste):
+        """Vorhersage-Ergänzung an/aus."""
+        G = self.G
+        if G["graphs"]:
+            cur = G["graphs"][G["sel"]]
+            try:
+                api_call("/api/graphs/%s/predict" % cur["id"], method="POST",
+                         body={"predict": not cur.get("predict")})
+                self.g_load()
+            except Exception:
+                G["msg"] = "predict fehlgeschlagen"
+
+    def aktion_erinnerung(self, _taste):
+        """Tages-Reminder an/aus: an → direkt aus, aus → Uhrzeit eintippen."""
+        G = self.G
+        if not G["graphs"]:
+            return
+        cur = G["graphs"][G["sel"]]
+        if cur.get("remind"):
+            try:
+                api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
+                         body={"remind": False})
+                self.g_load(); G["msg"] = "reminder aus"
+            except Exception:
+                G["msg"] = "reminder fehlgeschlagen"
+        else:
+            G["input"] = cur.get("remind_at") or "20:00"
+            G["msg"] = ""; G["view"] = "remind"
+
+    def aktion_zu(self, _taste):
+        self.G["active"] = False
+
+    def aktion_beenden(self, _taste):
+        return BEENDEN                          # q → ganze TUI beenden
+
+    # Lösch-Nachfrage
+    def aktion_ja(self, _taste):
+        G = self.G
+        try:
+            api_call("/api/graphs/" + G["graphs"][G["sel"]]["id"], method="DELETE")
+            G["msg"] = "gelöscht"
+        except Exception:
+            G["msg"] = "löschen fehlgeschlagen"
+        G["confirm"] = False
+        self.g_load()
+
+    def aktion_nein(self, _taste):
+        G = self.G
+        G["confirm"] = False; G["msg"] = ""
+
+    # Neuer Graph / Reminder-Uhrzeit
+    def aktion_name_tippen(self, zeichen):
+        G = self.G
+        if len(G["input"]) < 40:
+            G["input"] += zeichen
+
+    def aktion_typ(self, _taste):
+        G = self.G
+        ids = [t[0] for t in GRAPH_TYPES]
+        G["newtype"] = ids[(ids.index(G["newtype"]) + 1) % len(ids)]
+
+    def aktion_anlegen(self, _taste):
+        G = self.G
+        name = G["input"].strip()
+        if not name:
+            G["msg"] = "name fehlt"
+            return
+        try:
+            g = api_call("/api/graphs", method="POST", body={"name": name, "type": G["newtype"]})
+            self.g_load()
+            for i, x in enumerate(G["graphs"]):
+                if g and x["id"] == g.get("id"):
+                    G["sel"] = i
+            G["view"] = "list"; G["msg"] = "angelegt: " + name
+        except Exception:
+            G["msg"] = "anlegen fehlgeschlagen"
+
+    def aktion_zeichen_weg(self, _taste):
+        G, f = self.G, self._feld()
+        G[f] = G[f][:-1]
+
+    def aktion_zurueck(self, _taste):
+        G = self.G
+        G["view"] = "list"; G["msg"] = ""
+
+    def aktion_erinnerung_an(self, _taste):
+        G = self.G
+        if not G["graphs"]:
+            return
+        cur = G["graphs"][G["sel"]]
+        try:
+            api_call("/api/graphs/%s/remind" % cur["id"], method="POST",
+                     body={"remind": True, "at": G["input"].strip()})
+            self.g_load(); G["msg"] = "reminder an " + G["input"].strip()
+            G["view"] = "list"
+        except Exception:
+            G["msg"] = "uhrzeit ungültig (HH:MM)"
+
+    def aktion_uhr_tippen(self, zeichen):
+        """Uhrzeit tippen (Reminder, time, period): nur Ziffern und ':'."""
+        G, f = self.G, self._feld()
+        if (zeichen.isdigit() or zeichen == ":") and len(G[f]) < 5:
+            G[f] += zeichen
+
+    # Solo: einen Graphen zeigen und eintragen
+    def aktion_wert_tippen(self, zeichen):
+        G = self.G
+        if (zeichen.isdigit() or zeichen in ".-") and len(G["input"]) < 12:
+            G["input"] += zeichen
+
+    def aktion_eintragen(self, _taste):
+        G, g_save = self.G, self.g_save
+        typ = G["def"].get("type") if G["def"] else "number"
+        if typ == "number":
+            txt = G["input"].strip()
+            if txt:
+                try:
+                    g_save(float(txt)); G["input"] = ""
+                except ValueError:
+                    G["msg"] = "keine zahl"
+        elif typ == "time":
+            m = parse_clock(G["input"])
+            if m is None:
+                G["msg"] = "zeit? HH:MM"
+            else:
+                g_save(m); G["input"] = ""
+        elif G["pstage"] == 0:                  # period: erst von, dann bis
+            if parse_clock(G["input"]) is None:
+                G["msg"] = "von? HH:MM"
+            else:
+                G["pstage"] = 1; G["msg"] = ""
+        else:
+            s, e = parse_clock(G["input"]), parse_clock(G["input2"])
+            if e is None:
+                G["msg"] = "bis? HH:MM"
+            else:
+                g_save(s, end=e)
+                G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
+
+    def aktion_skala(self, taste):
+        self.g_save(int(taste))                 # 1–5 trägt sofort ein
+
+    def aktion_solo_graph(self, taste):
+        """Solo-Graph wechseln (↑↓)."""
+        G = self.G
+        if G["graphs"]:
+            step = -1 if taste == "up" else 1
+            G["sel"] = max(0, min(len(G["graphs"]) - 1, G["sel"] + step))
+            G["def"] = G["graphs"][G["sel"]]
+            G["shown"] = {G["def"]["id"]}
+            G["input"] = ""; G["input2"] = ""; G["pstage"] = 0
+            G["dayoff"] = 0; G["msg"] = ""
+            self.g_load_vals()
+
+    def aktion_solo_tag(self, taste):
+        """Ziel-Tag einen zurück (←) bzw. wieder vor (→, höchstens heute)."""
+        G = self.G
+        if taste == "left":
+            G["dayoff"] = min(365, G.get("dayoff", 0) + 1)
+        else:
+            G["dayoff"] = max(0, G.get("dayoff", 0) - 1)
+        G["msg"] = ""
+
+    def aktion_solo_zu(self, _taste):
+        """Esc: bei der Periode erst bis→von zurück, sonst zur Übersicht."""
+        G = self.G
+        typ = G["def"].get("type") if G["def"] else "number"
+        if typ == "period" and G["pstage"] == 1:
+            G["pstage"] = 0; G["input2"] = ""; G["msg"] = ""
+        else:                                   # zurück zur Übersicht (alle zeigen)
+            G["view"] = "list"; G["shown"] = set()
+            G["input"] = ""; G["input2"] = ""
+            G["pstage"] = 0; G["msg"] = ""; G["dayoff"] = 0
+            G["gscroll"] = 0                    # übersicht startet bei heute
 
     def draw_overlay(self, otop, oleft, oh, ow, gs_cache, gv_cache, labeled=False, scroll=0,
                      cyc=None):
@@ -981,7 +1090,9 @@ class Graphen:
         draw_overlay, g_daylabel = self.draw_overlay, self.g_daylabel
         g_existing, safe_addstr = self.g_existing, self.z.safe_addstr
         ix, iw = bx + 2, bw - 4
-        bottom = by + bh - 2          # Hinweiszeile unten in der Box
+        # Unten in der Box nur Rückmeldung (msg); die Tasten stehen in der
+        # Leiste ganz unten, aus TASTEN (2026-10-11).
+        bottom = by + bh - 2
         if iw < 8:
             return
 
@@ -997,7 +1108,7 @@ class Graphen:
                 safe_addstr(by + 5, tx, chip, C["acc"] if on else C["faint"])
                 tx += len(chip) + 1
             addclip(by + 7, ix, next((h for t, l, h in GRAPH_TYPES if t == G["newtype"]), ""), iw, C["faint"])
-            addclip(bottom, ix, ("tab typ · enter anlegen · esc zurück  " + G["msg"]).strip(), iw, C["faint"])
+            addclip(bottom, ix, G["msg"], iw, C["faint"])
 
         elif G["view"] == "remind" and G["graphs"]:
             nm = str(G["graphs"][G["sel"]].get("name") or "")
@@ -1005,7 +1116,7 @@ class Graphen:
             addclip(by + 3, ix, "täglich erinnern ab welcher uhrzeit?", iw, C["dim"])
             addclip(by + 5, ix, "uhrzeit (HH:MM): " + G["input"] + "_", iw, C["bright"])
             addclip(by + 7, ix, "erinnert dich, bis du für den tag eingetragen hast.", iw, C["faint"])
-            addclip(bottom, ix, ("HH:MM · enter an · esc zurück  " + G["msg"]).strip(), iw, C["faint"])
+            addclip(bottom, ix, G["msg"], iw, C["faint"])
 
         elif G["view"] in ("list", "view"):
             # EINE vereinte Ansicht: dieselbe große Überlagerung (draw_overlay,
@@ -1037,13 +1148,11 @@ class Graphen:
                     ly = by + 1 + ov_h             # Liste beginnt unter der Ansicht
             hdr = ("nur %s" % (solo.get("name") or "?")) if solo else "GRAPHEN"
             addclip(ly, ix, hdr, iw, C["bright"])
-            if not solo:
-                safe_addstr(ly, bx + bw - 9, "[n neu]", C["acc"])
             safe_addstr(ly + 1, ix, "─" * iw, C["faint"])
             list_bottom = (input_row - 1) if solo else bottom
             yy = ly + 2
             if not G["graphs"]:
-                addclip(yy, ix, "noch keine — 'n' legt einen an", iw, C["faint"])
+                addclip(yy, ix, "noch keine graphen", iw, C["faint"])
             else:
                 # Fenster um den Cursor, damit ↑↓ (auch im Solo) nicht aus dem
                 # sichtbaren Ausschnitt läuft, wenn mehr Graphen als Platz da sind.
@@ -1105,25 +1214,19 @@ class Graphen:
                     eh = " (aktuell %g)" % (_num(exv.get("value")) or 0)
                 if typ == "time":
                     addclip(input_row, ix, "%s · zeit: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    hint = "HH:MM · enter speichern · ↑↓ graph · ←→ tag · esc alle"
                 elif typ == "period":
                     c1 = G["input"] + ("_" if G["pstage"] == 0 else "")
                     c2 = G["input2"] + ("_" if G["pstage"] == 1 else "")
                     addclip(input_row, ix, "%s · von: %s  bis: %s%s" % (dl, c1, c2, eh), iw, C["bright"])
-                    hint = "HH:MM · enter von→bis · ↑↓ graph · ←→ tag · esc alle"
                 elif typ == "scale":
-                    addclip(input_row, ix, "1–5 trägt für %s ein%s" % (dl, eh), iw, C["acc"])
-                    hint = "1–5 eintragen · ↑↓ graph · ←→ tag · esc alle"
+                    addclip(input_row, ix, "%s · skala 1–5%s" % (dl, eh), iw, C["acc"])
                 else:  # number
                     addclip(input_row, ix, "%s · wert: %s_%s" % (dl, G["input"], eh), iw, C["bright"])
-                    hint = "ziffern · enter speichern · ↑↓ graph · ←→ tag · esc alle"
-                addclip(bottom, ix, (hint + "  " + G["msg"]).strip(), iw, C["faint"])
-            elif G["msg"]:                     # Shortcuts liegen unter '/'; nur Feedback
                 addclip(bottom, ix, G["msg"], iw, C["faint"])
-            else:
-                gs = G.get("gscroll", 0)
-                zt = ("←→ zeit (%d t zurück)" % gs) if gs else "←→ zeit"
-                addclip(bottom, ix, "enter solo · n neu · %s · p ~vorhersage · r reminder · d weg · esc zu" % zt, iw, C["faint"])
+            elif G["msg"]:                     # nur Rückmeldung
+                addclip(bottom, ix, G["msg"], iw, C["faint"])
+            elif G.get("gscroll", 0):          # Status: so weit hat ←/→ zurückgepant
+                addclip(bottom, ix, "%d t zurück" % G["gscroll"], iw, C["faint"])
 
             if G["confirm"] and G["graphs"]:        # Mini-Dialog über die Liste legen
                 nm = G["graphs"][G["sel"]]["name"]
@@ -1131,6 +1234,5 @@ class Graphen:
                 dw = min(iw, max(len(q), 16) + 4)
                 dx = bx + (bw - dw) // 2
                 dy = by + bh // 2 - 2
-                draw_box(dy, dx, 4, dw, "LÖSCHEN", C["warn"])
+                draw_box(dy, dx, 3, dw, "LÖSCHEN", C["warn"])
                 addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
-                addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])

@@ -12,6 +12,7 @@ import urllib.parse
 from datetime import date, timedelta
 
 from .basis import BEENDEN, PROJEKT, api_call, venv_python
+from .tasten import Tasten
 
 
 MAP_CHOKE = "◆"          # Ereignis-/Chokepoint-Marker (Diamant)
@@ -282,7 +283,9 @@ class Karte:
 
     def m_alt_arrow(self, ch):
         """Alt+Pfeil → 'up'/'down'/'left'/'right'; einzelnes Esc → 'esc'; sonst
-        None. (Strg+Pfeil ist schon belegt: Höhe Zentrale↔Befehlszeile.) Deckt die
+        None. Die Karte selbst liest Alt+Pfeil seit 2026-10-11 über ihre
+        Tastentabelle (tasten.py); hier hängt noch die Startseite (Rad-Wechsel)
+        dran. (Strg+Pfeil ist schon belegt: Höhe Zentrale↔Befehlszeile.) Deckt die
         verbreiteten Alt-Formen ab, da das Terminal eine davon schickt:
           1) terminfo-Keyname kUP3… (Modifier 3 = Alt) — EIN Keycode
           2) Esc + (keypad-übersetzter) Pfeil-Keycode  (Meta=Esc-Präfix)
@@ -336,58 +339,94 @@ class Karte:
         """Startseite → Karte; die Basiskarte wird beim Zeichnen frisch geholt."""
         self.M["active"] = True; self.M["data"] = None
 
+    # ── Tasten (Tastentabelle, 2026-10-11) ──────────────────────────────
+    # EINE Tabelle für Verteilung UND Leiste (tasten.py). Alt+Pfeil dekodiert
+    # tasten.py selbst (dieselben Formen wie m_alt_arrow oben, das die
+    # Startseite noch für ihr Rad nutzt). Die Zeitachse (, . ;) gibt es nur,
+    # wenn das Overlay eine liefert; ';' nur, wenn man in der Zeit zurück ist.
+    _KARTE = [
+        ("↑↓←→", "schwenken", "pan"), ("h/j/k/l", "schwenken"),
+        ("+/-", "zoom", "zoom"), ("=/_", "zoom"), ("0", "welt", "reset"),
+        ("alt+↑↓←→", "land", "focus country"),
+        ("o", "overlay", "overlay"), ("O", "overlay"),
+    ]
+    _ZEIT = [(",/.", "zeit", "time ±1 week"), ("</>", "zeit")]
+    _ENDE = [("w", "fenster", "window"), ("W/enter", "fenster"), ("t/T", "theme"),
+             ("esc", "zu", "close"), ("m/M", "zu"), ("q/Q", "beenden")]
+    TASTEN = Tasten({
+        "karte": _KARTE + _ENDE,
+        "karte:zeit": _KARTE + _ZEIT + _ENDE,
+        "karte:zeit:damals": _KARTE + _ZEIT + [(";", "jetzt", "now")] + _ENDE,
+    })
+
+    def ansicht(self):
+        M = self.M
+        if M["overlay"] and M.get("overlay_at") is not None:
+            return "karte:zeit:damals"
+        od = M["odata"] if isinstance(M["odata"], dict) else {}
+        if M["overlay"] and od.get("time"):
+            return "karte:zeit"
+        return "karte"
+
     def taste(self, ch):
         """Eine Taste, während die Karte den Fokus hat (früher ein Zweig der
         Hauptschleife in run_ui). Gibt BEENDEN zurück, wenn die TUI enden soll."""
-        M, cycle_theme, m_alt_arrow = self.M, self.z.cycle_theme, self.m_alt_arrow
-        m_focus_step, m_pan, m_time_now = self.m_focus_step, self.m_pan, self.m_time_now
-        m_time_step, m_window, m_zoom = self.m_time_step, self.m_window, self.m_zoom
-        ca = m_alt_arrow(ch)              # Alt+Pfeil? (frisst evtl. Folgebytes)
-        if ca in ("up", "down", "left", "right"):
-            m_focus_step(*{"up": (0, -1), "down": (0, 1),
-                           "left": (-1, 0), "right": (1, 0)}[ca])
-        elif ca == "esc" or ch in (ord("m"), ord("M")):    # Esc/m → Karte zu
-            M["active"] = False
-        elif ch in (ord("q"), ord("Q")):                   # q → ganze TUI beenden
-            return BEENDEN
-        elif ch in (curses.KEY_LEFT, ord("h")):
-            m_pan(-0.30, 0.0)
-        elif ch in (curses.KEY_RIGHT, ord("l")):
-            m_pan(0.30, 0.0)
-        elif ch in (curses.KEY_UP, ord("k")):
-            m_pan(0.0, 0.30)               # nach Norden
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            m_pan(0.0, -0.30)              # nach Süden
-        elif ch in (ord("+"), ord("=")):   # '=' = '+' ohne Shift
-            m_zoom(1.0)
-        elif ch in (ord("-"), ord("_")):
-            m_zoom(-1.0)
-        elif ch == ord("0"):               # zurück zur ganzen Welt
-            M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
-            M["odata"] = M["fdata"] = None
-        elif ch in (ord("o"), ord("O")):   # Overlay zyklieren
-            # aus → erster Layer → nächster … → letzter → aus.
-            if not M["overlay"]:
-                M["overlay"] = True
-                M["overlay_layer"] = OVERLAY_CYCLE[0]
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    _SCHWENK = {"left": (-0.30, 0.0), "h": (-0.30, 0.0), "right": (0.30, 0.0),
+                "l": (0.30, 0.0), "up": (0.0, 0.30), "k": (0.0, 0.30),      # Norden
+                "down": (0.0, -0.30), "j": (0.0, -0.30)}                   # Süden
+
+    def aktion_schwenken(self, taste):
+        self.m_pan(*self._SCHWENK[taste])
+
+    def aktion_zoom(self, taste):
+        self.m_zoom(1.0 if taste in ("+", "=") else -1.0)   # '=' = '+' ohne Shift
+
+    def aktion_welt(self, _taste):
+        """Zurück zur ganzen Welt."""
+        M = self.M
+        M["cx"], M["cy"], M["zoom"], M["data"] = 0.0, 20.0, 0.0, None
+        M["odata"] = M["fdata"] = None
+
+    def aktion_land(self, taste):
+        """Alt+Pfeil: zum räumlich nächsten Land in der Richtung."""
+        self.m_focus_step(*{"alt+up": (0, -1), "alt+down": (0, 1),
+                            "alt+left": (-1, 0), "alt+right": (1, 0)}[taste])
+
+    def aktion_overlay(self, _taste):
+        """Overlay zyklieren: aus → erster Layer → nächster … → letzter → aus."""
+        M = self.M
+        if not M["overlay"]:
+            M["overlay"] = True
+            M["overlay_layer"] = OVERLAY_CYCLE[0]
+        else:
+            i = OVERLAY_CYCLE.index(M["overlay_layer"]) + 1
+            if i >= len(OVERLAY_CYCLE):
+                M["overlay"] = False   # nach dem letzten: Overlay aus
             else:
-                i = OVERLAY_CYCLE.index(M["overlay_layer"]) + 1
-                if i >= len(OVERLAY_CYCLE):
-                    M["overlay"] = False   # nach dem letzten: Overlay aus
-                else:
-                    M["overlay_layer"] = OVERLAY_CYCLE[i]
-            M["overlay_at"] = None         # Layer-Wechsel → Zeitachse auf „jetzt"
-            M["odata"] = None              # bei Wechsel/Einschalten frisch holen
-        elif ch in (ord(","), ord("<")):   # Achse 3: Zeit zurück (1 Woche)
-            m_time_step(-7)
-        elif ch in (ord("."), ord(">")):   # Achse 3: Zeit vor (1 Woche)
-            m_time_step(7)
-        elif ch == ord(";"):               # Achse 3: zurück auf „jetzt"
-            m_time_now()
-        elif ch in (ord("w"), ord("W"), 10, 13, curses.KEY_ENTER):
-            m_window()                     # natives Fenster aufklappen
-        elif ch in (ord("t"), ord("T")):   # Theme darf auch hier zyklieren
-            cycle_theme()
+                M["overlay_layer"] = OVERLAY_CYCLE[i]
+        M["overlay_at"] = None         # Layer-Wechsel → Zeitachse auf „jetzt"
+        M["odata"] = None              # bei Wechsel/Einschalten frisch holen
+
+    def aktion_zeit(self, taste):
+        """Achse 3: Zeit eine Woche zurück (, <) bzw. vor (. >)."""
+        self.m_time_step(-7 if taste in (",", "<") else 7)
+
+    def aktion_jetzt(self, _taste):
+        self.m_time_now()              # Achse 3: zurück auf „jetzt"
+
+    def aktion_fenster(self, _taste):
+        self.m_window()                # natives Fenster aufklappen
+
+    def aktion_theme(self, _taste):
+        self.z.cycle_theme()           # Theme darf auch hier zyklieren
+
+    def aktion_zu(self, _taste):
+        self.M["active"] = False
+
+    def aktion_beenden(self, _taste):
+        return BEENDEN                 # q → ganze TUI beenden
 
     def draw_map(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn die Karte Fokus hat. Holt bei Bedarf

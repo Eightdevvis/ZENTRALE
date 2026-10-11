@@ -22,6 +22,7 @@ import urllib.error
 import urllib.parse
 
 from .basis import api_call
+from .tasten import Tasten, codes as tasten_codes
 
 try:
     from tui import pixel
@@ -30,7 +31,15 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
     from bausteine.textfeld import Textfeld
 
-ENTER = (10, 13, curses.KEY_ENTER)
+
+class _Feld(Textfeld):
+    """Das Namensfeld; sein repr zeigt Text und Cursor (Zustandsvergleich
+    der Tests: tut eine Taste etwas?)."""
+
+    def __repr__(self):
+        return "Textfeld(%r, %d)" % (self.text, self.pos)
+
+
 # Besitz aus dem Shop (core/shop.py, eigene Sitzung, 2026-10-10). Gibt es den
 # Weg nicht (Backend alt), fehlt die Wahl einfach.
 SHOP_BESITZ = "/api/shop/besitz?kategorie=icons"
@@ -106,9 +115,9 @@ class Werkstatt:
         if schritt == "start":                    # am Anfang ist alles Halbe vergessen
             W["neu"], W["ziel"] = {}, None
         elif schritt == "name":
-            W["feld"] = Textfeld(W["neu"].get("name", ""))
+            W["feld"] = _Feld(W["neu"].get("name", ""))
         elif schritt == "umbenennen":
-            W["feld"] = Textfeld(W["ziel"]["name"])
+            W["feld"] = _Feld(W["ziel"]["name"])
         elif schritt == "icon":
             W["shop"] = self._shop_symbole()
         elif schritt == "bild":
@@ -202,24 +211,71 @@ class Werkstatt:
             return [("nein, behalten", "desk"), ("ja, wegwerfen", "desk_weg")]
         return []
 
-    # ── Tasten ────────────────────────────────────────────────────────
-    def taste(self, ch):
+    # ── Tasten (Tastentabelle, 2026-10-11) ────────────────────────────
+    # EINE Tabelle für Verteilung UND Leiste (tasten.py). Wählen oder tippen;
+    # am Anfang macht Esc die Werkstatt zu, sonst geht es einen Schritt zurück.
+    # Steht nur EIN Punkt zur Wahl („weiter"), gibt es nichts zu wählen (↑↓).
+    # Umlaute kommen als UTF-8-Bytes und gehen an der Tabelle vorbei ins Feld.
+    _WAHL = [("↑↓", "waehlen", "select"), ("enter", "nehmen", "choose")]
+    TASTEN = Tasten({
+        "start": _WAHL + [("esc", "zurueck", "close")],
+        "wahl": _WAHL + [("esc", "zurueck", "back")],
+        "wahl:eins": [("enter", "nehmen", "choose"), ("esc", "zurueck", "back")],
+        "tippen": [
+            ("type", "tippen", "type name"), ("enter", "name_fertig", "ok"),
+            ("⌫", "feld", "delete"), ("del", "feld"), ("←→", "feld", "move"),
+            ("home/end", "feld"), ("esc", "zurueck", "back"),
+        ],
+    })
+
+    def ansicht(self):
         W = self.W
+        if W["feld"] is not None:
+            return "tippen"
+        if W["schritt"] == "start":
+            return "start"
+        return "wahl" if len(self.punkte()) > 1 else "wahl:eins"
+
+    def taste(self, ch):
         if ch == -1:
             return None
-        if W["feld"] is not None:
-            return self._taste_text(ch)
-        n = len(self.punkte())
-        if ch == curses.KEY_UP and n:
-            W["sel"] = (W["sel"] - 1) % n          # rundherum: ↑ tut immer etwas
-        elif ch == curses.KEY_DOWN and n:
-            W["sel"] = (W["sel"] + 1) % n
-        elif ch in ENTER and n:
-            W["msg"] = ""
-            self.waehlen(self.punkte()[min(W["sel"], n - 1)][1])
-        elif ch == 27:
-            self.zurueck()
+        if 128 <= ch <= 255:                    # UTF-8-Byte (Umlaut): ins Feld
+            if self.W["feld"] is not None:
+                self.W["feld"].taste(ch)
+            return None
+        self.TASTEN.verteilen(self, self.ansicht(), ch)
         return None
+
+    def aktion_waehlen(self, taste):
+        W = self.W
+        n = len(self.punkte())
+        if n:                                   # rundherum: ↑ tut immer etwas
+            W["sel"] = (W["sel"] + (-1 if taste == "up" else 1)) % n
+
+    def aktion_nehmen(self, _taste):
+        W = self.W
+        punkte = self.punkte()
+        if punkte:
+            W["msg"] = ""
+            self.waehlen(punkte[min(W["sel"], len(punkte) - 1)][1])
+
+    def aktion_zurueck(self, _taste):
+        self.zurueck()
+
+    def aktion_tippen(self, zeichen):
+        self.W["feld"].taste(ord(zeichen))
+
+    def aktion_feld(self, taste):
+        """⌫ del ←→ home end: das Textfeld bewegt den Cursor selbst."""
+        self.W["feld"].taste(tasten_codes(taste)[0])
+
+    def aktion_name_fertig(self, _taste):
+        W = self.W
+        text = W["feld"].text.strip()
+        if W["schritt"] == "name":
+            self._name_fertig(text)
+        else:
+            self._umbenennen(text)
 
     def zurueck(self):
         W = self.W
@@ -235,19 +291,6 @@ class Werkstatt:
             W["active"] = False
         else:
             self._gehe(ziel)
-
-    def _taste_text(self, ch):
-        W = self.W
-        if ch in ENTER:
-            text = W["feld"].text.strip()
-            if W["schritt"] == "name":
-                self._name_fertig(text)
-            else:
-                self._umbenennen(text)
-            return None
-        if W["feld"].taste(ch) == "abbrechen":
-            self.zurueck()
-        return None
 
     def waehlen(self, aktion):
         W = self.W

@@ -16,6 +16,7 @@ import time
 import urllib.error
 
 from .basis import PROJEKT, api_call
+from .tasten import Tasten
 
 
 # ── Klavier-Werkzeug (Taste 'k') ────────────────────────────────────
@@ -851,108 +852,181 @@ class Klavier:
         """Startseite → Klavier (p_open: Melodien laden, Ton im Hintergrund an)."""
         self.p_open()
 
+    # ── Tasten (Tastentabelle, 2026-10-11) ──────────────────────────────
+    # EINE Tabelle für Verteilung UND Leiste (tasten.py). Die ganze Tastatur
+    # ist Klaviatur; Steuertasten liegen auf den Lücken (k, r, t) bzw. auf
+    # Großbuchstaben, deren Kleinbuchstabe ein Ton ist (D, L). '/' ist keine
+    # Klaviertaste und öffnet seit der Tabelle beim Spielen die Befehlszeile
+    # (auf der deutschen Tastatur Shift+7 — trifft man beim Spielen nicht).
+    # 'ö' (schwarze Taste) und Umlaute beim Tippen kommen als UTF-8-Bytes und
+    # gehen an der Tabelle vorbei (taste → _utf8).
+    _SPIELEN = [
+        ("y x c v b n m , . -", "ton", "white keys"), ("s d g h j l", "ton", "black keys"),
+        ("Y/X/C/V/B/N/M/S/G/H/J", "ton"),
+        ("←→", "oktave", "octave"), ("⌫", "note_weg", "undo note"),
+        ("space", "aufnahme", "record"),
+    ]
+    _SPIELEN_ENDE = [("L", "licht", "lights"), ("t", "theme", "theme"), ("T", "theme"),
+                     ("k/esc", "zu", "close"), ("K", "zu")]
+    TASTEN = Tasten({
+        "spielen": _SPIELEN + [
+            ("↑↓", "melodie", "melody"), ("enter", "abspielen", "play / stop"),
+            ("r", "umbenennen", "rename"), ("R", "umbenennen"),
+            ("D", "melodie_weg", "delete melody"),
+        ] + _SPIELEN_ENDE,
+        # Noch keine Melodie: ↑↓ hat nichts zu wählen; enter/r/D sagen nur,
+        # dass es keine gibt — verarbeitet, nicht angezeigt.
+        "spielen:leer": _SPIELEN + [
+            ("enter", "abspielen"), ("r/R", "umbenennen"), ("D", "melodie_weg"),
+        ] + _SPIELEN_ENDE,
+        "name": [
+            ("type", "tippen", "type name"), ("enter", "speichern", "save"),
+            ("⌫", "zeichen_weg", "delete"), ("esc", "verwerfen", "discard"),
+        ],
+        "umbenennen": [
+            ("type", "tippen", "type name"), ("enter", "name_setzen", "set"),
+            ("⌫", "zeichen_weg", "delete"), ("esc", "verwerfen", "cancel"),
+        ],
+        "frage": [("j", "ja", "delete"), ("J", "ja"),
+                  ("n/esc", "nein", "cancel"), ("N", "nein")],
+    })
+
+    def ansicht(self):
+        PIANO = self.PIANO
+        if PIANO["naming"] is not None:
+            return "name"
+        if PIANO["renaming"] is not None:
+            return "umbenennen"
+        if PIANO["confirm"]:
+            return "frage"
+        return "spielen" if PIANO["mel"] else "spielen:leer"
+
     def taste(self, ch):
         """Eine Taste, während das Klavier den Fokus hat (früher ein Zweig der
-        Hauptschleife in run_ui)."""
-        PIANO, cycle_theme, p_close = self.PIANO, self.z.cycle_theme, self.p_close
-        p_delete, p_play, p_play_key = self.p_delete, self.p_play, self.p_play_key
-        p_rec_toggle, p_rename, p_save = self.p_rec_toggle, self.p_rename, self.p_save
-        p_sel_melody, p_shift_oct = self.p_sel_melody, self.p_shift_oct
-        p_undo_note = self.p_undo_note
-        # Reihenfolge zählt: erst die Freitext-Zustände (Namen tippen),
-        # dann Steuertasten, ZULETZT die Klaviatur — sonst würde 'd'
-        # (= D♯ bzw. löschen) im falschen Zustand landen.
-        if PIANO["naming"] is not None:                 # Name der Aufnahme
-            nm = PIANO["naming"]
-            if ch == 27:
-                PIANO["naming"] = None; PIANO["msg"] = "aufnahme verworfen"
-            elif ch in (10, 13, curses.KEY_ENTER):
-                name = nm["buf"].strip() or nm.get("vorschlag", "")
-                if name:
-                    p_save(name, nm["notes"]); PIANO["naming"] = None
-                else:
-                    PIANO["msg"] = "name fehlt"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                nm["buf"] = nm["buf"][:-1]
-            elif 32 <= ch <= 126 and len(nm["buf"]) < 60:
-                nm["buf"] += chr(ch)
-            elif ch >= 128:                             # UTF-8 best effort (Umlaute)
-                buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
-                try:
-                    nm["buf"] += buf.decode("utf-8"); PIANO["_u8"] = b""
-                except UnicodeDecodeError:
-                    PIANO["_u8"] = buf if len(buf) < 4 else b""
-        elif PIANO["renaming"] is not None:             # Melodie umbenennen
-            if ch == 27:
-                PIANO["renaming"] = None
-            elif ch in (10, 13, curses.KEY_ENTER):
-                name = PIANO["renaming"].strip()
-                if name:
-                    p_rename(name); PIANO["renaming"] = None
-                else:
-                    PIANO["msg"] = "name fehlt"
-            elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                PIANO["renaming"] = PIANO["renaming"][:-1]
-            elif 32 <= ch <= 126 and len(PIANO["renaming"]) < 60:
-                PIANO["renaming"] += chr(ch)
-            elif ch >= 128:
-                buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
-                try:
-                    PIANO["renaming"] += buf.decode("utf-8"); PIANO["_u8"] = b""
-                except UnicodeDecodeError:
-                    PIANO["_u8"] = buf if len(buf) < 4 else b""
-        elif PIANO["confirm"]:                          # Melodie löschen? j/n
-            if ch in (ord("j"), ord("J")):
-                p_delete(); PIANO["confirm"] = False
-            elif ch in (ord("n"), ord("N"), 27):
-                PIANO["confirm"] = False
-        elif ch == 27 or ch in (ord("k"), ord("K")):    # zu (k wie im Browser)
-            p_close()
-        elif ch in (curses.KEY_BACKSPACE, 127, 8):      # letzte note weg
-            p_undo_note()
-        elif ch == ord(" "):                            # aufnehmen an/aus
-            p_rec_toggle()
-        elif ch in (10, 13, curses.KEY_ENTER):          # melodie spielen/abbrechen
-            p_play()
-        elif ch == curses.KEY_LEFT:
-            p_shift_oct(-1)
-        elif ch == curses.KEY_RIGHT:
-            p_shift_oct(1)
-        elif ch == curses.KEY_UP:
-            if PIANO["mel"]:
-                PIANO["sel"] = max(0, PIANO["sel"] - 1)
-        elif ch == curses.KEY_DOWN:
-            if PIANO["mel"]:
-                PIANO["sel"] = min(len(PIANO["mel"]) - 1, PIANO["sel"] + 1)
-        elif ch in (ord("r"), ord("R")):                # ausgewählte umbenennen
-            m = p_sel_melody()
-            PIANO["renaming"] = str(m.get("name", "")) if m else None
-            if m is None:
-                PIANO["msg"] = "keine melodie"
-        elif ch == ord("D"):
-            # Löschen liegt auf SHIFT+D: das nackte 'd' ist hier eine
-            # Klaviertaste (D♯) und darf keine Melodie wegwerfen.
-            if PIANO["mel"]:
-                PIANO["confirm"] = True
-            else:
-                PIANO["msg"] = "keine melodie"
-        elif ch == ord("L"):                # Tastenbeleuchtung zyklieren
-            # Groß-L, weil das nackte 'l' die Taste A♯ ist.
-            i = PIANO_LIGHTS.index(PIANO.get("light", PIANO_LIGHTS[0]))
-            PIANO["light"] = PIANO_LIGHTS[(i + 1) % len(PIANO_LIGHTS)]
-            PIANO["msg"] = "licht: " + PIANO["light"]
-        elif ch in (ord("t"), ord("T")):    # Theme darf auch hier zyklieren
-            cycle_theme()
-        elif 32 <= ch <= 126 and chr(ch).lower() in PIANO_KEYMAP:
-            p_play_key(chr(ch).lower())
-        elif ch >= 128:                                 # 'ö' kommt als UTF-8 (2 bytes)
-            buf = PIANO.get("_u8", b"") + bytes([ch & 0xFF])
-            try:
-                s = buf.decode("utf-8"); PIANO["_u8"] = b""
-                if not p_play_key(s.lower()):
-                    PIANO["msg"] = ""
-            except UnicodeDecodeError:
-                PIANO["_u8"] = buf if len(buf) < 4 else b""
+        Hauptschleife in run_ui). Die Ansicht entscheidet, ob 'd' ein Ton
+        (D♯) ist oder 'j' „ja, löschen" — siehe TASTEN."""
+        if 128 <= ch <= 255:                    # UTF-8-Byte: 'ö', Umlaute im Namen
+            return self._utf8(ch)
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def _utf8(self, ch):
+        """Bytes sammeln, bis ein Zeichen fertig ist; dann tippen (Name) oder
+        spielen ('ö' = D♯ der oberen Oktave)."""
+        PIANO = self.PIANO
+        ansicht = self.ansicht()
+        if ansicht == "frage":
+            return None
+        buf = PIANO.get("_u8", b"") + bytes([ch])
+        try:
+            s = buf.decode("utf-8"); PIANO["_u8"] = b""
+        except UnicodeDecodeError:
+            PIANO["_u8"] = buf if len(buf) < 4 else b""
+            return None
+        if ansicht == "name":
+            PIANO["naming"]["buf"] += s
+        elif ansicht == "umbenennen":
+            PIANO["renaming"] += s
+        elif not self.p_play_key(s.lower()):
+            PIANO["msg"] = ""
+        return None
+
+    # Spielen
+    def aktion_ton(self, taste):
+        self.p_play_key(taste.lower())
+
+    def aktion_oktave(self, taste):
+        self.p_shift_oct(-1 if taste == "left" else 1)
+
+    def aktion_note_weg(self, _taste):
+        self.p_undo_note()
+
+    def aktion_aufnahme(self, _taste):
+        self.p_rec_toggle()
+
+    def aktion_melodie(self, taste):
+        PIANO = self.PIANO
+        if PIANO["mel"]:
+            schritt = -1 if taste == "up" else 1
+            PIANO["sel"] = max(0, min(len(PIANO["mel"]) - 1, PIANO["sel"] + schritt))
+
+    def aktion_abspielen(self, _taste):
+        self.p_play()                           # nochmal enter = abbrechen
+
+    def aktion_umbenennen(self, _taste):
+        PIANO = self.PIANO
+        m = self.p_sel_melody()
+        PIANO["renaming"] = str(m.get("name", "")) if m else None
+        if m is None:
+            PIANO["msg"] = "keine melodie"
+
+    def aktion_melodie_weg(self, _taste):
+        # Löschen liegt auf SHIFT+D: das nackte 'd' ist eine Klaviertaste (D♯)
+        # und darf keine Melodie wegwerfen.
+        PIANO = self.PIANO
+        if PIANO["mel"]:
+            PIANO["confirm"] = True
+        else:
+            PIANO["msg"] = "keine melodie"
+
+    def aktion_licht(self, _taste):
+        # Groß-L, weil das nackte 'l' die Taste A♯ ist.
+        PIANO = self.PIANO
+        i = PIANO_LIGHTS.index(PIANO.get("light", PIANO_LIGHTS[0]))
+        PIANO["light"] = PIANO_LIGHTS[(i + 1) % len(PIANO_LIGHTS)]
+        PIANO["msg"] = "licht: " + PIANO["light"]
+
+    def aktion_theme(self, _taste):
+        self.z.cycle_theme()                    # Theme darf auch hier zyklieren
+
+    def aktion_zu(self, _taste):
+        self.p_close()                          # k wie im Browser
+
+    # Name tippen (nach der Aufnahme) / Melodie umbenennen
+    def aktion_tippen(self, zeichen):
+        PIANO = self.PIANO
+        if PIANO["naming"] is not None:
+            if len(PIANO["naming"]["buf"]) < 60:
+                PIANO["naming"]["buf"] += zeichen
+        elif len(PIANO["renaming"]) < 60:
+            PIANO["renaming"] += zeichen
+
+    def aktion_zeichen_weg(self, _taste):
+        PIANO = self.PIANO
+        if PIANO["naming"] is not None:
+            PIANO["naming"]["buf"] = PIANO["naming"]["buf"][:-1]
+        else:
+            PIANO["renaming"] = PIANO["renaming"][:-1]
+
+    def aktion_speichern(self, _taste):
+        PIANO = self.PIANO
+        nm = PIANO["naming"]
+        name = nm["buf"].strip() or nm.get("vorschlag", "")
+        if name:
+            self.p_save(name, nm["notes"]); PIANO["naming"] = None
+        else:
+            PIANO["msg"] = "name fehlt"
+
+    def aktion_name_setzen(self, _taste):
+        PIANO = self.PIANO
+        name = PIANO["renaming"].strip()
+        if name:
+            self.p_rename(name); PIANO["renaming"] = None
+        else:
+            PIANO["msg"] = "name fehlt"
+
+    def aktion_verwerfen(self, _taste):
+        PIANO = self.PIANO
+        if PIANO["naming"] is not None:
+            PIANO["naming"] = None; PIANO["msg"] = "aufnahme verworfen"
+        else:
+            PIANO["renaming"] = None
+
+    # Melodie löschen? j/n
+    def aktion_ja(self, _taste):
+        self.p_delete(); self.PIANO["confirm"] = False
+
+    def aktion_nein(self, _taste):
+        self.PIANO["confirm"] = False
 
     def draw_piano_tool(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box fürs Klavier: unten die Tasten, darüber das
@@ -1062,12 +1136,12 @@ class Klavier:
                 nm = PIANO["naming"]
                 zeile = "name: " + nm["buf"] + "_"
                 if not nm["buf"]:                  # leer → der Vorschlag gilt
-                    zeile += "  (enter = »%s«)" % nm.get("vorschlag", "")
+                    zeile += "  (vorschlag: »%s«)" % nm.get("vorschlag", "")
                 addclip(mrow, ix, zeile, iw, C["bright"])
             elif PIANO["renaming"] is not None:
                 addclip(mrow, ix, "neuer name: " + PIANO["renaming"] + "_", iw, C["bright"])
             elif PIANO["confirm"]:
-                addclip(mrow, ix, "melodie löschen? j/n", iw, C["warn"])
+                addclip(mrow, ix, "melodie löschen?", iw, C["warn"])
             elif mel:
                 i = max(0, min(PIANO["sel"], len(mel) - 1))
                 m = mel[i]
@@ -1078,17 +1152,7 @@ class Klavier:
             else:
                 addclip(mrow, ix, "noch keine melodie aufgenommen", iw, C["faint"])
 
-        # ── Statuszeile ──
-        if PIANO["naming"] is not None:
-            tip = "enter speichern · esc verwerfen"
-        elif PIANO["renaming"] is not None:
-            tip = "enter übernehmen · esc abbrechen"
-        elif PIANO["confirm"]:
-            tip = "j löschen · n abbrechen"
-        else:
-            # Welche Taste welchen Ton spielt, steht auf der Taste selbst —
-            # hier nur, was man sonst nirgends sieht.
-            tip = ("←→ oktave · ⌫ note weg · space aufnahme · ↑↓ melodie · "
-                   "enter spielen · r name · D melodie weg · L licht · k/esc zu")
-        addclip(bottom, ix, (tip + ("  " + PIANO["msg"] if PIANO["msg"] else "")).strip(),
-                iw, C["faint"])
+        # ── Statuszeile: nur Rückmeldung (die Tasten stehen in der Leiste
+        # ganz unten, aus TASTEN — 2026-10-11) ──
+        if PIANO["msg"]:
+            addclip(bottom, ix, PIANO["msg"], iw, C["faint"])

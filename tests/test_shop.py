@@ -348,7 +348,8 @@ def test_ansicht_zeichnet_leer_und_voll(ansicht):
     v.draw_shop(0, 0, 30, 120)
     alles = "\n".join(v.schirm.zeile(y) for y in range(30))
     assert "Icons 10" in alles and "Post" in alles and "kostenlos" in alles
-    assert "enter = holen" in alles
+    # Tastenhinweise stehen nur in der Leiste ganz unten (Tastentabelle, 2026-10-11)
+    assert "enter = holen" not in alles and "tab wechselt" not in alles
     v.taste(10)
     v.schirm.zellen.clear()
     v.draw_shop(0, 0, 30, 120)

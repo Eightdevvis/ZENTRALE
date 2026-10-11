@@ -662,6 +662,12 @@ tippen, `Tab` zykliert den **Typ** (s.u.),
 Enter legt an (`POST /api/graphs`); in **view** trägt man Werte für *heute* ein,
 gespeichert über `/api/log` — dieselbe Route wie die Data-Collection.
 
+Tasten: Tastentabelle `Graphen.TASTEN` (2026-10-11, `tui/ansichten/tasten.py`),
+Ansichten `liste` · `liste:leer` · `liste:frage` · `neu` · `erinnerung` ·
+`solo:zahl|zeit|skala|periode|periode:bis` — jede zeigt in der Leiste ganz
+unten nur ihre Tasten; im Kasten stehen keine Tastenhinweise mehr (nur msg
+und „N t zurück"). Im Skala-Solo öffnet `/` seitdem die Befehlszeile.
+
 **Übersicht = großer Kombigraph mit Zeit-Achse (`draw_overlay(labeled=True)`):**
 oben über der Liste liegt die beschriftete Überlagerung aller Graphen. Unten
 läuft eine **sparse Datums-Zeile** (ein paar `dd.mm.`-Marken übers Fenster

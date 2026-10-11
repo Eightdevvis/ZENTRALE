@@ -78,9 +78,11 @@ Die **Werkstatt** liest geholte Icons über
 leere blass), darunter „thema: alle" (tab vor, shift+tab zurück; die Themen
 kommen aus der gewählten Kategorie, gefiltert wird beim Hub), links die
 Stücke (↑↓, ✓ = geholt), rechts das Stück: bei Icons das Pixel-Symbol wie im
-Rad, Name, Preis („kostenlos"), Beschreibung, Themen, „enter = holen" bzw.
-„geholt ✓". Enter holt („geholt ✓", nochmal: „hast du schon ✓"), Esc zurück.
-Fußleiste: Kontext `shop` in `befehle.CTX_KEYS`. Nach Hot Reload geht das
+Rad, Name, Preis („kostenlos"), Beschreibung, Themen, ggf. „geholt ✓".
+Enter holt („geholt ✓", nochmal: „hast du schon ✓"), Esc zurück.
+Tasten: Tastentabelle `Shop.TASTEN` (2026-10-11), Ansichten `regal` ·
+`regal:ohne_thema` · `leer` · `leer:thema` · `fehler`; die Leiste ganz unten
+zeigt sie, im Kasten stehen keine Tastenhinweise mehr. Nach Hot Reload geht das
 Schaufenster wieder auf (`_offen_apps`).
 
 ## Später: bezahlen und Sashas Server

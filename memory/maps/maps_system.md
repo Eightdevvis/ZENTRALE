@@ -311,6 +311,11 @@ Antwort. Bei totem Backend: Fehler-Marker statt Dauer-Refetch (kein UI-Freeze).
 Steuerung: `↑↓←→`/`hjkl` pan, `+`/`−` zoom, `0` reset, `esc`/`m` zu. Modal wie
 das Graph-Werkzeug (`q` beendet erst nach `esc`).
 
+Tasten: Tastentabelle `Karte.TASTEN` (2026-10-11), Ansichten `karte` ·
+`karte:zeit` (Overlay mit Zeitachse: `,`/`.`) · `karte:zeit:damals` (dazu `;`
+jetzt). Alt+Pfeil dekodiert `tui/ansichten/tasten.py`; `m_alt_arrow` lebt nur
+noch für die Startseite (Rad-Wechsel).
+
 > Verifiziert end-to-end via tmux (Welt + Reinzoomen rendern korrekt, sauberer
 > Quit, keine Fehler) — nicht nur Unit-getestet.
 

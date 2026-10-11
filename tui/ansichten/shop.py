@@ -17,14 +17,13 @@ import urllib.error
 import urllib.parse
 
 from .basis import api_call
+from .tasten import Tasten
 
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-ENTER = (10, 13, curses.KEY_ENTER)
-TAB = 9
 
 
 def motiv(stueck):
@@ -146,31 +145,63 @@ class Shop:
         S["geholt"] = s.get("@id")
         S["msg"] = "geholt ✓" if r.get("neu", True) else "hast du schon ✓"
 
-    # ── Tasten ────────────────────────────────────────────────────────
-    def taste(self, ch):
+    # ── Tasten (Tastentabelle, 2026-10-11) ────────────────────────────
+    # EINE Tabelle für Verteilung UND Leiste (tasten.py). Je Ansicht nur, was
+    # dort geht: ↑↓/enter nur bei Stücken, tab nur, wenn es Themen gibt,
+    # ←→ nur, wenn Kategorien da sind (sonst ist das Backend weg).
+    _KAT = [("←→", "kategorie", "category")]
+    _THEMA = [("tab", "thema", "theme"), ("shift+tab", "thema")]
+    _STUECKE = [("↑↓", "waehlen", "select"), ("enter", "holen", "get")]
+    _ZU = [("esc", "zu", "back")]
+    TASTEN = Tasten({
+        "regal": _KAT + _STUECKE[:1] + _THEMA + _STUECKE[1:] + _ZU,
+        "regal:ohne_thema": _KAT + _STUECKE + _ZU,
+        "leer": _KAT + _ZU,
+        "leer:thema": _KAT + _THEMA + _ZU,          # nichts zu diesem Thema
+        "fehler": _ZU,
+    })
+
+    def ansicht(self):
         S = self.SHOP
-        if ch == 27:
-            S["active"] = False
-            return None
-        if ch in (curses.KEY_LEFT, curses.KEY_RIGHT) and S["kategorien"]:
-            schritt = -1 if ch == curses.KEY_LEFT else 1
-            S["kat"] = (S["kat"] + schritt) % len(S["kategorien"])
+        if not S["kategorien"]:
+            return "fehler"
+        if S["stuecke"]:
+            return "regal" if S["themen"] else "regal:ohne_thema"
+        return "leer:thema" if S["themen"] else "leer"
+
+    def taste(self, ch):
+        self.TASTEN.verteilen(self, self.ansicht(), ch)
+        return None
+
+    def aktion_zu(self, _taste):
+        self.SHOP["active"] = False
+
+    def aktion_kategorie(self, taste):
+        S = self.SHOP
+        if S["kategorien"]:
+            S["kat"] = (S["kat"] + (-1 if taste == "left" else 1)) % len(S["kategorien"])
             S.update(thema=None, sel=0, msg="", geholt=None)
             self._laden()
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN) and S["stuecke"]:
-            schritt = -1 if ch == curses.KEY_UP else 1
+
+    def aktion_waehlen(self, taste):
+        S = self.SHOP
+        if S["stuecke"]:
+            schritt = -1 if taste == "up" else 1
             S["sel"] = max(0, min(len(S["stuecke"]) - 1, S["sel"] + schritt))
             S.update(msg="", geholt=None)
-        elif ch in (TAB, curses.KEY_BTAB) and S["themen"]:
-            # Reihe: alle → erstes Thema → … → letztes → alle
+
+    def aktion_thema(self, taste):
+        """Reihe: alle → erstes Thema → … → letztes → alle (shift+tab rückwärts)."""
+        S = self.SHOP
+        if S["themen"]:
             reihe = [None] + S["themen"]
             i = reihe.index(S["thema"]) if S["thema"] in reihe else 0
-            S["thema"] = reihe[(i + (-1 if ch == curses.KEY_BTAB else 1)) % len(reihe)]
+            S["thema"] = reihe[(i + (-1 if taste == "shift+tab" else 1)) % len(reihe)]
             S.update(sel=0, msg="", geholt=None)
             self._laden()
-        elif ch in ENTER:
-            self.holen()
-        return None
+
+    def aktion_holen(self, _taste):
+        self.holen()
 
     # ── Zeichnen ──────────────────────────────────────────────────────
     def titel(self):
@@ -184,12 +215,10 @@ class Shop:
         x0, innen = mx + 2, w - 4
         self._draw_leiste(top + 1, x0, innen)
         thema = S["thema"] or "alle"
-        mehr = "  (tab wechselt)" if S["themen"] else ""
         z.addclip(top + 2, x0, "thema: ", innen, C["faint"])
         z.addclip(top + 2, x0 + 7, thema, innen - 7, C["acc"] if S["thema"] else C["dim"])
-        z.addclip(top + 2, x0 + 7 + len(thema), mehr, innen - 7 - len(thema), C["faint"])
         z.addclip(top + 3, x0, "─" * innen, innen, C["faint"])
-        oben, unten = top + 4, top + h - 2           # unten = Hinweiszeile
+        oben, unten = top + 4, top + h - 2           # unten = Rückmeldung
         if not S["stuecke"]:
             leer = "noch leer" if not S["thema"] else "nichts zu diesem thema"
             if S["msg"]:
@@ -201,8 +230,8 @@ class Shop:
             self._draw_liste(oben, x0, unten - oben, lw)
             dx = x0 + lw + 2
             self._draw_detail(oben, dx, unten - oben, x0 + innen - dx)
-        # Die Tasten stehen in der Fußleiste (befehle.CTX_KEYS["shop"]); hier
-        # nur, was eben passiert ist.
+        # Die Tasten stehen in der Fußleiste (aus TASTEN); hier nur, was eben
+        # passiert ist.
         if S["msg"] and S["stuecke"]:
             z.addclip(unten, x0, S["msg"], innen, C["acc"] if S["msg"].endswith("✓") else C["warn"])
 
@@ -269,8 +298,6 @@ class Shop:
         y = min(y + 1, y0 + hoehe - 1)
         if s.get("@id") in S["besitz"]:
             z.addclip(y, x, "geholt ✓", breite, C["acc"] | curses.A_BOLD)
-        else:
-            z.addclip(y, x, "enter = holen", breite, C["dim"])
 
     def _draw_motiv(self, name, y, x):
         """Das Pixel-Motiv wie im Rad (offen, ruhend). Ohne 256 Farben oder mit

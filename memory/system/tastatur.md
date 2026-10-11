@@ -76,6 +76,12 @@ Drei Unterschiede, die aus dem Terminal kommen:
 | `L` (groß)   | Tastenbeleuchtung: neon → regenbogen → aus — `l` ist die Taste A♯ |
 | `t`          | Theme wechseln (gilt im Klavier wie überall sonst)               |
 
+Tasten: Tastentabelle `Klavier.TASTEN` (2026-10-11), Ansichten `spielen` ·
+`spielen:leer` (keine Melodie: kein ↑↓) · `name` · `umbenennen` · `frage`. Die
+Leiste ganz unten zeigt sie; im Kasten steht nur noch die Rückmeldung. `ö` und
+Umlaute kommen als UTF-8-Bytes an der Tabelle vorbei. `/` ist keine
+Klaviertaste und öffnet beim Spielen seitdem die Befehlszeile.
+
 - **Die Tasten sind beschriftet:** die gezeichnete Klaviatur trägt jeden
   Buchstaben auf seiner Taste (weiße vorne, schwarze oben), deshalb steht in
   der Statuszeile nur noch, was man sonst nirgends sieht (Oktave, Aufnahme,
