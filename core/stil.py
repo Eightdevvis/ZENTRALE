@@ -210,6 +210,38 @@ def anwenden(alt, aenderung):
     return raus
 
 
+# ── Abhängigkeit Rahmenstil ↔ Rahmenfarbe (11.10.2026) ─────────────────────
+# Sasha: „dass dort kein Rahmen steht, aber ein Rahmen da sein kann, ist mega
+# buggy vom Gefühl." Der Kalender zeichnet eine border-color ohne
+# border-style als durchgezogenen Rahmen — also muss der Stil das auch sagen.
+# Eine Regel für alle Oberflächen; die Stylebox wendet sie nach jeder
+# Änderung an.
+RAHMEN_VORGABE = "solid"
+
+
+def stimmig(stil, vorher=None):
+    """Stil so ergänzen, dass er sagt, was gezeichnet wird → neues dict.
+
+    - Rahmenstil von gesetzt (in `vorher`) auf nicht gesetzt → die
+      Rahmenfarbe fällt mit weg (kein Rahmen heißt: keine Rahmenfarbe).
+    - Rahmenfarbe ohne Rahmenstil → Rahmenstil „durchgezogen" (beim Öffnen
+      eines alten Stils wie beim Wählen einer Farbe).
+    - Rahmenfarbe weg, Rahmenstil gesetzt → bleibt (Rahmen in Standardfarbe).
+    Ein altes „none" als Rahmenstil zählt als nicht gesetzt."""
+    raus = dict(stil or {})
+    if alt_nichts("border-style", raus.get("border-style")):
+        raus.pop("border-style")
+
+    def gesetzt(d):
+        w = (d or {}).get("border-style")
+        return w is not None and not alt_nichts("border-style", w)
+    if vorher is not None and gesetzt(vorher) and "border-style" not in raus:
+        raus.pop("border-color", None)
+    elif raus.get("border-color") is not None and "border-style" not in raus:
+        raus["border-style"] = RAHMEN_VORGABE
+    return raus
+
+
 # ── Angebot für einen Kasten (Termin im Kalender, 2026-10-10) ──────────────
 # Sasha: „In der Stylebox kann man den Kasten genau stylen: Rahmenstil +
 # Rahmenfarbe, Innenfarbe, Schriftfarbe, Innenmuster; ‚Icon hochladen' wird

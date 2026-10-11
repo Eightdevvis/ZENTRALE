@@ -522,7 +522,8 @@ def test_entfernt_wieder_setzen_und_r_zurueck_auf_anfang():
     sb.taste(curses.KEY_RIGHT)                               # wieder gesetzt: keine → solid
     sb.taste(curses.KEY_RIGHT)
     assert sb.werte["border-style"] == "dashed"
-    assert sb.taste(ENTER) == ("fertig", {})                 # wie am Anfang
+    # Rahmen auf ‹ keine › nahm die Rahmenfarbe mit (stil.stimmig, 11.10.2026)
+    assert sb.taste(ENTER) == ("fertig", {"border-color": None})
     sb = Stylebox(START, ALLES)
     sb.taste(curses.KEY_DOWN)
     sb.taste(curses.KEY_DC)
@@ -856,3 +857,192 @@ def test_ohne_truecolor_bleibt_der_256er_weg():
     f = fw.Farbwaehler("#ff8040")
     f.zeichne(z, 0, 0, 22, 70)
     assert f.weg == "256" and [k for k in z.PIX["pairs"] if k[0] != "x"]
+
+
+# ── Fokus Kreis ↔ Regler mit Tab (11.10.2026: MacBook ohne Bild-Tasten) ─────
+def test_tab_und_shift_tab_wechseln_den_fokus():
+    f = fw.Farbwaehler("#ff0000")
+    assert f.fokus == fw.KREIS
+    f.taste(9)
+    assert f.fokus == fw.REGLER
+    f.taste(9)
+    assert f.fokus == fw.KREIS
+    f.taste(curses.KEY_BTAB)
+    assert f.fokus == fw.REGLER
+    f.taste(curses.KEY_BTAB)
+    assert f.fokus == fw.KREIS
+    assert f.tasten()[0] == ("tab", "regler")
+
+
+def test_regler_im_fokus_hoch_runter_aendert_helligkeit_nicht_den_cursor():
+    f = fw.Farbwaehler("#ff0000")
+    f.taste(9)
+    n = f.geo[1] - 1                                    # sichtbare Stufen des Reglers
+    punkt = (f.u, f.v)
+    zeilen = []
+    for _ in range(3):
+        f.taste(curses.KEY_DOWN)
+        zeilen.append(round((1 - f.wert) * n))
+    assert zeilen == [1, 2, 3]                          # je Druck genau eine Stufe
+    assert f.wert == pytest.approx(1 - 3 / n)
+    f.taste(curses.KEY_UP)
+    assert f.wert == pytest.approx(1 - 2 / n)
+    assert (f.u, f.v) == punkt                          # Cursor steht
+    f.taste(curses.KEY_LEFT)
+    f.taste(curses.KEY_RIGHT)                           # ←→ am Regler: nichts
+    assert (f.u, f.v) == punkt and f.wert == pytest.approx(1 - 2 / n)
+    for _ in range(n + 5):
+        f.taste(curses.KEY_UP)
+    assert f.wert == 1.0 and f.hex == "#ff0000"
+    for _ in range(n + 5):
+        f.taste(curses.KEY_DOWN)
+    assert f.hex == "#000000"
+    assert f.tasten()[:2] == [("tab", "kreis"), ("↑↓", "hell")]
+
+
+def test_kreis_im_fokus_hoch_runter_bewegt_cursor_nicht_helligkeit():
+    f = fw.Farbwaehler("#e0e0ff")
+    wert = f.wert
+    r0, _c = f._marke(f.geo[1], f.geo[0])
+    f.taste(curses.KEY_UP)
+    assert f._marke(f.geo[1], f.geo[0])[0] == r0 - 1 and f.wert == wert
+    f.taste(curses.KEY_DOWN)
+    assert f._marke(f.geo[1], f.geo[0])[0] == r0 and f.wert == wert
+
+
+@pytest.mark.parametrize("fokus_tabs", [0, 1])
+def test_klammern_und_bild_tasten_gelten_in_beiden_fokussen(fokus_tabs):
+    f = fw.Farbwaehler("#ff0000")
+    for _ in range(fokus_tabs):
+        f.taste(9)
+    f.taste(ord("["))
+    assert f.wert == pytest.approx(0.95)
+    f.taste(curses.KEY_NPAGE)
+    assert f.wert == pytest.approx(0.90)
+    f.taste(ord("]"))
+    f.taste(curses.KEY_PPAGE)
+    assert f.wert == 1.0
+
+
+@pytest.mark.parametrize("echt", [False, True])
+def test_fokus_ist_im_bild_markiert(echt):
+    f = fw.Farbwaehler("#ff8040")
+    z = _EchtZ() if echt else _Z()
+    f.zeichne(z, 0, 0, 22, 70)
+    assert "▸ kreis" in z.text() and "tab regler" in z.text()
+    f.taste(9)
+    z = _EchtZ() if echt else _Z()
+    f.zeichne(z, 0, 0, 22, 70)
+    assert "▸ helligkeit" in z.text() and "tab kreis" in z.text()
+    if echt:
+        kreis = z.flaechen[0][2]
+        assert any(c[0] == "▶" for zeile in kreis for c in zeile)
+    else:
+        assert "▶" in z.text()
+
+
+def test_stylebox_reicht_tab_an_den_offenen_farbwaehler():
+    sb = Stylebox(START, ALLES)
+    sb.taste(curses.KEY_DOWN)                           # Rahmenfarbe
+    sb.taste(ord(" "))
+    sb.taste(9)
+    assert sb.feld == 1 and sb.waehler.fokus == fw.REGLER
+    sb.taste(curses.KEY_DOWN)
+    assert sb.waehler.wert < 1.0 and sb.feld == 1
+
+
+# ── Rahmenstil ↔ Rahmenfarbe: stil.stimmig (11.10.2026) ─────────────────────
+def test_stimmig_kern():
+    assert stil.stimmig({"border-color": "#ff0000"}) == {
+        "border-color": "#ff0000", "border-style": "solid"}
+    assert stil.stimmig({"border-color": "#ff0000"}, {"border-style": "dashed",
+                                                      "border-color": "#ff0000"}) == {}
+    assert stil.stimmig({"border-style": "dotted"}, {"border-style": "dotted",
+                                                     "border-color": "#00ff00"}) == {
+        "border-style": "dotted"}
+    assert stil.stimmig({"border-style": "none", "border-color": "#ff0000"})[
+        "border-style"] == "solid"
+
+
+def _rahmenfarbe_waehlen(sb, hexwert):
+    sb.feld = ALLES.index("border-color")
+    sb.taste(ord("#"))
+    tippen(sb, hexwert.lstrip("#"))
+    sb.taste(ENTER)
+    assert sb.waehler is None
+
+
+def test_farbe_bei_rahmen_keine_setzt_durchgezogen():
+    sb = Stylebox({"color": "#ffffff"}, ALLES)
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"
+    _rahmenfarbe_waehlen(sb, "#123456")
+    assert sb.zeilen()[0]["text"] == "‹ durchgezogen ›"
+    assert sb.vorschau(9, 5)[0][0][0] == "┌"
+    assert sb.taste(ENTER) == ("fertig", {"border-color": "#123456", "border-style": "solid"})
+
+
+def test_gesetzter_rahmenstil_bleibt_und_abbruch_wirkt_nicht():
+    sb = Stylebox(START, ALLES)
+    _rahmenfarbe_waehlen(sb, "#123456")
+    assert sb.werte["border-style"] == "dashed"
+    sb = Stylebox({"color": "#ffffff"}, ALLES)
+    sb.feld = ALLES.index("border-color")
+    sb.taste(ord(" "))
+    sb.taste(curses.KEY_RIGHT)
+    sb.taste(ESC)                                       # Farbwähler abgebrochen
+    assert sb.waehler is None and "border-style" not in sb.werte
+    assert sb.taste(ENTER) == ("fertig", {})
+
+
+@pytest.mark.parametrize("weg", ["durchschalten", "entf"])
+def test_rahmen_keine_nimmt_die_farbe_mit(weg):
+    sb = Stylebox(START, ALLES)
+    if weg == "entf":
+        sb.taste(curses.KEY_DC)
+    else:
+        sb.taste(curses.KEY_RIGHT)                      # gestrichelt → gepunktet → doppelt → keine
+        sb.taste(curses.KEY_RIGHT)
+        sb.taste(curses.KEY_RIGHT)
+    assert sb.zeilen()[0]["text"] == "‹ keine ›" == sb.zeilen()[1]["text"]
+    assert sb.taste(ENTER) == ("fertig", {"border-style": None, "border-color": None})
+
+
+def test_alter_stil_farbe_ohne_rahmen_zeigt_durchgezogen():
+    sb = Stylebox({"border-color": "#ff8800"}, ALLES)
+    assert sb.zeilen()[0]["text"] == "‹ durchgezogen ›"
+    assert sb.taste(ENTER) == ("fertig", {"border-style": "solid"})
+
+
+def test_rahmenfarbe_keine_laesst_den_rahmen_stehen():
+    sb = Stylebox(START, ALLES)
+    sb.feld = ALLES.index("border-color")
+    sb.taste(curses.KEY_DC)
+    assert sb.werte.get("border-style") == "dashed"
+    assert sb.taste(ENTER) == ("fertig", {"border-color": None})
+
+
+def test_nur_farbe_angeboten_kein_rahmenstil():
+    sb = Stylebox({"border-color": "#ff8800"}, ["border-color"])
+    assert sb.taste(ENTER) == ("fertig", {})
+
+
+# ── Höhe aus dem Inhalt (11.10.2026: „unten voll viel Platz frei") ──────────
+@pytest.mark.parametrize("W", [120, 80, 40])
+def test_stylebox_hoehe_ist_der_inhalt(W):
+    voll = Stylebox(START, ALLES)                       # volle Kalenderliste
+    h, w = voll.groesse(40, W)
+    assert w <= W
+    z = _Z()
+    voll.zeichne(z, 0, 0, h, w)
+    unten = max(y for (y, _x), (ch, _a) in z.schirm.items() if ch == "└")
+    assert unten == h - 4                               # Vorschau-Rand, Leerzeile, Fuß, Rahmen
+    if W >= 80:
+        assert h == 4 + max(len(ALLES), voll.vorschau_h)   # nebeneinander: 11 statt fest 22
+    nur = Stylebox({"color": "#ffffff"}, ["color"])     # nur Schrift: kleine Vorschau
+    h, w = nur.groesse(40, W)
+    z = _Z()
+    nur.zeichne(z, 0, 0, h, w)
+    text = z.text().splitlines()
+    assert any("Schrift" in t for t in text) and any("Beispiel" in t for t in text)
+    assert h == (7 if W >= 80 else 4 + 1 + 1 + nur.vorschau_h)
+    assert voll.groesse(8, W)[0] == 8                   # kleiner Schirm: Obergrenze

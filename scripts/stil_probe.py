@@ -47,7 +47,8 @@ def lauf(stdscr, thema):
         z.safe_addstr(0, 1, meldung[:W - 2], z.C.get("dim", 0))
         z.safe_addstr(1, 1, ("stil: %s" % stil)[:W - 2], z.C.get("faint", 0))
         if modal is not None:
-            y, x, h, w = modal.mittig(H - 2, W, 22, 70)
+            mh, mw = modal.groesse(H - 2, W) if hasattr(modal, "groesse") else (22, 70)
+            y, x, h, w = modal.mittig(H - 2, W, mh, mw)
             modal.zeichne(z, y + 2, x, h, w)
         stdscr.refresh()
         z.nachmalen()                                   # 24-Bit-Flächen nach refresh

@@ -116,7 +116,8 @@ def test_farbe_ueber_den_farbwaehler():
         f.taste(10)
     f.taste(10)                                                # Box: nehmen
     f.taste(19)                                                # Fenster: übernehmen
-    assert _stil(f) == {"border-color": "#ff8800"}
+    # Rahmen war ‹ keine ›: mit der Farbe wird er durchgezogen (stil.stimmig)
+    assert _stil(f) == {"border-color": "#ff8800", "border-style": "solid"}
 
 
 def test_speichern_neu_schickt_stil_mit():

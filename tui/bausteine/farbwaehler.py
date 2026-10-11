@@ -11,10 +11,15 @@
 # Helligkeit weiß würde und der Kreis bei 100 % nichts zeigte; HSV ist auch
 # das, was die meisten Mal-Programme im Kreis zeigen.
 #
-# Tasten (nur gängige, terminal-sichere): Pfeile schieben den Cursor um
-# genau ein Feld, + (auch =) zoomt hinein, - zoomt hinaus; Bild↑/Bild↓ (auch ] und [) ändern die Helligkeit; # öffnet ein
-# Hex-Feld (#rrggbb, CSS), Ziffern/a–f tippen, ⌫ löscht; Enter nimmt,
-# Esc bricht ab (im Hex-Feld: schließt nur das Feld).
+# Tasten (nur gängige, terminal-sichere): Tab (und Shift+Tab) wechselt den
+# Fokus zwischen Kreis und Helligkeits-Regler (2026-10-11, Sasha: das
+# MacBook hat keine Bild-Tasten). Kreis im Fokus: Pfeile schieben den Cursor
+# um genau ein Feld. Regler im Fokus: ↑/↓ gehen eine sichtbare Stufe des
+# Reglers heller/dunkler, ←/→ tun nichts. Immer, egal wo der Fokus ist:
+# ] und [ (auch Bild↑/Bild↓) ändern die Helligkeit fein, + (auch =) zoomt
+# hinein, - zoomt hinaus; # öffnet ein Hex-Feld (#rrggbb, CSS), Ziffern/a–f
+# tippen, ⌫ löscht; Enter nimmt, Esc bricht ab (im Hex-Feld: schließt nur
+# das Feld).
 #
 # Baustein-Regeln (tui_bauplan.md „Bausteine"): kennt keinen Aufrufer,
 # speichert nichts. `taste(ch)` → None | ("fertig", "#rrggbb") |
@@ -59,6 +64,8 @@ MARKE = "○"                             # einspaltig (East-Asian-Width A)
 ENTER = (10, 13, curses.KEY_ENTER)
 ZURUECK = (curses.KEY_BACKSPACE, 127, 8)
 ESC = 27
+TAB = (9, curses.KEY_BTAB)              # Tab / Shift+Tab: Fokus Kreis ↔ Regler
+KREIS, REGLER = "kreis", "regler"       # wohin die Pfeile gehen
 HOCH = (curses.KEY_PPAGE, ord("]"))
 RUNTER = (curses.KEY_NPAGE, ord("["))
 REIN = (ord("+"), ord("="))
@@ -272,6 +279,7 @@ class Farbwaehler:
         self.zoom_stufe = 0
         self.blick = (0.0, 0.0)          # Kreispunkt in der Mitte des Ausschnitts
         self.hex_feld = None            # None = zu, sonst die getippten Ziffern
+        self.fokus = KREIS              # KREIS | REGLER (Tab wechselt)
         self.fehler = ""
         self.hinweis = ""               # z. B. „feiner geht hier nicht"
         self._fest = None               # genau gesetztes Hex (Start/getippt) bis zur nächsten Bewegung
@@ -374,6 +382,14 @@ class Farbwaehler:
                 r, c = r - dy, c - dx
         self._punkt(*zelle_punkt(b, h, self.mitte(), self.zoom, seiten, r, c))
 
+    def _regler(self, d):
+        """Regler im Fokus: genau eine sichtbare Stufe (eine Zeile des
+        Reglers, so viele wie der Kreis hoch ist) heller (+1) / dunkler (-1);
+        der Wert landet auf der Stufe, also wandert die Marke ◀ jedes Mal."""
+        n = max(2, self.geo[1]) - 1
+        zeile = max(0, min(n, round((1 - self.wert) * n) - d))
+        self.wert, self._fest = 1 - zeile / n, None
+
     def _zoomen(self, d):
         neu = max(0, min(len(ZOOM) - 1, self.zoom_stufe + d))
         if neu == self.zoom_stufe:
@@ -406,7 +422,13 @@ class Farbwaehler:
             return ("abbruch",)
         if ch in ENTER:
             return ("fertig", self.hex)
-        if ch == curses.KEY_LEFT:
+        if ch in TAB:
+            self.fokus = REGLER if self.fokus == KREIS else KREIS
+        elif self.fokus == REGLER and ch in (curses.KEY_UP, curses.KEY_DOWN):
+            self._regler(1 if ch == curses.KEY_UP else -1)
+        elif self.fokus == REGLER and ch in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            pass                        # ←→ am Regler: nichts (kein heimlicher Kreis-Schritt)
+        elif ch == curses.KEY_LEFT:
             self._pfeil(0, -1)
         elif ch == curses.KEY_RIGHT:
             self._pfeil(0, 1)
@@ -452,8 +474,12 @@ class Farbwaehler:
         return "weiter"
 
     def tasten(self):
-        return [("pfeile", "farbe"), ("+ −", "zoom"), ("bild↑↓", "helligkeit"),
-                ("#", "hex"), ("enter", "nehmen"), ("esc", "zurück")]
+        """Fußzeile; die erste Taste sagt, wohin Tab den Fokus legt."""
+        if self.fokus == REGLER:
+            vorne = [("tab", "kreis"), ("↑↓", "hell")]
+        else:
+            vorne = [("tab", "regler"), ("pfeile", "farbe")]
+        return vorne + [("+−", "zoom"), ("#", "hex"), ("enter", "ok"), ("esc", "zurück")]
 
     # ── Bild (rein) ─────────────────────────────────────────────────────
     @staticmethod
@@ -541,8 +567,10 @@ class Farbwaehler:
         zeile_wert = round((1 - self.wert) * (len(stufen) - 1))
         for i, stufe in enumerate(stufen):
             zellen[i] += [(" ", bg, bg)] * 2 + [(" ", stufe, stufe)] * 2
+        if self.fokus == REGLER:        # Fokus: Marke ▶ auch links vom Regler
+            zellen[zeile_wert][kb + 1] = ("▶", kontrast(bg), bg)
         z.echt_malen(iy, ix, zellen)
-        z.safe_addstr(iy + zeile_wert, ix + kb + 4, "◀", z.C.get("bright", 0))
+        self._regler_marke(z, iy + zeile_wert, ix + kb + 4)
 
     def _zeichne_farbig(self, z, iy, ix, kh, kb):
         C, PIX = z.C, z.PIX
@@ -567,8 +595,18 @@ class Farbwaehler:
         for i, farbe in enumerate(stufen):
             z.safe_addstr(iy + i, ix + kb + 2, "  ", z.pix_attr(farbe, farbe))
         zeile = round((1 - self.wert) * (len(stufen) - 1))
-        z.safe_addstr(iy + zeile, ix + kb + 4, "◀", C.get("bright", 0))
+        if self.fokus == REGLER:
+            z.safe_addstr(iy + zeile, ix + kb + 1, "▶", C.get("bright", 0))
+        self._regler_marke(z, iy + zeile, ix + kb + 4)
         return True
+
+    def _regler_marke(self, z, y, x):
+        """◀ an der Helligkeit; im Fokus hell und invers (der Wert in %
+        steht daneben in der Seite, Zeile 6)."""
+        if self.fokus == REGLER:
+            z.safe_addstr(y, x, "◀", z.C.get("bright", 0) | curses.A_REVERSE)
+        else:
+            z.safe_addstr(y, x, "◀", z.C.get("dim", 0))
 
     def _zeichne_seite(self, z, y, x, w, farbig, echt=False):
         C = z.C
@@ -585,6 +623,8 @@ class Farbwaehler:
         z.safe_addstr(y + 6, x, ("%3d° %3d%% %3d%%" % (round(f), round(s * 100),
                                                     round(self.wert * 100)))[:w], C.get("dim", 0))
         z.safe_addstr(y + 7, x, ("zoom %d×" % self.zoom)[:w], C.get("dim", 0))
+        z.safe_addstr(y + 8, x, ("▸ " + ("helligkeit" if self.fokus == REGLER
+                                         else "kreis"))[:w], C.get("acc", 0))
         if self.hex_feld is not None:
             z.safe_addstr(y + 9, x, ("#" + self.hex_feld + "_")[:w], C.get("acc", 0))
         if self.fehler:

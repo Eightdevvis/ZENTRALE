@@ -42,7 +42,8 @@ if erg and erg[0] == "fertig":
 if erg:
     self.modal = None
 # in draw_*:
-y, x, h, w = self.modal.mittig(H, W, 22, 70)        # oder eigene Stelle
+h, w = self.modal.groesse(H, W)                     # Stylebox: aus dem Inhalt (Farbwähler: 22, 70)
+y, x, h, w = self.modal.mittig(H, W, h, w)          # oder eigene Stelle
 self.modal.zeichne(self.z, y, x, h, w)
 ```
 
@@ -54,7 +55,13 @@ self.modal.zeichne(self.z, y, x, h, w)
   Abbruch None). Die Änderung anwenden mit **`stil.anwenden(alt, änderung)`**,
   nicht mit `dict.update` (das schriebe None hinein). `zeilen()` und `vorschau(b, h)` sind rein (Tests, andere
   Zeichner). Ist der Farbwähler offen, zeichnet `zeichne` ihn an derselben
-  Stelle, und `tasten()` liefert seine Tasten.
+  Stelle, und `tasten()` liefert seine Tasten. **`groesse(H, W)`** → (h, w)
+  aus dem Inhalt (seit 11.10.2026): Liste und Vorschau nebeneinander
+  (Vorschau 7 Zeilen, nur Schrift angeboten: 3), sonst untereinander, dazu
+  Leerzeile, Fußzeile, Rahmen; breit genug für die Fußzeile; höchstens H×W.
+  Mit offenem Farbwähler 22×72. Vorher setzten die Aufrufer fest 22 Zeilen
+  (Kalender `kalender_bedienung._zeichne_advanced`, `stil_probe.py`) — bei 6
+  Eigenschaften blieben 11 Zeilen leer.
 - `z` ist der Kontext der TUI (`tui/ansichten/kontext.py`): gebraucht werden
   `C`, `PIX`, `pix_attr`, `pix_farbe`, `safe_addstr`, `draw_box`, `has_color`.
 - Das Modal deckt sein Rechteck ab (wischt es leer) und zeichnet Rahmen und
@@ -115,12 +122,24 @@ self.modal.zeichne(self.z, y, x, h, w)
   (1:2); Sashas VTE mit „Monospace 10" hat ~8×17 (1:2,125) → der Kreis war
   6 % höher als breit. Die Kreisbreite folgt der Zellform (`masse`).
 - **Ohne Farben** (8-Farben-Terminal): kein Kreis, Hex tippen geht.
+- **Fokus** (seit 11.10.2026, Sasha: das MacBook hat keine Bild-Tasten):
+  Tab/Shift+Tab (`KEY_BTAB`) wechselt zwischen Kreis und Regler, wie in
+  jedem Dialog. Shift+↑↓ ginge nicht (xfce4-terminal schluckt es), Strg/Alt/
+  F-Tasten nicht als einzige Belegung. Markiert: Regler im Fokus hat links
+  ein `▶` und rechts ein inverses `◀` an der Helligkeit (im 24-Bit-Weg steht
+  das `▶` in der Fläche selbst), in der Seite steht `▸ kreis` bzw.
+  `▸ helligkeit`, und die Fußzeile beginnt mit dem Ziel von Tab
+  (`tab regler` / `tab kreis`). Die Stylebox reicht Tab an den offenen
+  Farbwähler durch (sie fragt ihn zuerst), genauso Kalender → advanced →
+  Stylebox.
 
 | Taste | was |
 |---|---|
-| ← → ↑ ↓ | Cursor genau ein Feld weiter (bleibt im Kreis); am Rand rückt der Ausschnitt nach |
+| Tab / Shift+Tab | Fokus wechseln: Kreis ↔ Helligkeits-Regler (Start: Kreis) |
+| ← → ↑ ↓ (Fokus Kreis) | Cursor genau ein Feld weiter (bleibt im Kreis); am Rand rückt der Ausschnitt nach |
+| ↑ ↓ (Fokus Regler) | eine sichtbare Stufe des Reglers heller / dunkler (der Wert springt auf die Stufe, die Marke ◀ wandert jedes Mal); ← → tun dort nichts |
+| `]` / `[` (auch Bild↑ / Bild↓), egal wo der Fokus ist | heller / dunkler, fein (5 % bei 1×, geteilt durch den Zoom) |
 | `+` (auch `=`) / `-` (auch `_`) | Zoom hinein (Ausschnitt um den Cursor) / hinaus; bei 256 Farben endet es mit „feiner geht hier nicht" |
-| Bild↑ / Bild↓ (auch `]` / `[`) | heller / dunkler |
 | `#` | Hex-Feld: `0–9 a–f` tippen, bei 6 Ziffern sofort gesetzt; ⌫ löscht; Enter nimmt (3 Ziffern = Kurzform); Esc schließt nur das Feld; ein Pfeil schließt es und bewegt |
 | Enter | nehmen → `("fertig", "#rrggbb")` |
 | Esc | abbrechen → `("abbruch",)` |
@@ -155,6 +174,21 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
   1px, transparent 1px)` mit `background-size: 8px 8px`; `streifen` →
   `repeating-linear-gradient(0deg, …)`; `schraeg` → dasselbe mit 45deg;
   `karo` → zwei gekreuzte; `raster`/`dicht` → Punkte enger bzw. halbdeckend.
+- **Rahmenstil ↔ Rahmenfarbe** (11.10.2026, Sasha: „dass dort kein Rahmen
+  steht, aber ein Rahmen da sein kann, ist mega buggy vom Gefühl"): die Box
+  zeigt immer, was gezeichnet wird. Regel im Kern, für jede Oberfläche:
+  **`stil.stimmig(stil, vorher=None)`** → neues dict; die Stylebox wendet
+  sie beim Öffnen und nach jeder Änderung an (nur wenn beide Eigenschaften
+  angeboten sind; was sie ändert, kommt mit zurück):
+  1. Rahmenfarbe gewählt, Rahmen ‹ keine › → Rahmen **durchgezogen**.
+  2. Rahmen auf ‹ keine › (Durchschalten oder ⌫/Entf) → Rahmenfarbe fällt
+     mit weg (Rückgabe beide `None`, wenn vorher gesetzt).
+  3. Start-Stil mit Rahmenfarbe ohne Rahmenstil (der Kalender zeichnet das
+     durchgezogen) → zeigt „durchgezogen", Enter gibt `border-style: solid`
+     zurück.
+  4. Rahmenfarbe auf ‹ keine ›, Rahmenstil gesetzt → Rahmen bleibt
+     (Standardfarbe).
+  Esc im Farbwähler ändert nichts. Gilt nur für den Rahmen.
 - **Rahmen ohne Angebot**: bietet der Aufrufer weder `border-style` noch
   `border-color` an (z. B. eine Überschrift nur mit Schrift), zeigt die
   Vorschau keinen Rahmen.

@@ -27,6 +27,10 @@
 # auf den Anfang zurück; Enter nimmt, Esc bricht ab. Icon hochladen steht da, ist aber gesperrt
 # (readOnly) — es lässt sich nicht öffnen.
 #
+# Die Box zeigt immer, was gezeichnet wird (11.10.2026, Sasha): nach jeder
+# Änderung gilt stil.stimmig — Rahmenfarbe ohne Rahmenstil → durchgezogen,
+# Rahmenstil auf ‹ keine › → Rahmenfarbe fällt mit weg.
+#
 # `taste(ch)` → None | ("fertig", {geänderte css, entfernte = None}) |
 # ("abbruch",); der Aufrufer wendet das mit stil.anwenden(alt, …) an; danach
 # steht dasselbe in `ergebnis` (None bei Abbruch). Rein gerechnet:
@@ -119,6 +123,7 @@ class Stylebox:
         self.werte = dict(anfang)       # fehlt ein Name: nicht gesetzt (‹ keine ›)
         self.beruehrt = set()           # in dieser Sitzung geändert/entfernt
         self.feld = 0
+        self._stimmig(None)             # alter Stil: Rahmenfarbe ohne Stil → durchgezogen
         self.waehler = None             # offener Farbwähler
         self.hinweis = ""
         self.ergebnis = None
@@ -133,8 +138,11 @@ class Stylebox:
         if self.waehler is not None:
             erg = self.waehler.taste(ch)
             if erg and erg[0] == "fertig":
-                self.werte[self.aktuell["name"]] = erg[1]
-                self.beruehrt.add(self.aktuell["name"])
+                name = self.aktuell["name"]
+                vorher = dict(self.werte)
+                self.werte[name] = erg[1]
+                self.beruehrt.add(name)
+                self._stimmig(vorher)
             if erg:
                 self.waehler = None
             return None
@@ -152,6 +160,7 @@ class Stylebox:
         f = self.aktuell
         if f is None:
             return None
+        vorher = dict(self.werte)
         n = len(self.felder)
         if ch in (curses.KEY_UP, curses.KEY_BTAB):
             self.feld = (self.feld - 1) % n
@@ -183,7 +192,20 @@ class Stylebox:
             else:
                 self.werte.pop(f["name"], None)
             self.beruehrt.discard(f["name"])
+        self._stimmig(vorher)           # Rahmenstil ↔ Rahmenfarbe (stil.stimmig)
         return None
+
+    def _stimmig(self, vorher):
+        """stil.stimmig nach jeder Änderung (Rahmenstil ↔ Rahmenfarbe), nur
+        wenn beide angeboten sind; was die Regel ändert, gilt als berührt
+        (Enter gibt es mit zurück, Entferntes als None)."""
+        if not {"border-style", "border-color"} <= set(self.namen):
+            return
+        neu = stil_kern.stimmig(self.werte, vorher)
+        for name in set(neu) | set(self.werte):
+            if neu.get(name) != self.werte.get(name):
+                self.beruehrt.add(name)
+        self.werte = neu
 
     def _keine(self, name):
         """Auf ‹ keine › (nicht gesetzt); nie Gesetztes kommt nicht zurück."""
@@ -193,8 +215,8 @@ class Stylebox:
     def tasten(self):
         if self.waehler is not None:
             return self.waehler.tasten()
-        return [("↑↓", "wählen"), ("←→", "ändern"), ("space", "farbe"),
-                ("⌫", "keine"), ("r", "anfang"), ("enter", "nehmen"), ("esc", "zurück")]
+        return [("↑↓", "feld"), ("←→", "wert"), ("space", "farbe"),         # passt in 80 Spalten
+                ("⌫", "keine"), ("r", "anfang"), ("enter", "ok"), ("esc", "zurück")]
 
     # ── Inhalt (rein) ───────────────────────────────────────────────────
     def zeilen(self):
@@ -257,6 +279,37 @@ class Stylebox:
 
     # ── Zeichnen ────────────────────────────────────────────────────────
     mittig = staticmethod(Farbwaehler.mittig)
+    VORSCHAU_H = 7                      # Zeilen der Vorschau mit Rahmen/Fläche/Muster
+
+    @property
+    def vorschau_h(self):
+        """Nur Schrift angeboten: drei Zeilen reichen (Text in der Mitte)."""
+        kasten = {"border-style", "border-color", "background-color",
+                  stil_kern.MUSTER_EIGENSCHAFT}
+        return self.VORSCHAU_H if kasten & set(self.namen) else 3
+    WAEHLER_MASS = (22, 72)             # (h, w) mit offenem Farbwähler
+
+    def _listen_breite(self):
+        rand = max([len(f["titel"]) for f in self.felder] + [4]) + 2
+        return rand, rand + max([16] + [len(zl["text"]) + 3 for zl in self.zeilen()])
+
+    def groesse(self, H, W):
+        """(h, w) des Modals aus dem Inhalt (11.10.2026, Sasha: „unten voll
+        viel Platz frei" — vorher setzten die Aufrufer fest 22 Zeilen):
+        Liste und Vorschau nebeneinander (sonst untereinander), eine
+        Leerzeile, die Fußzeile, Rahmen; höchstens H×W. Breit genug für die
+        Fußzeile, solange W reicht. Mit offenem Farbwähler dessen Maß."""
+        if self.waehler is not None:
+            return min(H, self.WAEHLER_MASS[0]), min(W, self.WAEHLER_MASS[1])
+        _rand, lb = self._listen_breite()
+        fuss = len(" · ".join("%s %s" % t for t in self.tasten()))
+        w = min(W, max(lb + 2 + 10, fuss) + 4)
+        n = len(self.felder)
+        if (w - 4) - lb - 2 >= 10:                       # Vorschau rechts
+            innen = max(n, self.vorschau_h)
+        else:                                            # Vorschau darunter
+            innen = n + 1 + self.vorschau_h
+        return min(H, innen + 4), w
 
     def zeichne(self, z, y, x, h, w):
         """Rahmen + Liste + Vorschau in y, x, h, w über den Kontext z; ist
@@ -269,9 +322,8 @@ class Stylebox:
         z.draw_box(y, x, h, w, self.titel, C.get("acc", 0))
         iy, ix, iw = y + 1, x + 2, w - 4
         farbig = getattr(z, "has_color", False) and C.get("pix_bg") is not None
-        rand = max([len(f["titel"]) for f in self.felder] + [4]) + 2
+        rand, listen_breite = self._listen_breite()
         zeilen = self.zeilen()
-        listen_breite = rand + max([16] + [len(zl["text"]) + 3 for zl in zeilen])
         for i, zl in enumerate(zeilen):
             attr = C.get("bright", 0) | curses.A_REVERSE if zl["aktiv"] else C.get("ink", 0)
             z.safe_addstr(iy + i, ix, zl["titel"].ljust(rand)[:iw], attr)
@@ -288,7 +340,7 @@ class Stylebox:
             vx, vy = ix, iy + len(self.felder) + 1
             vb, vh = min(iw, 30), h - 4 - len(self.felder) - 1
         if vb >= 4 and vh >= 3:
-            self._zeichne_vorschau(z, vy, vx, min(vh, 7), vb, farbig)
+            self._zeichne_vorschau(z, vy, vx, min(vh, self.vorschau_h), vb, farbig)
         unten = self.hinweis or " · ".join("%s %s" % t for t in self.tasten())
         z.safe_addstr(y + h - 2, ix, unten[:iw],
                       C.get("warn", 0) if self.hinweis else C.get("faint", 0))

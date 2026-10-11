@@ -642,7 +642,7 @@ class Bedienung:
         if getattr(u, "liste", False):
             self._zeichne_liste(u, by, bx, bh, bw)
         else:                                    # Stylebox
-            hb, wb = min(bh - 2, 22), min(bw - 4, 72)
+            hb, wb = u.groesse(bh - 2, bw - 4)           # aus dem Inhalt (vorher fest 22)
             yb, xb, hb, wb = u.mittig(bh, bw, hb, wb)
             u.zeichne(self.z, by + yb, bx + xb, hb, wb)
 
