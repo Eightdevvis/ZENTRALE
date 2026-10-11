@@ -44,7 +44,9 @@ def _zustaende():
 
 
 ZUSTAENDE = _zustaende()
-FAELLE = [(p, a) for p, z in ZUSTAENDE.items() for a in z]
+# None = die Ansicht kommt in diesem Programm nicht vor (ein Baustein bringt
+# sie mit, z. B. die leere Stylebox, die der Kalender nie zeigt).
+FAELLE = [(p, a) for p, z in ZUSTAENDE.items() for a, auf in z.items() if auf is not None]
 
 
 def _programm(u, name):

@@ -189,6 +189,7 @@ ZUSTAENDE = {
     "stylebox:wahl": _stylebox,
     "stylebox:farbe": lambda u: _stylebox(u, 1),
     "stylebox:gesperrt": lambda u: _stylebox(u, 5),
+    "stylebox:leer": None,              # der Kalender gibt der Stylebox immer Felder
     "stylebox:farbe:kreis": _farbe,
     "stylebox:farbe:regler": lambda u: _farbe(u, TAB),
     "stylebox:farbe:hex": lambda u: _farbe(u, "#", "f"),
