@@ -454,6 +454,8 @@ gebraucht, die echten eigenen Code verlangen. Bis es Codicus gibt,
 übernimmt das Claude Code.
 
 **Reihenfolge:** (a) allgemeiner Adapter für MCP + OpenAPI nach den Regeln
-oben; (b) Probe: den eigenen Kalender einmal per Beschreibung statt per
+oben — **gebaut 2026-10-11** (Format `core/werkzeug_erzeuger/anbindung.schema.json`, Adapter `allgemein.py`, Probefahrt `scripts/anbindung_probe.py`; MCP über stdio und HTTP, OpenAPI nur von Hand als http-Aufrufe; Doku: [werkzeug_erzeuger.md](../ki/werkzeug_erzeuger.md) „Anbindungs-Beschreibung"); (b) Probe: den eigenen Kalender einmal per Beschreibung statt per
 Python anbinden und auf dem Prüfstand vergleichen; (c) Werkstatt-Ansicht für
 Ansehen/Ausfüllen/Probefahrt/Freigabe (gehört zur Werkstatt-Sitzung).
+
+**Stand (b) 2026-10-11:** die Probe am eigenen Kalender läuft (`core/anbindungen/kalender_kern.json`, HTTP gegen `/api/calendar`, Probefahrt voll grün, Anbindung standardmäßig aus); Unterschiede zu den Handwerkzeugen stehen in werkzeug_erzeuger.md. Auf dem Prüfstand mit echtem Modell noch nicht gemessen. (c) bleibt bei der Werkstatt-Sitzung.

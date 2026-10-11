@@ -747,3 +747,15 @@ def test_ki_werkzeugaufruf_ende_zu_ende(monkeypatch):
     # das Modell bekommt reines JSON Schema
     gesehen = next(t for t in client.calls[0]["tools"] if t["name"] == "nt_create_note")
     assert "x-zentrale" not in json.dumps(gesehen) and gesehen["input_schema"]["required"] == ["title"]
+
+
+def test_das_beispiel_in_der_doku_ist_eine_gueltige_beschreibung():
+    """Doku und Code bleiben deckungsgleich: das vollständige Beispiel in
+    memory/ki/werkzeug_erzeuger.md besteht die Prüfung."""
+    import re
+    with open(os.path.join(ROOT, "memory", "ki", "werkzeug_erzeuger.md"), encoding="utf-8") as f:
+        text = f.read()
+    teil = text[text.index("## Anbindungs-Beschreibung"):]
+    beispiel = re.search(r"```json\n(.*?)\n```", teil, re.S).group(1)
+    p = anbindung.pruefen(json.loads(beispiel))
+    assert p.ok and not p.warnungen, (p.fehler, p.warnungen)
