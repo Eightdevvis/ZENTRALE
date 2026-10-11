@@ -302,6 +302,13 @@ AKTIONEN = [
          "muster": {"type": "string", "enum": [w for w, _ in stil.MUSTER],
                     "description": "Innenmuster: " + ", ".join(f"{w}={t}" for w, t in stil.MUSTER),
                     X: {"wort": "Muster", "ungueltig": "STIL-UNGUELTIG"}},
+         # 2026-10-11: einzelne Eigenschaften wieder „nicht gesetzt" (Sasha:
+         # kein ausdrückliches none, nur nicht gesetzt — stil.py seit e511c74).
+         "zuruecksetzen": {"type": "array",
+                           "items": {"type": "string",
+                                     "enum": ["rahmen", "rahmenfarbe", "hintergrund",
+                                              "schrift", "muster"]},
+                           "description": "Diese Eigenschaften wieder auf nicht gesetzt."},
          "entfernen": {"type": "string", "enum": ["ja"],
                        "description": "'ja' = eigenes Aussehen ganz entfernen."}},
         pflicht=("kennung",),

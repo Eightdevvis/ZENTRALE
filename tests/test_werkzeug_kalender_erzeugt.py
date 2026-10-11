@@ -432,3 +432,16 @@ def test_stil_nicht_fuer_phasen():
     k = "#" + _schlaf()
     r = tun("set_calendar_style", kennung=k, rahmen="dashed")
     assert r.code == "K-IST-PHASE", r
+
+
+def test_stil_einzelne_eigenschaft_zuruecksetzen():
+    """2026-10-11: „nicht gesetzt" statt none — zuruecksetzen nimmt die
+    Eigenschaft aus dem Stil, der Rest bleibt."""
+    k = _termin()
+    assert tun("set_calendar_style", kennung=k, rahmen="double", muster="punkte").status == "ok"
+    r = tun("set_calendar_style", kennung=k, zuruecksetzen=["muster"])
+    assert r.status == "ok" and "border-style: double" in r and "muster" not in r, r
+    vorher = _stand()
+    r = tun("set_calendar_style", kennung=k, zuruecksetzen=["muster"])   # schon weg
+    assert r.code == "K-STIL-UNGUELTIG", r
+    assert _stand() == vorher

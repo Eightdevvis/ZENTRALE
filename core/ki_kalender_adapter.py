@@ -641,13 +641,21 @@ def stil_setzen(args: dict) -> Ergebnis:
             wert = _text(args, feld)
             if wert:
                 neu[css] = wert
+        weg = args.get("zuruecksetzen") or []
+        if isinstance(weg, str):
+            weg = [weg]
+        for feld in weg:
+            if feld not in _STIL_FELDER:
+                raise Ablehnung("STIL-UNGUELTIG", f"unbekanntes Feld zum Zurücksetzen: {feld!r}")
+            neu.pop(_STIL_FELDER[feld], None)
         if neu == alt:
             raise Ablehnung("STIL-UNGUELTIG", "kein Feld fürs Aussehen genannt")
     kalender_kennung.stil_setzen(s.uid, neu)        # Ablehnung → K-… im Adapter
     soll = kalender_kennung.eintrag(s.uid).get("stil") or {}
     return Ergebnis(kennung=s.uid, vorher=_vorher(s),
                     pruefe=lambda x: [] if (x.get("stil") or {}) == soll and
-                    all(soll.get(k) == v for k, v in neu.items()) and (neu or not soll)
+                    all(soll.get(k) == v for k, v in neu.items())
+                    and not (set(soll) - set(neu))
                     else [f"Aussehen steht {x.get('stil')!r}, verlangt {neu!r}"],
                     nachsatz=lambda x: ": " + (stil.als_css(x.get("stil")) or "Standard-Aussehen"))
 
