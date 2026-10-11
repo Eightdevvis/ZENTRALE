@@ -566,9 +566,9 @@ bleibt aber gesperrt."
 
   | Taste | Wirkung |
   |---|---|
-  | ↑↓ / Tab, Shift-Tab | Zeile (Typ · Liste, nur bei liste · Stylebox) |
-  | ←→ / Leertaste auf **Typ** | `normal` ↔ `liste` |
-  | Enter auf **Typ**, Strg-S überall | übernehmen, zurück ins Formular (Typ liste ohne Liste: Fehler, springt auf „Liste") |
+  | ↑↓ / Tab, Shift-Tab | Zeile (Typ · Liste, nur bei liste · Stylebox · Status) |
+  | ←→ / Leertaste auf **Typ** / **Status** | `normal` ↔ `liste` / `committed` ↔ `uncommitted` |
+  | Enter auf **Typ** oder **Status**, Strg-S überall | übernehmen, zurück ins Formular (Typ liste ohne Liste: Fehler, springt auf „Liste") |
   | Enter / Leertaste / → auf **Liste** | Kasten „welche Liste?" |
   | Enter / Leertaste / → auf **Stylebox** | die Stylebox (wie bisher) |
   | ⌫ / Entf auf **Stylebox** | kein Stil |
@@ -602,5 +602,5 @@ bleibt aber gesperrt."
 - **Advanced ganz unten, ohne Vorschau (11.10.2026):** Sasha: „advanced ganz
   unten im formular haben und ohne vorschau rechts nebendran, stattdessen
   einfach nur mini erklärung". Die Zeile zeigt nur `ADVANCED_HINWEIS`
-  („see for more options"); was gewählt ist, steht im Fenster selbst.
-  „Verbindlich" (nur im Neu-Formular) rückt davor.
+  („see for more options"); was gewählt ist, steht im Fenster. Status (statt „Verbindlich",
+  11.10.2026) auch beim Bearbeiten → zuletzt `POST …/ebene {kennung, ziel}`; u bleibt.

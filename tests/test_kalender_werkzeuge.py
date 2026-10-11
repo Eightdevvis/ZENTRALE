@@ -322,3 +322,73 @@ def test_advanced_ist_letzte_zeile_nur_mit_hinweis():
         assert f.felder[-1].art == "advanced"
         zeile = [(b, w) for b, w, _a, _h in f.zeilen()][-1]
         assert zeile == ("Advanced", kw.ADVANCED_HINWEIS)
+
+
+# ── Status (committed/uncommitted) unter Advanced (11.10.2026) ─────────
+# Sasha: „pack den committed/uncommitted status unter advanced im formular.
+# lass den shortcut dazu aber drin." — kein Feld „Verbindlich" mehr; u bleibt.
+def _status_waehlen(f, status):
+    """Über das Fenster: Advanced öffnen, bis „Status", ←→, Enter."""
+    f.i = len(f.sichtbar()) - 1
+    f.taste(10)                                    # Fenster auf
+    box = f.box
+    box.i = box.reihen().index("status")
+    if box.status != status:
+        box.taste(261)
+    assert box.zeilen()[-1][:2] == ("Status", "‹ %s ›" % status)
+    f.taste(10)                                    # Enter auf Status = übernehmen
+    assert f.box is None
+
+
+def test_neu_status_unter_advanced_statt_verbindlich():
+    f = kw.formular_neu(TAG, HEUTE)
+    assert all(x.name != "verbindlich" for x in f.felder)
+    assert f.felder[-1].art == "advanced"
+    _status_waehlen(f, "uncommitted")
+    f.i = 0
+    fuelle(f, titel="Kino", von="20:00", bis="22:00")
+    plan = f.plan()
+    (_m, pfad, body), = plan["aufrufe"]
+    assert (pfad, body["layer"]) == ("/api/calendar/entry", "uncommitted")
+    assert not plan.get("konflikt"), "uncommitted: keine Kollisions-Rückfrage"
+    f = kw.formular_neu(TAG, HEUTE)
+    fuelle(f, titel="Kino", von="20:00", bis="22:00")
+    assert f.plan()["aufrufe"][0][2]["layer"] == "termine"
+
+
+def test_bearbeiten_status_geaendert_ebene_zuletzt():
+    zahn = {**ZAHN, "kennung": "k-zahn"}
+    f = kw.formular_bearbeiten(zahn, TAG, HEUTE)
+    _status_waehlen(f, "uncommitted")
+    f.i = 0
+    fuelle(f, von="14:30")
+    aufrufe = f.plan()["aufrufe"]
+    assert aufrufe[0][1] == "/api/calendar/eintrag"
+    assert aufrufe[-1] == ("POST", "/api/calendar/ebene",
+                           {"kennung": "k-zahn", "ziel": "uncommitted"})
+    # Startwert aus layer; unverändert → kein Aufruf
+    blass = {**zahn, "layer": "uncommitted"}
+    f = kw.formular_bearbeiten(blass, TAG, HEUTE)
+    assert f.felder[-1].adv["status"] == "uncommitted"
+    fuelle(f, von="14:30")
+    assert all(p != "/api/calendar/ebene" for _m, p, _b in f.plan()["aufrufe"])
+    f = kw.formular_bearbeiten(blass, TAG, HEUTE)
+    _status_waehlen(f, "committed")
+    f.i = 0
+    fuelle(f)
+    assert f.plan()["aufrufe"][-1][2] == {"kennung": "k-zahn", "ziel": "termine"}
+
+
+def test_status_nicht_im_kasten_nur_dieser_tag():
+    d = kw.formular_bearbeiten({**GEIGE, "kennung": "k-geige"}, TAG, HEUTE)
+    d.taste(ord("t"))
+    f = d.plan()["weiter"]
+    assert all(x.art != "advanced" for x in f.felder)
+    d = kw.formular_bearbeiten({**GEIGE, "kennung": "k-geige"}, TAG, HEUTE)
+    d.taste(ord("a"))
+    f = d.plan()["weiter"]
+    _status_waehlen(f, "uncommitted")
+    f.i = 0
+    fuelle(f, titel="Violine")
+    assert f.plan()["aufrufe"][-1] == ("POST", "/api/calendar/ebene",
+                                       {"kennung": "k-geige", "ziel": "uncommitted"})

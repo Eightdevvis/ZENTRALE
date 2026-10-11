@@ -229,11 +229,11 @@ def test_listen_termin_ueber_advanced(tmp_path):
     Taste mehr. a, Von/Bis, Tab bis „Advanced", Enter öffnet das Fenster,
     → Typ liste, ↓ Zeile Liste, Enter „welche Liste?", Enter nimmt, ↑ Typ,
     Enter übernimmt; Strg-S speichert (Advanced ist seit 11.10.2026 die
-    letzte Zeile, hinter „Verbindlich"). Titel leer = Name der Liste. A ist
-    wieder ein zweites a."""
+    letzte Zeile; „Verbindlich" ist seitdem darin als Status). Titel leer =
+    Name der Liste. A ist wieder ein zweites a."""
     rechts, runter, hoch = b"\x1bOC", b"\x1bOB", b"\x1bOA"
     tasten = ([b"A", b"\t", b"\t", b"\t"] + [c.encode() for c in "10:00"] + [b"\t"]
-              + [c.encode() for c in "11:00"] + [b"\t"] * 5
+              + [c.encode() for c in "11:00"] + [b"\t"] * 4
               + [b"\r", rechts, runter, b"\r", b"\r", hoch, b"\r", b"\x13"])
     w, fehler = _lauf(tmp_path, tasten)
     assert fehler == "", fehler

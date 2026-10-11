@@ -7,16 +7,19 @@ der listentermin zu nem termintypen und nicht zu so nem extra shortcut".
 
 Darum steht im Formular (kalender_werkzeuge.py) nur noch EIN Feld „Advanced"
 mit einer Zusammenfassung („typ normal · stil keine"). Enter darauf öffnet
-dieses Fenster mit drei Zeilen:
+dieses Fenster mit diesen Zeilen:
 
   Typ       ‹ normal › | ‹ liste ›   (←→/Leertaste)
   Liste     nur bei Typ liste: Enter öffnet den Kasten „welche Liste?"
             (kalender_quellen.QuellenWahl — Listen ≡ und Projekte ◆)
   Stylebox  Vorschau; Enter öffnet die Stylebox (tui/bausteine/stylebox.py),
             ⌫/Entf = kein Stil
+  Status    ‹ committed › | ‹ uncommitted › (←→/Leertaste). Sasha, 11.10.2026:
+            „pack den committed/uncommitted status unter advanced im
+            formular. lass den shortcut dazu aber drin" — u bleibt.
 
 Tasten wie im Formular und in der Stylebox: ↑↓/Tab Zeile, Enter auf „Typ"
-oder Strg-S = übernehmen und zurück ins Formular, Esc = alles hier
+oder „Status" oder Strg-S = übernehmen und zurück ins Formular, Esc = alles hier
 verwerfen. Liste und Stylebox liegen als eigene Kasten darüber (`unter`);
 ihr Esc führt nur hierher zurück. Gespeichert wird erst mit dem Formular.
 
@@ -29,6 +32,8 @@ from . import kalender_quellen, kalender_stil
 
 NORMAL, LISTE = "normal", "liste"
 TYPEN = (NORMAL, LISTE)
+COMMITTED, UNCOMMITTED = "committed", "uncommitted"
+STATUS = (COMMITTED, UNCOMMITTED)
 
 ENTER = (10, 13, 343)
 STRG_S = 19
@@ -39,15 +44,19 @@ HILFE = {
     "typ": "normal = eigener Titel · liste = Titel ist der oberste offene Punkt",
     "liste": "enter wählt die liste oder das projekt",
     "stil": "enter öffnet die Stylebox · ⌫ kein stil",
+    "status": "uncommitted = blass, nicht fest · umschalten auch mit u",
 }
-FUSS = "↑↓ zeile · ←→ typ · enter öffnen/übernehmen · strg-s übernehmen · esc verwerfen"
+FUSS = "↑↓ zeile · ←→ typ/status · enter öffnen/übernehmen · strg-s übernehmen · esc verwerfen"
 
 
 def wert_von(roh=None) -> dict:
     """Der Anfangswert aus einem API-Eintrag (oder leer für Neues):
-    {"typ", "quelle": {art, id, name}|None, "stil": dict}."""
+    {"typ", "quelle": {art, id, name}|None, "stil": dict, "status"}.
+    Status aus der Ebene (`layer` uncommitted → uncommitted)."""
     q = kalender_quellen.quelle_von(roh or {})
-    return {"typ": LISTE if q else NORMAL, "quelle": q, "stil": kalender_stil.von(roh or {})}
+    status = UNCOMMITTED if (roh or {}).get("layer") == UNCOMMITTED else COMMITTED
+    return {"typ": LISTE if q else NORMAL, "quelle": q, "stil": kalender_stil.von(roh or {}),
+            "status": status}
 
 
 def quelle(wert: dict):
@@ -68,10 +77,11 @@ def _stil_text(st) -> str:
 
 def zusammenfassung(wert: dict) -> str:
     """Die Zeile im Formular: „typ normal · stil keine" bzw.
-    „typ liste: todo · stil ╔═╗ rand #ff8800"."""
+    „typ liste: todo · stil ╔═╗ rand #ff8800" (+ „ · uncommitted")."""
     q = quelle(wert)
     typ = "typ liste: %s" % q["name"] if q else "typ normal"
-    return "%s · stil %s" % (typ, _stil_text((wert or {}).get("stil")))
+    aus = "%s · stil %s" % (typ, _stil_text((wert or {}).get("stil")))
+    return aus + (" · uncommitted" if (wert or {}).get("status") == UNCOMMITTED else "")
 
 
 class Advanced:
@@ -85,17 +95,23 @@ class Advanced:
         self.typ = wert.get("typ") if wert.get("typ") in TYPEN else NORMAL
         self.quelle = wert.get("quelle")      # bleibt gemerkt, auch wenn Typ normal
         self.stil = dict(wert.get("stil") or {})
+        # Ohne „status" im Wert keine Zeile (z.B. ein Formular ohne Ebene)
+        self.status = wert.get("status") if wert.get("status") in STATUS else None
         self.quellen, self.text = quellen, text
         self.i = 0
         self.fehler = ""
         self.unter = None                     # offene Stylebox oder QuellenWahl
 
     def wert(self) -> dict:
-        return {"typ": self.typ, "quelle": self.quelle if self.typ == LISTE else None,
-                "stil": dict(self.stil)}
+        w = {"typ": self.typ, "quelle": self.quelle if self.typ == LISTE else None,
+             "stil": dict(self.stil)}
+        if self.status:
+            w["status"] = self.status
+        return w
 
     def reihen(self) -> list:
-        return ["typ"] + (["liste"] if self.typ == LISTE else []) + ["stil"]
+        return (["typ"] + (["liste"] if self.typ == LISTE else []) + ["stil"]
+                + (["status"] if self.status else []))
 
     @property
     def reihe(self) -> str:
@@ -111,6 +127,8 @@ class Advanced:
                 b, w = "Typ", "‹ %s ›" % self.typ
             elif r == "liste":
                 b, w = "Liste", _quelle_text(self.quelle)
+            elif r == "status":
+                b, w = "Status", "‹ %s ›" % self.status
             else:
                 b, w = "Stylebox", _stil_text(self.stil)
             aus.append((b, w, k == self.i, HILFE[r]))
@@ -126,7 +144,7 @@ class Advanced:
             return "abbruch"
         r = self.reihe
         n = len(self.reihen())
-        if ch == STRG_S or (ch in ENTER and r == "typ"):
+        if ch == STRG_S or (ch in ENTER and r in ("typ", "status")):
             return "fertig" if self._pruefen() else "weiter"
         self.fehler = ""
         if ch in (9, 258):                    # Tab, ↓
@@ -136,6 +154,8 @@ class Advanced:
         elif r == "typ" and ch in (260, 261, 32):
             k = TYPEN.index(self.typ) + (-1 if ch == 260 else 1)
             self.typ = TYPEN[k % len(TYPEN)]
+        elif r == "status" and ch in (260, 261, 32):
+            self.status = STATUS[(STATUS.index(self.status) + 1) % len(STATUS)]
         elif r == "liste" and ch in ENTER + (32, 261):
             self._liste_oeffnen()
         elif r == "stil" and ch in ENTER + (32, 261):

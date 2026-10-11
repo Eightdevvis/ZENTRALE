@@ -79,8 +79,8 @@ getrennt angucken". Umsetzung:
   Kollisions-Rückfrage, keine Abwesenheit durch eine Vielleicht-Reise; die KI
   sieht `[uncommitted · vielleicht]` und soll es höchstens als Möglichkeit
   nennen.
-- TUI: immer in A/B/C über den Terminen; Taste `u` schaltet, Feld
-  „Verbindlich" im Formular für Neues. Seit dem Abend als **Glas** (Sasha: „es
+- TUI: immer in A/B/C über den Terminen; Taste `u` schaltet, im Formular
+  Advanced → Status (neu und bearbeiten; bis 11.10.2026 Feld „Verbindlich"). Seit dem Abend als **Glas** (Sasha: „es
   sieht nicht transparent aus da der hintergrund nicht durchscheint"):
   Flächen in B und C liegen als Scheibe über allem — Punktlinien und feste
   Termine bleiben sichtbar, nur ihr Grund wird mit der Kursfarbe gemischt

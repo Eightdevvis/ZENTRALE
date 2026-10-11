@@ -593,8 +593,9 @@ def _gruppe_aufruf(roh, w) -> list:
 # termintypen". EIN Feld statt „Stylebox" und „Liste"; das Fenster steht in
 # kalender_advanced.py. Gilt wie die Gruppe für den ganzen Eintrag/die ganze
 # Serie — darum nicht im Kasten „nur dieser Tag". Beim Speichern breitet es
-# sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil.
-ADVANCED_HILFE = "enter öffnet: typ (normal/liste) und stylebox"
+# sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil,
+# status (committed/uncommitted — seit 11.10.2026 hier statt „Verbindlich").
+ADVANCED_HILFE = "enter öffnet: typ (normal/liste), stylebox, status"
 _QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
 
 
@@ -606,7 +607,8 @@ def _advanced_feld(roh, titel_feld, quellen=None) -> Feld:
     leer bleiben (= Name der Liste) und sagt dann, dass er nur Rückfall ist."""
     f = Feld("advanced", "Advanced", art="advanced", wert=kalender_advanced.wert_von(roh),
              lesen=lambda d: (True, {"typ": d.get("typ"), "quelle": kalender_advanced.quelle(d),
-                                     "stil": dict(d.get("stil") or {})}),
+                                     "stil": dict(d.get("stil") or {}),
+                                     **({"status": d["status"]} if d.get("status") else {})}),
              hilfe=ADVANCED_HILFE)
     f.quellen = quellen
 
@@ -758,19 +760,14 @@ def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
     Titel wird dann der Name der Liste (leer = ihr Name), angezeigt wird live
     ihr oberster offener Punkt. `quellen()` → die Listen (von der Bedienung)."""
     def plan(w):
-        layer = UNVERBINDLICH if w.get("verbindlich") == "nein" else "termine"
+        layer = _ziel_ebene(w)
         aufrufe, meldung, kon = _neu_plan(w, tag, layer, w.get("quelle"))
         if layer == UNVERBINDLICH:
             kon = None                    # uncommitted: Kollision nur Hinweis, keine Rückfrage
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
-    felder = _termin_felder(tag, heute, quellen=quellen)
-    # committed (Standard) oder uncommitted — umschalten später mit u
-    # Advanced bleibt die letzte Zeile (Sasha, 11.10.2026: „advanced ganz
-    # unten im formular") — Verbindlich davor einreihen.
-    adv = len(felder) - 1 if felder and felder[-1].art == "advanced" else len(felder)
-    felder.insert(adv, Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
-                            optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
-    return Formular("neuer termin", felder, plan)
+    # committed (Standard) oder uncommitted: Advanced → Status (seit
+    # 11.10.2026, vorher eigenes Feld „Verbindlich"); umschalten auch mit u.
+    return Formular("neuer termin", _termin_felder(tag, heute, quellen=quellen), plan)
 
 
 # ── Typ liste beim Bearbeiten (Feld „Advanced", 11.10.2026) ────────────
@@ -815,6 +812,26 @@ def _quelle_bleibt(roh, w):
 
 
 UNVERBINDLICH = "uncommitted"
+
+
+def _ziel_ebene(w, alt="termine"):
+    """Die Ebene aus Advanced → Status; ohne Status bleibt `alt`."""
+    s = w.get("status")
+    if s is None:
+        return alt
+    return UNVERBINDLICH if s == kalender_advanced.UNCOMMITTED else "termine"
+
+
+def _ebene_aufruf(roh, w) -> list:
+    """Status in Advanced geändert → nach den anderen Aufrufen EIN Aufruf
+    per Kennung (POST /api/calendar/ebene mit ziel)."""
+    if not roh.get("kennung"):
+        return []
+    alt = roh.get("layer") or "termine"
+    ziel = _ziel_ebene(w, alt)
+    if ziel == alt:
+        return []
+    return [("POST", "/api/calendar/ebene", {"kennung": roh["kennung"], "ziel": ziel})]
 
 
 def plan_ebene(roh: dict) -> dict | None:
@@ -870,13 +887,15 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
     if a_ == "einmal":
         def plan(w):
             if w.get("wied", "keine") != "keine":       # wird zur Wiederholung
-                aufrufe, meldung, _k = _neu_plan(w, tag, layer, _quelle_bleibt(roh, w))
+                aufrufe, meldung, _k = _neu_plan(w, tag, _ziel_ebene(w, layer),
+                                                 _quelle_bleibt(roh, w))
                 weg = ("DELETE", "/api/calendar/eintrag",
                        {"layer": layer, "day": iso, "label": label, "time": t0 or None})
                 return _plan(aufrufe + [weg], meldung)
             start, e_dt = _zeiten(w["datum"], w)
             if e_dt and e_dt.date() > w["datum"]:       # über Mitternacht → Spanne
-                aufrufe, meldung, _k = _neu_plan(w, tag, layer, _quelle_bleibt(roh, w))
+                aufrufe, meldung, _k = _neu_plan(w, tag, _ziel_ebene(w, layer),
+                                                 _quelle_bleibt(roh, w))
                 weg = ("DELETE", "/api/calendar/eintrag",
                        {"layer": layer, "day": iso, "label": label, "time": t0 or None})
                 return _plan(aufrufe + [weg], meldung, danach={"tag": w["datum"]})
@@ -884,11 +903,13 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                    "time": start or "", "ende": e_dt.strftime("%H:%M") if e_dt else "",
                    "ort": w.get("ort") or ""}
             kon = ({"day": neu["day"], "label": neu["label"], "time": neu["time"],
-                    "ende": neu["ende"]} if neu["time"] and neu["ende"] else None)
+                    "ende": neu["ende"]} if neu["time"] and neu["ende"]
+                   and _ziel_ebene(w, layer) != UNVERBINDLICH else None)
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
                             "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
-                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w),
+                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
+                         + _ebene_aufruf(roh, w),
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
                          zurueck=_quelle_folge(roh, w))
         felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
@@ -930,7 +951,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             aufrufe = [("PUT", "/api/calendar/routine",
                         {"layer": layer, "label": label, "day": iso,
                          "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
-                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
+                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + _ebene_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
             return _plan(aufrufe, "alle geändert: " + w["titel"],
@@ -975,7 +996,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
         return _plan([("PUT", "/api/calendar/spanne",
                        {"layer": layer, "von": von_iso, "label": label, "new": neu})]
-                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w),
+                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
+                     + _ebene_aufruf(roh, w),
                      "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]},
                      zurueck=_quelle_folge(roh, w))
 
