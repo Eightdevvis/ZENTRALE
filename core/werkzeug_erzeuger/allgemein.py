@@ -239,7 +239,7 @@ class AllgemeinerAdapter:
         treffer = vorlage.zeiger_alle(daten, ziel)
         eintraege = [e for t in treffer for e in (t if isinstance(t, list) else [t])]
         if not eintraege:
-            return o.get("leer") or ANTWORT_NICHTS
+            return vorlage.text_nachsichtig(o["leer"], dict(args)) if o.get("leer") else ANTWORT_NICHTS
         grenze = o.get("hoechstens", MAX_ZEILEN)
         zeilen = [vorlage.text_nachsichtig(o["zeile"], {**args, "e": e}) for e in eintraege[:grenze]]
         kopf = vorlage.text_nachsichtig(o["kopf"], dict(args)) + "\n" if o.get("kopf") else ""

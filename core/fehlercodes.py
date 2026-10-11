@@ -401,6 +401,9 @@ ANBINDUNG_CODES = {
     "ABGELEHNT": (
         "Das Programm hat den Wunsch abgelehnt (Begründung im Ergebnis); nichts ist geändert.",
         "Die Begründung lesen und beheben; nicht blind wiederholen."),
+    "GESPERRT": (
+        "Das Programm hat eine Schutzsperre gesetzt und nimmt die Änderung nicht an.",
+        "Den Grund im Ergebnis Sasha zeigen; nicht umgehen."),
     "NICHT-ERREICHBAR": (
         "Das Programm antwortet nicht (nicht gestartet, falsche Adresse, Netz).",
         "Sasha sagen, dass das Programm nicht erreichbar ist; nicht erneut versuchen."),
