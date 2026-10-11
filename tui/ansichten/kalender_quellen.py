@@ -5,10 +5,14 @@ sowas whatever dann machen, man wählt ja eigentlich einfach nur ne liste für
 nen termin slot aus, ansonsten soll sich das ganze ganz normal als termin
 bearbeiten lassen, also bleibt der rest vom formular genau gleich."
 
+Seit 11.10.2026 ist das keine eigene Taste mehr, sondern ein Termintyp
+(Sasha: „dann wird der listentermin zu nem termintypen und nicht zu so nem
+extra shortcut"): Formular → Advanced → Typ liste (kalender_advanced.py).
+
 Darum steht hier nur, was eine Liste MEHR braucht als ein normaler Termin:
   * QuellenWahl — der Kasten „welche Liste?" (Name + was jetzt oben steht,
-    Tippen filtert, ↑↓ wählt, Enter nimmt). Danach kommt das ganz normale
-    Formular aus kalender_werkzeuge.py.
+    Tippen filtert, ↑↓ wählt, Enter nimmt). Er liegt über dem Fenster
+    „advanced"; Enter setzt dort die Liste, Esc lässt sie.
   * Abhaken des angezeigten Punkts und die Zeilen fürs Ansehen.
 Kern: core/kalender_quelle.py (Auflösung live, nie geschrieben beim Abhaken),
 Routen /api/calendar/quellen, /api/calendar/quelle (GET/POST/DELETE).
@@ -56,8 +60,8 @@ def wort(art: str) -> str:
 class QuellenWahl:
     """Eine Zeile je Liste/Projekt: Zeichen, Name, was jetzt oben steht.
     Tippen filtert (alle Buchstaben sind Text, darum ↑↓ statt j/k),
-    Enter nimmt → `waehlen(quelle)` liefert den nächsten Plan (meist das
-    Formular als `weiter`). Esc darin führt hierher zurück."""
+    Enter nimmt → `waehlen(quelle)` (liefert einen Plan; hat er ein
+    `weiter`, führt dessen Esc hierher zurück)."""
 
     liste = True                    # Bedienung.zeichne_kasten erkennt den Kasten daran
     leer_text = "keine liste gefunden"

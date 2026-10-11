@@ -144,27 +144,55 @@ def test_wahl_jk_sind_text_pfeile_waehlen():
     assert w.taste(27) == "abbruch"
 
 
-def test_neu_fuer_liste_ist_das_normale_formular_mit_quelle():
-    q = {"art": "liste", "id": "l_todo", "name": "todo"}
-    f = kw.formular_neu(TAG, TAG, quelle=q)
-    normal = kw.formular_neu(TAG, TAG)
-    assert [x.name for x in f.felder] == [x.name for x in normal.felder]
-    assert f.felder[0].text == "todo" and "todo" in f.titel
-    f.felder[0].text = ""                      # leer = Name der Liste
-    f.feld.text = ""
-    for x in f.felder:
-        if x.name == "von":
-            x.text = "10"
-        if x.name == "bis":
-            x.text = "12"
-    assert f.taste(10) == "fertig"
-    p = f.plan()
-    (meth, pfad, body), = p["aufrufe"]
+# ── Typ liste im Fenster „advanced" (11.10.2026) ──────────────────────
+# Sasha: „dann wird der listentermin zu nem termintypen und nicht zu so nem
+# extra shortcut". Kein eigener Weg mehr (Taste A), sondern a → Formular →
+# Advanced → Typ liste.
+def _feld(f, name):
+    return next(x for x in f.sichtbar() if x.name == name)
+
+
+def _liste_waehlen(f, suche=""):
+    """Im Formular: Advanced öffnen, Typ liste, Liste wählen, übernehmen."""
+    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    assert f.taste(10) == "weiter" and f.box is not None
+    f.taste(261)                               # Typ: normal → liste
+    f.taste(258)                               # Zeile „Liste"
+    f.taste(10)                                # „welche Liste?"
+    for ch in suche:
+        f.taste(ord(ch))
+    f.taste(10)                                # nimmt
+    assert f.box.unter is None
+    assert f.taste(19) == "weiter" and f.box is None     # Strg-S: übernehmen
+
+
+def test_neu_typ_liste_ist_das_normale_formular_mit_quelle():
+    f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
+    assert "liste" not in [x.name for x in f.felder]     # kein eigenes Feld mehr
+    _liste_waehlen(f)
+    assert f.felder[0].text == "todo"                    # Titel vorbelegt
+    assert "Rückfall" in dict((b, h) for b, _w, _a, h in f.zeilen())["Titel"]
+    zeile = dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"]
+    assert zeile == "typ liste: todo · stil keine"
+    f.felder[0].text = ""                                # leer = Name der Liste
+    _feld(f, "von").text, _feld(f, "bis").text = "10", "12"
+    assert f.taste(19) == "fertig"
+    (meth, pfad, body), = f.plan()["aufrufe"]
     assert (meth, pfad) == ("POST", "/api/calendar/entry")
     assert body["quelle"] == Q and body["label"] == "todo" and body["time"] == "10:00"
 
 
-def test_neu_fuer_liste_als_routine_und_spanne():
+def test_neu_typ_normal_ohne_quelle_und_titel_pflicht():
+    f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
+    _feld(f, "von").text = "10"
+    assert f.taste(19) == "weiter" and f.fehler == "titel fehlt"
+    f.felder[0].text = "Kino"
+    assert f.taste(19) == "fertig"
+    (_m, _p, body), = f.plan()["aufrufe"]
+    assert "quelle" not in body and "stil" not in body
+
+
+def test_neu_typ_liste_als_routine_und_spanne():
     q = {"art": "liste", "id": "l_todo", "name": "todo"}
     w = {"titel": "todo", "datum": TAG, "ganz": "nein", "von": "08:00", "bis": None,
          "wied": "wöchentlich", "alle": 1, "wtage": [], "wbis": None}
@@ -175,20 +203,64 @@ def test_neu_fuer_liste_als_routine_und_spanne():
     assert pfad == "/api/calendar/spanne" and body["quelle"] == Q
 
 
-# ── Bearbeiten: Feld „Liste" ───────────────────────────────────────────
-def _speichern(f, liste):
-    feld = next(x for x in f.felder if x.name == "liste")
-    feld.wahl = feld.optionen.index(liste)
-    assert f.taste(10) == "fertig"
-    return f.plan()
+def test_advanced_liste_ohne_wahl_laesst_nicht_zu():
+    f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
+    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.taste(10)
+    f.taste(32)                                # Leertaste: Typ liste
+    assert f.taste(10) == "weiter" and f.box is not None   # Enter auf Typ: übernehmen?
+    assert "liste wählen" in f.box.fehler and f.box.reihe == "liste"
+    f.taste(27)                                # Esc: verworfen
+    assert f.box is None and _feld(f, "advanced").adv["typ"] == "normal"
 
 
-def test_bearbeiten_liste_loesen_fragt_titel_uebernehmen():
+def test_advanced_esc_verwirft_auch_die_gewaehlte_liste():
+    f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
+    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.taste(10)
+    f.taste(261)
+    f.taste(258)
+    f.taste(10)
+    f.taste(27)                                # Esc in „welche Liste?" → zurück ins Fenster
+    assert f.box is not None and f.box.unter is None and f.box.quelle is None
+    f.taste(10)
+    f.taste(258)                               # zweite Liste
+    f.taste(10)
+    assert f.box.quelle["name"] == "einkauf"
+    f.taste(27)                                # Esc im Fenster: alles weg
+    assert f.box is None and kw.kalender_advanced.quelle(_feld(f, "advanced").adv) is None
+    assert f.felder[0].text == ""
+
+
+def test_advanced_ohne_backend_sagt_es():
+    f = kw.formular_neu(TAG, TAG, quellen=lambda: None)
+    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.taste(10)
+    f.taste(261)
+    f.taste(258)
+    f.taste(10)
+    assert f.box.unter is None and "backend" in f.box.fehler
+
+
+# ── Bearbeiten: Typ liste ↔ normal ─────────────────────────────────────
+def _typ_normal(f):
+    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.taste(10)
+    assert f.box.typ == "liste"
+    f.taste(260)                               # ← : liste → normal
+    f.taste(10)                                # Enter auf Typ: übernehmen
+    assert f.box is None
+
+
+def test_bearbeiten_typ_normal_fragt_titel_uebernehmen():
     roh = dict(QUELL_TERMIN, layer="termine")
     f = kw.formular_bearbeiten(roh, TAG, TAG)
-    assert next(x for x in f.felder if x.name == "liste").optionen == ("todo", "keine")
-    p = _speichern(f, "keine")
+    assert dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"].startswith("typ liste: todo")
+    _typ_normal(f)
+    assert f.taste(19) == "fertig"
+    p = f.plan()
     assert p["aufrufe"][0][0] == "PUT"
+    assert all(pf != "/api/calendar/quelle" for _m, pf, _b in p["aufrufe"])
     frage = p["zurueck"]()
     assert "Steuern planen" in frage.zeile() and "(j/n)" in frage.zeile()
     frage.taste(ord("j"))
@@ -199,26 +271,69 @@ def test_bearbeiten_liste_loesen_fragt_titel_uebernehmen():
 
 def test_bearbeiten_liste_bleibt_ohne_folge():
     f = kw.formular_bearbeiten(dict(QUELL_TERMIN, layer="termine"), TAG, TAG)
-    assert _speichern(f, "todo")["zurueck"] is None
+    assert f.taste(19) == "fertig"
+    p = f.plan()
+    assert p["zurueck"] is None
+    assert all(pf != "/api/calendar/quelle" for _m, pf, _b in p["aufrufe"])
 
 
-def test_bearbeiten_liste_waehlen_oeffnet_den_kasten_und_setzt_per_kennung():
+def test_bearbeiten_typ_liste_setzt_per_kennung_beim_speichern():
     roh = {"day": "2026-10-07", "label": "Kino", "time": "19:00", "layer": "termine",
            "kennung": "k-kino"}
-    f = kw.formular_bearbeiten(roh, TAG, TAG, quelle_wahl=lambda r: kq.QuellenWahl(
-        AUSWAHL, lambda q: kq.plan_setzen(r, q)))
-    p = _speichern(f, kw.LISTE_WAEHLEN)
-    w = p["zurueck"]()
-    assert w.taste(10) == "fertig"
-    (meth, pfad, body), = w.plan()["aufrufe"]
-    assert (meth, pfad) == ("POST", "/api/calendar/quelle")
-    assert body == {"kennung": "k-kino", "art": "liste", "id": "l_todo"}
+    f = kw.formular_bearbeiten(roh, TAG, TAG, quellen=lambda: AUSWAHL)
+    _liste_waehlen(f)
+    assert f.felder[0].text == "Kino"          # eigener Titel bleibt (nur Rückfall)
+    assert f.taste(19) == "fertig"
+    p = f.plan()
+    assert p["aufrufe"][0][0] == "PUT" and p["zurueck"] is None
+    assert ("POST", "/api/calendar/quelle", {"kennung": "k-kino", "art": "liste",
+                                             "id": "l_todo"}) in p["aufrufe"]
 
 
-def test_ohne_quelle_und_ohne_wahl_kein_feld():
-    roh = {"day": "2026-10-07", "label": "Kino", "time": "19:00", "kennung": "k"}
+def test_bearbeiten_andere_liste_und_serie_und_spanne():
+    roh = dict(QUELL_TERMIN, recurring=True, rrule="FREQ=WEEKLY;BYDAY=WE", layer="termine")
+    frage = kw.formular_bearbeiten(roh, TAG, TAG, quellen=lambda: AUSWAHL)
+    frage.taste(ord("a"))
+    alle = frage.plan()["weiter"]
+    alle.i = [x.name for x in alle.sichtbar()].index("advanced")
+    alle.taste(10)
+    alle.taste(258)                            # Zeile „Liste"
+    alle.taste(10)
+    for ch in "bad":
+        alle.taste(ord(ch))
+    alle.taste(10)
+    alle.taste(19)
+    assert alle.felder[0].text == "Bad renovieren"   # Titel war der Name der alten Liste
+    assert alle.taste(19) == "fertig"
+    assert ("POST", "/api/calendar/quelle", {"kennung": "k-todo", "art": "projekt",
+                                             "id": "l_haus/7"}) in alle.plan()["aufrufe"]
+    frage = kw.formular_bearbeiten(roh, TAG, TAG)
+    frage.taste(ord("t"))
+    assert "advanced" not in [x.name for x in frage.plan()["weiter"].felder]
+    sp = dict(QUELL_TERMIN, spanning=True, von="2026-10-06", bis="2026-10-08", layer="termine")
+    frage = kw.formular_bearbeiten(sp, TAG, TAG)
+    frage.taste(ord("a"))
+    ganze = frage.plan()["weiter"]
+    _typ_normal(ganze)
+    assert ganze.taste(19) == "fertig" and ganze.plan()["zurueck"] is not None
+    frage = kw.formular_bearbeiten(sp, TAG, TAG)
+    frage.taste(ord("t"))
+    assert "advanced" not in [x.name for x in frage.plan()["weiter"].felder]
+
+
+def test_einmal_wird_routine_quelle_aus_dem_fenster():
+    roh = dict(QUELL_TERMIN, layer="termine")
     f = kw.formular_bearbeiten(roh, TAG, TAG)
-    assert "liste" not in [x.name for x in f.felder]
+    _feld(f, "wied").wahl = kw.WIEDERHOLUNG.index("wöchentlich")
+    assert f.taste(19) == "fertig"
+    (_m, pfad, body), _weg = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/routine" and body["quelle"] == Q
+    f = kw.formular_bearbeiten(roh, TAG, TAG)
+    _typ_normal(f)
+    _feld(f, "wied").wahl = kw.WIEDERHOLUNG.index("wöchentlich")
+    assert f.taste(19) == "fertig"
+    (_m, pfad, body), _weg = f.plan()["aufrufe"]
+    assert "quelle" not in body
 
 
 def test_kopie_nimmt_die_liste_mit():
@@ -258,4 +373,4 @@ def test_fusszeile_passt_sich_der_breite_an():
     for an in ("A", "C"):
         for b in (150, 110, 80):
             s = ka.tasten_hinweis(an, b)
-            assert "A für liste" in s and "! abhaken" in s
+            assert "A für liste" not in s and "! abhaken" in s

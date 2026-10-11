@@ -1,5 +1,6 @@
 """
-Kalender-TUI: das Feld „Stylebox" und wie ein gestylter Termin aussieht.
+Kalender-TUI: die Stylebox (im Fenster „advanced") und wie ein gestylter
+Termin aussieht.
 
 Sasha, 10.10.2026: „Im Terminformular gibt es NUR eine Option ‚Stylebox'
 (kein eigenes ‚color'-Feld). Von dort öffnen sich die Bausteine, und das
@@ -42,56 +43,87 @@ def _auf(f, name):
     f.i = [x.name for x in f.sichtbar()].index(name)
 
 
-# ── Formular: genau EIN Feld „Stylebox" ───────────────────────────────
-def test_neu_hat_genau_ein_feld_stylebox_und_keine_farbe():
+def _stil(f):
+    return _feld(f, "advanced").adv["stil"]
+
+
+def _setze_stil(f, st):
+    _feld(f, "advanced").adv["stil"] = dict(st)
+
+
+def _zur_stylebox(f):
+    """Formular → Fenster „advanced" → Zeile Stylebox → Stylebox offen."""
+    _auf(f, "advanced")
+    assert f.taste(10) == "weiter" and f.box is not None       # Enter speichert hier nicht
+    f.taste(258)                                               # Typ normal: ↓ = Stylebox
+    assert f.box.reihe == "stil"
+    f.taste(10)
+    assert f.box.unter is not None
+
+
+# ── Formular: die Stylebox liegt im Fenster „advanced" (11.10.2026) ───
+def test_neu_hat_kein_feld_stylebox_mehr_nur_advanced():
     f = kw.formular_neu(TAG, TAG)
     namen = [x.name for x in f.felder]
-    assert namen.count("stil") == 1 and "color" not in namen and "farbe" not in namen
-    assert _feld(f, "stil").beschriftung == "Stylebox"
-    assert dict((b, w) for b, w, _a, _h in f.zeilen())["Stylebox"] == "keine"
+    assert "stil" not in namen and "liste" not in namen and namen.count("advanced") == 1
+    assert _feld(f, "advanced").beschriftung == "Advanced"
+    assert dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"] == "typ normal · stil keine"
 
 
 def test_enter_oeffnet_die_stylebox_fertig_uebernimmt_esc_laesst():
     f = kw.formular_neu(TAG, TAG)
     f.felder[0].text = "Uni"
-    _auf(f, "stil")
-    assert f.taste(10) == "weiter" and f.box is not None       # Enter speichert hier nicht
-    assert f.box.text == "Uni"                                 # Vorschau mit dem Titel
+    _zur_stylebox(f)
+    assert f.box.unter.text == "Uni"                           # Vorschau mit dem Titel
     f.taste(-1)                                                # Takt der Schleife: nichts
-    assert f.box is not None
+    assert f.box.unter is not None
     f.taste(curses.KEY_RIGHT)                                  # Rahmen: ‹ keine › → solid
     f.taste(curses.KEY_RIGHT)                                  # → dashed
-    assert f.taste(10) == "weiter" and f.box is None
-    assert _feld(f, "stil").stil == {"border-style": "dashed"}
-    f.taste(10)
+    f.taste(10)                                                # Stylebox: nehmen
+    assert f.box is not None and f.box.unter is None
+    assert f.box.stil == {"border-style": "dashed"}
+    assert _stil(f) == {}                                      # noch nicht im Formular
+    f.taste(10)                                                # Stylebox wieder auf
     f.taste(curses.KEY_RIGHT)
     f.taste(27)                                                # Esc nur in der Box
-    assert f.box is None and _feld(f, "stil").stil == {"border-style": "dashed"}
-    zeile = dict((b, w) for b, w, _a, _h in f.zeilen())["Stylebox"]
-    assert zeile.startswith("┌╌┐")
+    assert f.box.unter is None and f.box.stil == {"border-style": "dashed"}
+    assert f.taste(19) == "weiter" and f.box is None           # Strg-S: übernehmen
+    assert _stil(f) == {"border-style": "dashed"}
+    zeile = dict((b, w) for b, w, _a, _h in f.zeilen())["Advanced"]
+    assert zeile == "typ normal · stil ┌╌┐"
+
+
+def test_esc_im_fenster_verwirft_den_neuen_stil():
+    f = kw.formular_neu(TAG, TAG)
+    _zur_stylebox(f)
+    f.taste(curses.KEY_RIGHT)
+    f.taste(10)
+    assert f.box.stil == {"border-style": "solid"}
+    f.taste(27)
+    assert f.box is None and _stil(f) == {}
 
 
 def test_farbe_ueber_den_farbwaehler():
     f = kw.formular_neu(TAG, TAG)
-    _auf(f, "stil")
-    f.taste(10)
+    _zur_stylebox(f)
     f.taste(curses.KEY_DOWN)                                   # Rahmenfarbe
     f.taste(ord("#"))
     for ch in "ff8800":
         f.taste(ord(ch))
     for _ in range(3):                                         # Enter bis der Wähler zu ist
-        if f.box.waehler is None:
+        if f.box.unter.waehler is None:
             break
         f.taste(10)
     f.taste(10)                                                # Box: nehmen
-    assert _feld(f, "stil").stil == {"border-color": "#ff8800"}
+    f.taste(19)                                                # Fenster: übernehmen
+    assert _stil(f) == {"border-color": "#ff8800"}
 
 
 def test_speichern_neu_schickt_stil_mit():
     f = kw.formular_neu(TAG, TAG)
     f.felder[0].text = "Uni"
     _feld(f, "von").text, _feld(f, "bis").text = "8", "12"
-    _feld(f, "stil").stil = dict(STIL)
+    _setze_stil(f, STIL)
     assert f.taste(19) == "fertig"                             # Strg-S
     (meth, pfad, body), = f.plan()["aufrufe"]
     assert (meth, pfad) == ("POST", "/api/calendar/entry") and body["stil"] == STIL
@@ -107,10 +139,14 @@ def test_speichern_neu_schickt_stil_mit():
 
 def test_backspace_entfernt_den_stil():
     f = kw.formular_bearbeiten(dict(UNI, layer="termine"), TAG, TAG)
-    assert _feld(f, "stil").stil == STIL
-    _auf(f, "stil")
-    f.taste(127)
-    assert _feld(f, "stil").stil == {}
+    assert _stil(f) == STIL
+    _auf(f, "advanced")
+    f.taste(10)
+    f.taste(258)
+    f.taste(127)                                               # ⌫ auf der Zeile Stylebox
+    assert f.box.stil == {}
+    f.taste(19)
+    assert _stil(f) == {}
 
 
 def test_bearbeiten_stil_per_kennung_nur_wenn_geaendert():
@@ -118,7 +154,7 @@ def test_bearbeiten_stil_per_kennung_nur_wenn_geaendert():
     assert f.taste(19) == "fertig"
     assert all(p != "/api/calendar/stil" for _m, p, _b in f.plan()["aufrufe"])
     f = kw.formular_bearbeiten(dict(UNI, layer="termine"), TAG, TAG)
-    _feld(f, "stil").stil = {"color": "#00ff00"}
+    _setze_stil(f, {"color": "#00ff00"})
     assert f.taste(19) == "fertig"
     assert ("POST", "/api/calendar/stil", {"kennung": "k-uni", "stil": {"color": "#00ff00"}}) \
         in f.plan()["aufrufe"]
@@ -130,11 +166,11 @@ def test_routine_und_spanne_alle_haben_stil_dieser_tag_nicht():
     frage = kw.formular_bearbeiten(roh, TAG, TAG)
     frage.taste(ord("t"))
     dieser = frage.plan()["weiter"]
-    assert "stil" not in [x.name for x in dieser.felder]
+    assert "advanced" not in [x.name for x in dieser.felder]
     frage = kw.formular_bearbeiten(roh, TAG, TAG)
     frage.taste(ord("a"))
     alle = frage.plan()["weiter"]
-    _feld(alle, "stil").stil = {}
+    _setze_stil(alle, {})
     assert alle.taste(19) == "fertig"
     assert ("POST", "/api/calendar/stil", {"kennung": "k-geige", "stil": {}}) \
         in alle.plan()["aufrufe"]
@@ -142,7 +178,7 @@ def test_routine_und_spanne_alle_haben_stil_dieser_tag_nicht():
           "layer": "termine", "kennung": "k-messe"}
     frage = kw.formular_bearbeiten(sp, TAG, TAG)
     frage.taste(ord("a"))
-    assert "stil" in [x.name for x in frage.plan()["weiter"].felder]
+    assert "advanced" in [x.name for x in frage.plan()["weiter"].felder]
 
 
 def test_kopie_und_ansehen_tragen_den_stil():
@@ -247,13 +283,10 @@ def test_stil_attr_mischt_mit_der_rueckfallrolle():
 def test_stylebox_entfernt_einzelne_eigenschaft():
     """Rückgabe {"name": None} der Stylebox (af5915e) entfernt die Eigenschaft,
     statt None in den Stil zu schreiben."""
-    from tui.ansichten import kalender_werkzeuge as kw
-    from tui.ansichten import kalender_stil
-    f = kw.Feld("stil", "Stylebox", art="stil", wert={})
-    f.stil = {"border-style": "double", "color": "#ffffff"}
-    form = kw.Formular("t", [f], lambda w: None)
-    form.box, form._box_feld = type("B", (), {"taste": lambda self, ch: (
-        "fertig", {"border-style": None, "color": "#ff8800"})})(), f
-    form._box_taste(10)
-    assert f.stil == {"color": "#ff8800"}
+    from tui.ansichten import kalender_advanced, kalender_stil
+    adv = kalender_advanced.Advanced({"stil": {"border-style": "double", "color": "#ffffff"}})
+    adv.unter = type("B", (), {"taste": lambda self, ch: (
+        "fertig", {"border-style": None, "color": "#ff8800"})})()
+    adv.taste(10)
+    assert adv.unter is None and adv.stil == {"color": "#ff8800"}
     assert kalender_stil.stil_kern.anwenden({"a": 1}, {"a": None}) == {}

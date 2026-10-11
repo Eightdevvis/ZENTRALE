@@ -6,7 +6,7 @@ heranzoomt, und eine „Stylebox", in der man das Aussehen eines Objekts
 einstellt — für alle Apps, nicht nur den Kalender. Beide sind Bausteine
 (`tui/bausteine/`, Regeln in [tui_bauplan.md](tui_bauplan.md) „Bausteine"):
 sie kennen keinen Aufrufer, speichern nichts und fragen kein Backend.
-Eingehängt seit 10.10.2026 im Kalender: Feld „Stylebox" im Terminformular
+Eingehängt seit 10.10.2026 im Kalender, seit 11.10. im Fenster „advanced" des Terminformulars
 ([kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md)); das
 Angebot für einen Kasten steht als `stil.KASTEN` in `core/stil.py` (dort auch
 `als_css`/`aus_css`, `anwenden` und die CSS3-Farbnamen für iCalendar COLOR).

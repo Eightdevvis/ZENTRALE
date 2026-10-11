@@ -36,7 +36,7 @@ TUI_KEYS = [
     ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
     ("notizen", "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
     ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
-    ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu · A neu für eine Liste/ein Projekt (Titel = ihr oberster offener Punkt, ! hakt ihn ab) · e ändern (Kasten, Feld „Liste“) · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
+    ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu (Feld „Advanced“: Typ normal/liste und Stylebox; Typ liste = Titel ist der oberste offene Punkt einer Liste/eines Projekts, ! hakt ihn ab) · e ändern · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
     ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
     ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter oder \\ + enter neue zeile · ←→ home end del: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann pgup/pgdn) · ctrl+c stoppt eine laufende antwort · esc schließt (die antwort läuft weiter, ● wenn fertig) · /help im chat: /new /chats /model /provider /effort /budget /local /cloud /auto"),
     ("tutor", "Persona-Zimmer (eigene App, eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · braucht einen bildschirm"),
@@ -113,7 +113,7 @@ CTX_KEYS = {
     # Kalender (seit 07.10.2026 nur noch A/B/C, alle wie calcurse bedienbar;
     # Belegung von der KALENDER-Sitzung, hier nur englisch beschriftet)
     "cal:a:termine": [
-        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("A", "new for list"), ("e", "edit"),
+        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
         ("u", "(un)commit"), ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
         ("g", "go to"), ("x", "show done"), ("R", "rhythm"), ("G", "course group"),
@@ -121,7 +121,7 @@ CTX_KEYS = {
     ],
     "cal:a:kalender": [
         ("←→", "day"), ("↑↓", "week"), ("0/$", "week start/end"),
-        ("a", "new"), ("A", "new for list"), ("enter", "to entries"), ("R", "rhythm"), ("tab", "box"),
+        ("a", "new"), ("enter", "to entries"), ("R", "rhythm"), ("tab", "box"),
         ("esc", "close"),
     ],
     "cal:a:todo": [
@@ -134,7 +134,7 @@ CTX_KEYS = {
         ("g", "go to"), ("R", "rhythm"), ("v", "view"), ("esc", "close"),
     ],
     "cal:c": [
-        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("A", "new for list"), ("e", "edit"),
+        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
         ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
         ("u", "(un)commit"), ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
         ("R", "rhythm"), ("G", "course group"), ("v", "view"), ("esc", "close"),

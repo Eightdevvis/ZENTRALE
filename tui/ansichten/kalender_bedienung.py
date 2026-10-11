@@ -16,7 +16,7 @@ import urllib.parse
 from datetime import date, timedelta
 
 from .basis import BEENDEN, api_call
-from . import kalender_gruppen, kalender_motive, kalender_phasen
+from . import kalender_advanced, kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_quellen as kq
 from . import kalender_stil
 from . import kalender_werkzeuge as kw
@@ -29,12 +29,12 @@ FOKUS = ("termine", "kalender", "todo")
 # und befehle.py mitziehen.
 TASTE_RHYTHMUS = ord("R")   # Kasten „Rhythmus": Phasen einstellen
 TASTE_KURSGRUPPE = ord("G")  # Gruppe für den ganzen Kurs des gewählten Termins
-# Neuer Termin für eine Liste/ein Projekt (10.10.2026, Sasha: „mit shift a
-# oder sowas"). Shift+A war bis dahin nur ein zweites „a" — das Alias ist
-# dafür aufgegeben; a und Strg-A legen weiter normal an. Shift+Buchstabe
-# fängt kein Terminal, OS oder i3 ab. Abhaken des angezeigten Punkts: „!"
-# wie im TODO-Kasten (dort ist es calcurses „erledigt").
-TASTE_NEU_LISTE = ord("A")
+# Neuer Termin für eine Liste/ein Projekt: seit 11.10.2026 keine eigene
+# Taste mehr (vorher Shift+A, d75f21a). Sasha: „dann wird der listentermin zu
+# nem termintypen und nicht zu so nem extra shortcut den kannst dann
+# rausnehmen" — a → Formular → Advanced → Typ liste. A ist wieder, was es vor
+# d75f21a war: ein zweites a (wie im TODO-Kasten). Abhaken des angezeigten
+# Punkts: „!" wie im TODO-Kasten (dort ist es calcurses „erledigt").
 TASTE_ABHAKEN = ord("!")
 
 
@@ -283,7 +283,7 @@ class Bedienung:
             self.setze_tag(d + timedelta(days=sprung))
         elif ch in (10, 13, curses.KEY_ENTER):
             self.kal.sprung_zum_tag(d)
-        elif ch in (ord("a"), TASTE_NEU_LISTE, 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
+        elif ch in (ord("a"), ord("A"), 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
                     ord("c"), ord("p"), 22, ord("u"), ord("U"), TASTE_KURSGRUPPE, 9,
                     curses.KEY_BTAB):
             W["msg"] = "im monat nur ansehen — enter öffnet den tag zum bearbeiten"
@@ -313,10 +313,8 @@ class Bedienung:
             else:
                 W["msg"] = "kein termin gewählt"
             return True
-        if ch in (ord("a"), 1):                # Strg-A wie calcurse
-            self._starte(kw.formular_neu(d, date.today()))
-        elif ch == TASTE_NEU_LISTE:
-            self._neu_fuer_liste(d)
+        if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse, A = a
+            self._starte(kw.formular_neu(d, date.today(), quellen=self._quellen_holen))
         elif ch in (10, 13, curses.KEY_ENTER):
             roh = self.gewaehlt()
             if roh:
@@ -327,11 +325,11 @@ class Bedienung:
                 W["msg"] = "kein termin gewählt"
             elif ch in (ord("e"), ord("E")):
                 self._starte(kw.formular_bearbeiten(roh, d, date.today(),
-                                                    quelle_wahl=self._quelle_wahl_fuer))
+                                                    quellen=self._quellen_holen))
             elif ch in (ord("d"), ord("D")):
                 self._starte(kw.dialog_loeschen(roh, d))
             elif ch == ord("r"):
-                dl = kw.formular_wiederholen(roh, d, date.today(), self._quelle_wahl_fuer)
+                dl = kw.formular_wiederholen(roh, d, date.today(), self._quellen_holen)
                 if dl is None:
                     W["msg"] = "eine spanne wiederholt sich nicht — e ändert sie"
                 else:
@@ -356,7 +354,8 @@ class Bedienung:
             if roh and kq.quelle_von(roh):
                 self._quelle_abhaken(roh)
             else:
-                W["msg"] = "! hakt den obersten Punkt eines Listen-Termins ab (A) · TODO: tab"
+                W["msg"] = ("! hakt den obersten Punkt eines Listen-Termins ab "
+                            "(a → advanced → typ liste) · TODO: tab")
         else:
             return False
         return True
@@ -371,10 +370,8 @@ class Bedienung:
             self.setze_tag(d + timedelta(days=sprung))
         elif ch in (10, 13, curses.KEY_ENTER):
             self.W["fokus"] = "termine"
-        elif ch in (ord("a"), 1):
-            self._starte(kw.formular_neu(d, date.today()))
-        elif ch == TASTE_NEU_LISTE:
-            self._neu_fuer_liste(d)
+        elif ch in (ord("a"), ord("A"), 1):
+            self._starte(kw.formular_neu(d, date.today(), quellen=self._quellen_holen))
         else:
             return False
         return True
@@ -414,30 +411,12 @@ class Bedienung:
 
     # ── Termine mit Titel aus Liste/Projekt (kalender_quellen.py) ─────
     def _quellen_holen(self):
+        """Für Advanced → Typ liste: GET /api/calendar/quellen (None = Fehler;
+        das Fenster sagt es selbst)."""
         try:
             return api_call("/api/calendar/quellen", timeout=8.0) or {}
-        except Exception as e:
-            self.W["msg"] = "⚠ listen: backend? " + str(e)[:50]
+        except Exception:
             return None
-
-    def _neu_fuer_liste(self, d):
-        """A: erst die Liste wählen, dann das ganz normale Neu-Formular."""
-        auswahl = self._quellen_holen()
-        if auswahl is None:
-            return
-        if not kq.eintraege(auswahl):
-            self.W["msg"] = "keine listen gefunden"
-            return
-        self._starte(kq.QuellenWahl(auswahl, lambda q: kw._plan(
-            weiter=kw.formular_neu(d, date.today(), quelle=q))))
-
-    def _quelle_wahl_fuer(self, roh):
-        """Feld „Liste" → „wählen …": derselbe Kasten, setzt per Kennung."""
-        auswahl = self._quellen_holen()
-        if auswahl is None:
-            return None
-        return kq.QuellenWahl(auswahl, lambda q: kq.plan_setzen(roh, q),
-                              titel="liste für „%s“" % (roh.get("label") or "termin"))
 
     def _quelle_vorschau(self, roh):
         q = kq.quelle_von(roh)
@@ -601,36 +580,13 @@ class Bedienung:
         z, C = self.z, self.z.C
         kal = C.get("kal", C["acc"])
         if isinstance(dl, kw.Formular):
-            zeilen = dl.zeilen()
-            bl = max(len(b) for b, *_ in zeilen) + 2
-            # breit genug für die längste Zeile (Stylebox-Vorschau), höchstens der Platz
-            w = min(bw - 4, max(56, bl + 40, bl + 6 + max(len(wt) for _b, wt, *_r in zeilen)))
-            h = len(zeilen) + 6
-            y, x, w, h = self._kasten(by, bx, bh, bw, w, h, dl.titel)
             felder = dl.sichtbar()
-            for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
-                yy = y + 2 + i
-                z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
-                feld_w = w - bl - 4
-                art = felder[i].art if i < len(felder) else "text"
-                txt = wert + ("_" if aktiv and art == "text" else "")
-                attr = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
-                z.addclip(yy, x + 2 + bl, txt.ljust(feld_w)[:feld_w], feld_w, attr)
-                if art == "stil":                # Rahmenzeichen in Rahmen- und Flächenfarbe
-                    self._stil_vorschau(yy, x + 2 + bl, felder[i].stil)
-            unten = y + h - 3
-            if dl.fehler:
-                z.addclip(unten, x + 2, "⚠ " + dl.fehler, w - 4, C["warn"])
-            else:
-                hilfe = next((hf for _b, _w, a, hf in zeilen if a and hf), "")
-                if hilfe:
-                    z.addclip(unten, x + 2, hilfe, w - 4, C["faint"])
-            z.addclip(y + h - 2, x + 2, "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
-                      w - 4, C["faint"])
-            if dl.box is not None:               # Stylebox als Kasten über dem Formular
-                hb, wb = min(bh - 2, 22), min(bw - 4, 72)
-                yb, xb, hb, wb = dl.box.mittig(bh, bw, hb, wb)
-                dl.box.zeichne(z, by + yb, bx + xb, hb, wb)
+            self._zeichne_felder(dl.zeilen(), [f.art for f in felder],
+                                 [f.adv for f in felder], dl.titel, dl.fehler,
+                                 "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
+                                 by, bx, bh, bw)
+            if dl.box is not None:               # Fenster „advanced" über dem Formular
+                self._zeichne_advanced(dl.box, by, bx, bh, bw)
             return
         if getattr(dl, "liste", False):
             self._zeichne_liste(dl, by, bx, bh, bw)
@@ -641,15 +597,67 @@ class Bedienung:
         y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
         z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
 
-    def _stil_vorschau(self, y, x, st):
-        """Die drei Rahmenzeichen vorn in der Zeile „Stylebox" farbig (wie
-        der Kasten im Kalender aussehen wird)."""
+    def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, fuss, by, bx, bh, bw):
+        """Ein Kasten mit Feldzeilen (Formular und Fenster „advanced"):
+        Beschriftung, Wert (aktiv in Akzentfläche), unten Hilfe/Fehler und
+        die Tastenzeile. `stile[i]`: dict mit „stil" → Rahmenzeichen farbig."""
+        z, C = self.z, self.z.C
+        kal = C.get("kal", C["acc"])
+        bl = max(len(b) for b, *_ in zeilen) + 2
+        # breit genug für die längste Zeile (Stil-Vorschau), höchstens der Platz
+        w = min(bw - 4, max(56, bl + 40, bl + 6 + max(len(wt) for _b, wt, *_r in zeilen),
+                            len(fuss) + 4))
+        h = len(zeilen) + 6
+        y, x, w, h = self._kasten(by, bx, bh, bw, w, h, titel)
+        for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
+            yy = y + 2 + i
+            z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
+            feld_w = w - bl - 4
+            art = arten[i] if i < len(arten) else "text"
+            txt = wert + ("_" if aktiv and art == "text" else "")
+            attr = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE) if aktiv else C["dim"]
+            z.addclip(yy, x + 2 + bl, txt.ljust(feld_w)[:feld_w], feld_w, attr)
+            st = (stile[i] or {}).get("stil") if i < len(stile) else None
+            if st:                               # Rahmenzeichen in Rahmen- und Flächenfarbe
+                self._stil_vorschau(yy, x + 2 + bl, st, wert)
+        unten = y + h - 3
+        if fehler:
+            z.addclip(unten, x + 2, "⚠ " + fehler, w - 4, C["warn"])
+        else:
+            hilfe = next((hf for _b, _w, a, hf in zeilen if a and hf), "")
+            if hilfe:
+                z.addclip(unten, x + 2, hilfe, w - 4, C["faint"])
+        z.addclip(y + h - 2, x + 2, fuss, w - 4, C["faint"])
+
+    def _zeichne_advanced(self, adv, by, bx, bh, bw):
+        """Das Fenster „advanced" (kalender_advanced.Advanced) und darüber,
+        falls offen, die Stylebox oder „welche Liste?"."""
+        zeilen = adv.zeilen()
+        stile = [{"stil": adv.stil} if b == "Stylebox" else None for b, *_r in zeilen]
+        self._zeichne_felder(zeilen, ["wahl"] * len(zeilen), stile, adv.titel, adv.fehler,
+                             kalender_advanced.FUSS, by, bx, bh, bw)
+        u = adv.unter
+        if u is None:
+            return
+        if getattr(u, "liste", False):
+            self._zeichne_liste(u, by, bx, bh, bw)
+        else:                                    # Stylebox
+            hb, wb = min(bh - 2, 22), min(bw - 4, 72)
+            yb, xb, hb, wb = u.mittig(bh, bw, hb, wb)
+            u.zeichne(self.z, by + yb, bx + xb, hb, wb)
+
+    def _stil_vorschau(self, y, x, st, wert=""):
+        """Die drei Rahmenzeichen in der Zeile farbig (wie der Kasten im
+        Kalender aussehen wird) — dort, wo sie im Text stehen."""
         vr = kalender_stil.vorschau_rahmen(st)
         if vr is None:
             return
         zeichen, rolle = vr
+        ab = wert.find(zeichen)
+        if ab < 0:
+            return
         attr = self.kal._stil_attr(rolle) if hasattr(self.kal, "_stil_attr") else self.z.C["dim"]
-        self.z.addclip(y, x, zeichen, 3, attr)
+        self.z.addclip(y, x + ab, zeichen, 3, attr)
 
     def _zeichne_liste(self, dl, by, bx, bh, bw):
         """Der Rhythmus-Kasten: eine Zeile je Phase, Zeichen in Motivfarbe,

@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from . import kalender_gruppen, kalender_quellen, kalender_stil
+from . import kalender_advanced, kalender_gruppen, kalender_quellen, kalender_stil
 from .kalender_ansichten import _tag_eintraege, monat_eintraege, titel_schluessel
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
@@ -340,15 +340,17 @@ _KURZ_FREQ = {"DAILY": "täglich", "WEEKLY": "wöchentlich", "MONTHLY": "monatli
 
 
 class Feld:
-    """art: 'text' (tippen), 'wahl' (←→ zwischen `optionen`) oder 'stil'
-    (Enter öffnet die Stylebox, Wert = dict aus CSS-Eigenschaften).
-    `lesen(text)` → (ok, wert|fehlertext); `zeigen(werte)` → sichtbar?"""
+    """art: 'text' (tippen), 'wahl' (←→ zwischen `optionen`) oder 'advanced'
+    (Enter öffnet das Fenster „advanced", Wert = {typ, quelle, stil} —
+    kalender_advanced.py). `lesen(text)` → (ok, wert|fehlertext);
+    `zeigen(werte)` → sichtbar?; `hilfe` Text oder (werte) → Text."""
 
     def __init__(self, name, beschriftung, art="text", wert="", optionen=(),
                  lesen=None, zeigen=None, hilfe=""):
         self.name, self.beschriftung, self.art = name, beschriftung, art
         self.text = str(wert or "") if art == "text" else ""
-        self.stil = dict(wert or {}) if art == "stil" else None
+        self.adv = dict(wert or {}) if art == "advanced" else None
+        self.quellen = None             # art 'advanced': () → GET /api/calendar/quellen
         self.optionen = tuple(optionen)
         self.wahl = self.optionen.index(wert) if wert in self.optionen else 0
         self.lesen = lesen or (lambda s: (True, s.strip()))
@@ -356,14 +358,15 @@ class Feld:
         self.hilfe = hilfe
 
     def roh(self):
-        if self.art == "stil":
-            return dict(self.stil)
+        if self.art == "advanced":
+            return dict(self.adv)
         return self.optionen[self.wahl] if self.art == "wahl" else self.text
 
 
 class Formular:
     """Mehrere Felder in einem Kasten. `plan(werte)` macht daraus die Aufrufe,
-    `pruefen(werte)` darf Feldübergreifendes ablehnen → (feld, fehler)|None."""
+    `pruefen(werte)` darf Feldübergreifendes ablehnen → (feld, fehler)|None.
+    Das Feld „advanced" breitet sich in den Werten aus: typ, quelle, stil."""
 
     modal = True
 
@@ -374,7 +377,7 @@ class Formular:
         self._u8 = b""
         self.fertig = False
         self.antworten: dict = {}
-        self.box = None                 # offene Stylebox (Feld art 'stil')
+        self.box = None                 # offenes Fenster „advanced" (Feld art 'advanced')
         sicht = self.sichtbar()
         self.i = next((k for k, f in enumerate(sicht) if f.name == fokus), 0)
 
@@ -399,7 +402,10 @@ class Formular:
                 self.fehler, self.fehler_feld = wert, f.name
                 self.i = self.sichtbar().index(f)
                 return False
-            werte[f.name] = wert
+            if f.art == "advanced":
+                werte.update(wert)
+            else:
+                werte[f.name] = wert
         p = self._pruefen(werte)
         if p:
             name, self.fehler = p
@@ -420,11 +426,8 @@ class Formular:
             return "abbruch"
         f = self.feld
         n = len(self.sichtbar())
-        if f.art == "stil" and ch in (10, 13, 343, 32, 261):    # Enter/Leertaste/→: Stylebox
+        if f.art == "advanced" and ch in (10, 13, 343, 32, 261):  # Enter/Leertaste/→: Fenster
             self._box_oeffnen(f)
-            return "weiter"
-        if f.art == "stil" and ch in (8, 127, 263, 330):       # ⌫/Entf: kein Stil
-            f.stil = {}
             return "weiter"
         if ch in (10, 13, 343, 19):              # Enter / KEY_ENTER / Strg-S
             return "fertig" if self._speichern() else "weiter"
@@ -456,44 +459,47 @@ class Formular:
             self.fehler, self.fehler_feld = "", None
         return "weiter"
 
-    # ── Stylebox über dem Formular (10.10.2026) ────────────────────────
-    # Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox'. Von dort
-    # öffnen sich die Bausteine." Solange sie offen ist, gehen alle Tasten an
-    # sie (tui/bausteine/stylebox.py); „fertig" übernimmt das Geänderte ins
-    # Feld, „abbruch" lässt es, wie es war. Gespeichert wird erst mit dem
-    # Formular.
+    # ── Fenster „advanced" über dem Formular (11.10.2026) ──────────────
+    # Sasha: „im formular für nen termin kann man auf ‚advanced' klicken und
+    # dort ist dann stylebox oder typus wählbar". Solange es offen ist, gehen
+    # alle Tasten an das Fenster (kalender_advanced.Advanced, darin ggf. die
+    # Stylebox oder „welche Liste?"); „fertig" übernimmt ins Feld, „abbruch"
+    # lässt es, wie es war. Gespeichert wird erst mit dem Formular.
     def _box_oeffnen(self, f):
-        try:
-            from tui.bausteine.stylebox import Stylebox
-        except ImportError:             # als Skript gestartet: tui/ liegt im Pfad
-            from bausteine.stylebox import Stylebox
-        text = (self.roh_werte().get("titel") or "").strip() or "Termin"
-        self.box = Stylebox(f.stil, list(kalender_stil.ANGEBOT), titel="stylebox", text=text)
+        text = (self.roh_werte().get("titel") or "").strip()
+        self.box = kalender_advanced.Advanced(f.adv, quellen=f.quellen, text=text)
         self._box_feld = f
 
     def _box_taste(self, ch) -> str:
-        if ch in (-1, 410):              # Takt der Hauptschleife / KEY_RESIZE: keine Taste
-            return "weiter"
         erg = self.box.taste(ch)
-        if erg and erg[0] == "fertig":
-            # Wert None = Eigenschaft entfernt (Stylebox seit af5915e); update
-            # schriebe None hinein — anwenden lässt sie weg.
-            self._box_feld.stil = kalender_stil.stil_kern.anwenden(self._box_feld.stil, erg[1])
-        if erg:
+        if erg == "fertig":
+            f = self._box_feld
+            alt, neu = kalender_advanced.quelle(f.adv), self.box.wert()
+            f.adv = neu
+            q = kalender_advanced.quelle(neu)
+            titel = next((x for x in self.felder if x.name == "titel"), None)
+            # Neue Liste: der Titel wird ihr Name, solange er leer ist oder noch
+            # der Name der alten Liste (wie vorher bei A vorbelegt).
+            if q and titel is not None and q != alt and \
+                    titel.text.strip() in ("", (alt or {}).get("name", "")):
+                titel.text = q["name"]
+        if erg in ("fertig", "abbruch"):
             self.box = None
         return "weiter"
 
     def zeilen(self) -> list:
         """[(beschriftung, wert, aktiv, hilfe)] für den Kasten."""
         aus = []
+        w = self.roh_werte()
         for k, f in enumerate(self.sichtbar()):
-            if f.art == "stil":
-                wert = kalender_stil.vorschau_text(f.stil)
+            if f.art == "advanced":
+                wert = kalender_advanced.zusammenfassung(f.adv)
             elif f.art == "wahl":
                 wert = "‹ %s ›" % f.roh()
             else:
                 wert = f.text
-            aus.append((f.beschriftung, wert, k == self.i, f.hilfe))
+            hilfe = f.hilfe(w) if callable(f.hilfe) else f.hilfe
+            aus.append((f.beschriftung, wert, k == self.i, hilfe))
         return aus
 
     def plan(self) -> dict:
@@ -579,16 +585,32 @@ def _gruppe_aufruf(roh, w) -> list:
     return [("POST", "/api/calendar/kategorie", body)]
 
 
-# ── Stylebox (Feld `stil`, 10.10.2026) ─────────────────────────────────
-# EIN Feld für das ganze Aussehen des Kastens (kalender_stil.py). Gilt wie
-# Gruppe und Liste für den ganzen Eintrag/die ganze Serie — darum nicht im
-# Kasten „nur dieser Tag".
-STIL_HILFE = "enter öffnet die Stylebox · ⌫ kein stil · strg-s speichert"
+# ── Feld „Advanced": Typ (normal/liste) und Stylebox (11.10.2026) ─────
+# Sasha: „bitte setz die stylebox unter ein eigenes fenster … mit typ
+# ‚normal' und ‚list' verfügbar, dann wird der listentermin zu nem
+# termintypen". EIN Feld statt „Stylebox" und „Liste"; das Fenster steht in
+# kalender_advanced.py. Gilt wie die Gruppe für den ganzen Eintrag/die ganze
+# Serie — darum nicht im Kasten „nur dieser Tag". Beim Speichern breitet es
+# sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil.
+ADVANCED_HILFE = "enter öffnet: typ (normal/liste) und stylebox"
+_QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
 
 
-def _stil_feld(roh=None) -> Feld:
-    return Feld("stil", "Stylebox", art="stil", wert=kalender_stil.von(roh),
-                lesen=lambda d: (True, dict(d or {})), hilfe=STIL_HILFE)
+def _advanced_feld(roh, titel_feld, quellen=None) -> Feld:
+    """Das Feld, vorbelegt aus `roh`; der Titel daneben darf bei Typ liste
+    leer bleiben (= Name der Liste) und sagt dann, dass er nur Rückfall ist."""
+    f = Feld("advanced", "Advanced", art="advanced", wert=kalender_advanced.wert_von(roh),
+             lesen=lambda d: (True, {"typ": d.get("typ"), "quelle": kalender_advanced.quelle(d),
+                                     "stil": dict(d.get("stil") or {})}),
+             hilfe=ADVANCED_HILFE)
+    f.quellen = quellen
+
+    def titel_lesen(s):
+        q = kalender_advanced.quelle(f.adv)
+        return (True, s.strip() or q["name"]) if q else _l_titel(s)
+    titel_feld.lesen = titel_lesen
+    titel_feld.hilfe = lambda w: _QUELLE_TITEL_HILFE if kalender_advanced.quelle(f.adv) else ""
+    return f
 
 
 def _stil_body(w) -> dict:
@@ -609,7 +631,7 @@ def _stil_aufruf(roh, w) -> list:
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
                    mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag",
-                   mit_gruppe=True, roh=None):
+                   mit_gruppe=True, roh=None, quellen=None):
     ganz_an = lambda w: w.get("ganz") == "ja"
     regel_an = lambda w: w.get("wied", "keine") != "keine"
     felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
@@ -641,7 +663,7 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
         ]
     felder.append(Feld("ort", "Ort", wert=ort))
     if mit_gruppe:
-        felder += _gruppe_felder(roh) + [_stil_feld(roh)]
+        felder += _gruppe_felder(roh) + [_advanced_feld(roh, felder[0], quellen)]
     return felder
 
 
@@ -724,76 +746,63 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, kon
 
 
-def formular_neu(tag: date, heute: date, quelle: dict | None = None) -> Formular:
+def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
     """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender).
-    A (mit `quelle` aus kalender_quellen.QuellenWahl): GENAU dasselbe
-    Formular, nur der Titel ist der Name der Liste vorbelegt (leer = ihr
-    Name) — angezeigt wird live ihr oberster offener Punkt."""
+    Ein Listen-Termin ist seit 11.10.2026 kein eigener Weg mehr (früher
+    Taste A), sondern Advanced → Typ liste in GENAU diesem Formular; der
+    Titel wird dann der Name der Liste (leer = ihr Name), angezeigt wird live
+    ihr oberster offener Punkt. `quellen()` → die Listen (von der Bedienung)."""
     def plan(w):
         layer = UNVERBINDLICH if w.get("verbindlich") == "nein" else "termine"
-        aufrufe, meldung, kon = _neu_plan(w, tag, layer, quelle)
+        aufrufe, meldung, kon = _neu_plan(w, tag, layer, w.get("quelle"))
         if layer == UNVERBINDLICH:
             kon = None                    # uncommitted: Kollision nur Hinweis, keine Rückfrage
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
-    felder = _termin_felder(tag, heute, titel=(quelle or {}).get("name") or "")
-    if quelle:
-        felder[0].lesen = lambda s: (True, s.strip() or quelle["name"])
-        felder[0].hilfe = _QUELLE_TITEL_HILFE
+    felder = _termin_felder(tag, heute, quellen=quellen)
     # committed (Standard) oder uncommitted — umschalten später mit u
     felder.append(Feld("verbindlich", "Verbindlich", art="wahl", wert="ja",
                        optionen=("ja", "nein"), hilfe="nein = uncommitted (blass, nicht fest)"))
-    if quelle:
-        titel = "neuer termin · %s %s" % (kalender_quellen.wort(quelle["art"]).lower(),
-                                          quelle["name"])
-        return Formular(titel, felder, plan)
     return Formular("neuer termin", felder, plan)
 
 
-# ── Feld „Liste" im Bearbeiten-Kasten (10.10.2026) ─────────────────────
-# Sasha: „man wählt ja eigentlich einfach nur ne liste für nen termin slot
-# aus". Das Feld gilt wie die Gruppe für den ganzen Eintrag/die ganze Serie
-# (nicht im Kasten „nur dieser Tag"). Werte: der Name der jetzigen Quelle
-# (bleibt), „keine" (lösen — danach „aktuellen Titel übernehmen? (j/n)"),
-# „wählen …"/„andere …" (nach dem Speichern der Kasten mit allen Listen).
-_QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
-LISTE_KEINE, LISTE_WAEHLEN, LISTE_ANDERE = "keine", "wählen …", "andere …"
+# ── Typ liste beim Bearbeiten (Feld „Advanced", 11.10.2026) ────────────
+# Vorher ein eigenes Feld „Liste" mit bleibt/keine/wählen …; jetzt steht die
+# Wahl im Fenster „advanced". Beim Speichern eines bestehenden Eintrags:
+# neue/andere Liste → POST /api/calendar/quelle per Kennung; Typ zurück auf
+# normal → danach „aktuellen Titel übernehmen? (j/n)" (DELETE …/quelle).
+def _gleiche_quelle(a, b) -> bool:
+    return (a or {}).get("art") == (b or {}).get("art") and (a or {}).get("id") == (b or {}).get("id")
 
 
-def _quelle_felder(roh, quelle_wahl) -> list:
-    q = kalender_quellen.quelle_von(roh)
-    if q is None and quelle_wahl is None:
+def _quelle_aufruf(roh, w) -> list:
+    """Neue oder andere Liste für einen bestehenden Eintrag → EIN Aufruf."""
+    if "typ" not in w or not roh.get("kennung"):
         return []
-    if q is None:
-        optionen = (LISTE_KEINE, LISTE_WAEHLEN)
-    else:
-        optionen = (q["name"], LISTE_KEINE) + ((LISTE_ANDERE,) if quelle_wahl else ())
-    return [Feld("liste", "Liste", art="wahl", wert=optionen[0], optionen=optionen,
-                 hilfe="Titel = oberster offener Punkt der Liste · ←→ ändern")]
+    neu, alt = w.get("quelle"), kalender_quellen.quelle_von(roh)
+    if not neu or _gleiche_quelle(neu, alt):
+        return []
+    return kalender_quellen.plan_setzen(roh, neu)["aufrufe"]
 
 
-def _quelle_folge(roh, w, quelle_wahl):
-    """Nach dem Speichern: was mit der Liste passiert → (zurueck, meldung).
-    zurueck ist ein () → Kasten, den die Bedienung nach den Aufrufen öffnet."""
-    wahl = w.get("liste")
-    q = kalender_quellen.quelle_von(roh)
-    if wahl is None or not roh.get("kennung"):
+def _quelle_folge(roh, w):
+    """Nach dem Speichern: Typ liste → normal? → () → Rückfrage-Kasten,
+    den die Bedienung nach den Aufrufen öffnet; sonst None."""
+    if "typ" not in w or not roh.get("kennung"):
         return None
-    if wahl in (LISTE_WAEHLEN, LISTE_ANDERE) and quelle_wahl is not None:
-        return lambda: quelle_wahl(roh)
-    if wahl == LISTE_KEINE and q is not None:
-        live = roh.get("titel_live") or roh.get("label") or ""
-        return lambda: Dialog("liste lösen", [Schritt(
-            "ok", "aktuellen Titel „%s“ übernehmen? (j/n)" % live, art="wahl",
-            wahl={"j": True, "n": False})],
-            lambda a: kalender_quellen.plan_loesen(roh, a["ok"]))
-    return None
+    if w.get("quelle") or kalender_quellen.quelle_von(roh) is None:
+        return None
+    live = roh.get("titel_live") or roh.get("label") or ""
+    return lambda: Dialog("liste lösen", [Schritt(
+        "ok", "aktuellen Titel „%s“ übernehmen? (j/n)" % live, art="wahl",
+        wahl={"j": True, "n": False})],
+        lambda a: kalender_quellen.plan_loesen(roh, a["ok"]))
 
 
 def _quelle_bleibt(roh, w):
-    """Beim Neu-Anlegen statt Ändern (Einmal → Wiederholung): die Quelle
-    wandert mit, außer „keine" ist gewählt."""
-    if w.get("liste") == LISTE_KEINE:
-        return None
+    """Beim Neu-Anlegen statt Ändern (Einmal → Wiederholung): die Quelle aus
+    dem Fenster (Typ normal = keine)."""
+    if "typ" in w:
+        return w.get("quelle")
     return kalender_quellen.quelle_von(roh)
 
 
@@ -839,13 +848,12 @@ def _wahl_umfang(roh):
                    art="wahl", wahl={"t": "dieser", "a": "alle"})
 
 
-def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wahl=None):
+def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=None):
     """e (und r): derselbe Kasten, vorbelegt. Routinen und Spannen fragen
     vorher „nur dieser Tag oder alle?" (Handy-Kalender) — dann ist das
     Ergebnis ein kleiner Dialog, dessen Plan den Kasten als `weiter` bringt.
-    `quelle_wahl(roh)` → Kasten „welche Liste?" (von der Bedienung, die die
-    Listen holt); ohne sie gibt es im Feld „Liste" nur bleiben/lösen."""
-    qhilfe = _QUELLE_TITEL_HILFE if kalender_quellen.quelle_von(roh) else ""
+    `quellen()` → die Listen für Advanced → Typ liste (von der Bedienung,
+    die sie holt); ohne sie lässt sich eine Liste nur lösen."""
     a_ = art(roh)
     label, layer = roh.get("label", ""), roh.get("layer") or "termine"
     t0, e0, ort0 = roh.get("time") or "", roh.get("ende") or "", roh.get("ort") or ""
@@ -872,12 +880,11 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
                             "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
-                         + _stil_aufruf(roh, w),
+                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w),
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
-                         zurueck=_quelle_folge(roh, w, quelle_wahl))
+                         zurueck=_quelle_folge(roh, w))
         felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
-                                ort=ort0, roh=roh) + _quelle_felder(roh, quelle_wahl)
-        felder[0].hilfe = qhilfe
+                                ort=ort0, roh=roh, quellen=quellen)
         return Formular("termin ändern", felder, plan, fokus=fokus)
 
     if a_ == "routine":
@@ -915,11 +922,11 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
             aufrufe = [("PUT", "/api/calendar/routine",
                         {"layer": layer, "label": label, "day": iso,
                          "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
-                + _stil_aufruf(roh, w)
+                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
             return _plan(aufrufe, "alle geändert: " + w["titel"],
-                         zurueck=_quelle_folge(roh, w, quelle_wahl))
+                         zurueck=_quelle_folge(roh, w))
 
         r = _regel_felder(roh.get("rrule"))
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
@@ -930,8 +937,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
             felder = _termin_felder(
                 tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
                 mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
-                wtage=r["wtage"], wbis=r["wbis"], roh=roh) + _quelle_felder(roh, quelle_wahl)
-            felder[0].hilfe = qhilfe
+                wtage=r["wtage"], wbis=r["wbis"], roh=roh, quellen=quellen)
             return Formular("alle termine der serie", felder, alle, fokus=fokus)
         if fokus == "wied":
             return form_alle()
@@ -961,9 +967,9 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
             neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
         return _plan([("PUT", "/api/calendar/spanne",
                        {"layer": layer, "von": von_iso, "label": label, "new": neu})]
-                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w),
+                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w),
                      "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]},
-                     zurueck=_quelle_folge(roh, w, quelle_wahl))
+                     zurueck=_quelle_folge(roh, w))
 
     def alle_pruefen(w):
         if w["letzter"] < w["erster"]:
@@ -977,23 +983,25 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quelle_wa
         Feld("bis", "Bis", wert=e0, lesen=_l_ende,
              zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm, leer = ohne"),
     ], tag_plan)
-    form_alle = lambda: Formular("ganze spanne", [
-        Feld("titel", "Titel", wert=label, lesen=_l_titel, hilfe=qhilfe),
-        Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
-        Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
-        Feld("ort", "Ort", wert=ort0),
-    ] + _gruppe_felder(roh) + [_stil_feld(roh)] + _quelle_felder(roh, quelle_wahl), alle_plan,
-        pruefen=alle_pruefen)
+    def form_alle():
+        titel = Feld("titel", "Titel", wert=label, lesen=_l_titel)
+        return Formular("ganze spanne", [
+            titel,
+            Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
+            Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
+            Feld("ort", "Ort", wert=ort0),
+        ] + _gruppe_felder(roh) + [_advanced_feld(roh, titel, quellen)], alle_plan,
+            pruefen=alle_pruefen)
     return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
         weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
 
 
-def formular_wiederholen(roh: dict, tag: date, heute: date, quelle_wahl=None):
+def formular_wiederholen(roh: dict, tag: date, heute: date, quellen=None):
     """r (calcurse „repeat"): der Bearbeiten-Kasten, gleich auf
     „Wiederholung"; eine Spanne wiederholt sich nicht (None)."""
     if art(roh) == "spanne":
         return None
-    return formular_bearbeiten(roh, tag, heute, fokus="wied", quelle_wahl=quelle_wahl)
+    return formular_bearbeiten(roh, tag, heute, fokus="wied", quellen=quellen)
 
 
 # ── d: Löschen ─────────────────────────────────────────────────────────

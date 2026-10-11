@@ -194,7 +194,7 @@ def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
     """Fußzeile je Ansicht — die längste Fassung, die in `breite` passt.
 
     10.10.2026: in B/C wurde die Zeile bei 150 Spalten abgeschnitten (und
-    mit A für liste / ! abhaken käme mehr dazu). Darum drei Stufen: voll,
+    mit ! abhaken käme mehr dazu). Darum drei Stufen: voll,
     ohne Bewegen und Seltenes (Pfeile, r, c/p, g, G), nur das Nötigste. Was hier wegfällt, steht
     vollständig in der Fußleiste unten (befehle.py, cal:…)."""
     ziel = "v " + ANSICHT_NAMEN[naechste_ansicht(ansicht)]
@@ -204,16 +204,18 @@ def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
                   "←→ tag · ↑↓ woche · enter tag bearbeiten · " + ziel)
     elif ansicht in ("A", "C"):
         # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
-        # a/A/e/d/r/!/u/c/p/g/enter, nur das Bewegen unterscheidet sich.
+        # a/e/d/r/!/u/c/p/g/enter, nur das Bewegen unterscheidet sich. Einen
+        # Listen-Termin gibt es seit 11.10.2026 über a → Advanced → Typ liste
+        # (vorher eigene Taste A — Sasha: „den kannst dann rausnehmen").
         gehen = "↑↓ termin · ←→ tag" + (" · w/W woche" if ansicht == "C" else "")
         ende = (" · tab kasten · " if ansicht == "A" else " · ") + ziel
         stufen = (
-            gehen + " · a neu · A für liste · e ändern · d löschen · r wiederholen · "
+            gehen + " · a neu · e ändern · d löschen · r wiederholen · "
             "! abhaken · u (un)committed · enter ansehen · c/p kopieren · g gehe zu · "
             "R rhythmus · G gruppe" + ende,
-            "a neu · A für liste · e ändern · d löschen · ! abhaken · u (un)commit · "
+            "a neu · e ändern · d löschen · ! abhaken · u (un)commit · "
             "enter ansehen · R rhythmus" + ende,
-            "a neu · A für liste · e ändern · d löschen · ! abhaken · enter ansehen" + ende)
+            "a neu · e ändern · d löschen · ! abhaken · enter ansehen" + ende)
     else:
         stufen = (ziel,)
     if breite is None:

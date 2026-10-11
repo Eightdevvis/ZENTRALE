@@ -61,7 +61,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kalender_werkzeuge.py` | Bearbeiten wie calcurse als reine Logik: Eingaben lesen (Zeit, Dauer, Datum, Wochentage), Formular (Modal) zum Anlegen/Ändern, kurze Rückfragen, daraus Backend-Aufrufe; Auswahl in derselben Reihenfolge wie die Ansicht | — |
 | `ansichten/kalender_motive.py` | Tagesphasen als leiser Hintergrund der Woche C: Phasen eines Tages (auch über Mitternacht), Muster je Motiv als Regler-Tabelle, deterministisch gestreut; A-Hinweis im Tageskopf | — |
 | `ansichten/kalender_gruppen.py` | Gruppen (CATEGORIES) im Monat B: gleiche Gruppe eines Tages → eine Zeile „08:30–16:00 Uni", Namen vom Backend, Farbschlüssel `gruppe:…` | — |
-| `ansichten/kalender_stil.py` | Aussehen eines Termins aus der Stylebox (Feld `stil`): Rollen `$schrift$grund$rückfall`, Block in C (Rahmen abgestuft, Fläche, Muster), Titel in A, Zeile in B, Vorschau der Formularzeile | — |
+| `ansichten/kalender_stil.py` | Aussehen eines Termins aus der Stylebox (Fenster „advanced", Wert `stil`): Rollen `$schrift$grund$rückfall`, Block in C (Rahmen abgestuft, Fläche, Muster), Titel in A, Zeile in B, Vorschau der Formularzeile | — |
+| `ansichten/kalender_advanced.py` | Fenster „advanced" über dem Termin-Formular (seit 2026-10-11): Typ normal/liste (Liste wählen über `kalender_quellen.QuellenWahl`) und die Stylebox; reine Logik, Zeichnen in `kalender_bedienung._zeichne_advanced` | — |
 | `ansichten/kalender_phasen.py` | Kasten „Rhythmus" (Taste R): Liste der Phasen, Formular anlegen/ab jetzt ändern, nur an einem Tag, Zeitraum, löschen → Backend-Aufrufe | — |
 | `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen) | `K["w"]` |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |

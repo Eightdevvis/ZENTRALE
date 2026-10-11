@@ -521,20 +521,24 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
 - **Leise Schrift auf Fläche:** Rolle `<fläche>_inv_leise` (`ka.LEISE`);
   `kalender.py _leise_attr` mischt die Schrift zum Grund (≥ 3:1), ohne 256
   Farben `A_DIM`.
-- **Tasten** (`kalender_bedienung.py`): **`A`** (Shift+A) = neuer Termin für
-  eine Liste/ein Projekt — bis dahin nur ein zweites `a`, das Alias ist
-  aufgegeben (`a`/Strg-A legen weiter normal an; im TODO-Kasten bleibt `A`
-  „neue Aufgabe"). Erst der Kasten „welche Liste?" (`kalender_quellen.
-  QuellenWahl`: ≡ Liste, ◆ Projekt, Name + was jetzt oben steht; Tippen
-  filtert, ↑↓ wählt, Enter nimmt, Esc im Formular führt zurück), dann EXAKT
-  das Neu-Formular, Titel = Name der Liste (leer = Name, ist nur Rückfall).
-  **`!`** auf einem Quellen-Termin hakt den angezeigten Punkt ab
-  (`/api/lists/<lid>/items/<iid>/toggle`) → „erledigt: X — jetzt: Y".
-- **Bearbeiten (e):** Feld „Liste" im Kasten (wie Gruppe: ganzer Eintrag/
-  ganze Serie, nicht „nur dieser Tag"): Name = bleibt, „keine" = lösen →
-  „aktuellen Titel „X“ übernehmen? (j/n)" (`titel_uebernehmen`), „wählen …"
-  / „andere …" → nach dem Speichern derselbe Kasten, setzt per Kennung.
-  Kopieren (c/p) nimmt die Liste mit.
+- **Typ liste statt eigener Taste (seit 11.10.2026):** Sasha: „dann wird der
+  listentermin zu nem termintypen und nicht zu so nem extra shortcut den
+  kannst dann rausnehmen". Ein Listen-Termin entsteht über `a` → Formular →
+  **Advanced** → Typ `liste` (Abschnitt „Fenster advanced" unten). Die Taste
+  `A` (Shift+A, d75f21a) für „neuer Termin für eine Liste" ist raus; `A` ist
+  wieder, was es vorher war: ein zweites `a` (im TODO-Kasten ohnehin
+  „neue Aufgabe"). Den Kasten „welche Liste?" (`kalender_quellen.QuellenWahl`:
+  ≡ Liste, ◆ Projekt, Name + was jetzt oben steht; Tippen filtert, ↑↓ wählt,
+  Enter nimmt, Esc zurück ins Fenster) gibt es weiter, er liegt jetzt über
+  dem Fenster. Titel: wird beim Wählen der Name der Liste, solange er leer
+  ist oder noch der Name der alten Liste war; leer gespeichert = ihr Name
+  (nur Rückfall). **`!`** auf einem Quellen-Termin hakt den angezeigten Punkt
+  ab (`/api/lists/<lid>/items/<iid>/toggle`) → „erledigt: X — jetzt: Y".
+- **Bearbeiten (e):** dasselbe Fenster. Neue/andere Liste → beim Speichern
+  `POST /api/calendar/quelle` per Kennung; Typ zurück auf `normal` → danach
+  „aktuellen Titel „X“ übernehmen? (j/n)" (`DELETE …/quelle`,
+  `titel_uebernehmen`). Wird ein Einmal-Termin zur Wiederholung, wandert die
+  Liste aus dem Fenster mit. Kopieren (c/p) nimmt Liste und Stil mit.
 - **Ansehen (Enter):** Liste, „Jetzt", „Danach" (die nächsten offenen,
   neue Route `GET /api/calendar/quelle?art=&id=&n=4` → `kalender_quelle.
   vorschau`). `POST /api/calendar/spanne` und die Routine mit `freq` nehmen
@@ -550,21 +554,35 @@ Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox' … In der
 Stylebox kann man den Kasten genau stylen: Rahmenstil + Rahmenfarbe,
 Innenfarbe, Schriftfarbe, Innenmuster; ‚Icon hochladen' wird angezeigt,
 bleibt aber gesperrt."
-- **Formular** (`kalender_werkzeuge.py`, Feld-Art `stil`): genau EIN Feld
-  „Stylebox" in a, A (für Liste), e, r und im Kasten „ganze Spanne"/„alle
-  termine der serie" — nicht in „nur dieser Tag" (gilt für die Serie, wie
-  Gruppe/Liste). Die Zeile zeigt eine Vorschau: die drei Rahmenzeichen in
-  Rahmen- und Flächenfarbe, dann „rand #ff8800 · fläche #202030 · schrift … ·
-  Punkte" bzw. „keine"; der Kasten wird so breit wie die Zeile.
-- **Bedienung:** auf dem Feld öffnen Enter, Leertaste oder → die Stylebox
-  (Enter speichert hier also NICHT — Strg-S oder Enter auf einem anderen
-  Feld); ⌫/Entf = kein Stil. Die Box liegt als Kasten über dem Formular
-  (`Formular.box`, gezeichnet in `kalender_bedienung.zeichne_kasten`), alle
-  Tasten gehen an sie; ihr „fertig" übernimmt das Geänderte ins Feld, „abbruch"
-  lässt es. Den Farbwähler öffnet die Box selbst. Gespeichert wird erst mit
-  dem Formular: neu → `stil` im Body, bestehend → `POST /api/calendar/stil`
-  per Kennung, nur wenn er sich geändert hat. Kopieren (c/p) nimmt ihn mit,
-  Ansehen (Enter) zeigt „Stil …".
+- **Fenster „advanced" (seit 11.10.2026, `kalender_advanced.py`):** Sasha:
+  „bitte setz die stylebox unter ein eigenes fenster, also im formular für
+  nen termin kann man auf ‚advanced' klicken und dort ist dann stylebox oder
+  typus wählbar". Im Formular (a, e, r, „ganze Spanne", „alle termine der
+  serie"; nicht „nur dieser Tag", gilt für die Serie wie die Gruppe) steht
+  statt „Stylebox" und „Liste" EIN Feld **Advanced** (Feld-Art `advanced`)
+  mit Zusammenfassung: „typ normal · stil keine" bzw. „typ liste: todo ·
+  stil ╔═╗ · rand #ff8800"; die drei Rahmenzeichen darin farbig.
+- **Tasten:** auf dem Feld öffnen Enter, Leertaste oder → das Fenster (Enter
+  speichert hier also NICHT — Strg-S oder Enter auf einem anderen Feld). Im
+  Fenster:
+
+  | Taste | Wirkung |
+  |---|---|
+  | ↑↓ / Tab, Shift-Tab | Zeile (Typ · Liste, nur bei liste · Stylebox) |
+  | ←→ / Leertaste auf **Typ** | `normal` ↔ `liste` |
+  | Enter auf **Typ**, Strg-S überall | übernehmen, zurück ins Formular (Typ liste ohne Liste: Fehler, springt auf „Liste") |
+  | Enter / Leertaste / → auf **Liste** | Kasten „welche Liste?" |
+  | Enter / Leertaste / → auf **Stylebox** | die Stylebox (wie bisher) |
+  | ⌫ / Entf auf **Stylebox** | kein Stil |
+  | Esc | alles in diesem Fenster verwerfen (in Stylebox/„welche Liste?": nur die schließen) |
+
+  Konsistent mit Formular (Enter = fertig, Strg-S = fertig, Esc = weg) und
+  Stylebox (Enter nimmt, Esc zurück). Gespeichert wird erst mit dem
+  Formular: neu → `quelle`/`stil` im Body, bestehend → `POST
+  /api/calendar/stil` per Kennung nur bei Änderung. Gezeichnet in
+  `kalender_bedienung._zeichne_advanced` (gleicher Feld-Kasten wie das
+  Formular, `_zeichne_felder`), Stylebox bzw. Listen-Kasten darüber. Ansehen
+  (Enter) zeigt „Stil …".
 - **Anzeige** (`kalender_stil.py`, reine Funktionen): Rolle
   `$<schrift>$<grund>$<rückfall>` (Hex ohne #, leer = aus der Rückfall-Rolle);
   `kalender.py _stil_attr` macht daraus ein Paar über `pix_attr` (bunte Farben
