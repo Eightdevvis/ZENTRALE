@@ -680,7 +680,10 @@ UEBERLAGERUNGEN = {
 GEGENTEIL = {curses.KEY_UP: curses.KEY_DOWN, curses.KEY_DOWN: curses.KEY_UP,
              curses.KEY_LEFT: curses.KEY_RIGHT, curses.KEY_RIGHT: curses.KEY_LEFT,
              curses.KEY_PPAGE: curses.KEY_NPAGE, curses.KEY_NPAGE: curses.KEY_PPAGE,
-             curses.KEY_HOME: curses.KEY_END, curses.KEY_END: curses.KEY_HOME}
+             curses.KEY_HOME: curses.KEY_END, curses.KEY_END: curses.KEY_HOME,
+             # Kalender 0/$ = Wochenanfang/-ende: am Montag bzw. Sonntag steht
+             # man schon dort (fiel am Sonntag, 11.10.2026, als rot auf).
+             ord("0"): ord("$"), ord("$"): ord("0")}
 
 
 def drueck(u, folge):
