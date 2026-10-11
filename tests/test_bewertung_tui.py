@@ -138,14 +138,13 @@ def test_plus_minus_im_verlauf_und_esc_bricht_ab(welt, monkeypatch):
     _zeichnen(c)
     c.AI["fokus"] = "verlauf"
     c.taste(curses.KEY_UP)                              # letztes Ziel: bad der letzten
-    assert ("+/-", "rate") in c.tasten()
+    assert ("+/-", "rate") in c.TASTEN.eintraege(c.ansicht())      # die Leiste
     c.taste(ord("+"))
     assert c.AI["bewertung"]["wert"] == 1 and c.AI["bewertung"]["i"] == 3
-    assert c.tasten()[0] == ("enter", "save")
+    assert c.TASTEN.eintraege(c.ansicht())[0] == ("enter", "save")
     c.taste(9)                                          # Tab: gut ↔ schlecht
     assert c.AI["bewertung"]["wert"] == -1
-    monkeypatch.setattr(c, "_esc_lesen", lambda: "esc")
-    c.taste(27)
+    c.taste(27)                                         # nichts folgt: Esc allein
     assert c.AI["bewertung"] is None and not _posts(c) and c.AI["msg"] == "nicht bewertet"
 
 
@@ -154,8 +153,10 @@ def test_mehrzeilig_und_umlaute(welt, monkeypatch):
     c.bewertung.oeffnen(1, 1)
     for b in "für".encode("utf-8"):
         c.taste(b)
-    monkeypatch.setattr(c, "_esc_lesen", lambda: "alt_enter")
-    c.taste(27)                                         # Alt+Enter
+    folge = [10]                                        # Esc + Enter = Alt+Enter
+    monkeypatch.setattr(c.z.stdscr, "getch", lambda: folge.pop(0) if folge else -1,
+                        raising=False)
+    c.taste(27)
     c.taste(ord("x"))
     c.taste(curses.KEY_BACKSPACE)
     c.taste(ord("y"))

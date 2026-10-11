@@ -16,9 +16,10 @@ import urllib.error
 import urllib.parse
 
 from . import verlauf as V
-from .ablage import lese_zeilen
+from .ablage import FASSUNGEN, LESEN, lese_zeilen
 from .basis import api_call
 from .chat_ablage import TRENNER
+from .chat_teil import ChatTeil, menge, tabelle
 
 
 def dokumente(log):
@@ -44,9 +45,28 @@ def vorschau_zeilen(dok, breite, n=3):
     return raus
 
 
-class Rechts:
+_DOKUMENT = [("f", "gross", "full size on/off"), ("F", "gross"),
+             ("esc", "schliessen", "close"), ("f6", "fokus_weiter", "next pane")]
+_OUTPUTS = [("esc", "zurueck", "back to reply"), ("ctrl+o", "outputs", "hide outputs"),
+            ("f6", "fokus_weiter", "next pane")]
+
+
+class Rechts(ChatTeil):
     """Zustand: AI["rechts"] None | "outputs" | "dokument", AI["gross"],
-    AI["owahl"] (gewähltes Kärtchen), AI["vorschau"] {id: zeilen}."""
+    AI["owahl"] (gewähltes Kärtchen), AI["vorschau"] {id: zeilen}.
+
+    Tasten: Tastentabelle TASTEN (tasten.py), im Chat unter „rechts:…".
+    Ansichten: dokument / dokument:fassungen (←→ und v nur dort gezeigt),
+    outputs mit :eins / :leer (↑↓ bzw. Enter wählen dort nichts)."""
+
+    TASTEN = tabelle({
+        "dokument": LESEN + [("←→", "fassung"), ("v/V", "fassung_waehlen")] + _DOKUMENT,
+        "dokument:fassungen": LESEN + FASSUNGEN + [("v", "fassung_waehlen", "pick version"),
+                                                   ("V", "fassung_waehlen")] + _DOKUMENT,
+        "outputs": [("↑↓", "waehlen", "select"), ("enter", "oeffnen", "open")] + _OUTPUTS,
+        "outputs:eins": [("enter", "oeffnen", "open")] + _OUTPUTS,
+        "outputs:leer": _OUTPUTS,
+    })
 
     def __init__(self, chat):
         self.chat = chat
@@ -129,43 +149,53 @@ class Rechts:
                            "idx": n - int(L.get("fassung") or n),
                            "aktion": lambda k: self.chat.ablageliste.lesen(doc_id, k, direkt=True)}
 
-    # ── Tasten ─────────────────────────────────────────────────────────
-    def tasten(self):
+    # ── Tasten (Tastentabelle, im Chat unter „rechts:…") ───────────────
+    def ansicht(self):
         if self.art() == "dokument":
-            A = self.AI["ablage"]
-            kopf = A["lesen"]["dok"].get("kopf") or {}
-            mehr = int(kopf.get("fassung") or 1) > 1
-            return ([("↑↓", "scroll"), ("pgup pgdn", "page")]
-                    + ([("←→", "versions"), ("v", "pick version")] if mehr else [])
-                    + [("f", "normal size" if self.AI.get("gross") else "full size"),
-                       ("esc", "close")])
-        n = len(dokumente(self.AI["log"]))
-        return (([("↑↓", "select")] if n > 1 else []) + ([("enter", "open")] if n else [])
-                + [("esc", "back to reply"), ("ctrl+o", "hide outputs")])
+            return "dokument:fassungen" if self.chat.ablageliste.fassungen() > 1 else "dokument"
+        return "outputs" + menge(len(dokumente(self.AI["log"])))
 
-    def taste(self, ch):
-        AI = self.AI
-        if self.art() == "dokument":
-            if ch in (ord("f"), ord("F")):
-                self.gross_umschalten()
-            elif ch in (ord("v"), ord("V")):
-                self.fassung_waehlen()
-            elif ch == 27:
-                self.schliessen()
-            else:
-                self.chat.ablageliste.taste(ch)
-                if not self.dokument_offen():
-                    AI["fokus"] = "eingabe"
-            return
-        docs = dokumente(AI["log"])
-        if ch == 27:
-            AI["fokus"] = "eingabe"
-        elif ch == 15:                               # Strg+O
-            self.outputs_umschalten()
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN) and docs:
-            AI["owahl"] = (AI.get("owahl", 0) + (1 if ch == curses.KEY_DOWN else -1)) % len(docs)
-        elif ch in (10, 13, curses.KEY_ENTER) and docs:
-            self.dokument_zeigen(docs[min(AI.get("owahl", 0), len(docs) - 1)][0])
+    # Dokument: Blättern und Fassungen macht die Ablageliste (ablage.py).
+    def _ablage(self, aktion, taste):
+        getattr(self.chat.ablageliste, "aktion_" + aktion)(taste)
+        if not self.dokument_offen():
+            self.AI["fokus"] = "eingabe"
+
+    def aktion_rollen(self, taste):
+        self._ablage("rollen", taste)
+
+    def aktion_seite(self, taste):
+        self._ablage("seite", taste)
+
+    def aktion_ende(self, taste):
+        self._ablage("ende", taste)
+
+    def aktion_fassung(self, taste):
+        self._ablage("fassung", taste)
+
+    def aktion_fassung_waehlen(self, _t):
+        self.fassung_waehlen()
+
+    def aktion_gross(self, _t):
+        self.gross_umschalten()
+
+    def aktion_schliessen(self, _t):
+        self.schliessen()
+
+    # Outputs: Kärtchen wählen und öffnen.
+    def aktion_waehlen(self, taste):
+        n = len(dokumente(self.AI["log"]))
+        self.AI["owahl"] = (self.AI.get("owahl", 0) + (1 if taste == "down" else -1)) % n
+
+    def aktion_oeffnen(self, _t):
+        docs = dokumente(self.AI["log"])
+        self.dokument_zeigen(docs[min(self.AI.get("owahl", 0), len(docs) - 1)][0])
+
+    def aktion_zurueck(self, _t):
+        self.AI["fokus"] = "eingabe"
+
+    def aktion_outputs(self, _t):
+        self.outputs_umschalten()
 
     # ── Zeichnen ───────────────────────────────────────────────────────
     def zeichnen(self, top, x, h, w):

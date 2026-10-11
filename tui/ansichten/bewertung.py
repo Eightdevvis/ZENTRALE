@@ -30,8 +30,9 @@ import curses
 import urllib.error
 import urllib.parse
 
-from . import eingabe, fussleiste
+from . import eingabe
 from .basis import api_call
+from .chat_teil import ChatTeil, tabelle
 
 WORT = {1: "good", -1: "bad"}
 ZEICHEN = {1: "✓", -1: "✗"}            # einspaltig (unicodedata: „N")
@@ -69,8 +70,21 @@ def marken(log, ids, bewertungen):
     return raus
 
 
-class Bewertung:
-    """Das kleine Fenster und alles, was eine Bewertung braucht."""
+_FENSTER = [("enter", "speichern", "save"), ("alt+enter", "neue_zeile", "new line"),
+            ("tab", "umschalten", "good/bad"), ("esc", "abbrechen", "cancel"),
+            ("type", "tippen")]
+
+
+class Bewertung(ChatTeil):
+    """Das kleine Fenster und alles, was eine Bewertung braucht.
+
+    Tasten: Tastentabelle TASTEN (tasten.py), im Chat unter „bewertung:…".
+    Ansichten: leer (noch kein Kommentar) und text (Cursor-Tasten wirken)."""
+
+    TASTEN = tabelle({
+        "leer": _FENSTER,
+        "text": _FENSTER + [("↑↓", "bearbeiten")] + eingabe.BEARBEITEN_TASTEN,
+    })
 
     def __init__(self, chat):
         self.chat = chat
@@ -189,35 +203,35 @@ class Bewertung:
         self.schliessen()
 
     # ── Tasten ─────────────────────────────────────────────────────────
-    def tasten(self):
-        return [("enter", "save"), ("alt+enter", "new line"), ("tab", "good/bad"),
-                ("esc", "cancel")]
+    def ansicht(self):
+        return "text" if self.AI["bewertung"]["text"] else "leer"
 
-    def taste(self, ch):
-        """Eine Taste im offenen Fenster (Chat.taste hat Esc/Alt+Enter
-        schon gedeutet: 27 = Esc, TASTE_ALT_ENTER = neue Zeile)."""
-        from .chat import TASTE_ALT_ENTER, Chat
+    def aktion_speichern(self, _t):
+        """Enter speichert; \\ am Zeilenende + Enter ist eine neue Zeile."""
         B = self.AI["bewertung"]
-        if ch == 27:
-            self.schliessen()
-            self.AI["msg"] = "nicht bewertet"
-        elif ch in (10, 13, curses.KEY_ENTER):
-            art, text, pos = eingabe.enter_deuten(B["text"], min(B["cur"], len(B["text"])))
-            B["text"], B["cur"] = text, pos
-            if art == "senden":
-                self.speichern()
-        elif ch == 9:
-            self.umschalten()
-        elif ch == TASTE_ALT_ENTER:
-            self._einfuegen("\n")
-        elif ch in Chat._BEARBEITEN:
-            B["text"], B["cur"] = Chat._BEARBEITEN[ch](B["text"], min(B["cur"], len(B["text"])))
-        elif 32 <= ch <= 126:
-            self._einfuegen(chr(ch))
-        elif 128 <= ch <= 255:                 # ein Byte eines Umlauts (UTF-8)
-            B["u8"], zeichen = eingabe.utf8_byte(B.get("u8", b""), ch)
-            if zeichen is not None and eingabe.druckbar(zeichen):
-                self._einfuegen(zeichen)
+        art, text, pos = eingabe.enter_deuten(B["text"], min(B["cur"], len(B["text"])))
+        B["text"], B["cur"] = text, pos
+        if art == "senden":
+            self.speichern()
+
+    def aktion_neue_zeile(self, _t):
+        self._einfuegen("\n")
+
+    def aktion_umschalten(self, _t):
+        self.umschalten()
+
+    def aktion_abbrechen(self, _t):
+        self._abbrechen()
+
+    def aktion_bearbeiten(self, taste):
+        B = self.AI["bewertung"]
+        B["text"], B["cur"] = eingabe.BEARBEITEN[taste](B["text"], min(B["cur"], len(B["text"])))
+
+    def aktion_tippen(self, zeichen):
+        B = self.AI["bewertung"]
+        B["u8"], text = eingabe.getippt(B.get("u8", b""), zeichen)
+        if text:
+            self._einfuegen(text)
 
     def _einfuegen(self, s):
         B = self.AI["bewertung"]
@@ -261,15 +275,12 @@ class Bewertung:
         if cx < innen:
             zeichen = tz[cy][cx] if cx < len(tz[cy]) else " "
             chat.z.safe_addstr(y0 + 3 + cy, x + 2 + cx, zeichen, C["bright"] | curses.A_REVERSE)
-        # Fuß: was geht — anklickbar
+        # Fuß: die Knöpfe (anklickbar); die Tasten stehen in der Leiste unten
         fy, fx = y0 + bh - 2, x + 2
         for text, aktion in (("save", self.speichern), ("cancel", self._abbrechen)):
             addclip(fy, fx, "[%s]" % text, len(text) + 2, C["acc"])
             chat.klickbar(fy, fx, len(text) + 2, aktion)
             fx += len(text) + 4
-        rest = fussleiste.text([("alt+enter", "new line"), ("tab", "good/bad")])
-        if fx + len(rest) < x + bw - 1:
-            addclip(fy, fx, rest, x + bw - 1 - fx, C["faint"])
 
     def _abbrechen(self):
         self.schliessen()

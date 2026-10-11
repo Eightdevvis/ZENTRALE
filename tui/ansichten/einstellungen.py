@@ -19,17 +19,18 @@
 # Eine Überlagerung über dem Inhalt rechts der Seitenleiste, wie Gedächtnis
 # und Projekte. Zustand AI["einstellungen"] (None = zu).
 #
-# Tasten: ↑↓ Abschnitt, → oder Enter hinein, im Abschnitt ↑↓ wählen,
+# Tasten (Tastentabelle Einstellungen.TASTEN, die Leiste ganz unten zeigt
+# sie): ↑↓ Abschnitt, → oder Enter hinein, im Abschnitt ↑↓ wählen,
 # Enter/Leertaste schalten, ← oder Esc zurück, Esc in der Leiste schließt.
 
 import curses
 import urllib.error
 import urllib.parse
 
-from . import fussleiste
 from . import verlauf as V
 from .basis import api_call
 from . import chat as chatmod      # erst beim Aufruf gelesen: chat importiert uns
+from .chat_teil import ChatTeil, menge, tabelle
 from .gedaechtnis import KERNAKTEN, inhalt_zeilen, naechster_status
 from .text import md_zeilen
 
@@ -152,9 +153,47 @@ def feedback_zeilen(e, breite):
 
 # ── Die Überlagerung ─────────────────────────────────────────────────────
 
-class Einstellungen:
+# Was Enter in einem Abschnitt tut (die Leiste sagt es).
+ENTER = {"skills": "on/off", "capabilities": "on/off", "permissions": "revoke",
+         "model": "change", "feedback": "open chat"}
+# Abschnitte, deren Zahl an Zeilen schwankt: Ansicht + :eins / :leer.
+SCHWANKT = ("skills", "permissions", "feedback")
+
+
+def _tabelle():
+    zurueck = [("←", "nav", "sections"), ("esc", "nav", "back")]
+    t = {"nav": [("↑↓", "abschnitt", "section"), ("enter", "hinein", "open"),
+                 ("→", "hinein", "open"), ("esc", "zu", "close")]}
+    for ab, _titel in ABSCHNITTE:
+        if ab == "memory":
+            mitte = [("tab", "naechste_akte", "next file"), ("↑↓", "rollen", "scroll"),
+                     ("pgup pgdn", "blaettern")]
+            t["memory"] = mitte + [("e", "akte_bearbeiten", "edit in editor"),
+                                   ("enter", "akte_bearbeiten")] + zurueck
+            t["memory:themen"] = mitte + zurueck
+            continue
+        blaettern = [("pgup pgdn", "blaettern", "scroll" if ab == "capabilities" else None),
+                     ("r", "laden", "reload" if ab == "usage" else None)]
+        if ab not in ENTER:                        # usage: nur lesen
+            t[ab] = blaettern[::-1] + zurueck
+            continue
+        nehmen = [("enter", "ausloesen", ENTER[ab]), ("space", "ausloesen")]
+        t[ab] = [("↑↓", "waehlen", "select")] + nehmen + blaettern + zurueck
+        if ab in SCHWANKT:
+            t[ab + ":eins"] = nehmen + blaettern + zurueck
+            t[ab + ":leer"] = blaettern + zurueck
+    return tabelle(t)
+
+
+class Einstellungen(ChatTeil):
     """Zustand AI["einstellungen"]: {abschnitt, fokus "nav"|"detail", daten,
-    wahl, scroll, akte}."""
+    wahl, scroll, akte}.
+
+    Tasten: Tastentabelle TASTEN, im Chat „einstellungen:…". Ansichten: nav
+    (die Abschnitte links) und je Abschnitt eine; skills, permissions,
+    feedback mit :eins / :leer, memory:themen (keine Kernakte: kein e)."""
+
+    TASTEN = _tabelle()
 
     def __init__(self, chat):
         self.chat = chat
@@ -242,67 +281,57 @@ class Einstellungen:
         return 0
 
     # ── Tasten ─────────────────────────────────────────────────────────
-    def tasten(self):
+    def ansicht(self):
         E = self.AI["einstellungen"]
         if E["fokus"] == "nav":
-            return [("↑↓", "section"), ("enter", "open"), ("→", "open"), ("esc", "close")]
-        ab, n = self.abschnitt(), self._waehlbar()
-        mitte = [("↑↓", "select")] if n > 1 else []
-        if ab == "skills" and n:
-            mitte.append(("enter", "on/off"))
-        elif ab == "memory":
-            mitte = [("tab", "next file"), ("↑↓", "scroll")] + (
-                [("e", "edit in editor")] if AKTEN[E["akte"]] in KERNAKTEN else [])
-        elif ab == "capabilities":
-            mitte += [("enter", "on/off"), ("pgup pgdn", "scroll")]
-        elif ab == "permissions" and n:
-            mitte.append(("enter", "revoke"))
-        elif ab == "model":
-            mitte.append(("enter", "change"))
-        elif ab == "usage":
-            mitte = [("r", "reload")]
-        elif ab == "feedback" and n:
-            mitte.append(("enter", "open chat"))
-        return mitte + [("←", "sections"), ("esc", "back")]
-
-    def taste(self, ch):
-        E = self.AI["einstellungen"]
-        if E["fokus"] == "nav":
-            if ch == 27:
-                self.schliessen()
-            elif ch in (curses.KEY_UP, curses.KEY_DOWN):
-                E["abschnitt"] = (E["abschnitt"] + (1 if ch == curses.KEY_DOWN else -1)) % len(ABSCHNITTE)
-                E["wahl"] = E["scroll"] = 0
-                self.laden()
-            elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT):
-                E["fokus"] = "detail"
-            return
-        if ch in (27, curses.KEY_LEFT):
-            E["fokus"] = "nav"
-            return
-        ab, n = self.abschnitt(), self._waehlbar()
+            return "nav"
+        ab = self.abschnitt()
         if ab == "memory":
-            self._taste_memory(ch)
-            return
-        if ch in (curses.KEY_UP, curses.KEY_DOWN) and n:
-            E["wahl"] = (E["wahl"] + (1 if ch == curses.KEY_DOWN else -1)) % n
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
-            E["scroll"] = max(0, E["scroll"] + (-8 if ch == curses.KEY_PPAGE else 8))
-        elif ch == ord("r"):
-            self.laden()
-        elif ch in (10, 13, curses.KEY_ENTER, ord(" ")) and n:
-            self.ausloesen(E["wahl"])
+            return "memory" if AKTEN[E["akte"]] in KERNAKTEN else "memory:themen"
+        return ab + menge(self._waehlbar()) if ab in SCHWANKT else ab
 
-    def _taste_memory(self, ch):
+    # Leiste links
+    def aktion_abschnitt(self, taste):
         E = self.AI["einstellungen"]
-        if ch == 9:
-            E["akte"], E["scroll"] = (E["akte"] + 1) % len(AKTEN), 0
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN):
-            E["scroll"] = max(0, E["scroll"] + (1 if ch == curses.KEY_DOWN else -1))
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
-            E["scroll"] = max(0, E["scroll"] + (-8 if ch == curses.KEY_PPAGE else 8))
-        elif ch in (ord("e"), 10, 13, curses.KEY_ENTER) and AKTEN[E["akte"]] in KERNAKTEN:
-            self.akte_bearbeiten(AKTEN[E["akte"]])
+        E["abschnitt"] = (E["abschnitt"] + (1 if taste == "down" else -1)) % len(ABSCHNITTE)
+        E["wahl"] = E["scroll"] = 0
+        self.laden()
+
+    def aktion_hinein(self, _t):
+        self.AI["einstellungen"]["fokus"] = "detail"
+
+    def aktion_zu(self, _t):
+        self.schliessen()
+
+    # Im Abschnitt
+    def aktion_nav(self, _t):
+        self.AI["einstellungen"]["fokus"] = "nav"
+
+    def aktion_waehlen(self, taste):
+        E = self.AI["einstellungen"]
+        E["wahl"] = (E["wahl"] + (1 if taste == "down" else -1)) % self._waehlbar()
+
+    def aktion_blaettern(self, taste):
+        E = self.AI["einstellungen"]
+        E["scroll"] = max(0, E["scroll"] + (-8 if taste == "pgup" else 8))
+
+    def aktion_laden(self, _t):
+        self.laden()
+
+    def aktion_ausloesen(self, _t):
+        self.ausloesen(self.AI["einstellungen"]["wahl"])
+
+    # Memory: die Akten nacheinander
+    def aktion_naechste_akte(self, _t):
+        E = self.AI["einstellungen"]
+        E["akte"], E["scroll"] = (E["akte"] + 1) % len(AKTEN), 0
+
+    def aktion_rollen(self, taste):
+        E = self.AI["einstellungen"]
+        E["scroll"] = max(0, E["scroll"] + (1 if taste == "down" else -1))
+
+    def aktion_akte_bearbeiten(self, _t):
+        self.akte_bearbeiten(AKTEN[self.AI["einstellungen"]["akte"]])
 
     def ausloesen(self, i):
         """Enter/Klick auf Zeile i des Abschnitts."""
@@ -413,9 +442,7 @@ class Einstellungen:
         chat, E = self.chat, self.AI["einstellungen"]
         C, addclip = chat.z.C, chat.z.addclip
         top, x0, h, w = by + 1, bx + 1, max(1, bh - 2), max(4, bw - 2)
-        fuss = [fussleiste.text(self.chat.tasten())]   # dasselbe wie die Leiste unten
-        if self.AI.get("msg"):
-            fuss = [self.AI["msg"]] + fuss
+        fuss = [self.AI["msg"]] if self.AI.get("msg") else []   # Tasten: Leiste unten
         fuss_zeilen = [f[i:i + w - 2] for f in fuss for i in range(0, max(1, len(f)), max(1, w - 2))]
         unten = top + h - len(fuss_zeilen)
         for i, f in enumerate(fuss_zeilen):
@@ -547,9 +574,6 @@ class Einstellungen:
                      "leise")
             for i, (art, x) in enumerate(erl):
                 dazu("%-10s %s" % (art, x.get("was") or x.get("name")), "", i)
-            if erl:
-                dazu("")
-                dazu("enter takes it back — the ki asks again", "leise")
         elif ab == "model":
             for i, (name, wert, _was) in enumerate(self._modell_reihen()):
                 dazu("%-9s %s" % (name, wert), "", i)

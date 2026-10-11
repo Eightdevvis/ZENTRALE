@@ -320,7 +320,7 @@ def test_chat_leitet_befehl_und_tasten_weiter(backend):
     c.gedaechtnis = Gedaechtnis(c)
     c.befehl("skills", "")
     assert c.gedaechtnis.abschnitt() == "skills"
-    assert "enter on/off" in c.fusszeile()
+    assert ("enter", "on/off") in c.TASTEN.eintraege(c.ansicht())     # die Leiste
     c.taste(curses.KEY_RIGHT)
     assert c.gedaechtnis.abschnitt() == "hausregeln"
     c.befehl("gedaechtnis", "")

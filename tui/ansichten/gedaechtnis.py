@@ -30,8 +30,8 @@ import subprocess
 import tempfile
 import urllib.error
 
-from . import fussleiste
 from .basis import api_call
+from .chat_teil import ChatTeil, menge, tabelle
 from .text import md_zeilen
 
 ABSCHNITTE = [("hausregeln", "hausregeln"), ("steckbrief", "steckbrief"),
@@ -160,9 +160,39 @@ def _themen_zeilen(daten, breite):
 
 # ── Die Überlagerung ─────────────────────────────────────────────────────
 
-class Gedaechtnis:
+def _tabelle():
+    """Je Abschnitt eine Ansicht: die Ziffern springen zu den ANDEREN
+    Abschnitten (die eigene täte nichts)."""
+    hinten = [("pgup pgdn", "blaettern"), ("r", "neu_laden", "reload"),
+              ("esc", "zu", "close")]
+    rollen = [("↑↓", "rollen", "scroll")]
+    schalten = [("enter", "skill_schalten", "on/off"), ("space", "skill_schalten")]
+    t = {}
+    for k, (ab, _n) in enumerate(ABSCHNITTE):
+        andere = "/".join(str(i + 1) for i in range(len(ABSCHNITTE)) if i != k)
+        vorn = [("←→", "abschnitt", "section"), ("tab shift+tab", "abschnitt"),
+                (andere, "abschnitt")]
+        if ab in KERNAKTEN:
+            t[ab] = vorn + rollen + [("e", "bearbeiten", "edit in editor"),
+                                     ("enter", "bearbeiten")] + hinten
+        elif ab == "skills":
+            t[ab] = vorn + [("↑↓", "skill_waehlen", "select")] + schalten + hinten
+            t[ab + ":eins"] = vorn + schalten + hinten
+            t[ab + ":leer"] = vorn + rollen + hinten
+        else:
+            t[ab] = vorn + rollen + hinten
+    return tabelle(t)
+
+
+class Gedaechtnis(ChatTeil):
     """Zustand liegt in chat.AI["gedaechtnis"] (None = zu):
-    {abschnitt, daten, scroll, wahl}."""
+    {abschnitt, daten, scroll, wahl}.
+
+    Tasten: Tastentabelle TASTEN, im Chat „gedaechtnis:…". Ansichten: je
+    Abschnitt eine (hausregeln … skills; Kernakten: e ändert), skills mit
+    :eins / :leer."""
+
+    TASTEN = _tabelle()
 
     def __init__(self, chat):
         self.chat = chat
@@ -206,30 +236,47 @@ class Gedaechtnis:
         return ABSCHNITTE[self.AI["gedaechtnis"]["abschnitt"]][0]
 
     # ── Tasten ─────────────────────────────────────────────────────────
-    def taste(self, ch):
-        G = self.AI["gedaechtnis"]
+    def ansicht(self):
         ab = self.abschnitt()
-        n_skills = len(G["daten"].get("skills") or [])
-        if ch == 27:
-            self.schliessen()
-        elif ch in (curses.KEY_RIGHT, 9):
-            G["abschnitt"], G["scroll"] = (G["abschnitt"] + 1) % len(ABSCHNITTE), 0
-        elif ch in (curses.KEY_LEFT, curses.KEY_BTAB):
-            G["abschnitt"], G["scroll"] = (G["abschnitt"] - 1) % len(ABSCHNITTE), 0
-        elif ord("1") <= ch <= ord("0") + len(ABSCHNITTE):
-            G["abschnitt"], G["scroll"] = ch - ord("1"), 0
-        elif ab == "skills" and ch in (curses.KEY_UP, curses.KEY_DOWN) and n_skills:
-            G["wahl"] = (G["wahl"] + (1 if ch == curses.KEY_DOWN else -1)) % n_skills
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN):
-            G["scroll"] = max(0, G["scroll"] + (1 if ch == curses.KEY_DOWN else -1))
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
-            G["scroll"] = max(0, G["scroll"] + (-10 if ch == curses.KEY_PPAGE else 10))
-        elif ch == ord("r"):
-            self.neu_laden()
-        elif ab in KERNAKTEN and ch in (10, 13, curses.KEY_ENTER, ord("e")):
-            self.bearbeiten(ab)
-        elif ab == "skills" and ch in (10, 13, curses.KEY_ENTER, ord(" ")) and n_skills:
-            self.umschalten()
+        if ab == "skills":
+            return "skills" + menge(len(self.AI["gedaechtnis"]["daten"].get("skills") or []))
+        return ab
+
+    def aktion_zu(self, _t):
+        self.schliessen()
+
+    def aktion_abschnitt(self, taste):
+        """←→ (auch Tab/Shift+Tab) blättern die Abschnitte, 1–5 springen."""
+        G = self.AI["gedaechtnis"]
+        if taste in ("right", "tab"):
+            neu = G["abschnitt"] + 1
+        elif taste in ("left", "shift+tab"):
+            neu = G["abschnitt"] - 1
+        else:
+            neu = int(taste) - 1
+        G["abschnitt"], G["scroll"] = neu % len(ABSCHNITTE), 0
+
+    def aktion_skill_waehlen(self, taste):
+        G = self.AI["gedaechtnis"]
+        n = len(G["daten"].get("skills") or [])
+        G["wahl"] = (G["wahl"] + (1 if taste == "down" else -1)) % n
+
+    def aktion_skill_schalten(self, _t):
+        self.umschalten()
+
+    def aktion_rollen(self, taste):
+        G = self.AI["gedaechtnis"]
+        G["scroll"] = max(0, G["scroll"] + (1 if taste == "down" else -1))
+
+    def aktion_blaettern(self, taste):
+        G = self.AI["gedaechtnis"]
+        G["scroll"] = max(0, G["scroll"] + (-10 if taste == "pgup" else 10))
+
+    def aktion_neu_laden(self, _t):
+        self.neu_laden()
+
+    def aktion_bearbeiten(self, _t):
+        self.bearbeiten(self.abschnitt())
 
     def umschalten(self):
         G, AI = self.AI["gedaechtnis"], self.AI
@@ -299,20 +346,6 @@ class Gedaechtnis:
         AI["msg"] = "%s gespeichert (die alte fassung bleibt als sicherung)" % akte
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def tasten(self):
-        """Tasten je Abschnitt — Fußleiste und Hinweis im Kasten (2026-10-07)."""
-        ab = self.abschnitt()
-        if ab in KERNAKTEN:
-            mitte = [("↑↓", "scroll"), ("e", "edit in editor")]
-        elif ab == "skills":
-            mitte = [("↑↓", "select"), ("enter", "on/off")]
-        else:
-            mitte = [("↑↓", "scroll")]
-        return [("←→", "section")] + mitte + [("r", "reload"), ("esc", "close")]
-
-    def fusszeile(self):
-        return fussleiste.text(self.tasten())
-
     def zeichnen(self, by, bx, bh, bw):
         z = self.chat.z
         C, addclip = z.C, z.addclip
@@ -324,10 +357,8 @@ class Gedaechtnis:
                     (C["bright"] | curses.A_REVERSE) if gewaehlt else C["dim"])
             x += len(text)
 
-        fuss = [self.fusszeile()]
         msg = self.AI.get("msg")
-        if msg:
-            fuss = [msg] + fuss
+        fuss = [msg] if msg else []                  # die Tasten: Leiste ganz unten
         zeilen_fuss = []
         for f in fuss:
             zeilen_fuss += [f[i:i + inw] for i in range(0, len(f), inw)] or [""]

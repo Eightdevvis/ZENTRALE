@@ -1,28 +1,27 @@
 # tui/ansichten/gespraechsliste.py
 #
-# Die Gesprächsliste im KI-Chat (Claude-Web-Plan Phase 2, 2026-10-07):
-# eine Überlagerung IM Chat-Kasten — sie nimmt den Platz des Verlaufs ein,
-# solange sie offen ist. Geöffnet mit Tab (bei leerer Eingabe) oder /liste.
+# Die Gesprächsliste im KI-Chat (Claude-Web-Plan Phase 2, 2026-10-07).
+# Seit dem Umbau nach Claude Web (2026-10-07) steht sie in der Seitenleiste
+# (seitenleiste.py zeichnet sie); hier liegen Zustand, Daten und Tasten.
+# Geöffnet mit Tab (bei leerer Eingabe) oder /chats.
 #
-# Warum Überlagerung statt Seitenleiste: der Chat-Kasten ist auf 80×24 nur
-# gut 40 Spalten breit; eine Seitenleiste daneben ließe für den Verlauf zu
-# wenig übrig. Die Liste braucht den Platz nur kurz — zum Wählen.
-#
-# Tasten: ↑↓ wählen · Enter öffnen · n neu · r umbenennen · a archivieren
-# (im Archiv: zurückholen) · z Archiv zeigen · / filtern nach Titel · Esc/Tab zu.
+# Tasten (Tastentabelle Gespraechsliste.TASTEN, im Chat „liste:…"): ↑↓
+# wählen (↑ über dem ersten: Menü der Leiste) · Enter öffnen · n neu ·
+# r umbenennen · a archivieren (im Archiv: zurückholen) · z Archiv zeigen ·
+# / filtern nach Titel · Tab Leiste zu · Esc zurück zur Eingabe.
 # Filtern startet mit '/', weil r, a, n, z sonst zugleich Befehl und
 # Suchbuchstabe wären.
 #
 # Reine Helfer (alter_text, filtern, listen_zeilen) sind ohne curses und ohne
 # HTTP testbar (tests/test_gespraechsliste.py).
 
-import curses
 import urllib.error
 from datetime import datetime, timezone
 
 from . import eingabe
-from . import fussleiste
 from .basis import api_call
+from .chat_teil import ChatTeil, menge, tabelle
+from .seitenleiste import MENUE
 
 ERINNERUNGEN = "erinnerungen"       # dieselbe id wie core/gespraeche.py
 
@@ -89,11 +88,40 @@ def listen_zeilen(eintraege, idx, breite, jetzt=None, aktiv=None):
     return raus
 
 
-# ── Die Überlagerung ─────────────────────────────────────────────────────
+# ── Die Liste ────────────────────────────────────────────────────────────
 
-class Gespraechsliste:
+def _liste(archiv):
+    """Ansichten liste/archiv mit :eins, :leer (dort wählen ↓ bzw. Enter,
+    r und a nichts — ↑ führt immer ins Menü)."""
+    a, z = (("restore", "back") if archiv else ("archive", "archive list"))
+    hinten = [("n", "neu", "new"), ("z", "archivliste", z), ("/", "suchen", "search"),
+              ("tab", "zuklappen", "hide chats"), ("esc", "zurueck", "back to reply"),
+              ("f6", "fokus_weiter", "next pane")]
+    mit = [("enter", "oeffnen", "open"), ("r", "umbenennen", "rename")]
+    return {"": [("↑↓", "waehlen", "select"), ("pgup pgdn", "blaettern")] + mit
+            + hinten[:1] + [("a", "archiv", a)] + hinten[1:],
+            ":eins": [("↑", "waehlen", "menu")] + mit + hinten[:1] + [("a", "archiv", a)]
+            + hinten[1:],
+            ":leer": [("↑", "waehlen", "menu")] + hinten}
+
+
+class Gespraechsliste(ChatTeil):
     """Zustand liegt in chat.AI["liste"] (None = zu):
-    {eintraege, idx, suche, suchen, umbenennen, archiv, aktiv}."""
+    {eintraege, idx, suche, suchen, umbenennen, archiv, aktiv}.
+
+    Ansichten: liste/archiv (+ :eins, :leer), suche (Tippen filtert),
+    umbenennen (Feld)."""
+
+    TASTEN = tabelle(dict(
+        [("liste" + k, v) for k, v in _liste(False).items()]
+        + [("archiv" + k, v) for k, v in _liste(True).items()]
+        + [("suche", [("type", "suche_tippen", "filter"), ("⌫", "suche_tippen"),
+                      ("enter", "suche_fertig", "done"), ("↑↓", "suche_fertig"),
+                      ("esc", "suche_leeren", "clear filter"),
+                      ("f6", "fokus_weiter", "next pane")]),
+           ("umbenennen", [("enter", "name_fertig", "save"), ("esc", "name_ab", "cancel"),
+                           ("type", "name_tippen"), ("⌫ ←→", "name_tippen"),
+                           ("f6", "fokus_weiter", "next pane")])]))
 
     def __init__(self, chat):
         self.chat = chat
@@ -126,20 +154,6 @@ class Gespraechsliste:
                        "umbenennen": None, "archiv": archiv, "aktiv": aktiv}
         AI["msg"] = ""
 
-    def tasten(self):
-        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
-        L = self.AI["liste"]
-        if L["umbenennen"] is not None:
-            return [("enter", "save"), ("esc", "cancel")]
-        if L["suchen"]:
-            return [("type", "filter"), ("enter", "done"), ("esc", "clear filter")]
-        n = len(self.sichtbar())
-        return (([("↑↓", "select")] if n > 1 else [])
-                + ([("enter", "open"), ("r", "rename")] if n else []) + [("n", "new")]
-                + ([("a", "restore" if L["archiv"] else "archive")] if n else [])
-                + [("z", "back" if L["archiv"] else "archive list"),
-                   ("/", "filter"), ("esc", "close")])
-
     def schliessen(self):
         self.AI["liste"] = None
 
@@ -154,86 +168,100 @@ class Gespraechsliste:
         L["idx"] = max(0, min(L["idx"], len(s) - 1))
         return s[L["idx"]]
 
-    # ── Tasten ─────────────────────────────────────────────────────────
-    def taste(self, ch):
+    # ── Tasten (Tastentabelle, im Chat unter „liste:…") ────────────────
+    def ansicht(self):
         L = self.AI["liste"]
         if L["umbenennen"] is not None:
-            self._taste_umbenennen(ch)
-            return
+            return "umbenennen"
         if L["suchen"]:
-            self._taste_suchen(ch)
-            return
-        n = len(self.sichtbar())
-        if ch in (27, 9):                                  # Esc, Tab
-            self.schliessen()
-        elif ch == curses.KEY_UP and n:
-            L["idx"] = (L["idx"] - 1) % n
-        elif ch == curses.KEY_DOWN and n:
-            L["idx"] = (L["idx"] + 1) % n
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE) and n:
-            L["idx"] = max(0, min(n - 1, L["idx"] + (-5 if ch == curses.KEY_PPAGE else 5)))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            e = self.gewaehlt()
-            if e:
-                self.schliessen()
-                self.chat.gespraech_oeffnen(e["id"])
-        elif ch == ord("/"):
-            L["suchen"] = True
-        elif ch == ord("n"):
-            self.schliessen()
-            self.chat.neues_gespraech()
-        elif ch == ord("z"):
-            self.oeffnen(archiv=not L["archiv"])
-        elif ch == ord("r"):
-            e = self.gewaehlt()
-            if e and e["id"] == ERINNERUNGEN:
-                self.AI["msg"] = "„erinnerungen“ behält seinen namen"
-            elif e:
-                t = str(e.get("titel") or "")
-                L["umbenennen"] = {"text": t, "cur": len(t), "u8": b""}
-        elif ch == ord("a"):
-            self._archivieren()
+            return "suche"
+        return ("archiv" if L["archiv"] else "liste") + menge(len(self.sichtbar()))
 
-    def _taste_suchen(self, ch):
-        L = self.AI["liste"]
-        if ch == 27:
-            L["suche"], L["suchen"] = "", False
-        elif ch in (10, 13, curses.KEY_ENTER, curses.KEY_DOWN, curses.KEY_UP):
-            L["suchen"] = False
-        else:
-            L["suche"], _cur, L["u8_suche"] = self._tippen(
-                L["suche"], len(L["suche"]), L.get("u8_suche", b""), ch)
-            L["idx"] = 0
+    def aktion_waehlen(self, taste):
+        """↑↓; ↑ über dem ersten Gespräch geht ins Menü der Seitenleiste."""
+        L, n = self.AI["liste"], len(self.sichtbar())
+        if taste == "up" and L["idx"] <= 0:
+            self.AI["seite_menu"] = len(MENUE) - 1
+        elif n:
+            L["idx"] = (L["idx"] + (1 if taste == "down" else -1)) % n
 
-    def _taste_umbenennen(self, ch):
+    def aktion_blaettern(self, taste):
+        L, n = self.AI["liste"], len(self.sichtbar())
+        L["idx"] = max(0, min(n - 1, L["idx"] + (-5 if taste == "pgup" else 5)))
+
+    def aktion_oeffnen(self, _t):
+        if self.gewaehlt():
+            self.chat.seite.chat_oeffnen(self.AI["liste"]["idx"])
+
+    def aktion_umbenennen(self, _t):
+        e = self.gewaehlt()
+        if e and e["id"] == ERINNERUNGEN:
+            self.AI["msg"] = "„erinnerungen“ behält seinen namen"
+        elif e:
+            t = str(e.get("titel") or "")
+            self.AI["liste"]["umbenennen"] = {"text": t, "cur": len(t), "u8": b""}
+
+    def aktion_neu(self, _t):
+        self.schliessen()
+        self.chat.neues_gespraech()
+        if self.AI.get("fokus") == "seite":
+            self.AI["fokus"] = "eingabe"         # neues Gespräch → tippen
+
+    def aktion_archiv(self, _t):
+        self._archivieren()
+
+    def aktion_archivliste(self, _t):
+        self.oeffnen(archiv=not self.AI["liste"]["archiv"])
+
+    def aktion_suchen(self, _t):
+        self.AI["liste"]["suchen"] = True
+
+    def aktion_zuklappen(self, _t):
+        self.chat.seite.zuklappen()
+
+    def aktion_zurueck(self, _t):
+        self.AI["fokus"] = "eingabe"
+
+    # Suche: Tippen filtert, Enter (oder ↑↓) ist fertig, Esc leert.
+    def aktion_suche_tippen(self, taste):
         L = self.AI["liste"]
-        u = L["umbenennen"]
-        if ch == 27:
-            L["umbenennen"] = None
-        elif ch in (10, 13, curses.KEY_ENTER):
-            e = self.gewaehlt()
-            L["umbenennen"] = None
-            if e and u["text"].strip():
-                self.chat.titel_setzen(e["id"], u["text"])
-                self.oeffnen(L["archiv"])
-        else:
-            u["text"], u["cur"], u["u8"] = self._tippen(u["text"], u["cur"], u["u8"], ch)
+        L["suche"], _cur, L["u8_suche"] = self._tippen(
+            L["suche"], len(L["suche"]), L.get("u8_suche", b""), taste)
+        L["idx"] = 0
+
+    def aktion_suche_fertig(self, _t):
+        self.AI["liste"]["suchen"] = False
+
+    def aktion_suche_leeren(self, _t):
+        L = self.AI["liste"]
+        L["suche"], L["suchen"] = "", False
+
+    # Umbenennen: ein einzeiliges Feld.
+    def aktion_name_tippen(self, taste):
+        u = self.AI["liste"]["umbenennen"]
+        u["text"], u["cur"], u["u8"] = self._tippen(u["text"], u["cur"], u["u8"], taste)
+
+    def aktion_name_fertig(self, _t):
+        L = self.AI["liste"]
+        u, e = L["umbenennen"], self.gewaehlt()
+        L["umbenennen"] = None
+        if e and u["text"].strip():
+            self.chat.titel_setzen(e["id"], u["text"])
+            self.oeffnen(L["archiv"])
+
+    def aktion_name_ab(self, _t):
+        self.AI["liste"]["umbenennen"] = None
 
     @staticmethod
-    def _tippen(text, pos, u8, ch):
-        """Eine Taste in einem einzeiligen Feld (Umlaute als UTF-8-Bytes)."""
-        if ch in (curses.KEY_BACKSPACE, 127, 8):
-            text, pos = eingabe.zurueck(text, pos)
-        elif ch == curses.KEY_LEFT:
-            text, pos = eingabe.links(text, pos)
-        elif ch == curses.KEY_RIGHT:
-            text, pos = eingabe.rechts(text, pos)
-        elif isinstance(ch, int) and 32 <= ch <= 126:
-            text, pos = eingabe.einfuegen(text, pos, chr(ch), grenze=120)
-        elif isinstance(ch, int) and 128 <= ch <= 255:
-            u8, z = eingabe.utf8_byte(u8, ch)
-            if z is not None and eingabe.druckbar(z):
-                text, pos = eingabe.einfuegen(text, pos, z, grenze=120)
+    def _tippen(text, pos, u8, taste):
+        """Eine Taste (neutraler Name oder Zeichen) in einem einzeiligen Feld."""
+        if taste == "backspace":
+            return eingabe.zurueck(text, pos) + (u8,)
+        if taste in ("left", "right"):
+            return (eingabe.links if taste == "left" else eingabe.rechts)(text, pos) + (u8,)
+        u8, z = eingabe.getippt(u8, taste)
+        if z:
+            text, pos = eingabe.einfuegen(text, pos, z, grenze=120)
         return text, pos, u8
 
     def _archivieren(self):
@@ -254,48 +282,3 @@ class Gespraechsliste:
             self.chat.leeren()              # das offene Gespräch ist jetzt im Archiv
         self.oeffnen(L["archiv"])
         AI["msg"] = ("archiviert — z zeigt das archiv" if an else "zurückgeholt")
-
-    # ── Zeichnen ───────────────────────────────────────────────────────
-    def zeichnen(self, by, bx, bh, bw):
-        z = self.chat.z
-        C, addclip = z.C, z.addclip
-        L = self.AI["liste"]
-        inx, inw = bx + 2, max(6, bw - 4)
-        kopf = "archiv" if L["archiv"] else "gespräche"
-        if L["suche"] or L["suchen"]:
-            kopf += "  · suche: " + L["suche"] + ("▌" if L["suchen"] else "")
-        addclip(by + 1, inx, kopf, inw, C["acc"])
-
-        if L["umbenennen"] is not None:
-            fuss = ["neuer titel: " + L["umbenennen"]["text"] + "▌",
-                    fussleiste.text(self.tasten())]
-        elif L["suchen"]:
-            fuss = ["tippen sucht im titel und projekt · " + fussleiste.text(self.tasten()[1:])]
-        else:
-            fuss = [fussleiste.text(self.tasten())]
-        msg = self.AI.get("msg")
-        if msg:
-            fuss = [msg] + fuss
-        # Lange Hinweise umbrechen statt abschneiden (schmale Fenster).
-        zeilen_fuss = []
-        for f in fuss:
-            zeilen_fuss += [f[i:i + inw] for i in range(0, len(f), inw)] or [""]
-        oben, unten = by + 3, by + bh - 2 - len(zeilen_fuss)
-        platz = max(1, unten - oben + 1)
-
-        s = self.sichtbar()
-        if not s:
-            leer = "keine treffer" if L["suche"] else (
-                "archiv ist leer" if L["archiv"] else "noch keine gespräche — n beginnt eins")
-            addclip(oben, inx, leer, inw, C["faint"])
-        else:
-            idx = max(0, min(L["idx"], len(s) - 1))
-            start = max(0, min(idx - platz // 2, len(s) - platz))
-            stile = {"gewaehlt": C["bright"] | curses.A_BOLD, "ungelesen": C["acc"],
-                     "normal": C["dim"]}
-            for i, (text, art) in enumerate(listen_zeilen(self.chat.markiert(s), idx, inw, aktiv=self.AI.get("gid"))
-                                            [start:start + platz]):
-                addclip(oben + i, inx, text, inw, stile[art])
-        y = by + bh - 1 - len(zeilen_fuss)
-        for i, f in enumerate(zeilen_fuss):
-            addclip(y + i, inx, f, inw, C["warn"] if (msg and i == 0) else C["faint"])

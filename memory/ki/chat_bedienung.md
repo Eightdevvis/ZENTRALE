@@ -29,7 +29,21 @@ nirgendwohin raus. Aus `ki_system.md` ausgelagert am 2026-10-11 (Inhalt unverän
   Moderation per Wortliste im Namen herausgefiltert); in der Auswahl filtert
   Tippen. Budget: 0–100 € im Monat (Sasha).
   (`/memory` und `/forget N` sind mit dem Legacy-LTM-Pfad entfallen.)
-- ESC – stoppt eine laufende Antwort, sonst zurück zum Haupt-Dashboard.
+- Esc schließt den Chat (eine laufende Antwort läuft weiter), Strg+C stoppt
+  sie (seit 2026-10-07).
+- **Tasten (seit 2026-10-11):** EINE Tastentabelle `Chat.TASTEN`
+  (`tui/ansichten/chat.py`, Format `tui/ansichten/tasten.py`) verteilt die
+  Tasten UND füllt die Leiste ganz unten; Hinweiszeilen im Kasten gibt es
+  nicht mehr. Die Teile mit eigener Tabelle (Seitenleiste, Gesprächsliste,
+  rechts, Bewertung, Ablage, Gedächtnis, Projekte, Einstellungen; Mixin
+  `chat_teil.py`) kommen über `Tasten.zusammen` dazu („teil:ansicht").
+  `Chat.ansicht()` sagt, welche gilt: `frage:N`, `bewertung:…`, `wahl…`,
+  Überlagerung, `seite:`/`liste:`/`rechts:`, `verlauf:<ziel-art>`, sonst das
+  Eingabefeld `eingabe|antwort|bearbeiten[:dokument|:text|:zeilen]`.
+  Listen haben `:eins`/`:leer`, damit ↑↓/Enter nur angezeigt werden, wo sie
+  wirken. Strg+C steht in jeder Ansicht. Chat-Befehle sind Freitext; bei
+  leerer Eingabe zeigt die Leiste „/ chat commands". Wege zu jeder Ansicht:
+  `tests/tasten_zustaende/chat.py`.
 - **Gespräche** (seit 2026-10-07, Claude-Web-Plan Phase 2): der Verlauf
   lebt nicht mehr im RAM (`state._chat_history` ist weg), sondern in
   `core/gespraeche.py` — viele Gespräche, Ordner pro Gespräch, Datei pro

@@ -747,8 +747,10 @@ def test_jede_taste_in_der_leiste_tut_etwas(welt, name):
 
 
 def test_leiste_im_chat_zeigt_keine_globale_befehlszeile(welt):
+    # Seit der Tastentabelle (2026-10-11): '/' beginnt bei leerer Eingabe
+    # einen Chat-Befehl — die Leiste sagt das, statt „/help" als Taste.
     e = fussleiste.eintraege(_aufgebaut(welt, _chat))
-    assert ("/", "commands") not in e and ("/help", "commands") in e
+    assert ("/", "commands") not in e and ("/", "chat commands") in e
 
 
 def test_leiste_auf_der_startseite_ohne_fremde_tasten(welt):

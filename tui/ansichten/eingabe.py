@@ -168,15 +168,30 @@ def druckbar(zeichen):
 ENTER_CODES = (10, 13, 343)
 
 
-def esc_folge(folge, enter=ENTER_CODES):
-    """Was nach einem ESC kam (Tasten, die innerhalb von 50 ms folgten).
-    -> "esc" (allein stehend), "alt_enter" oder None (andere Alt-Taste —
-    nichts tun). Alt+Enter schickt das Terminal als ESC + CR/LF."""
-    if not folge:
-        return "esc"
-    if len(folge) == 1 and folge[0] in enter:
-        return "alt_enter"
-    return None
+def getippt(u8, zeichen):
+    """Ein Zeichen aus der Tastentabelle („type", tasten.py) → (u8, text);
+    text None = (noch) nichts einzufügen. Ein Zeichen 128–255 ist ein Byte
+    eines Umlauts: curses liefert UTF-8 byteweise, und die Tabelle kennt nur
+    ASCII — Chat.taste reicht solche Bytes als chr(byte) an die Aktion."""
+    c = ord(zeichen) if len(zeichen) == 1 else -1
+    if 128 <= c <= 255:
+        u8, z = utf8_byte(u8, c)
+        return u8, (z if z is not None and druckbar(z) else None)
+    return u8, zeichen
+
+
+# Tasten, die den Cursor bewegen oder an ihm löschen (neutrale Namen der
+# Tastentabelle) → Funktion oben. Chat-Eingabe und Bewertung teilen sie.
+BEARBEITEN = {
+    "left": links, "right": rechts,
+    "home": zeilenanfang, "ctrl+a": zeilenanfang,
+    "end": zeilenende, "ctrl+e": zeilenende,
+    "up": hoch, "down": runter,
+    "backspace": zurueck, "del": entfernen,
+}
+# Dieselben als Beschriftungen für die Tabellen (verarbeitet, nicht gezeigt).
+BEARBEITEN_TASTEN = [("←→", "bearbeiten"), ("home end", "bearbeiten"),
+                     ("ctrl+a/ctrl+e", "bearbeiten"), ("⌫ del", "bearbeiten")]
 
 
 # ── Anzeige ────────────────────────────────────────────────────────────

@@ -203,4 +203,4 @@ def test_befehl_hilfe_und_fussleiste():
     assert (w.art, w.name) == ("befehl", "einfuegen")
     assert "/paste" in chat_befehle.hilfe_text() and "attach image from clipboard" in chat_befehle.hilfe_text()
     c = chatmod.Chat(FakeZ())
-    assert ("ctrl+v", "paste") in c.tasten()
+    assert ("ctrl+v", "paste") in c.TASTEN.eintraege(c.ansicht())

@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from . import symbole
 from .basis import api_call
 from .chat_layout import LEISTE
+from .chat_teil import ChatTeil, tabelle
 from .symbole import DOKU
 
 # (Symbol, Beschriftung, Aktion) — die Reihenfolge von Claude Web.
@@ -80,11 +81,18 @@ def zeilen(eintraege, breite, jetzt=None, aktiv=None, mit_doku=frozenset()):
 
 # ── Die Leiste ───────────────────────────────────────────────────────────
 
-class Seitenleiste:
+class Seitenleiste(ChatTeil):
     """Zustand: AI["seite"] (None = von selbst, True/False = von Hand),
     AI["seite_menu"] (None = Cursor bei den Gesprächen, sonst Menü-Index),
     AI["mit_doku"] (ids der Gespräche mit Dokument). Die Gespräche: AI["liste"]
-    (gespraechsliste.py), solange die Leiste offen ist."""
+    (gespraechsliste.py), solange die Leiste offen ist.
+
+    Tasten: Tastentabelle TASTEN, im Chat „seite:menue"."""
+
+    TASTEN = tabelle({"menue": [
+        ("↑↓", "menue_waehlen", "select"), ("enter", "menue_oeffnen", "open"),
+        ("tab", "zuklappen", "hide chats"), ("esc", "zurueck", "back to reply"),
+        ("f6", "fokus_weiter", "next pane")]})
 
     def __init__(self, chat):
         self.chat = chat
@@ -177,61 +185,42 @@ class Seitenleiste:
         if AI.get("seite_voll"):
             AI["seite"] = False
 
-    # ── Tasten ─────────────────────────────────────────────────────────
-    def tasten(self):
-        L = self.AI.get("liste")
-        if L and L.get("umbenennen") is not None:
-            return [("enter", "save"), ("esc", "cancel")]
-        if L and L.get("suchen"):
-            return [("type", "filter"), ("enter", "done"), ("esc", "clear filter")]
-        if self.AI.get("seite_menu") is not None or not L:
-            return [("↑↓", "select"), ("enter", "open"), ("tab", "hide chats"),
-                    ("esc", "back to reply")]
-        n = len(self.eintraege())
-        return ([("↑↓", "select")] + ([("enter", "open"), ("r", "rename")] if n else [])
-                + [("n", "new")] + ([("a", "restore" if L["archiv"] else "archive")] if n else [])
-                + [("z", "back" if L["archiv"] else "archive list"), ("/", "search"),
-                   ("tab", "hide chats"), ("esc", "back to reply")])
+    # ── Tasten (Tastentabelle, im Chat unter „seite:…") ────────────────
+    # Nur das Menü oben; die Gespräche darunter nimmt die Gesprächsliste
+    # (gespraechsliste.py, „liste:…"). Welche gerade gilt, sagt Chat.ansicht.
+    def menue_offen(self):
+        """Cursor im Menü — auch solange die Gespräche noch nicht geladen
+        sind (dann landet die erste Taste im Menü)."""
+        return self.AI.get("seite_menu") is not None or not self.AI.get("liste")
 
-    def taste(self, ch):
-        AI = self.AI
-        L = AI.get("liste")
-        if L and (L.get("umbenennen") is not None or L.get("suchen")):
-            self.chat.liste.taste(ch)            # Feld: alles dorthin
-            return
-        if ch == 9:
-            self.zuklappen()
-            return
-        if ch == 27:
-            AI["fokus"] = "eingabe"
-            return
+    def ansicht(self):
+        return "menue"
+
+    def aktion_menue_waehlen(self, taste):
+        AI, L = self.AI, self.AI.get("liste")
         m = AI.get("seite_menu")
-        if m is not None:
-            if ch == curses.KEY_UP:
-                AI["seite_menu"] = max(0, m - 1)
-            elif ch == curses.KEY_DOWN:
-                if m + 1 < len(MENUE):
-                    AI["seite_menu"] = m + 1
-                elif L and self.eintraege():
-                    AI["seite_menu"] = None
-                    L["idx"] = 0
-            elif ch in (10, 13, curses.KEY_ENTER):
-                self.menue(MENUE[m][2])
-            return
-        if not L:
+        if m is None:
             AI["seite_menu"] = len(MENUE) - 1
-            return
-        if ch == curses.KEY_UP and L["idx"] <= 0:
-            AI["seite_menu"] = len(MENUE) - 1    # über den Gesprächen: das Menü
-            return
-        if ch in (10, 13, curses.KEY_ENTER):
-            e = self.chat.liste.gewaehlt()
-            if e:
-                self.chat_oeffnen(L["idx"])
-            return
-        self.chat.liste.taste(ch)
-        if AI.get("liste") is None and AI.get("fokus") == "seite":
-            AI["fokus"] = "eingabe"              # n: neues Gespräch → tippen
+        elif taste == "up":
+            AI["seite_menu"] = max(0, m - 1)
+        elif m + 1 < len(MENUE):
+            AI["seite_menu"] = m + 1
+        elif L and self.eintraege():
+            AI["seite_menu"] = None              # unter dem Menü: die Gespräche
+            L["idx"] = 0
+
+    def aktion_menue_oeffnen(self, _t):
+        m = self.AI.get("seite_menu")
+        if m is None:
+            self.AI["seite_menu"] = len(MENUE) - 1
+        else:
+            self.menue(MENUE[m][2])
+
+    def aktion_zuklappen(self, _t):
+        self.zuklappen()
+
+    def aktion_zurueck(self, _t):
+        self.AI["fokus"] = "eingabe"
 
     # ── Zeichnen ───────────────────────────────────────────────────────
     def _symbol(self, y, x, name, an, unten):
@@ -273,7 +262,7 @@ class Seitenleiste:
             chat.z.safe_addstr(y + 1, x + lw // 2, "●", chat.z.C["acc"])
 
     def zeichnen(self, top, x, h, w):
-        """Offen: Menü, Gespräche nach Tagen, ganz unten ein Hinweis."""
+        """Offen: Menü, Gespräche nach Tagen."""
         chat, AI = self.chat, self.AI
         C, addclip = chat.z.C, chat.z.addclip
         hat_fokus = AI.get("fokus") == "seite"
@@ -296,7 +285,7 @@ class Seitenleiste:
             y += sh
         oben = y + 1
         if L and L.get("archiv"):
-            addclip(oben, x + 1, "Archive · z back", w - 2, C["acc"])
+            addclip(oben, x + 1, "Archive", w - 2, C["acc"])
             oben += 1
         s = self.eintraege()
         reihen = zeilen(s, w - 2, aktiv=AI.get("gid"), mit_doku=AI.get("mit_doku") or frozenset())

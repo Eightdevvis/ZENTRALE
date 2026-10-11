@@ -149,7 +149,9 @@ def test_liste_waehlen_lesen_blaettern_fassung_zurueck(backend):
     assert c.AI["ablage"]["lesen"]["scroll"] > 0
     a.taste(curses.KEY_END)
     a.zeichnen(0, 0, 24, 80)
-    assert c.AI["ablage"]["lesen"]["scroll"] == 60 - (24 - 2 - 1 - 3 + 1)
+    # Seit der Tastentabelle (2026-10-11) ohne Hinweiszeile im Kasten: eine
+    # Zeile mehr Platz für den Text.
+    assert c.AI["ablage"]["lesen"]["scroll"] == 60 - (24 - 2 - 3 + 1)
     a.taste(curses.KEY_LEFT)
     assert c.AI["ablage"]["lesen"]["fassung"] == 1
     a.taste(curses.KEY_LEFT)
@@ -203,9 +205,7 @@ def test_zeichnen_stuerzt_nicht_ab(backend, groesse):
 # ── Der Chat: Enter öffnet, Anhänge ───────────────────────────────────
 
 def _chat(monkeypatch):
-    c = chatmod.Chat(FakeZ())
-    monkeypatch.setattr(c, "_esc_lesen", lambda: "esc")    # Esc allein, ohne Bildschirm
-    return c
+    return chatmod.Chat(FakeZ())     # ohne stdscr: Esc ist Esc (tasten.py)
 
 
 def test_enter_bei_leerer_eingabe_liest_das_neueste_dokument(backend, monkeypatch):
@@ -225,7 +225,7 @@ def test_befehl_ablage_oeffnet_die_liste(backend, monkeypatch):
     c = _chat(monkeypatch)
     c.befehl("ablage", "")
     assert c.AI["ablage"]["eintraege"] == DOKS
-    assert "enter read" in c.fusszeile()
+    assert ("enter", "read") in c.TASTEN.eintraege(c.ansicht())     # die Leiste
 
 
 def test_anhang_lesen_schicken_vormerken(tmp_path, monkeypatch):
@@ -279,7 +279,8 @@ def test_papierkorb_ist_ein_eigener_filter_und_a_holt_zurueck(backend):
     assert [e["id"] for e in c.AI["ablage"]["eintraege"]] == ["d1", "d2"]
     a.taste(ord("p"))
     assert c.AI["ablage"]["korb"] and [e["id"] for e in c.AI["ablage"]["eintraege"]] == ["alt"]
-    assert ("p", "back") in a.tasten() and ("a", "restore") in a.tasten()
+    e = a.TASTEN.eintraege(a.ansicht())                 # Tastentabelle (2026-10-11)
+    assert ("p", "back") in e and ("a", "restore") in e
     a.zeichnen(0, 0, 24, 80)
     a.zeichnen(0, 0, 30, 136)
     a.taste(ord("a"))

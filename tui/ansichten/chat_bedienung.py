@@ -2,8 +2,9 @@
 #
 # Bedienung des Chats nach dem Vorbild von Claude Web (2026-10-07): Fokus
 # zwischen Seitenleiste / Verlauf / Eingabe / rechts, Ziele im Verlauf
-# (aufklappen, kopieren, wiederholen, bewerten, Dokument öffnen), Strg-Tasten, Maus.
-# Ein Mixin für Chat (chat.py), wie chat_gespraeche.py.
+# (aufklappen, kopieren, wiederholen, bewerten, Dokument öffnen), Maus.
+# Ein Mixin für Chat (chat.py), wie chat_gespraeche.py. Welche Taste was tut,
+# steht in der Tastentabelle Chat.TASTEN (chat.py, seit 2026-10-11).
 #
 # Fokuswechsel ist F6 (wie im Browser zwischen den Bereichen einer Seite):
 # Tab gehört laut Sasha den Gesprächen („tab für gespräche auf und zu klappen
@@ -18,7 +19,8 @@ import subprocess
 from . import maus
 from .chat_ablage import TRENNER
 
-# Was Enter auf einem Ziel im Verlauf tut — für die Fußleiste.
+# Was Enter auf einem Ziel im Verlauf tut — für die Leiste (je Art eine
+# Ansicht der Tastentabelle, chat.py).
 WAS = {"schritt": "open/close", "denken": "open/close", "voll": "more/less", "kopieren": "copy",
        "wiederholen": "retry", "dok": "open", "gut": "rate good", "schlecht": "rate bad",
        "trace": "open/close trace", "spur": "show all/less"}
@@ -81,33 +83,32 @@ class ChatBedienung:
         self.fokus_setzen(neu)
 
     # ── Verlauf ────────────────────────────────────────────────────────
-    def _tasten_verlauf(self):
+    def verlauf_ansicht(self):
+        """Ansicht der Tastentabelle (chat.py), wenn der Verlauf den Fokus
+        hat: ohne Ziele „verlauf:leer", ohne gewähltes „verlauf:frei", sonst
+        die Art des gewählten Ziels — Enter tut je Art etwas anderes (WAS)."""
         z = self.AI.get("vwahl")
-        liste = [("↑↓", "select")] if len(self._ziele) > 1 else []
-        if z in self._ziele:
-            liste.append(("enter", WAS.get(z[0], "do")))
-            if z[0] in UNTER_ANTWORT:
-                liste.append(("+/-", "rate"))
-        return liste + [("pgup pgdn", "scroll"), ("esc", "back to reply")]
+        if not self._ziele:
+            return "verlauf:leer"
+        if z not in self._ziele:
+            return "verlauf:frei"
+        return "verlauf:" + z[0]
 
-    def _taste_verlauf(self, ch):
-        AI = self.AI
-        ziele = self._ziele
-        if ch == 27:
-            AI["fokus"] = "eingabe"
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN) and ziele:
-            i = ziele.index(AI["vwahl"]) if AI.get("vwahl") in ziele else len(ziele)
-            i = max(0, min(len(ziele) - 1, i + (1 if ch == curses.KEY_DOWN else -1)))
-            AI["vwahl"], AI["vwahl_folgen"] = ziele[i], True
-        elif ch in (10, 13, curses.KEY_ENTER, ord(" ")) and AI.get("vwahl") in ziele:
-            self.ziel_ausloesen(AI["vwahl"])
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
-            AI["scroll"] = max(0, AI["scroll"] + (5 if ch == curses.KEY_PPAGE else -5))
-        elif ch == 4:
-            self.denken_umschalten()
-        elif ch in (ord("+"), ord("-")) and AI.get("vwahl") in ziele \
-                and AI["vwahl"][0] in UNTER_ANTWORT:
-            self.bewertung.oeffnen(AI["vwahl"][1], 1 if ch == ord("+") else -1)
+    def aktion_ziel_waehlen(self, taste):
+        AI, ziele = self.AI, self._ziele
+        i = ziele.index(AI["vwahl"]) if AI.get("vwahl") in ziele else len(ziele)
+        i = max(0, min(len(ziele) - 1, i + (1 if taste == "down" else -1)))
+        AI["vwahl"], AI["vwahl_folgen"] = ziele[i], True
+
+    def aktion_ziel(self, _t):
+        self.ziel_ausloesen(self.AI["vwahl"])
+
+    def aktion_bewerten(self, taste):
+        """+ / − bei einer gewählten Antwort: das Bewertungs-Fenster."""
+        self.bewertung.oeffnen(self.AI["vwahl"][1], 1 if taste == "+" else -1)
+
+    def aktion_zur_eingabe(self, _t):
+        self.AI["fokus"] = "eingabe"
 
     def ziel_ausloesen(self, z):
         """Ein Ziel im Verlauf (Klick oder Enter): auf/zu, kopieren,
@@ -210,25 +211,6 @@ class ChatBedienung:
             return
         self.AI["wahl"] = None
         (wahl.get("aktion") or self.setzen)(wahl["optionen"][i][1])
-
-    def _taste_strg(self, ch):
-        """Strg-Tasten im Eingabefeld. -> True, wenn eine davon."""
-        from .chat import STRG
-        if ch == STRG["o"]:
-            self.rechts.outputs_umschalten()
-        elif ch == STRG["p"]:
-            self.befehl("modell", "")
-        elif ch == STRG["t"]:
-            self.befehl("effort", "")
-        elif ch == STRG["u"]:
-            self.anhang_vorbereiten()
-        elif ch == STRG["v"]:               # Zwischenablage (chat_ablage.strg_v)
-            self.strg_v()
-        elif ch == STRG["n"]:
-            self.neues_gespraech()
-        else:
-            return False
-        return True
 
     # ── Maus ───────────────────────────────────────────────────────────
     def maus_pflegen(self):

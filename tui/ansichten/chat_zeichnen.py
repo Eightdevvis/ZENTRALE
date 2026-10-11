@@ -16,7 +16,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import chat_layout, denkadern, eingabe, fussleiste
+from . import chat_layout, denkadern, eingabe
 from . import verlauf as V
 from .chat_ablage import kaertchen_text
 from .text import _wrap
@@ -82,19 +82,21 @@ class ChatZeichnen:
             m = a.mitte or reste[0]
             self.bewertung.zeichnen(top, m.x, h, m.w)
 
-    def _ueberlagerung(self):
+    def _ueberlagerung_name(self):
         """Was den Inhalt ganz überdeckt (Einstellungen, Gedächtnis, Projekte,
-        Ablage-Liste) — oder None."""
+        Ablage-Liste) — sein Name in der Tastentabelle (chat.TEILE) oder None."""
         AI = self.AI
-        if AI.get("einstellungen"):
-            return self.einstellungen
-        if AI.get("gedaechtnis"):
-            return self.gedaechtnis
-        if AI.get("projekte"):
-            return self.projekte
+        for name in ("einstellungen", "gedaechtnis", "projekte"):
+            if AI.get(name):
+                return name
         if AI.get("ablage") and not AI["ablage"].get("direkt"):
-            return self.ablageliste
+            return "ablage"
         return None
+
+    def _ueberlagerung(self):
+        """Das Objekt der Überlagerung (zeichnet sie) — oder None."""
+        name = self._ueberlagerung_name()
+        return getattr(self, "ablageliste" if name == "ablage" else name) if name else None
 
     def _fokus_pruefen(self, a):
         """Der Fokus darf nicht auf etwas liegen, das nicht zu sehen ist."""
@@ -198,11 +200,10 @@ class ChatZeichnen:
             zeile = (("thinking: " + reflect.replace("\n", " "))[-w:], C["faint"])
         elif msg:
             zeile = (msg[:w], C["warn"])
-        elif streaming:
-            zeile = ("answering … ctrl+c stops · esc closes (keeps running)"[:w], C["faint"])
+        elif streaming:                       # Stoppen/Schließen: die Leiste unten
+            zeile = ("answering …"[:w], C["faint"])
         elif hinten:
-            zeile = (("„%s“ antwortet noch im hintergrund · ctrl+c stoppt" % hinten[0])[:w],
-                     C["faint"])
+            zeile = (("„%s“ antwortet noch im hintergrund" % hinten[0])[:w], C["faint"])
         else:
             zeile = ("", 0)
         if zaehler:
@@ -293,7 +294,7 @@ class ChatZeichnen:
         if not zeilen:
             if adern:
                 self._adern_hinten(y0, platz, sp, {}, jetzt, dauer, ausklang)
-            hinweis = "frag die ki — tippen + enter · /help"
+            hinweis = "frag die ki · /help"
             z.addclip(y0 + platz // 2, sp.x, hinweis, sp.w, C["faint"])
             return
         total = len(zeilen)
@@ -427,7 +428,7 @@ class ChatZeichnen:
             for c, f in enumerate(line):
                 if f:
                     z.safe_addstr(ey + r, ex + c, f[0], z.pix_attr(f[1], f[2]))
-        hinweis = "frag die ki — tippen + enter · /help"
+        hinweis = "frag die ki · /help"
         z.addclip(ey + pixel.AUGE_H + 1, bereich.x + max(2, (bereich.w - len(hinweis)) // 2),
                   hinweis, bereich.w - 4, C["faint"])
         return True
@@ -435,7 +436,8 @@ class ChatZeichnen:
     # ── Auswahl im Fuß ─────────────────────────────────────────────────
     def _fuss_wahl(self, wahl, inw, bh):
         """Die offene Auswahl als Fußzeilen: Titel, ein Fenster der Optionen
-        um die gewählte herum, Hinweis. Jede Option ist anklickbar."""
+        um die gewählte herum (die Tasten stehen in der Leiste ganz unten).
+        Jede Option ist anklickbar."""
         C = self.z.C
         opts, idx = wahl["optionen"], wahl["idx"]
         platz = max(1, min(len(opts), bh - 6, 9)) if opts else 0
@@ -453,6 +455,5 @@ class ChatZeichnen:
             nr = "%d) " % (i + 1) if i < 9 and "filter" not in wahl else "   "
             zeilen.append(("%s %s%s" % (zeichen, nr, opts[i][0]),
                            C["bright"] if i == idx else C["dim"]))
-        zeilen.append((fussleiste.text(self._tasten_wahl(wahl))[:inw], C["faint"]))
         self._wahl_zeilen = (oben, platz)
         return zeilen

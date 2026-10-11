@@ -83,15 +83,6 @@ def test_kaputtes_utf8_haengt_nicht_ewig():
     assert puffer == b"" and z is None
 
 
-def test_esc_folge_unterscheidet_esc_und_alt_enter():
-    assert eingabe.esc_folge([]) == "esc"
-    assert eingabe.esc_folge([13]) == "alt_enter"
-    assert eingabe.esc_folge([10]) == "alt_enter"
-    assert eingabe.esc_folge([curses.KEY_ENTER]) == "alt_enter"
-    assert eingabe.esc_folge([91, 49, 59, 51, 68]) is None   # Alt+← roh
-    assert eingabe.esc_folge([ord("x")]) is None
-
-
 def test_anzeige_bricht_um_und_findet_den_cursor():
     zeilen, y, x, oben = eingabe.anzeige("abcdefgh", 8, 4, 5)
     assert zeilen == ["abcd", "efgh", ""] and (y, x, oben) == (2, 0, 0)

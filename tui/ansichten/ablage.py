@@ -12,7 +12,8 @@
 # aufbauen, und auf dem Pi-Kiosk gibt es kein less hinter dem Bild. Esc führt
 # immer eine Stufe zurück.
 #
-# Tasten Liste: ↑↓ Bild↑↓ wählen · Enter lesen · a archivieren (im Archiv:
+# Tasten (Tastentabelle Ablageliste.TASTEN, die Leiste ganz unten zeigt sie):
+# Liste: ↑↓ Bild↑↓ wählen · Enter lesen · a archivieren (im Archiv:
 # zurückholen) · z Archiv · p Papierkorb (dort: a zurückholen) · Esc zu.
 # Der Papierkorb (2026-10-11) ist sonst ausgeblendet.  Lesen: ↑↓ Bild↑↓ Pos1 Ende blättern ·
 # ←→ ältere/neuere Fassung · Esc zurück.
@@ -24,8 +25,8 @@ import curses
 import urllib.error
 import urllib.parse
 
-from . import fussleiste
 from .basis import api_call
+from .chat_teil import ChatTeil, menge, tabelle
 from .gespraechsliste import alter_text
 from .text import md_zeilen
 
@@ -108,10 +109,44 @@ def lese_zeilen(dok, breite):
 
 # ── Die Überlagerung ─────────────────────────────────────────────────────
 
-class Ablageliste:
+def _liste(art):
+    """art = liste | archiv | korb (Papierkorb, 2026-10-11: a holt zurück,
+    p geht wieder zur Liste, z gibt es dort nicht)."""
+    if art == "korb":
+        hinten = [("a", "zurueckholen", "restore"), ("p", "korb", "back"),
+                  ("esc", "zu", "close")]
+    else:
+        a, z = (("restore", "back") if art == "archiv" else ("archive", "archive list"))
+        hinten = [("a", "archiv", a), ("z", "archivliste", z), ("p", "korb", "trash"),
+                  ("esc", "zu", "close")]
+    return {"": [("↑↓", "waehlen", "select"), ("pgup pgdn", "blaettern"),
+                 ("enter", "lesen", "read")] + hinten,
+            ":eins": [("enter", "lesen", "read")] + hinten,
+            ":leer": hinten[1:]}
+
+
+# Lesen — auch rechts neben dem Chat (rechts.py nimmt diese Einträge).
+LESEN = [("↑↓", "rollen", "scroll"), ("pgup pgdn space", "seite", "page"),
+         ("home end", "ende", "top/end")]
+FASSUNGEN = [("←→", "fassung", "versions")]
+
+
+class Ablageliste(ChatTeil):
     """Zustand in chat.AI["ablage"] (None = zu):
     {eintraege, idx, archiv, korb, lesen: None | {dok, scroll, fassung},
-     direkt: True, wenn aus dem Chat heraus gelesen wird (Esc → Chat)}."""
+     direkt: True, wenn aus dem Chat heraus gelesen wird (Esc → Chat)}.
+
+    Tasten: Tastentabelle TASTEN (tasten.py), im Chat unter „ablage:…".
+    Ansichten: liste/archiv/korb (mit :eins, :leer — dort wählt ↑↓ bzw.
+    Enter nichts), lesen und lesen:fassungen (←→ blättert die Fassungen;
+    bei nur einer sagt ←→ das nur)."""
+
+    TASTEN = tabelle(dict(
+        [("liste" + k, v) for k, v in _liste("liste").items()]
+        + [("archiv" + k, v) for k, v in _liste("archiv").items()]
+        + [("korb" + k, v) for k, v in _liste("korb").items()]
+        + [("lesen", LESEN + [("←→", "fassung"), ("esc", "zurueck", "back")]),
+           ("lesen:fassungen", LESEN + FASSUNGEN + [("esc", "zurueck", "back")])]))
 
     def __init__(self, chat):
         self.chat = chat
@@ -166,21 +201,17 @@ class Ablageliste:
                                  "fassung": dok.get("fassung") or 1}
         AI["msg"] = ""
 
-    def tasten(self):
-        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
+    # ── Tasten (Tastentabelle, im Chat unter „ablage:…") ───────────────
+    def ansicht(self):
         A = self.AI["ablage"]
         if A["lesen"] is not None:
-            kopf = A["lesen"]["dok"].get("kopf") or {}
-            mehr = int(kopf.get("fassung") or 1) > 1
-            return ([("↑↓", "scroll"), ("pgup pgdn space", "page"), ("home end", "top/end")]
-                    + ([("←→", "versions")] if mehr else []) + [("esc", "back")])
-        if A.get("korb"):
-            return [("↑↓", "select"), ("enter", "read"), ("a", "restore"), ("p", "back"),
-                    ("esc", "close")]
-        return ([("↑↓", "select"), ("enter", "read")]
-                + ([("a", "restore"), ("z", "back")] if A["archiv"]
-                   else [("a", "archive"), ("z", "archive list")])
-                + [("p", "trash"), ("esc", "close")])
+            return "lesen:fassungen" if self.fassungen() > 1 else "lesen"
+        art = "korb" if A.get("korb") else "archiv" if A["archiv"] else "liste"
+        return art + menge(len(A["eintraege"]))
+
+    def fassungen(self):
+        L = self.AI["ablage"]["lesen"]
+        return int(((L or {}).get("dok") or {}).get("kopf", {}).get("fassung") or 1)
 
     def schliessen(self):
         self.AI["ablage"] = None
@@ -192,63 +223,68 @@ class Ablageliste:
         A["idx"] = max(0, min(A["idx"], len(A["eintraege"]) - 1))
         return A["eintraege"][A["idx"]]
 
-    # ── Tasten ─────────────────────────────────────────────────────────
-    def taste(self, ch):
+    # Liste: ↑↓ wählen, Enter lesen, a (zurück-)archivieren, z Archiv auf/zu.
+    def aktion_waehlen(self, taste):
         A = self.AI["ablage"]
-        if A["lesen"] is not None:
-            self._taste_lesen(ch)
-            return
-        n = len(A["eintraege"])
-        if ch == 27:
-            self.schliessen()
-        elif ch == curses.KEY_UP and n:
-            A["idx"] = (A["idx"] - 1) % n
-        elif ch == curses.KEY_DOWN and n:
-            A["idx"] = (A["idx"] + 1) % n
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE) and n:
-            A["idx"] = max(0, min(n - 1, A["idx"] + (-5 if ch == curses.KEY_PPAGE else 5)))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            e = self.gewaehlt()
-            if e:
-                self.lesen(e["id"])
-        elif ch == ord("z") and not A.get("korb"):
-            self.oeffnen(archiv=not A["archiv"])
-        elif ch == ord("p"):
-            self.oeffnen(korb=not A.get("korb"))
-        elif ch == ord("a") and A.get("korb"):
-            self._zurueckholen()
-        elif ch == ord("a"):
-            self._archivieren()
+        A["idx"] = (A["idx"] + (1 if taste == "down" else -1)) % len(A["eintraege"])
 
-    def _taste_lesen(self, ch):
+    def aktion_blaettern(self, taste):
+        A = self.AI["ablage"]
+        n = len(A["eintraege"])
+        A["idx"] = max(0, min(n - 1, A["idx"] + (-5 if taste == "pgup" else 5)))
+
+    def aktion_lesen(self, _t):
+        e = self.gewaehlt()
+        if e:
+            self.lesen(e["id"])
+
+    def aktion_archiv(self, _t):
+        self._archivieren()
+
+    def aktion_archivliste(self, _t):
+        self.oeffnen(archiv=not self.AI["ablage"]["archiv"])
+
+    def aktion_korb(self, _t):
+        self.oeffnen(korb=not self.AI["ablage"].get("korb"))
+
+    def aktion_zurueckholen(self, _t):
+        self._zurueckholen()
+
+    def aktion_zu(self, _t):
+        self.schliessen()
+
+    # Lesen: rollen, blättern, Anfang/Ende, Fassungen; Esc zurück zur Liste
+    # (rechts neben dem Chat schließt Esc das Dokument, rechts.py).
+    def aktion_rollen(self, taste):
+        L = self.AI["ablage"]["lesen"]
+        L["scroll"] = max(0, L["scroll"] + (1 if taste == "down" else -1))
+
+    def aktion_seite(self, taste):
+        L = self.AI["ablage"]["lesen"]
+        seite = max(1, getattr(self, "_seite", 10))
+        L["scroll"] = max(0, L["scroll"] + (-seite if taste == "pgup" else seite))
+
+    def aktion_ende(self, taste):
+        # 10**6: zeichnen() setzt es aufs Ende
+        self.AI["ablage"]["lesen"]["scroll"] = 0 if taste == "home" else 10 ** 6
+
+    def aktion_fassung(self, taste):
         A = self.AI["ablage"]
         L = A["lesen"]
-        seite = max(1, getattr(self, "_seite", 10))
-        if ch == 27:
-            if A.get("direkt"):
-                self.schliessen()
-            else:
-                A["lesen"] = None
-        elif ch == curses.KEY_UP:
-            L["scroll"] = max(0, L["scroll"] - 1)
-        elif ch == curses.KEY_DOWN:
-            L["scroll"] += 1
-        elif ch == curses.KEY_PPAGE:
-            L["scroll"] = max(0, L["scroll"] - seite)
-        elif ch in (curses.KEY_NPAGE, 32):
-            L["scroll"] += seite
-        elif ch in (curses.KEY_HOME, curses.KEY_FIND):
-            L["scroll"] = 0
-        elif ch in (curses.KEY_END, curses.KEY_SELECT):
-            L["scroll"] = 10 ** 6            # zeichnen() setzt es aufs Ende
-        elif ch in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            kopf = L["dok"].get("kopf") or {}
-            neu = L["fassung"] + (-1 if ch == curses.KEY_LEFT else 1)
-            if 1 <= neu <= int(kopf.get("fassung") or 1):
-                self.lesen(kopf.get("id"), neu, direkt=A.get("direkt"))
-            else:
-                self.AI["msg"] = ("das ist die erste fassung" if neu < 1
-                                  else "das ist die neueste fassung")
+        kopf = L["dok"].get("kopf") or {}
+        neu = L["fassung"] + (-1 if taste == "left" else 1)
+        if 1 <= neu <= int(kopf.get("fassung") or 1):
+            self.lesen(kopf.get("id"), neu, direkt=A.get("direkt"))
+        else:
+            self.AI["msg"] = ("das ist die erste fassung" if neu < 1
+                              else "das ist die neueste fassung")
+
+    def aktion_zurueck(self, _t):
+        A = self.AI["ablage"]
+        if A.get("direkt"):
+            self.schliessen()
+        else:
+            A["lesen"] = None
 
     def _archivieren(self):
         AI, A = self.AI, self.AI["ablage"]
@@ -310,8 +346,7 @@ class Ablageliste:
         inx, inw = bx + 2, max(6, bw - 4)
         addclip(by + 1, inx, "ablage · papierkorb" if A.get("korb") else
                 "ablage · archiv" if A["archiv"] else "ablage", inw, C["acc"])
-        fuss, mit_msg = self._fuss(
-            [fussleiste.text(self.tasten())], inw)
+        fuss, mit_msg = self._fuss([], inw)          # nur eine Meldung; Tasten: Leiste
         oben, unten = by + 3, by + bh - 2 - len(fuss)
         platz = max(1, unten - oben + 1)
         if not A["eintraege"]:
@@ -342,8 +377,7 @@ class Ablageliste:
         titel = str(kopf.get("titel") or "")
         rechts = " · fassung %d/%d" % (L["fassung"], n) if n > 1 else ""
         addclip(by + 1, inx, (titel[:max(1, inw - len(rechts))] + rechts), inw, C["acc"])
-        fuss, mit_msg = self._fuss(
-            [fussleiste.text(self.tasten())], inw)
+        fuss, mit_msg = self._fuss([], inw)          # nur eine Meldung; Tasten: Leiste
         oben, unten = by + 3, by + bh - 2 - len(fuss)
         platz = max(1, unten - oben + 1)
         self._seite = max(1, platz - 1)

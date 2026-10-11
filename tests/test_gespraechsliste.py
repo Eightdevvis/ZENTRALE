@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from tui.ansichten import chat as chatmod
-from tui.ansichten import chat_befehle, chat_gespraeche, gespraechsliste
+from tui.ansichten import chat_befehle, chat_gespraeche, gespraechsliste, seitenleiste
 from tui.ansichten.gespraechsliste import alter_text, filtern, listen_zeilen
 
 JETZT = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)
@@ -51,9 +51,12 @@ def test_listen_zeilen_zeiger_punkt_alter_und_kuerzen():
 
 class FakeChat:
     def __init__(self):
-        self.AI = {"streaming": False, "msg": "", "gid": "a", "liste": None}
+        self.AI = {"streaming": False, "msg": "", "gid": "a", "liste": None, "fokus": "seite"}
         self.z = None
         self.geoeffnet, self.titel, self.neu, self.geleert = [], [], 0, 0
+        # Die Liste steht in der Seitenleiste: Enter, Tab und Esc gehen dorthin.
+        self.liste = gespraechsliste.Gespraechsliste(self)
+        self.seite = seitenleiste.Seitenleiste(self)
 
     def gespraech_oeffnen(self, gid):
         self.geoeffnet.append(gid)
@@ -96,14 +99,14 @@ def _tippe(liste, *tasten):
 
 def test_oeffnen_steht_auf_dem_offenen_gespraech(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     assert c.AI["liste"]["idx"] == 1 and l.gewaehlt()["id"] == "a"
 
 
 def test_waehlen_und_oeffnen(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     _tippe(l, curses.KEY_DOWN, 10)
     assert c.geoeffnet == ["b"] and c.AI["liste"] is None
@@ -111,7 +114,7 @@ def test_waehlen_und_oeffnen(backend):
 
 def test_filtern_mit_schraegstrich(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     _tippe(l, "/", "s", "t", "e", 10)
     assert [e["id"] for e in l.sichtbar()] == ["b"]
@@ -122,7 +125,7 @@ def test_filtern_mit_schraegstrich(backend):
 
 def test_umbenennen(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     _tippe(l, "r", 127, 127, 127, 127, 127, 127, 127, "R", "a", "d", 10)
     assert c.titel == [("a", "Rad")]
@@ -130,7 +133,7 @@ def test_umbenennen(backend):
 
 def test_erinnerungen_wird_weder_umbenannt_noch_archiviert(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     _tippe(l, curses.KEY_UP, "r")
     assert c.AI["liste"]["umbenennen"] is None and "namen" in c.AI["msg"]
@@ -140,7 +143,7 @@ def test_erinnerungen_wird_weder_umbenannt_noch_archiviert(backend):
 
 def test_archivieren_und_archiv_zeigen(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
+    l = c.liste
     l.oeffnen()
     _tippe(l, "a")                          # das offene Gespräch „a"
     assert ("POST", "/api/gespraeche/a/archiv", {"an": True}) in backend["aufrufe"]
@@ -151,13 +154,24 @@ def test_archivieren_und_archiv_zeigen(backend):
     assert ("POST", "/api/gespraeche/c/archiv", {"an": False}) in backend["aufrufe"]
 
 
-def test_esc_und_tab_schliessen(backend):
+def test_tab_klappt_zu_esc_geht_zur_eingabe(backend):
     c = FakeChat()
-    l = gespraechsliste.Gespraechsliste(c)
-    for taste in (27, 9):
-        l.oeffnen()
-        l.taste(taste)
-        assert c.AI["liste"] is None
+    l = c.liste
+    l.oeffnen()
+    l.taste(27)                     # Esc: zurück zur Eingabe, die Leiste bleibt offen
+    assert c.AI["fokus"] == "eingabe" and c.AI["liste"] is not None
+    c.AI["fokus"] = "seite"
+    l.taste(9)                      # Tab: Leiste zu
+    assert c.AI["liste"] is None and c.AI["seite"] is False
+
+
+def test_hoch_ueber_dem_ersten_geht_ins_menue(backend):
+    c = FakeChat()
+    l = c.liste
+    l.oeffnen()
+    l.taste(curses.KEY_UP)
+    l.taste(curses.KEY_UP)
+    assert c.AI["seite_menu"] == len(seitenleiste.MENUE) - 1
 
 
 def test_waehrend_einer_antwort_geht_die_liste_auf(backend):

@@ -219,7 +219,7 @@ def test_uebersicht_liste_detail_und_gespraech_oeffnen(backend):
     assert c.AI["projekte"]["liste"][0]["id"] == "geige" and c.AI["liste"] is None
     _tippe(p, curses.KEY_DOWN, curses.KEY_UP, 10)
     assert c.AI["projekte"]["detail"]["id"] == "geige"
-    assert "e instructions" in p.fusszeile()
+    assert ("e", "instructions") in p.TASTEN.eintraege(p.ansicht())
     _tippe(p, curses.KEY_DOWN, curses.KEY_DOWN, 10)       # rundum zurück zu g1
     assert c.geoeffnet == ["g1"] and c.AI["projekte"] is None
 
@@ -376,6 +376,6 @@ def test_chat_leitet_projekt_befehle_weiter(backend):
     c.taste(ord("1"))                              # Ziffer nimmt die erste
     assert _posts(backend, "/api/projekte/zuordnen")[-1]["projekt"] == "geige"
     c.befehl("projekte", "")
-    assert "n new project" in c.fusszeile()
-    c.projekte.taste(27)          # c.taste(27) läse erst nach (Alt-Taste?)
+    assert ("n", "new project") in c.TASTEN.eintraege(c.ansicht())
+    c.taste(27)
     assert c.AI["projekte"] is None

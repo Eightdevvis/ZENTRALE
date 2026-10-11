@@ -31,8 +31,8 @@ import tempfile
 import urllib.error
 
 from . import eingabe
-from . import fussleiste
 from .basis import api_call
+from .chat_teil import ChatTeil, menge, tabelle
 from .gedaechtnis import editor_befehl
 from .gespraechsliste import alter_text
 from .text import md_zeilen
@@ -153,11 +153,40 @@ def detail_zeilen(p, wahl_idx, breite, jetzt=None):
 
 # ── Zuordnen (/projekt) und Übersicht (/projekte) ───────────────────────
 
-class Projekte:
+def _tabelle():
+    def liste(archiv):
+        a, z = (("restore", "back") if archiv else ("archive", "archive list"))
+        hinten = [("n", "anlegen", "new project"), ("a", "archiv", a),
+                  ("z", "archivliste", z), ("esc", "zu", "close")]
+        return {"": [("↑↓", "waehlen", "select"), ("enter", "detail", "open")] + hinten,
+                ":eins": [("enter", "detail", "open")] + hinten,
+                ":leer": [hinten[0]] + hinten[2:]}
+    detail_hinten = [("pgup pgdn", "blaettern"), ("n", "neues_gespraech", "new chat"),
+                     ("e", "anweisungen", "instructions"), ("w", "wissen", "add knowledge"),
+                     ("r", "neu_laden", "reload"), ("esc", "detail_zu", "back")]
+    detail = {"": [("↑↓", "gespraech_waehlen", "chat"), ("enter", "gespraech", "open")]
+              + detail_hinten,
+              ":eins": [("enter", "gespraech", "open")] + detail_hinten,
+              ":leer": detail_hinten}
+    t = {}
+    for name, teil in (("liste", liste(False)), ("archiv", liste(True)), ("detail", detail)):
+        t.update({name + k: v for k, v in teil.items()})
+    t["eingabe"] = [("enter", "eingabe_fertig", "done"), ("esc", "eingabe_ab", "cancel"),
+                    ("type", "eingabe_tippen"), ("⌫ ←→", "eingabe_tippen")]
+    return tabelle(t)
+
+
+class Projekte(ChatTeil):
     """Zustand der Übersicht in chat.AI["projekte"] (None = zu):
     {liste, idx, archiv, detail, wahl, eingabe}. eingabe: offenes
     Eingabefeld {art: "name"|"pfad", text, cur, u8} oder None.
-    Der Projektname des offenen Gesprächs steht in chat.AI["projekt"]."""
+    Der Projektname des offenen Gesprächs steht in chat.AI["projekt"].
+
+    Tasten: Tastentabelle TASTEN, im Chat „projekte:…". Ansichten: liste,
+    archiv, detail (je + :eins, :leer — dort wählen ↑↓ bzw. Enter nichts),
+    eingabe (Name oder Pfad tippen)."""
+
+    TASTEN = _tabelle()
 
     def __init__(self, chat):
         self.chat = chat
@@ -295,89 +324,104 @@ class Projekte:
         P["idx"] = max(0, min(P["idx"], len(P["liste"]) - 1))
         return P["liste"][P["idx"]]
 
-    def taste(self, ch):
+    # ── Tasten ─────────────────────────────────────────────────────────
+    def ansicht(self):
         P = self.AI["projekte"]
         if P["eingabe"] is not None:
-            self._taste_eingabe(ch)
-        elif P["detail"] is not None:
-            self._taste_detail(ch)
-        else:
-            self._taste_liste(ch)
+            return "eingabe"
+        if P["detail"] is not None:
+            return "detail" + menge(len(P["detail"].get("gespraeche") or []))
+        return ("archiv" if P["archiv"] else "liste") + menge(len(P["liste"]))
 
-    def _taste_liste(self, ch):
-        P, AI = self.AI["projekte"], self.AI
-        n = len(P["liste"])
-        if ch == 27:
-            self.schliessen()
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN) and n:
-            P["idx"] = (P["idx"] + (1 if ch == curses.KEY_DOWN else -1)) % n
-        elif ch in (10, 13, curses.KEY_ENTER):
-            p = self.gewaehlt()
-            if p:
-                self.detail_laden(p["id"])
-        elif ch == ord("n"):
-            P["eingabe"] = {"art": "name", "text": "", "cur": 0, "u8": b""}
-        elif ch == ord("z"):
-            self.oeffnen(archiv=not P["archiv"])
-        elif ch == ord("a"):
-            p = self.gewaehlt()
-            if p:
-                an = not P["archiv"]
-                if self._rufen("/api/projekte/%s/archiv" % p["id"], "POST", {"an": an},
-                               fehlschlag="nicht archiviert") is not None:
-                    self.oeffnen(P["archiv"])
-                    AI["msg"] = ("„%s“ archiviert — z zeigt das archiv" % p["name"]) if an \
-                        else ("„%s“ zurückgeholt" % p["name"])
-
-    def _taste_detail(self, ch):
-        P, AI = self.AI["projekte"], self.AI
-        d = P["detail"]
-        gespraeche = d.get("gespraeche") or []
-        if ch == 27:
-            P["detail"] = None
-        elif ch in (curses.KEY_UP, curses.KEY_DOWN) and gespraeche:
-            P["wahl"] = (P["wahl"] + (1 if ch == curses.KEY_DOWN else -1)) % len(gespraeche)
-        elif ch in (curses.KEY_PPAGE, curses.KEY_NPAGE):
-            P["scroll"] = max(0, P["scroll"] + (-10 if ch == curses.KEY_PPAGE else 10))
-        elif ch in (10, 13, curses.KEY_ENTER) and gespraeche:
-            g = gespraeche[max(0, min(P["wahl"], len(gespraeche) - 1))]
-            self.schliessen()
-            self.chat.gespraech_oeffnen(g["id"])
-        elif ch == ord("n"):
-            self.neues_gespraech(d)
-        elif ch == ord("e"):
-            self.anweisungen_bearbeiten(d)
-        elif ch == ord("w"):
-            P["eingabe"] = {"art": "pfad", "text": "", "cur": 0, "u8": b""}
-        elif ch == ord("r"):
-            self.detail_laden(d["id"])
-
-    def _taste_eingabe(self, ch):
+    # Liste
+    def aktion_waehlen(self, taste):
         P = self.AI["projekte"]
-        e = P["eingabe"]
-        if ch == 27:
-            P["eingabe"] = None
-        elif ch in (10, 13, curses.KEY_ENTER):
-            P["eingabe"] = None
-            text = e["text"].strip()
-            if not text:
-                return
-            if e["art"] == "name":
-                if self.anlegen(text) is not None:
-                    self.oeffnen(False)
-            else:
-                self.wissen_hinzufuegen(P["detail"], text)
-        elif ch in (curses.KEY_BACKSPACE, 127, 8):
+        P["idx"] = (P["idx"] + (1 if taste == "down" else -1)) % len(P["liste"])
+
+    def aktion_detail(self, _t):
+        p = self.gewaehlt()
+        if p:
+            self.detail_laden(p["id"])
+
+    def aktion_anlegen(self, _t):
+        self.AI["projekte"]["eingabe"] = {"art": "name", "text": "", "cur": 0, "u8": b""}
+
+    def aktion_archivliste(self, _t):
+        self.oeffnen(archiv=not self.AI["projekte"]["archiv"])
+
+    def aktion_archiv(self, _t):
+        P, AI = self.AI["projekte"], self.AI
+        p = self.gewaehlt()
+        if p:
+            an = not P["archiv"]
+            if self._rufen("/api/projekte/%s/archiv" % p["id"], "POST", {"an": an},
+                           fehlschlag="nicht archiviert") is not None:
+                self.oeffnen(P["archiv"])
+                AI["msg"] = ("„%s“ archiviert — z zeigt das archiv" % p["name"]) if an \
+                    else ("„%s“ zurückgeholt" % p["name"])
+
+    def aktion_zu(self, _t):
+        self.schliessen()
+
+    # Ein Projekt
+    def aktion_gespraech_waehlen(self, taste):
+        P = self.AI["projekte"]
+        n = len(P["detail"].get("gespraeche") or [])
+        P["wahl"] = (P["wahl"] + (1 if taste == "down" else -1)) % n
+
+    def aktion_blaettern(self, taste):
+        P = self.AI["projekte"]
+        P["scroll"] = max(0, P["scroll"] + (-10 if taste == "pgup" else 10))
+
+    def aktion_gespraech(self, _t):
+        P = self.AI["projekte"]
+        gespraeche = P["detail"].get("gespraeche") or []
+        g = gespraeche[max(0, min(P["wahl"], len(gespraeche) - 1))]
+        self.schliessen()
+        self.chat.gespraech_oeffnen(g["id"])
+
+    def aktion_neues_gespraech(self, _t):
+        self.neues_gespraech(self.AI["projekte"]["detail"])
+
+    def aktion_anweisungen(self, _t):
+        self.anweisungen_bearbeiten(self.AI["projekte"]["detail"])
+
+    def aktion_wissen(self, _t):
+        self.AI["projekte"]["eingabe"] = {"art": "pfad", "text": "", "cur": 0, "u8": b""}
+
+    def aktion_neu_laden(self, _t):
+        self.detail_laden(self.AI["projekte"]["detail"]["id"])
+
+    def aktion_detail_zu(self, _t):
+        self.AI["projekte"]["detail"] = None
+
+    # Eingabefeld (Name eines neuen Projekts, Pfad einer Wissensdatei)
+    def aktion_eingabe_fertig(self, _t):
+        P = self.AI["projekte"]
+        e, P["eingabe"] = P["eingabe"], None
+        text = e["text"].strip()
+        if not text:
+            return
+        if e["art"] == "name":
+            if self.anlegen(text) is not None:
+                self.oeffnen(False)
+        else:
+            self.wissen_hinzufuegen(P["detail"], text)
+
+    def aktion_eingabe_ab(self, _t):
+        self.AI["projekte"]["eingabe"] = None
+
+    def aktion_eingabe_tippen(self, taste):
+        e = self.AI["projekte"]["eingabe"]
+        if taste == "backspace":
             e["text"], e["cur"] = eingabe.zurueck(e["text"], e["cur"])
-        elif ch == curses.KEY_LEFT:
+        elif taste == "left":
             e["text"], e["cur"] = eingabe.links(e["text"], e["cur"])
-        elif ch == curses.KEY_RIGHT:
+        elif taste == "right":
             e["text"], e["cur"] = eingabe.rechts(e["text"], e["cur"])
-        elif isinstance(ch, int) and 32 <= ch <= 126:
-            e["text"], e["cur"] = eingabe.einfuegen(e["text"], e["cur"], chr(ch), grenze=400)
-        elif isinstance(ch, int) and 128 <= ch <= 255:
-            e["u8"], z = eingabe.utf8_byte(e["u8"], ch)
-            if z is not None and eingabe.druckbar(z):
+        else:
+            e["u8"], z = eingabe.getippt(e["u8"], taste)
+            if z:
                 e["text"], e["cur"] = eingabe.einfuegen(e["text"], e["cur"], z, grenze=400)
 
     # ── Aktionen im Projekt ────────────────────────────────────────────
@@ -385,7 +429,7 @@ class Projekte:
         """n im Projekt: das nächste Senden beginnt ein Gespräch darin."""
         AI = self.AI
         if AI["streaming"]:
-            AI["msg"] = "antwort läuft noch — erst stoppen (esc)"
+            AI["msg"] = "antwort läuft noch — erst stoppen (ctrl+c)"
             return
         if self._rufen("/api/chat/clear", "POST", {"projekt": d["id"]},
                        fehlschlag="kein neues gespräch") is None:
@@ -479,23 +523,6 @@ class Projekte:
         AI["msg"] = "anweisungen gespeichert (die alte fassung bleibt als sicherung)"
 
     # ── Zeichnen ───────────────────────────────────────────────────────
-    def tasten(self):
-        """Tasten je Zustand — Fußleiste und Hinweis im Kasten (2026-10-07)."""
-        P = self.AI["projekte"]
-        if P["eingabe"] is not None:
-            return [("enter", "done"), ("esc", "cancel")]
-        if P["detail"] is not None:
-            return [("↑↓", "chat"), ("enter", "open"), ("n", "new chat"),
-                    ("e", "instructions"), ("w", "add knowledge"), ("r", "reload"),
-                    ("esc", "back")]
-        return ([("↑↓", "select"), ("enter", "open"), ("n", "new project")]
-                + ([("a", "restore"), ("z", "back")] if P["archiv"]
-                   else [("a", "archive"), ("z", "archive list")])
-                + [("esc", "close")])
-
-    def fusszeile(self):
-        return fussleiste.text(self.tasten())
-
     def zeichnen(self, by, bx, bh, bw):
         z = self.chat.z
         C, addclip = z.C, z.addclip
@@ -518,7 +545,6 @@ class Projekte:
         if e is not None:
             frage = "name des neuen projekts: " if e["art"] == "name" else "pfad der datei: "
             fuss.append(frage + e["text"] + "▌")
-        fuss.append(self.fusszeile())
         zeilen_fuss = []
         for f in fuss:
             zeilen_fuss += [f[i:i + inw] for i in range(0, len(f), inw)] or [""]
@@ -537,7 +563,7 @@ class Projekte:
             zeilen = liste_zeilen(P["liste"], P["idx"], inw)
             ziel = P["idx"]
             if not zeilen:
-                zeilen = [("noch keine projekte — n legt eins an" if not P["archiv"]
+                zeilen = [("noch keine projekte" if not P["archiv"]
                            else "archiv ist leer", "leise")]
             P["scroll"] = max(0, min(ziel - platz // 2, len(zeilen) - platz))
         P["scroll"] = max(0, min(P["scroll"], max(0, len(zeilen) - platz)))
