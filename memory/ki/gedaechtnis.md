@@ -63,9 +63,13 @@ metadata:
 
 ## Was in den Prompt geht
 
-`gedaechtnis.kopf_block()`: **Hausregeln + Steckbrief + Index + knappe Regeln**
-— im gecachten Teil (`cloud._static_system`). Die **Ziele** stehen seit dem
-Umbau nur noch als Indexzeile drin (`person/ziele`), nicht mehr ganz.
+`gedaechtnis.kopf_block()`: **Hausregeln + Steckbrief + Ziele + Index + knappe Regeln**
+— im gecachten Teil (`cloud._static_system`). Die **Ziele** (`## Deine Ziele`,
+direkt unter „Über Sasha“) stehen seit 11.10. wieder GANZ drin, bei jedem
+Aufbau frisch aus `person/ziele` gelesen (keine Kopie; Sasha ändert die Datei,
+der Kopf folgt). Über `ZIELE_KOPF_MAX` (3000 Zeichen) nur Überschriften und
+fette Punkte + „Vollständig: person/ziele (nachlesen)“. Fehlt die Datei: kein
+Block. Die Indexzeile bleibt.
 Der Index ist byte-stabil: `aktualisiert` steht nicht drin, er ändert sich
 nur, wenn eine Datei dazukommt, wegfällt oder ihren Haken/ihre Art ändert;
 das Tagebuch ist eine Zeile (Monate von … bis). `INDEX.md` wird bei jeder

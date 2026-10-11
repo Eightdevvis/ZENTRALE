@@ -118,15 +118,61 @@ def test_leeres_gedaechtnis_erzeugt_keinen_block():
     assert gedaechtnis.kopf_block() == ""
 
 
-def test_steckbrief_im_kopf_ziele_nur_im_index():
-    """Seit 2026-10-11 (nach Themen, wie Claudes MEMORY.md): der Steckbrief
-    steht ganz im Kopf, die Ziele nur mit Namen und Haken im Index."""
+def test_steckbrief_und_ziele_ganz_im_kopf_ziele_auch_im_index():
+    """Sasha, 2026-10-11: die Ziele stehen wieder ganz im Kopf (unter dem
+    Steckbrief); die Indexzeile person/ziele bleibt."""
     gedaechtnis.kernakte_schreiben("steckbrief", "Fokus und Fertigstellen hat Vorrang.")
     gedaechtnis.kernakte_schreiben("ziele", "Spagat, L-Sit, Zugspitze.")
     block = gedaechtnis.kopf_block()
     assert "Fokus und Fertigstellen" in block
-    assert "Zugspitze" not in block
+    assert "Zugspitze" in block
     assert "themen/person/ziele.md" in block
+    assert block.index("## Über Sasha") < block.index("## Deine Ziele")
+
+
+def test_ziele_block_hat_ueberschrift_hinweis_und_keinen_yaml_kopf():
+    gedaechtnis.kernakte_schreiben("ziele", "> Sashas Datei.\n\n- **Spagat** lernen.")
+    assert "---" in open(gedaechtnis.kern_pfad("ziele")).read()   # Datei hat einen Kopf
+    block = gedaechtnis.kopf_block()
+    teil = block[block.index("## Deine Ziele"):]
+    assert teil.startswith("## Deine Ziele\nSashas Ziele. Beziehe sie ein, wenn sie "
+                           "zum Gespräch passen — nicht ungefragt in jede Antwort.\n"
+                           "> Sashas Datei.")
+    assert "- **Spagat** lernen." in teil
+    assert "name:" not in block and "metadata" not in block
+
+
+def test_ziele_block_folgt_der_datei_ohne_zwischenspeicher():
+    gedaechtnis.kernakte_schreiben("ziele", "- Eins")
+    assert "Eins" in gedaechtnis.kopf_block()
+    gedaechtnis.kernakte_schreiben("ziele", "- Zwei")
+    block = gedaechtnis.kopf_block()
+    assert "Zwei" in block and "Eins" not in block
+
+
+def test_ziele_block_ueber_der_grenze_nur_kurzform():
+    lang = "## Körper\n\n- **Spagat** lernen.\n- unfett, nur Beiwerk\n" + \
+        ("Fliesstext zum Auffuellen. " * 200)
+    assert len(lang) > gedaechtnis.ZIELE_KOPF_MAX
+    gedaechtnis.kernakte_schreiben("ziele", lang)
+    block = gedaechtnis.kopf_block()
+    assert "## Körper" in block and "**Spagat**" in block
+    assert "Beiwerk" not in block and "Fliesstext" not in block
+    assert "Vollständig: person/ziele (nachlesen)" in block
+
+
+def test_ziele_block_genau_an_der_grenze_bleibt_ganz():
+    text = "x" * gedaechtnis.ZIELE_KOPF_MAX
+    gedaechtnis.kernakte_schreiben("ziele", text)
+    block = gedaechtnis.kopf_block()
+    assert text in block and "Vollständig:" not in block
+
+
+def test_ohne_ziele_datei_kein_block():
+    gedaechtnis.kernakte_schreiben("steckbrief", "Nur der Steckbrief.")
+    assert "Deine Ziele" not in gedaechtnis.kopf_block()
+    gedaechtnis.kernakte_schreiben("ziele", "  \n")
+    assert "Deine Ziele" not in gedaechtnis.kopf_block()
 
 
 # ── Der Graph ist aus, das Rohmaterial läuft weiter ───────────────────

@@ -818,6 +818,34 @@ _REGELN = (
     "- Was nicht mehr stimmt: archive_note — nichts wird gelöscht.")
 
 
+# Sasha, 2026-10-11: ab dieser Größe (Zeichen, ohne YAML-Kopf) kommt statt der
+# ganzen Ziele-Datei nur die Kurzform in den Kopf (Überschriften + fette
+# Punkte). Bewusst Konstante, keine Einstellung: der Kopf sitzt im gecachten
+# Teil, jede Zeichenmenge dort kostet bei jedem Zug.
+ZIELE_KOPF_MAX = 3000
+
+
+def _ziele_kurz(text: str) -> str:
+    """Überschriften und Punkte mit fett markiertem Text, sonst nichts."""
+    zeilen = [z for z in text.splitlines()
+              if z.lstrip().startswith("#")
+              or (z.lstrip().startswith(("- ", "* ")) and "**" in z)]
+    return "\n".join(zeilen)
+
+
+def _ziele_block() -> str:
+    """„## Deine Ziele“ aus der Datei, bei JEDEM Aufbau frisch gelesen (keine
+    Kopie, kein Zwischenspeicher: Sasha ändert die Datei, der Kopf folgt).
+    Fehlt sie oder ist leer: ""."""
+    z = ziele()
+    if not z:
+        return ""
+    if len(z) > ZIELE_KOPF_MAX:
+        z = _ziele_kurz(z) + "\n\nVollständig: person/ziele (nachlesen)"
+    return ("## Deine Ziele\nSashas Ziele. Beziehe sie ein, wenn sie zum "
+            "Gespräch passen — nicht ungefragt in jede Antwort.\n" + z)
+
+
 def kopf_block() -> str:
     """Hausregeln + Steckbrief + der Index. Sonst nichts.
 
@@ -825,7 +853,9 @@ def kopf_block() -> str:
     ein Spagat-Dossier gibt, und es lesen, wenn es um den Spagat geht. Byte-
     stabil, solange keine Datei dazukommt oder ihren Haken ändert — gehört
     deshalb in den gecachten Teil (10 % des Preises). Die Ziele stehen seit
-    2026-10-11 nur noch im Index (person/ziele), nicht mehr ganz im Kopf."""
+    2026-10-11 (später am Tag, Sasha): die Ziele stehen wieder ganz im Kopf,
+    direkt unter „Über Sasha“ — frisch aus der Datei gelesen (_ziele_block),
+    der Indexeintrag person/ziele bleibt zusätzlich."""
     teile = []
     r = hausregeln()
     if r:
@@ -842,9 +872,9 @@ def kopf_block() -> str:
             "\n".join(f"- {b}/ — " + ", ".join(sorted(o.split("/", 1)[1] for o, _ in _alt_dateien()
                                                      if o.startswith(b + "/")))
                       for b in alt)
-        z = ziele()
-        if z and not os.path.exists(kern_pfad(ZIELE)):
-            teile.append("## Seine Ziele\n" + _ohne_titel(z))
+    zb = _ziele_block()
+    if zb:
+        teile.append(zb)
     if index:
         teile.append("## Was im Gedächtnis liegt\n" + index + "\n\n" + _REGELN)
     return "\n\n".join(teile)
