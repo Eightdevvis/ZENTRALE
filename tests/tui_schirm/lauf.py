@@ -131,6 +131,10 @@ SZ = {
     # Gedächtnis (Phase 3, 2026-10-07): Abschnitte durchblättern, Skill
     # umschalten, Kernakte im „Editor" (ein Skript, das eine Zeile anhängt),
     # /skills springt zu den Skills.
+    # Gedächtnis nach Themen (2026-10-11): Abschnitt 4, in drei Größen.
+    "ki_gedaechtnis_themen": [("k", "Space"), ("w", 2), ("l", "/gedaechtnis"), ("k", "Enter"),
+                              ("w", 1), ("l", "4"), ("cap", "a"), ("resize", 136, 30),
+                              ("cap", "b"), ("resize", 80, 24), ("cap", "c")],
     "ki_gedaechtnis": [("k", "Space"), ("w", 2), ("l", "/gedaechtnis"), ("k", "Enter"),
                        ("w", 1), ("cap", "a"), ("k", "Right"), ("cap", "b"), ("k", "Down"),
                        ("k", "Down"), ("cap", "c"), ("k", "Right"), ("cap", "d"),

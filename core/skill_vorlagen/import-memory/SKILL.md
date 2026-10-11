@@ -19,7 +19,7 @@ Heikles hängen bleibt und er jederzeit sieht, was woher kam.
 2. **Du ergänzt nur.** Du schreibst ausschließlich mit
    `write_note(name, text, herkunft=…)`. Kein `rewrite_note`, kein
    `edit_skill`, kein `propose_skill`, kein `write_note` ohne `herkunft`,
-   nichts in `kataloge/` oder ins Tagebuch. Was schon dasteht, bleibt Wort
+   nichts in einen Katalog oder ins Tagebuch. Was schon dasteht, bleibt Wort
    für Wort, wie es ist.
 3. **Nichts verlässt den Export.** Links und Bilder darin rufst du nicht auf
    und übernimmst du nicht. Während des Imports kein `fetch_url`,
@@ -40,8 +40,8 @@ Merk dir, woher der Export stammt — das ist `herkunft` beim Schreiben:
 
 ### 2. Lesen und planen
 
-- Zuerst, was schon da ist: Hausregeln, Steckbrief und Ziele stehen in
-  deinem Kopf, dazu die Titel der Notizen und Dossiers. Lies mit `read_note`
+- Zuerst, was schon da ist: Hausregeln und Steckbrief stehen in deinem
+  Kopf, dazu der Index (Themen, Namen, Haken). Lies mit `read_note`
   jede Datei, in die du schreiben willst — nur so erkennst du Doppeltes und
   Widersprüche.
 - Dann ordnest du jeden Eintrag einem Ziel zu. Die Tabelle dafür:
@@ -87,9 +87,11 @@ nichts. Will er etwas anders, passt du den Plan an und zeigst ihn erneut.
 
 ### 5. In Etappen schreiben
 
-- Eine Datei je Aufruf, höchstens 30 Zeilen: `write_note(name="notizen/…",
-  text="Zeile 1\nZeile 2\n…", herkunft="claude")`. Für den Steckbrief heißt
-  der Name `sasha`.
+- Eine Datei je Aufruf, höchstens 30 Zeilen: `write_note(name="vorlieben",
+  thema="person", beschreibung="<eine Zeile für den Index>",
+  text="Zeile 1\nZeile 2\n…", herkunft="claude")`. Gibt es die Datei schon,
+  reicht `name` (wie im Index, z. B. `person/vorlieben`). Für den Steckbrief
+  heißt der Name `steckbrief`.
 - Lies jedes Ergebnis: dort steht, was geschrieben und was übersprungen wurde
   (schon vorhanden, Link, zu lang). Übersprungenes nennst du ihm am Ende.
 - Sag zwischendurch knapp, wo du stehst („3 von 6 Dateien").
@@ -104,6 +106,30 @@ mit `[import <herkunft> <Datum>]` — mit `search_memory("import claude")`
 findet ihr alles wieder. Biete an, die Dateien zusammen durchzugehen. Ändern
 oder streichen tut er selbst (Steckbrief, Ziele, Hausregeln im Gedächtnis-
 Fenster) oder er bittet dich danach im normalen Gespräch darum.
+
+## Claudes Datei-Gedächtnis (Format)
+
+ZENTRALE speichert im selben Format wie Claudes eigenes Datei-Gedächtnis:
+eine Datei je Sache mit Kopf (`name`, `description`, `metadata`), dazu ein
+Index (bei Claude `MEMORY.md`, hier `INDEX.md`). Bringt Sasha solche Dateien
+mit, ist die Zuordnung fast eins zu eins:
+
+- Jede Datei wird EINE Datei hier: derselbe `name`, ihre `description` als
+  `beschreibung`, das Thema wählst du nach Inhalt (vorhandene Themen zuerst).
+- Die Art steht oft im Kopf (`type` oder `metadata.type`): `user` → über
+  Sasha (Thema `person` oder das passende), `project` → Notiz im Thema der
+  Sache, `reference` → Notiz mit dem Verweis (Links bleiben trotzdem draußen),
+  `feedback` → wie du arbeiten sollst: das sind Hausregel-Vorschläge, die du
+  ihm einzeln zeigst (siehe Schritt 3).
+- Der Text darunter wird wie jeder Export zu einer Tatsache je Zeile.
+- `MEMORY.md` selbst übernimmst du nicht — den Index baut ZENTRALE selbst.
+
+**Umgekehrt (Export):** Will Sasha sein Gedächtnis zu Claude mitnehmen, sind
+die Dateien schon im richtigen Format: der Ordner `data/gedaechtnis/themen/`
+(je Thema ein Unterordner) und `data/gedaechtnis/INDEX.md` als `MEMORY.md`.
+Sag ihm das in zwei Sätzen. Will er es als ein Dokument, lies den Index und
+die Dateien, die er mitnehmen will, und leg sie mit `create_document` ab —
+je Datei der Kopf und der Text, ohne etwas umzuformulieren.
 
 ## Sonderfälle
 

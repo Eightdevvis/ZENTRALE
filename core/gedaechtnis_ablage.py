@@ -190,6 +190,11 @@ def _stamm(dateiname: str) -> tuple:
     return dateiname[:-3], ".md"
 
 
+def endung_von(pfad: str) -> str:
+    """'…/ideen.katalog.md' → '.katalog.md', '…/spagat.md' → '.md'."""
+    return _stamm(os.path.basename(pfad))[1]
+
+
 def eintrag(wurzel: str, voll: str) -> dict:
     """Eine Datei als dict: pfad, rel, thema, name, endung, kopf, rumpf, art,
     beschreibung."""

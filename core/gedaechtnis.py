@@ -400,6 +400,11 @@ def notieren(name: str, text: str, thema: str = "", art: str = "",
     if not stamm:
         return "[Fehler: kein Name]"
     treffer = _alt_uebernehmen(name, thema)
+    if art and not endung and treffer and \
+            ablage.endung_von(treffer[0]) != ablage.endung(art):
+        # Ausdrücklich eine andere Art: `training` (Dossier) neben dem
+        # Katalog `training.katalog` ist eine eigene Datei, kein Anhängsel.
+        treffer = ablage.finden(_DIR, roh, thema, (ablage.endung(art),))
     if len(treffer) > 1:
         return _mehrdeutig(treffer)
     eintrag = katalog.kopf_lesen(text)
@@ -903,7 +908,8 @@ def _import_auswahl(text: str, vorhanden: str, wer: str) -> tuple:
     return neu, weg
 
 
-def import_ergaenzen(name: str, text: str, herkunft: str, thema: str = "") -> str:
+def import_ergaenzen(name: str, text: str, herkunft: str, thema: str = "",
+                     beschreibung: str = "") -> str:
     """Zeilen aus einem Import anhängen — nur, was noch nicht da ist.
     `text` = eine Tatsache je Zeile. Neue Dateien werden Notizen im Thema
     `thema` (sonst „allgemein")."""
@@ -949,7 +955,7 @@ def import_ergaenzen(name: str, text: str, herkunft: str, thema: str = "") -> st
     neu, weg = _import_auswahl(text, alt, wer)
     if neu:
         _import_schreiben(akte, treffer[0] if not akte and treffer else None,
-                          thema, name, alt, neu, wer)
+                          thema, name, alt, neu, wer, beschreibung)
     teile = [f"{'Ergänzt in' if alt else 'Neu angelegt:'} {ort}: {len(neu)} Zeile(n)"
              + f", je mit [import {wer} {date.today().isoformat()}]"
              if neu else f"Nichts geschrieben in {ort}"]
@@ -962,7 +968,7 @@ def import_ergaenzen(name: str, text: str, herkunft: str, thema: str = "") -> st
     return " · ".join(teile)
 
 
-def _import_schreiben(akte, pfad, thema, name, alt, neu, wer) -> None:
+def _import_schreiben(akte, pfad, thema, name, alt, neu, wer, beschreibung="") -> None:
     text = alt.rstrip("\n") + "\n" if alt.strip() else (
         HAUSREGELN_KOPF if akte == HAUSREGELN else "")
     if pfad and ablage.art_von(ablage.zerlegen(_lesen(pfad))[0]) in ("dossier", "projekt"):
@@ -978,7 +984,8 @@ def _import_schreiben(akte, pfad, thema, name, alt, neu, wer) -> None:
         _fortschreiben(pfad, rumpf)
     else:
         _, stamm, _ = ablage.name_zerlegen(_bevorzugt(name)[0])
-        _anlegen(thema, stamm, "notiz", f"Aus dem Import von {wer}", rumpf, herkunft=wer)
+        _anlegen(thema, stamm, "notiz", beschreibung or f"Aus dem Import von {wer}", rumpf,
+                 herkunft=wer)
 
 
 # ── Dokumente holen und lesbar machen ─────────────────────────────────

@@ -30,6 +30,10 @@ SICHERN = [
     "data/ai_calendar.json",
     "data/kalender_neben.json",
     "data/kalender/**",
+    # Seit 2026-10-11 nach Themen: themen/ (samt Messreihen *.reihe.json),
+    # ki/ (Hausregeln, Vorlagen, Skills), INDEX.md, _archiv/ und der beim
+    # Umzug beiseitegelegte alte Bestand — alles darunter. data/g_*.json
+    # oben bleibt für Reihen, die noch nicht umgezogen sind.
     "data/gedaechtnis/**",
     "data/ai_transcripts/*.jsonl",
     "data/gespraeche/**",

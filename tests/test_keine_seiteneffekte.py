@@ -510,6 +510,24 @@ def test_skill_ordner_liegt_im_test_nicht_im_echten_data():
         assert not pfad.startswith(os.path.realpath(echt)), pfad
 
 
+def test_messreihen_unter_themen_suchen_nicht_im_echten_gedaechtnis():
+    """Seit 2026-10-11 liegen Messreihen unter ihrem Thema im Gedächtnis
+    (themen/<thema>/<name>.reihe.json). graphs sucht sie dort über
+    gedaechtnis._DIR — zeigte das ins echte data/, schrieben log_series und
+    /api/log im Test in Sashas echte Kurven, sobald er umgezogen ist."""
+    import gedaechtnis
+    import graphs
+    haupt = ROOT.split(os.sep + ".claude" + os.sep + "worktrees" + os.sep)[0]
+    for echt in (os.path.join(ROOT, "data"), os.path.join(haupt, "data")):
+        echt = os.path.realpath(os.path.join(echt, "gedaechtnis"))
+        assert not os.path.realpath(gedaechtnis._DIR).startswith(echt)
+        for gid in ("g_sleep", "g_gym", "g_periode"):
+            pfad = graphs.reihe_pfad(gid, "")
+            assert not pfad or not os.path.realpath(pfad).startswith(echt), pfad
+    pfad = os.path.realpath(gedaechtnis.skills_ordner())
+    assert not pfad.startswith(os.path.realpath(os.path.join(haupt, "data"))), pfad
+
+
 def test_gedaechtnis_routen_und_suche_lassen_das_echte_data_in_ruhe():
     """Phase 3 (2026-10-07): PUT /api/gedaechtnis schreibt Sashas Kernakten —
     im Test nur in den Wegwerf-Ordner. Und search_chats liest Gespräche und

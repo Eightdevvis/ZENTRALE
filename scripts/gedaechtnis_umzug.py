@@ -337,19 +337,37 @@ def _beiseite(quelle: str, ziel: str) -> None:
     os.replace(quelle, ziel)
 
 
+# Mitgelieferte Skills, die den neuen Aufbau kennen müssen. Die Erstbefüllung
+# (core/skills.py) überschreibt nie; beim Umzug wird die mitgelieferte
+# Fassung erneuert — aber nur, solange es Sashas unveränderte Kopie ist
+# (herkunft „zentrale"); die alte liegt danach im _alt-Ordner.
+ERNEUERN = ("import-memory",)
+_VORLAGEN = os.path.join(HIER, "..", "core", "skill_vorlagen")
+
+
 def _skills_umziehen(wurzel: str, alt_ordner: str) -> None:
     alt, neu = os.path.join(wurzel, "skills"), os.path.join(wurzel, "ki", "skills")
-    if not os.path.isdir(alt):
-        return
-    if not os.path.isdir(neu):
+    if os.path.isdir(alt) and not os.path.isdir(neu):
         os.makedirs(os.path.dirname(neu), exist_ok=True)
         os.replace(alt, neu)
+    elif os.path.isdir(alt):
+        for name in os.listdir(alt):    # beide da: Fehlendes rüber, Rest beiseite
+            ziel = os.path.join(neu, name)
+            if not os.path.exists(ziel):
+                os.replace(os.path.join(alt, name), ziel)
+        _beiseite(alt, os.path.join(alt_ordner, "skills"))
+    else:
         return
-    for name in os.listdir(alt):        # beide da: Fehlendes rüber, Rest beiseite
-        ziel = os.path.join(neu, name)
-        if not os.path.exists(ziel):
-            os.replace(os.path.join(alt, name), ziel)
-    _beiseite(alt, os.path.join(alt_ordner, "skills"))
+    for name in ERNEUERN:
+        ordner, vorlage = os.path.join(neu, name), os.path.join(_VORLAGEN, name)
+        try:
+            with open(os.path.join(ordner, "_zentrale.json"), encoding="utf-8") as f:
+                herkunft = json.load(f).get("herkunft")
+        except (OSError, ValueError):
+            continue
+        if herkunft == "zentrale" and os.path.isdir(vorlage):
+            _beiseite(ordner, os.path.join(alt_ordner, "skills_vorher", name))
+            shutil.copytree(vorlage, ordner)
 
 
 def _einsetzen(wurzel: str, zwischen: str) -> None:

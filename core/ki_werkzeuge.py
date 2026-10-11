@@ -346,7 +346,8 @@ def _write_note(args: dict) -> str:
     # 2026-10-08: mit herkunft ist es ein Import (Skill import-memory) —
     # zeilenweise, nur Neues, nie ins Tagebuch oder in Kataloge.
     if str(args.get("herkunft") or "").strip():
-        roh = gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]), thema)
+        roh = gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]), thema,
+                                           str(args.get("beschreibung") or ""))
         lesen, ort = _lesen_fuer(wie, thema), f"in '{wie}'"
     elif wie.lower() in ("tagebuch", "diary", ""):
         roh = gedaechtnis.tagebuch_notieren(text)
