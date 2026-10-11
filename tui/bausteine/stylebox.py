@@ -17,7 +17,9 @@
 # Sasha: „da sollte Rahmen ‹keine› einfach ausgewählt dann sein"): bei einer
 # Auswahl steht sie vorn im Kreis (keine → durchgezogen → … → keine), eine
 # Farbe zeigt sie, bis man eine wählt. ‹ keine › ist NICHT CSS „none" —
-# die Eigenschaft fehlt dann einfach.
+# die Eigenschaft fehlt dann einfach. Es ist das EINZIGE „nichts" (11.10.2026,
+# Sasha): „keiner"/„keins" (CSS none) gibt es nicht mehr zur Wahl. Ein alter
+# Stil mit none zeigt ‹ keine ›, und Enter gibt dafür None zurück (fällt weg).
 #
 # Tasten: ↑↓ (Tab, Shift+Tab) Eigenschaft; ←→ oder Leertaste ändern eine
 # Auswahl; bei einer Farbe öffnen Leertaste/→ den Farbwähler (# öffnet ihn
@@ -71,6 +73,7 @@ def _feld(name, eigen):
     wahl = [(w["const"], str(w.get("title") or w["const"]))
             for w in s.get("oneOf") or [] if isinstance(w, dict) and "const" in w]
     wahl = wahl or [(w, str(w)) for w in s.get("enum") or []]
+    wahl = [(w, t) for w, t in wahl if not stil_kern.alt_nichts(name, w)]   # nur ‹ keine ›
     if s.get("readOnly"):
         f["art"] = "gesperrt"
     elif name in stil_kern.FARBEN:
@@ -106,9 +109,12 @@ class Stylebox:
         for name, wert in (stil or {}).items():         # Fremdes/Kaputtes still weglassen
             if name in self.namen:
                 sauber, grund = stil_kern.wert_pruefen(name, wert)
-                if not grund:
+                if not grund and not stil_kern.alt_nichts(name, sauber):
                     anfang[name] = sauber
         self.anfang = anfang
+        # altes CSS „none": zeigt ‹ keine ›, Enter gibt None (fällt weg)
+        self.alt_nichts = {n for n, w in (stil or {}).items()
+                           if n in self.namen and stil_kern.alt_nichts(n, w)}
         self.eingang = set(stil or {}) & set(self.namen)   # angeboten und mitgebracht (auch kaputt)
         self.werte = dict(anfang)       # fehlt ein Name: nicht gesetzt (‹ keine ›)
         self.beruehrt = set()           # in dieser Sitzung geändert/entfernt
@@ -139,7 +145,7 @@ class Stylebox:
         if ch in ENTER:
             neu = stil_kern.pruefen(self.werte, self.namen)
             erg = stil_kern.unterschied(self.anfang, neu)   # Entferntes aus dem Anfang = None
-            for name in self.beruehrt - set(neu):           # auch Kaputtes/neu Gesetztes, das weg ist
+            for name in (self.beruehrt | self.alt_nichts) - set(neu):   # auch Kaputtes/Altes, das weg ist
                 erg[name] = None
             self.ergebnis = erg
             return ("fertig", self.ergebnis)

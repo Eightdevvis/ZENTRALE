@@ -39,7 +39,7 @@ def test_schema_ist_json_schema_der_angebotenen_namen():
     assert s["additionalProperties"] is False
     assert s["properties"]["color"]["pattern"] == stil.HEX_MUSTER
     assert [w["const"] for w in s["properties"]["border-style"]["oneOf"]] == \
-        ["solid", "dashed", "dotted", "double", "none"]
+        ["solid", "dashed", "dotted", "double"]            # kein „keiner" mehr
     assert stil.EIGENSCHAFTEN["background-image"]["readOnly"] is True
     with pytest.raises(ValueError):
         stil.schema(["colour"])
@@ -363,8 +363,7 @@ def test_wahl_aendern_mit_pfeilen_und_leertaste():
     assert sb.werte["border-style"] == "solid"
     for _ in range(4):
         sb.taste(9)                                          # Tab bis zum Muster
-    sb.taste(ord(" "))                                       # ‹ keine › → keins
-    sb.taste(ord(" "))
+    sb.taste(ord(" "))                                       # ‹ keine › → Punkte
     assert sb.werte["--zentrale-muster"] == "punkte"
     sb.taste(curses.KEY_BACKSPACE)
     assert "--zentrale-muster" not in sb.werte              # entfernt (war nicht gesetzt)
@@ -380,25 +379,48 @@ def test_keine_ist_eine_echte_wahl_im_kreis():
     for _ in range(6):                                       # Rahmen: einmal rundum
         sb.taste(ord(" "))
         reihe.append(sb.werte.get("border-style"))
-    assert reihe == ["solid", "dashed", "dotted", "double", "none", None]
+    assert reihe == ["solid", "dashed", "dotted", "double", None, "solid"]   # kein „keiner"
+    sb.taste(curses.KEY_LEFT)
     assert sb.zeilen()[0]["text"] == "‹ keine ›"
-    sb.taste(curses.KEY_LEFT)                                # keine ← … am Ende: none
-    assert sb.werte["border-style"] == "none"
+    sb.taste(curses.KEY_LEFT)                                # keine ← … am Ende: doppelt
+    assert sb.werte["border-style"] == "double"
     sb.taste(curses.KEY_RIGHT)
     assert "border-style" not in sb.werte                    # ‹ keine › schreibt kein CSS „none"
     assert sb.taste(ENTER) == ("fertig", {"border-style": None})   # Vertrag wie af5915e
     assert stil.anwenden({}, sb.ergebnis) == {}
     sb = Stylebox({}, ALLES)
     sb.feld = ALLES.index("--zentrale-muster")
-    sb.taste(curses.KEY_RIGHT)
-    assert sb.werte["--zentrale-muster"] == "none" and sb.zeilen()[4]["text"] == "‹ keins ›"
+    sb.taste(curses.KEY_RIGHT)                               # kein „keins": gleich Punkte
+    assert sb.werte["--zentrale-muster"] == "punkte" and sb.zeilen()[4]["text"] == "‹ Punkte ›"
     sb.taste(curses.KEY_LEFT)
     assert sb.zeilen()[4]["text"] == "‹ keine ›"
+    sb.taste(curses.KEY_LEFT)
+    assert sb.werte["--zentrale-muster"] == "karo"
+    assert all("keiner" not in t and "keins" not in t
+               for f in sb.felder for _w, t in f.get("wahl", []))
     sb = Stylebox({"border-style": "dashed"}, ["border-style"])
     sb.taste(curses.KEY_LEFT)
     sb.taste(curses.KEY_LEFT)                                # dashed → solid → keine
     assert sb.zeilen()[0]["text"] == "‹ keine ›"
     assert sb.taste(ENTER) == ("fertig", {"border-style": None})
+
+
+def test_altes_none_ist_lesbar_und_heisst_keine():
+    """11.10.2026: CSS none („keiner"/„keins") wird nicht mehr angeboten,
+    alte Stile damit bleiben gültig, zeigen ‹ keine › und fallen beim Nehmen weg."""
+    alt = {"border-style": "none", "--zentrale-muster": "None", "color": "#ffffff"}
+    assert stil.pruefen(alt) == {"border-style": "none", "--zentrale-muster": "none",
+                                 "color": "#ffffff"}            # Lesen bleibt rückwärtskompatibel
+    assert stil.wert_pruefen("background-color", "none")[1]    # nur Rahmen/Muster
+    assert stil.alt_nichts("border-style", "none") and not stil.alt_nichts("border-style", "solid")
+    sb = Stylebox(alt, ALLES)
+    texte = {z["name"]: z["text"] for z in sb.zeilen()}
+    assert texte["border-style"] == texte["--zentrale-muster"] == "‹ keine ›"
+    assert sb.taste(ENTER) == ("fertig", {"border-style": None, "--zentrale-muster": None})
+    assert stil.anwenden(alt, sb.ergebnis) == {"color": "#ffffff"}
+    sb = Stylebox({"border-style": "none"}, ["border-style"])
+    sb.taste(ord(" "))                                       # ‹ keine › → durchgezogen
+    assert sb.taste(ENTER) == ("fertig", {"border-style": "solid"})
 
 
 def test_farbe_keine_setzen_keine():

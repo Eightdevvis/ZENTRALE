@@ -43,24 +43,45 @@ MUSTER = (("none", "keins"), ("punkte", "Punkte"), ("raster", "Raster"),
           ("dicht", "dicht"), ("streifen", "Streifen"), ("schraeg", "schräg"),
           ("karo", "Karo"))
 
+# Nur EIN „nichts" (11.10.2026, Sasha): nicht gesetzt (‹ keine ›, die
+# Eigenschaft fehlt). Das alte „none" („keiner"/„keins") wird nicht mehr
+# angeboten — weder im Schema noch in der Stylebox. Gelesen wird es weiter
+# (alte Stile, .ics): wert_pruefen nimmt es an, Oberflächen behandeln es als
+# nicht gesetzt (alt_nichts). RAHMEN/MUSTER bleiben vollständig, weil das
+# KI-Werkzeug set_calendar_style (core/werkzeug_kalender.py) sie so reicht.
+NICHTS = "none"
+ALT_NICHTS = frozenset({"border-style", MUSTER_EIGENSCHAFT})
+
+
+def alt_nichts(name, wert):
+    """Ist das ein altes „none", das heute „nicht gesetzt" heißt?"""
+    return name in ALT_NICHTS and str(wert or "").strip().lower() == NICHTS
+
+
+def _ohne_nichts(paare):
+    return tuple((w, t) for w, t in paare if w != NICHTS)
+
 
 def _farbe(titel):
     return {"type": "string", "title": titel, "pattern": HEX_MUSTER}
 
 
-def _wahl(titel, paare, vorgabe):
-    return {"type": "string", "title": titel, "default": vorgabe,
-            "oneOf": [{"const": w, "title": t} for w, t in paare]}
+def _wahl(titel, paare, vorgabe=None):
+    s = {"type": "string", "title": titel,
+         "oneOf": [{"const": w, "title": t} for w, t in paare]}
+    if vorgabe is not None:
+        s["default"] = vorgabe
+    return s
 
 
 # Alle Eigenschaften, die ZENTRALE kennt — als Schema-Stücke. Reihenfolge =
 # Reihenfolge in Dialogen, wenn der Aufrufer nur „alle" sagt.
 EIGENSCHAFTEN = {
-    "border-style": _wahl("Rahmen", RAHMEN, "solid"),
+    "border-style": _wahl("Rahmen", _ohne_nichts(RAHMEN), "solid"),
     "border-color": _farbe("Rahmenfarbe"),
     "background-color": _farbe("Fläche"),
     "color": _farbe("Schrift"),
-    MUSTER_EIGENSCHAFT: _wahl("Muster", MUSTER, "none"),
+    MUSTER_EIGENSCHAFT: _wahl("Muster", _ohne_nichts(MUSTER)),     # ohne: kein Muster
     # Icon hochladen gibt es noch nicht: das Feld steht da, ist aber
     # gesperrt (readOnly ist ein Standard-Schlüsselwort), 2026-10-10.
     "background-image": {"type": "string", "title": "Icon",
@@ -130,6 +151,8 @@ def wert_pruefen(name, wert):
     if "oneOf" in s:
         erlaubt = [w["const"] for w in s["oneOf"]]
         w = wert.strip().lower()
+        if alt_nichts(name, w):                 # altes „none": lesbar, nicht angeboten
+            return w, None
         return (w, None) if w in erlaubt else (
             None, "%s: eins von %s" % (s["title"], ", ".join(erlaubt)))
     if s.get("pattern") and not re.fullmatch(s["pattern"], wert.strip()):

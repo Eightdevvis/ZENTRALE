@@ -110,11 +110,11 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
 
 | CSS-Eigenschaft | Titel | Werte | Terminal |
 |---|---|---|---|
-| `border-style` | Rahmen | `solid`, `dashed`, `dotted`, `double`, `none` | `┌─┐│` · `┌╌┐╎` · `┌┈┐┊` · `╔═╗║` · leer |
+| `border-style` | Rahmen | `solid`, `dashed`, `dotted`, `double` (altes `none`: nur gelesen) | `┌─┐│` · `┌╌┐╎` · `┌┈┐┊` · `╔═╗║` |
 | `border-color` | Rahmenfarbe | `#rrggbb` | Farbe der Rahmenzeichen |
 | `background-color` | Fläche | `#rrggbb` | Hintergrund des Kästchens |
 | `color` | Schrift | `#rrggbb` | Schrift (Muster in Schrift/Fläche gemischt) |
-| `--zentrale-muster` | Muster | `none`, `punkte`, `raster`, `dicht`, `streifen`, `schraeg`, `karo` | leer · `· ·` versetzt · `░` · `▒` · `─` jede 2. Zeile · `╱` · `┼` |
+| `--zentrale-muster` | Muster | `punkte`, `raster`, `dicht`, `streifen`, `schraeg`, `karo` (altes `none`: nur gelesen) | `· ·` versetzt · `░` · `▒` · `─` jede 2. Zeile · `╱` · `┼` |
 | `background-image` | Icon | `none`, `url(…)` | **gesperrt** (`readOnly`), zeigt „noch gesperrt" |
 
 - **Farben** nur als `#rrggbb` (CSS-Hex), klein geschrieben; `stil.hex_lesen`
@@ -136,9 +136,16 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
   steht in der Liste als ausgewählte Wahl „‹ keine ›" — bei jeder Art
   (Rahmen, Farben, Muster, Icon). Bei einer Auswahl ist sie der erste
   Eintrag im Kreis von ←→/Leertaste: `keine → durchgezogen → gestrichelt →
-  gepunktet → doppelt → keiner → keine` (Muster: `keine → keins → Punkte →
-  …`). ‹ keine › heißt **nicht gesetzt**, nicht CSS `none` (das ist
-  „keiner"/„keins" im Kreis). Eine Farbe zeigt „‹ keine ›", bis
+  gepunktet → doppelt → keine` (Muster: `keine → Punkte → … → Karo →
+  keine`). ‹ keine › heißt **nicht gesetzt**, nicht CSS `none`, und ist das
+  **einzige „nichts"** (11.10.2026, Sasha): „keiner"/„keins" (CSS `none`)
+  gibt es nicht mehr zur Wahl, auch nicht im Schema (`stil.schema`). Alte
+  Stile mit `border-style: none` oder `--zentrale-muster: none` bleiben
+  gültig (`stil.wert_pruefen`/`pruefen` nehmen sie an, `.ics` liest sie
+  unverändert), die Stylebox zeigt sie als ‹ keine ›, und Enter gibt für sie
+  `None` zurück — sie fallen weg (`stil.alt_nichts(name, wert)` erkennt
+  sie). `stil.RAHMEN`/`stil.MUSTER` enthalten `none` weiter, weil das
+  KI-Werkzeug `set_calendar_style` sie als Liste reicht. Eine Farbe zeigt „‹ keine ›", bis
   Leertaste/→/`#` den Farbwähler öffnen (er startet weiß). ⌫/Entf setzt
   jede Eigenschaft zurück auf ‹ keine ›. Die Vorschau zeichnet ohne sie
   (Farbe des Themes, ohne Rahmenstil durchgezogen). `r` holt den Wert vom
