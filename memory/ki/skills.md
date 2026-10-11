@@ -1,7 +1,7 @@
 # Skills — `load_skill`, `propose_skill`, `edit_skill`
 
 **Stand 2026-10-11:** Skills im Format von Claude (`SKILL.md` mit `name` +
-`description`) unter `data/gedaechtnis/skills/<name>/`. Drei Stufen: Liste im
+`description`) unter `data/gedaechtnis/ki/skills/<name>/` (bis zum Gedächtnis-Umzug vom 11.10.2026: `skills/<name>/`). Drei Stufen: Liste im
 festen Kopf (Deckel 6.000 Zeichen, wird nicht gleichmäßig gekürzt), Anleitung
 per `load_skill`, Dateien per `load_skill(datei=…)`; Skripte nur über
 `run_code(skill=…)`. Anlegen/Umschreiben ist gegatet, abschalten kann nur Sasha.
@@ -19,7 +19,7 @@ Phase 4 des [Claude-Web-Plans](claude_web_plan.md); seit dem Abend des
 Umbau hineinpassen). Ein Skill ist eine **Anleitung für eine Art Aufgabe**
 („Woche planen", „einen Skill bauen"), keine Regel: was immer gilt, sind
 Hausregeln. Module `core/skills.py`, `core/skill_format.py`,
-`core/skill_umzug.py` (Schicht 2), Ordner `data/gedaechtnis/skills/<name>/`
+`core/skill_umzug.py` (Schicht 2), Ordner `data/gedaechtnis/ki/skills/<name>/`
 mit `SKILL.md` — Aufbau, Status, Umzug und Erstbefüllung in
 [gedaechtnis_dateien.md](gedaechtnis_dateien.md), Abschnitt „Skills".
 

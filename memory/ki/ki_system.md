@@ -14,7 +14,7 @@ Einstellung `modell_profile` → [modell_profile.md](modell_profile.md)).
 **Tools laufen immer lokal**, nur die Entscheidung wandert. Schreib-Tools
 gehen durchs Erlaubnis-Gate (Regel im Werkzeug-Register, nicht
 modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**
-(`gedaechtnis_dateien.md`); der Konzept-Graph ist seit 2026-08-18
+(`gedaechtnis_dateien.md`, Aufbau nach Themen: `gedaechtnis.md`); der Konzept-Graph ist seit 2026-08-18
 abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück),
 [konzept_graph.md](konzept_graph.md) beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
 nicht hart gegatet (`chat_available()`: ohne lokale KI —

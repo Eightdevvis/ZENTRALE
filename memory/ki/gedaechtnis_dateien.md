@@ -1,15 +1,10 @@
 # Das Datei-Gedächtnis
 
-**Stand 2026-09-18:** Das Gedächtnis der Kern-KI sind **Markdown-Dateien**
-unter `data/gedaechtnis/` (`core/gedaechtnis.py`, seit 18.08.2026): Steckbrief
-und Ziele pflegt Sasha, Notizen (formlos, Default), Dossiers (Prosa über eine
-Sache), Kataloge (gleichförmige Einträge, upsert statt anhängen), Quellen
-(abgelegte Dokumente) und das Tagebuch schreibt die KI über die Werkzeuge der
-`gross`-Schiene; Messreihen bleiben im Graph-Werkzeug (`data/g_*.json`). Im
-gecachten Prompt liegt nur der Kopf-Block, Inhalte kommen auf Abruf. Der
-Nachprüf-Schritt steckt im Werkzeug-Ergebnis. Der Konzept-Graph ist
-abgeschaltet, nicht gelöscht (Warum unten). Offen: Modulhandbuch/Stundenplan,
-`fetch_document` nur http(s), das Schemen.
+**Stand 2026-10-11:** Das Gedächtnis der Kern-KI sind **Markdown-Dateien**
+unter `data/gedaechtnis/`, seit dem 11.10. **nach Thema** und im Format von
+Claudes Datei-Gedächtnis (Kopf, Index) — Aufbau, Werkzeuge, Umzug:
+[gedaechtnis.md](gedaechtnis.md). Diese Datei hält das Warum fest: warum der
+Konzept-Graph ging, Notiz/Dossier/Katalog, Skills, Import, die TUI.
 
 Nachfolger des Konzept-Graphen als Gedächtnis der Kern-KI. Modul:
 `core/gedaechtnis.py`.
@@ -54,54 +49,27 @@ wiederkommt, dann mit einem Schema — [Graphiti](https://github.com/getzep/grap
 Pydantic-Schema, bi-temporale Gültigkeit mit Invalidierung, und Episoden-Knoten,
 die den Rohtext am Graphen halten.
 
-## Die Speicher
+## Die Arten — und woher der Default „Notiz" kommt
 
-| Speicher | Wo | Wer pflegt |
-|---|---|---|
-| **Steckbrief** | `data/gedaechtnis/sasha.md` | **Sasha.** Die stabilen Regeln über ihn. Zu wichtig für einen Extraktor. |
-| **Ziele** | `data/gedaechtnis/ziele.md` | Sasha; die KI darf vorschlagen. |
-| **Notizen** | `notizen/*.md` | **Formlos.** Einzelne Fakten, kurze Listen — alles, was kein Vorhaben ist. Der Default für neue Namen. |
-| **Dossiers** | `dossiers/*.md` | Prosa über EINE Sache, die er ernsthaft verfolgt. KI schreibt fort, Sasha korrigiert im Text. |
-| **Kataloge** | `kataloge/*.md` | Viele gleichförmige Einträge mit Attributen. Der Ideenpool, die Module, das Material. |
-| **Quellen** | `quellen/*.md` (+ `quellen/dateien/`) | Abgelegte Dokumente, aus PDF/HTML extrahiert. |
-| **Tagebuch** | `tagebuch/YYYY-MM-DD.md` | Die KI. Was gesagt und getan wurde, in SEINEN Worten. |
-| **Messreihen** | `data/g_*.json` (Zyklus-Werkzeug) | Zahlen über Zeit — Schlaf, Stimmung, Spagat in cm. |
-| **Skills** | `skills/<name>/SKILL.md` (+ `_zentrale.json`, optional `scripts/` `references/` `assets/`) | Anleitungen für eine Art Aufgabe, im Format von Claude. Sasha (hineinkopieren, an/aus; seit 09.10. auch per Zip/Ordner über die KI, `import_skill`) oder die KI — die nur nach seinem Ja (`propose_skill`). Siehe unten „Skills“. |
-| **Projekte** | `projekte/<id>/` (`projekt.json`, `anweisungen.md`, `wissen/`) | **Sasha** (TUI `/projekte`). Rahmen für ein Thema; die KI liest nur (`read_project_file`). Wie Skills nicht in `BEREICHE`. Siehe [projekte.md](projekte.md). |
+Seit dem 11.10.2026 ist die Art (`notiz`, `dossier`, `katalog`, `quelle`,
+`ziel`, `projekt` …) ein Feld im Datei-Kopf, kein Ordner mehr
+([gedaechtnis.md](gedaechtnis.md)). Was davor gelernt wurde, gilt weiter:
 
-### Notiz, Dossier oder Katalog?
+**Die Notiz ist der Default, wegen eines Fehlgriffs (18.08.2026).** Sasha
+fragte, ob sie sich Wegzeiten merken kann. Die KI überlegte richtig („eine
+kurze Notiz 'wegzeiten'") und schrieb die Fahrzeit dann ins Umzugs-Dossier —
+weil ein unbekannter Name damals ein Dossier wurde und ein Dossier ein
+Vorhaben ist (mit `thema`, `aufwand`, `status`). Seitdem: ein neuer Name wird
+eine formlose Notiz; ein Vorhaben entsteht absichtlich, indem die Vorlage
+ausgefüllt wird — **die Vorlage entscheidet die Art**. Schreibt sie einen
+Katalog-Kopf in eine Notiz, wird daraus ein Dossier (seit dem 11.10. bleibt
+die Datei dabei liegen, nur die Art im Kopf wechselt).
 
-**Notizen kamen am 18.08.2026 dazu, und zwar wegen eines Fehlgriffs.** Sasha
-fragte: *„kannst du dir merken wie lang ich zu etwas hinfahre ca?"* Die KI
-überlegte in ihrem Denken völlig richtig — *„am einfachsten eine kurze Notiz
-'wegzeiten', ohne förmlich ein Dossier anzulegen"* — und schrieb die Fahrzeit
-dann in **`dossiers/umzug`**.
-
-Das war kein Modellfehler, sondern eine Falle im Bau: der Default für einen
-unbekannten Namen war `dossiers`, und seit die Vorlage gilt, **ist ein Dossier
-ein Vorhaben** — mit `thema`, `equipment`, `aufwand`, `status`. Eine Liste von
-Wegzeiten ist nichts davon. Sie hatte also nur die Wahl zwischen einem falschen
-Formular und der am wenigsten falschen vorhandenen Datei.
-
-Seitdem gilt:
-
-- **Ein neuer Name landet in `notizen/`.** Formlos, kein Kopf, kein
-  Katalog-Eintrag. Der richtige Ort für „merk dir das".
-- **Ein Vorhaben entsteht absichtlich, nicht durch einen neuen Namen** —
-  nämlich dadurch, dass die Vorlage ausgefüllt wird. **Die Vorlage entscheidet
-  die Art.**
-- **Beförderung mit Umzug:** schreibt sie einen Katalog-Kopf in eine bestehende
-  Notiz, wandert die Datei nach `dossiers/` und der Katalog-Eintrag entsteht wie
-  immer. Zwei Dateien unter demselben Namen stehen zu lassen wäre genau die
-  stille Divergenz, gegen die das Kopf-im-Dossier-Modell gebaut ist.
-- **Der Steckbrief bleibt Sashas** (Entscheidung vom 18.08.2026). Die KI
-  soll dort nicht hineinschreiben; was sie über ihn erfährt, geht in eine
-  Notiz. Technisch konnte `write_note("sasha")` es trotzdem — seit
-  2026-10-06 geht das (wie bei Hausregeln und Ziele) nur noch über den
-  Ja/Nein-Knopf: Sasha, *„hausregeln und steckbrief mit meiner bestätigung ja
-  nur"*. Die Hausregeln stehen mit Vorrang ganz oben im Kopf; ohne Bestätigung
-  konnte das Modell sich selbst Vorrang-Regeln geben
-  (`gedaechtnis.schreibt_kernakte`, `erlaubnis.braucht_erlaubnis(name, args)`).
+**Steckbrief und Hausregeln gehören Sasha** (18.08. bzw. 06.10.2026: *„hausregeln
+und steckbrief mit meiner bestätigung ja nur"*). `write_note` auf Hausregeln,
+Steckbrief oder Ziele geht nur über den Ja/Nein-Knopf
+(`gedaechtnis.schreibt_kernakte`); ohne konnte das Modell sich selbst
+Vorrang-Regeln geben.
 
 ### Der Nachprüf-Schritt steht im Werkzeug-Ergebnis
 
@@ -238,15 +206,15 @@ in den Dossiers abgeschlossener Projekte (`gelernt:`-Zeilen) — wer drei Dinge
 mit I2C gebaut hat, kann I2C. Eine Liste, die man von Hand nachführt, ist am
 Tag nach dem Anlegen veraltet.
 
-Die Messreihen liegen bewusst **nicht** im Gedächtnis-Ordner: Kurven über Zeit
-kann das Zyklus-Werkzeug längst, samt Anzeige in der TUI. Sie hier nochmal als
-Text abzulegen hieße, zwei Wahrheiten über denselben Wert zu führen.
+Die Messreihen behalten ihr eigenes Format (das Zyklus-Werkzeug zeigt sie);
+seit dem 11.10.2026 liegen sie nur unter ihrem Thema im Gedächtnis
+([gedaechtnis.md](gedaechtnis.md), „Messreihen").
 
 ## Was in den Prompt geht — und was nicht
 
-`gedaechtnis.kopf_block()` liefert **Steckbrief + Ziele + die Dossier-TITEL**,
-mehr nicht, und sitzt im **gecachten** Kopf (`cloud._static_system`). Alles
-Weitere holt die KI per Werkzeug.
+`gedaechtnis.kopf_block()` liefert **Hausregeln + Steckbrief + den Index**
+(Namen und Haken, seit 11.10.2026), mehr nicht, und sitzt im **gecachten**
+Kopf (`cloud._static_system`). Alles Weitere holt die KI per Werkzeug.
 
 Das ist der eigentliche Unterschied zum Graph-Block, und er ist ökonomisch:
 
@@ -263,26 +231,14 @@ gecachten Präfix und sind damit der billigere Handel.
 
 ## Die Werkzeuge (`gross`-Schiene)
 
-| Werkzeug | Was | Gate |
-|---|---|---|
-| `read_note(name)` | Dossier am Stück lesen; auch `sasha` / `ziele` / `tagebuch` | nein |
-| `write_note(name, text)` | anhängen — `name="tagebuch"` oder ein Dossier-Titel | **nein** |
-| `write_note(name, text, herkunft)` | Import aus einer anderen KI: nur Neues, zeilenweise, mit Vermerk (unten „Import aus einer anderen KI") | wie oben (Kernakten: **ja**) |
-| `search_memory(query)` | Volltextsuche über Tagebuch und Dossiers | nein |
-| `rewrite_note(name, content)` | Dossier komplett neu schreiben (Aufräumen) | **ja** |
-| `log_series(series, value)` | Messwert in eine bestehende Kurve | nein |
-| `create_series(name, typ, einheit)` | neue Kurve anlegen | **ja** |
-| `fetch_document(url, name)` | etwas aus dem Netz holen und ablegen | **ja** |
-
-`read_note` erreicht außerdem `sasha`, `ziele`, `hausregeln`, `tagebuch` und
-die Vorlagen (`vorlagen/dossier`, `vorlagen/katalog`).
+Die Tabelle aller Gedächtnis-Werkzeuge mit Gate: [gedaechtnis.md](gedaechtnis.md).
 
 **`fetch_document` ist die Werkzeugkette, die Sasha wollte:** sie sucht das
 Modulhandbuch, zieht es, legt es richtig ab und kann es danach lesen — ohne
 dass er eine Datei anfasst. PDF wird per `pdftotext` zu Text (ein PDF ist
 binär, und ein hundertseitiges Handbuch will ohnehin niemand pro Frage im
 Kontext haben), HTML wird entrümpelt, Binäres landet als Datei in
-`quellen/dateien/` — **immer mit einem Markdown-Vermerk daneben**, was es ist
+`themen/<thema>/dateien/` — **immer mit einem Markdown-Vermerk daneben**, was es ist
 und wo es herkam. Es entsteht nie eine Datei ohne Eintrag; sonst liegt in einem
 halben Jahr ein Ordner voller namenloser Downloads herum.
 
@@ -322,7 +278,7 @@ selben Abend: „skills sind eher komplexere abläufe" — eine Stil-Regel wie
 
 Sasha: Claudes Skill-Format übernehmen, damit echte Claude-Skills sich
 **ohne Umbau hineinkopieren** lassen. Ein Skill ist ein Ordner
-`data/gedaechtnis/skills/<name>/`:
+`data/gedaechtnis/ki/skills/<name>/` (vor dem Umzug vom 11.10.2026: `skills/<name>/`):
 
 ```
 wochenplan/
@@ -493,7 +449,7 @@ Phase 3 des [Claude-Web-Plans](claude_web_plan.md). Vorher lag das
 Gedächtnis nur als Dateien da — Sasha hätte seine Hausregeln im Dateisystem
 suchen müssen. Jetzt im TUI-Chat `/gedaechtnis` (oder `/skills`): eine
 Überlagerung mit fünf Abschnitten — Hausregeln, Steckbrief, Ziele (ganzer
-Text), Bereiche (nur Titel), Skills (Name, an/aus/vorgeschlagen, von dir /
+Text), Themen (Dateien mit Art und Haken, seit 11.10.2026), Skills (Name, an/aus/vorgeschlagen, von dir /
 von der ki). Tasten und Aufbau: [../system/tui_bauplan.md](../system/tui_bauplan.md),
 „Chat: Gedächtnis".
 
