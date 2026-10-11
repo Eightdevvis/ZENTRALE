@@ -302,47 +302,62 @@ def _explain_error(args: dict) -> str:
 @ausfuehrer("read_note")
 def _read_note(args: dict) -> str:
     wie = (args.get("name") or "").strip()
-    if wie.lower() in ("sasha", "steckbrief"):
+    thema = (args.get("thema") or "").strip()
+    klein = wie.lower()
+    if klein in ("index", "inhalt", "uebersicht"):
+        import gedaechtnis_ablage
+        return gedaechtnis_ablage.index_text(gedaechtnis._DIR) or "[Das Gedächtnis ist noch leer]"
+    if klein in ("sasha", "steckbrief", "person/steckbrief"):
         return gedaechtnis.steckbrief() or "[Steckbrief ist noch leer]"
-    if wie.lower() in ("ziele", "goals"):
+    if klein in ("ziele", "goals", "person/ziele"):
         return gedaechtnis.ziele() or "[Ziele sind noch leer]"
-    if wie.lower() in ("hausregeln", "regeln"):
+    if klein in ("hausregeln", "regeln", "ki/hausregeln"):
         return gedaechtnis.hausregeln() or "[Noch keine Hausregeln]"
-    if wie.lower().startswith(("vorlage", "template")):
+    if klein.startswith(("vorlage", "template", "ki/vorlagen/")):
         # ueber vorlage() statt ueber die Datei: sie legt sie beim
         # ersten Zugriff an, damit ein frischer Rechner sofort eine hat.
         return gedaechtnis.vorlage(wie.split("/")[-1])
-    if wie.lower() in ("tagebuch", "diary"):
+    if klein in ("tagebuch", "diary"):
         return gedaechtnis.tagebuch_lesen() or "[Heute noch nichts notiert]"
-    inhalt = gedaechtnis.dossier_lesen(wie)
+    treffer = gedaechtnis.finden(wie, thema)
+    if len(treffer) > 1:
+        return gedaechtnis._mehrdeutig(treffer).replace(" Nichts geschrieben.", "")
+    inhalt = gedaechtnis.dossier_lesen(wie, thema)
     if not inhalt:
-        vorhanden = ", ".join(gedaechtnis.dossier_liste()) or "noch keine"
-        return (f"[Kein Dossier {wie!r}. Vorhanden: {vorhanden}. "
-                f"Mit write_note legst du eins an.]")
-    return inhalt
+        vorhanden = ", ".join(gedaechtnis.namen()) or "noch keine"
+        return (f"[Keine Datei {wie!r}. Vorhanden: {vorhanden}. "
+                f"Mit write_note (thema, art, beschreibung) legst du eine an.]")
+    ort = gedaechtnis.ort_von(wie, thema)
+    return (f"({ort})\n" if ort else "") + inhalt
+
+
+def _lesen_fuer(wie: str, thema: str):
+    return lambda: gedaechtnis.dossier_lesen(wie, thema)
 
 
 @ausfuehrer("write_note")
 def _write_note(args: dict) -> str:
     wie  = (args.get("name") or "").strip()
     text = args.get("text") or ""
+    thema = str(args.get("thema") or "").strip()
     if not str(text).strip():
         return abgebrochen("Notiz", "N-TEXT-LEER", "kein Text angegeben", "nichts geschrieben")
     sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
     # 2026-10-08: mit herkunft ist es ein Import (Skill import-memory) —
     # zeilenweise, nur Neues, nie ins Tagebuch oder in Kataloge.
     if str(args.get("herkunft") or "").strip():
-        roh = gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]))
-        lesen, ort = (lambda: gedaechtnis.dossier_lesen(wie)), f"in '{wie}'"
+        roh = gedaechtnis.import_ergaenzen(wie, text, str(args["herkunft"]), thema)
+        lesen, ort = _lesen_fuer(wie, thema), f"in '{wie}'"
     elif wie.lower() in ("tagebuch", "diary", ""):
         roh = gedaechtnis.tagebuch_notieren(text)
         lesen, ort = gedaechtnis.tagebuch_lesen, "im Tagebuch von heute"
-    elif wie.lower() in ("hausregeln", "regeln"):
+    elif wie.lower() in ("hausregeln", "regeln", "ki/hausregeln"):
         roh = gedaechtnis.regel_notieren(text)
         lesen, ort = gedaechtnis.hausregeln, "in den Hausregeln"
     else:
-        roh = gedaechtnis.dossier_notieren(wie, text)
-        lesen, ort = (lambda: gedaechtnis.dossier_lesen(wie)), f"in '{wie}'"
+        roh = gedaechtnis.notieren(wie, text, thema, str(args.get("art") or ""),
+                                   str(args.get("beschreibung") or ""))
+        lesen, ort = _lesen_fuer(wie, thema), f"in '{wie}'"
 
     if str(args.get("herkunft") or "").strip():
         # Ein Import filtert zeilenweise (Doppeltes, Links); belegt ist er,
@@ -365,22 +380,44 @@ def _write_note(args: dict) -> str:
 @ausfuehrer("rewrite_note")
 def _rewrite_note(args: dict) -> str:
     wie, inhalt = (args.get("name") or "").strip(), args.get("content") or ""
+    thema = str(args.get("thema") or "").strip()
     if not wie:
         return abgebrochen("Notiz neu schreiben", "N-NAME-LEER", "kein Name angegeben")
     if not str(inhalt).strip():
         return abgebrochen(f"Notiz '{wie}' neu schreiben", "N-TEXT-LEER",
                            "kein neuer Inhalt angegeben")
     sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
-    roh = gedaechtnis.dossier_ersetzen(wie, inhalt)
+    roh = gedaechtnis.ersetzen(wie, inhalt, thema)
 
     def pruefen():
-        jetzt = gedaechtnis.dossier_lesen(wie)
-        probe = _steht_drin(inhalt, jetzt)
+        jetzt = gedaechtnis.dossier_lesen(wie, thema)
+        import gedaechtnis_ablage
+        probe = _steht_drin(gedaechtnis_ablage.zerlegen(str(inhalt).strip())[1], jetzt)
         if not probe:
             return None
         beleg = f"'{wie}' hat jetzt {len(jetzt)} Zeichen und beginnt mit „{probe}…“."
         return f"Notiz '{wie}' NEU GESCHRIEBEN: {beleg}", beleg
     return _transaktion(f"Notiz '{wie}' neu schreiben", "nichts geändert", "N-ABGELEHNT",
+                        sicherung, roh, pruefen)
+
+
+@ausfuehrer("archive_note")
+def _archive_note(args: dict) -> str:
+    """2026-10-11: was nicht mehr stimmt, legt die KI selbst nach _archiv/ —
+    wie Claude veraltete Erinnerungen entfernt, nur ohne zu löschen (der
+    Abgleich ist additiv). Belegt, wenn die Datei unter dem Namen weg ist."""
+    wie = (args.get("name") or "").strip()
+    thema = str(args.get("thema") or "").strip()
+    if not wie:
+        return abgebrochen("Archivieren", "N-NAME-LEER", "kein Name angegeben")
+    sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
+    roh = gedaechtnis.archivieren(wie, thema)
+
+    def pruefen():
+        if gedaechtnis.ort_von(wie, thema):
+            return None
+        return f"'{wie}' ARCHIVIERT: {roh}", roh
+    return _transaktion(f"'{wie}' archivieren", "nichts archiviert", "N-ABGELEHNT",
                         sicherung, roh, pruefen)
 
 
@@ -392,12 +429,14 @@ def _search_memory(args: dict) -> str:
 @ausfuehrer("fetch_document")
 def _fetch_document(args: dict) -> str:
     name = args.get("name") or ""
+    thema = str(args.get("thema") or "").strip()
     sicherung = schreib_sicherung.Sicherung(ordner=[gedaechtnis._DIR])
-    roh = gedaechtnis.dokument_holen(args.get("url") or "", name)
-    ort = "quellen/" + gedaechtnis.slug(name)
+    roh = gedaechtnis.dokument_holen(args.get("url") or "", name, thema)
+    schluessel = gedaechtnis.slug(name)
+    ort = f"{gedaechtnis.slug(thema) or 'allgemein'}/{schluessel}"
 
     def pruefen():
-        jetzt = gedaechtnis.dossier_lesen(ort) if gedaechtnis.slug(name) else ""
+        jetzt = gedaechtnis.dossier_lesen(ort) if schluessel else ""
         if not jetzt:
             return None
         beleg = f"{ort} hat {len(jetzt)} Zeichen."
@@ -454,6 +493,11 @@ def _create_series(args: dict) -> str:
                            "der Liste; der alte Stand ist wiederhergestellt", "nichts angelegt")
     g = da[0]
     beleg = f"Messkurve {g.get('name')!r} steht in der Liste (Typ {g.get('type')})."
+    if str(args.get("thema") or "").strip():
+        # 2026-10-11: die Reihe liegt im Gedächtnis unter ihrem Thema.
+        ort = gedaechtnis.reihe_anlegen(g["id"], str(args["thema"]), g.get("name") or wie,
+                                        g.get("type") or "", g.get("unit") or "")
+        beleg += f" Liegt unter {ort}."
     return erledigt(f"Messreihe „{g.get('name')}“ ANGELEGT (Typ {g.get('type')}"
                     + (f", Einheit {g.get('unit')}" if g.get("unit") else "") + ").", beleg,
                     zusatz="Trag Werte mit log_series ein und verlink sie im Dossier der Sache.")
@@ -479,9 +523,10 @@ def _log_series(args: dict) -> str:
     if not name:
         return abgebrochen("Messwert eintragen", "M-NAME-LEER", "keine Reihe angegeben",
                            "nichts eingetragen")
+    kurz = name.split("/")[-1].removesuffix(".reihe")   # 'gesundheit/sleep' (Index)
     treffer = [g for g in graphs.list_graphs()
-               if g.get("name", "").casefold() == name.casefold()
-               or g.get("id") == name]
+               if g.get("name", "").casefold() in (name.casefold(), kurz.casefold())
+               or g.get("id") in (name, "g_" + kurz)]
     if not treffer:
         da = ", ".join(g.get("name", "?") for g in graphs.list_graphs()) or "keine"
         return abgebrochen(f"Messwert für „{name}“", "M-UNBEKANNT",

@@ -89,6 +89,8 @@ AUFRUFE = [
     ("write_note", {"name": "tagebuch", "text": "Heute Geige geübt."}),
     ("write_note", {"name": "wegzeiten", "text": "Zur Geigenschule 20 min."}),
     ("rewrite_note", {"name": "wegzeiten", "content": "Zur Geigenschule 25 min."}),
+    ("write_note", {"name": "alt", "text": "Stimmt nicht mehr.", "thema": "alltag"}),
+    ("archive_note", {"name": "alltag/alt"}),
     ("fetch_document", {"url": "https://example.org/a", "name": "handbuch"}),
     ("create_series", {"name": "Spagat", "typ": "number", "einheit": "cm"}),
     ("log_series", {"series": "Spagat", "value": 12, "day": "2026-10-08"}),

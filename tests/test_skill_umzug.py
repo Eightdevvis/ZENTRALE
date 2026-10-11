@@ -98,9 +98,10 @@ def test_kurz_haengt_an_bestehende_hausregeln_an_mit_bak():
     skills.alle()
     regeln = _hausregeln()
     assert regeln.startswith("# Hausregeln\n\n- Nicht duzen.\n- Bin ich im Stress")
-    bak = os.path.join(gedaechtnis._DIR, "hausregeln.md.bak")
+    bak = gedaechtnis.kern_pfad("hausregeln") + ".bak"
     with open(bak, encoding="utf-8") as f:
-        assert f.read() == "# Hausregeln\n\n- Nicht duzen.\n"
+        # die alte Fassung ganz, samt Datei-Kopf (seit 2026-10-11)
+        assert f.read().endswith("\n# Hausregeln\n\n- Nicht duzen.\n")
 
 
 def test_kurz_ausgeschaltet_wird_keine_hausregel():

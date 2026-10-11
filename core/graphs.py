@@ -160,8 +160,20 @@ def set_remind(gid, on, at=None):
 
 
 def _values_path(gid):
-    """Pfad der Messwert-Datei eines Graphen (dieselbe, die /api/log schreibt)."""
-    return os.path.join(_DATA_DIR, gid + '.json')
+    """Pfad der Messwert-Datei eines Graphen (dieselbe, die /api/log schreibt).
+
+    Seit 2026-10-11 liegt eine Messreihe unter ihrem Thema im Gedächtnis
+    (themen/<thema>/<name>.reihe.json, scripts/gedaechtnis_umzug.py); bis sie
+    umgezogen ist, wie bisher data/<gid>.json."""
+    return reihe_pfad(gid, os.path.join(_DATA_DIR, gid + '.json'))
+
+
+def reihe_pfad(gid, sonst):
+    """Die Werte-Datei unter dem Thema, wenn es sie gibt, sonst `sonst`.
+    Eine Stelle für alle Leser und Schreiber (/api/log, Zyklus, KI)."""
+    import gedaechtnis
+    import gedaechtnis_ablage
+    return gedaechtnis_ablage.reihe_finden(gedaechtnis._DIR, gid) or sonst
 
 
 def read_values(gid):
@@ -201,8 +213,9 @@ def log_value(gid, day, value, end=None):
         entry['end'] = end
     entry['logged_at'] = datetime.now().isoformat()
     rows.append(entry)
-    os.makedirs(_DATA_DIR, exist_ok=True)
-    dateien.json_schreiben(_values_path(gid), rows)
+    pfad = _values_path(gid)
+    os.makedirs(os.path.dirname(pfad), exist_ok=True)
+    dateien.json_schreiben(pfad, rows)
     return entry
 
 
@@ -240,6 +253,11 @@ def delete_graph(gid):
     """Definition entfernen und die zugehörige Messwerte-Datei mit löschen."""
     graphs = [g for g in _load() if g.get('id') != gid]
     _save(graphs)
-    values = os.path.join(_DATA_DIR, gid + '.json')
-    if os.path.exists(values):
+    values = _values_path(gid)
+    if values.endswith('.reihe.json'):
+        # Unter einem Thema: archivieren statt löschen (Gedächtnis-Regel,
+        # 2026-10-11), samt Kopf-Datei — sonst stünde sie weiter im Index.
+        import gedaechtnis
+        gedaechtnis.reihe_archivieren(gid)
+    elif os.path.exists(values):
         os.remove(values)

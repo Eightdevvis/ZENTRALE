@@ -127,7 +127,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `web` | 2 | Gegatete Internet-Pipe (Suche, Seite holen) |
 | `embeddings` | 2 | Vektoren lokal (bge-m3) oder in der Cloud |
 | `graph` | 2 | Konzept-Graph der KI (seit 18.08.2026 aus) |
-| `gedaechtnis` | 2 | Das Datei-Gedächtnis, das die KI liest und fortschreibt |
+| `gedaechtnis` | 2 | Das Datei-Gedächtnis, das die KI liest und fortschreibt (nach Themen: anlegen/ergänzen, Kataloge, Tagebuch, archivieren, Suche, Prompt-Kopf; liest den alten Aufbau bis zum Umzug mit) |
+| `gedaechtnis_ablage` | 2 | Wie das Gedächtnis auf der Platte liegt: `themen/<thema>/`, Kopf im Format von Claudes Datei-Gedächtnis (name, description, metadata), Dateien finden, archivieren, INDEX.md, Ort einer Messreihe |
+| `gedaechtnis_katalog` | 2 | Katalog-Einträge als Text: lesen, rendern, upsert, Dossier-Kopf setzen, Vorlagen |
 | `gespraeche` | 2 | Chat-Gespräche auf der Platte: Ordner pro Gespräch, Datei pro Rechner, Ereignisse (nachricht/verwerfen), Liste, aktiv pro Rechner |
 | `rueckmeldungen` | 2 | Bewertungen der KI-Antworten (gut/schlecht + Kommentar): eine jsonl pro Rechner, nur anhängen, das letzte Ereignis je Antwort gilt; mit Anbieter, Modell, Werkzeugen und Skills der Antwort |
 | `chat_suche` | 2 | Suche quer durch alle Gespräche und das alte Transkript (search_chats, read_chat): normalisierte Wörter, Rang nach Dichte und Aktualität |

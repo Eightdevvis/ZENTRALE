@@ -102,17 +102,16 @@ def szenario():
     kalender.add_entry("termine", (HEUTE + timedelta(days=9)).isoformat(),
                        "Mannheim")
 
-    with open(gedaechtnis._pfad("", "sasha"), "w", encoding="utf-8") as f:
-        f.write("# Sasha\n\nStudiert Biophysik in Saarbrücken.\n\n"
+    gedaechtnis.kernakte_schreiben("steckbrief", ("# Sasha\n\nStudiert Biophysik in Saarbrücken.\n\n"
                 "- Fokus und Fertigstellen haben Vorrang vor Breite.\n"
                 "- Zweifelt manchmal am Studiengang; dann an die Gründe "
-                "erinnern, nicht zum Wechsel raten.\n")
-    with open(gedaechtnis._pfad("", "ziele"), "w", encoding="utf-8") as f:
-        f.write("# Ziele\n\n- Spagat, L-Sit, Ausdauer für die Zugspitze\n"
-                "- Umzug fertig kriegen\n- Führerschein\n")
+                "erinnern, nicht zum Wechsel raten.\n"))
+    gedaechtnis.kernakte_schreiben("ziele", (
+        "# Ziele\n\n- Spagat, L-Sit, Ausdauer für die Zugspitze\n"
+        "- Umzug fertig kriegen\n- Führerschein\n"))
 
-    gedaechtnis.dossier_notieren(
-        "kataloge/ideen",
+    gedaechtnis.notieren(
+        "ideen", thema="basteln", art="katalog", text=
         "## Fourier-Visualisierer aufm Oszi\n"
         "- thema:     fourier, frequenzen, signale\n"
         "- equipment: arduino, dac, loetkolben\n"
@@ -121,11 +120,11 @@ def szenario():
         "- thema:     sensorik, funk, wetter\n"
         "- equipment: esp32, bme280, loetkolben\n"
         "- aufwand:   gross\n- status: idee\n- dossier: -\n")
-    gedaechtnis.dossier_notieren(
-        "dossiers/umzug",
+    gedaechtnis.notieren(
+        "umzug", thema="wohnen", art="dossier", text=
         "Küche: Regale hängen, Apparatur fehlt. Bad: nichts passiert.")
-    gedaechtnis.dossier_notieren(
-        "dossiers/spagat",
+    gedaechtnis.notieren(
+        "spagat", thema="sport", art="dossier", text=
         "Ziel voller Spagat. Messreihe: spagat_cm. Stand: 22 cm bis Boden "
         "(12.08.). Blockiert vermutlich an den Adduktoren.")
     g = graphs.create_graph("spagat_cm", gtype="number", unit="cm")

@@ -22,8 +22,10 @@ DATEN = {
         {"akte": "hausregeln", "text": "# Hausregeln\n\n- Nicht duzen.\n", "stand": "s1"},
         {"akte": "steckbrief", "text": "# Sasha\n\n" + "Studiert. " * 40, "stand": "s2"},
         {"akte": "ziele", "text": "", "stand": "s3"}],
-    "bereiche": [{"bereich": "dossiers", "titel": ["umzug", "geige"]},
-                 {"bereich": "quellen", "titel": []}],
+    "themen": [{"thema": "wohnen", "dateien": [
+                   {"name": "umzug", "art": "dossier", "beschreibung": "Umzug fertig kriegen"},
+                   {"name": "wegzeiten", "art": "notiz", "beschreibung": ""}]},
+               {"thema": "leer", "dateien": []}],
     "skills": [
         {"name": "kurz", "beschreibung": "schnelle auskunft", "status": "aktiv",
          "herkunft": "sasha"},
@@ -53,7 +55,7 @@ def test_editor_befehl_reihenfolge():
 
 def test_reiter_passt_oder_kuerzt():
     breit = reiter(1, 80)
-    assert "".join(t for t, _ in breit) == "hausregeln · steckbrief · ziele · bereiche · skills"
+    assert "".join(t for t, _ in breit) == "hausregeln · steckbrief · ziele · themen · skills"
     assert [t for t, g in breit if g] == ["steckbrief"]
     eng = reiter(4, 30)
     assert eng == [("‹ skills ›  5/5", True)]
@@ -68,11 +70,22 @@ def test_inhalt_kernakte_leer_und_voll():
     assert len(z) > 5 and all(len(t) <= 30 for t, _ in z)
 
 
-def test_inhalt_bereiche_nur_titel():
-    z, _ = inhalt_zeilen(DATEN, "bereiche", 40)
+def test_inhalt_themen_mit_art_und_haken():
+    """Seit 2026-10-11 nach Thema: je Datei Name, Art (außer notiz) und der
+    Haken, nach dem die KI entscheidet, ob sie sie liest."""
+    z, _ = inhalt_zeilen(DATEN, "themen", 60)
     texte = [t for t, _ in z]
-    assert "dossiers/  (2)" in texte and "  umzug, geige" in texte
-    assert "quellen/  (0)" in texte
+    assert "wohnen  (2)" in texte and "leer  (0)" in texte
+    assert "  umzug · dossier — Umzug fertig kriegen" in texte
+    assert "  wegzeiten" in texte
+    assert all(len(t) <= 30 for t, _ in inhalt_zeilen(DATEN, "themen", 30)[0][2:])
+
+
+def test_inhalt_themen_versteht_die_alte_form():
+    """Ein Backend vor dem Umbau liefert nur `bereiche` — die TUI zeigt sie."""
+    z, _ = inhalt_zeilen({"bereiche": [{"bereich": "dossiers", "titel": ["umzug"]}]},
+                         "themen", 40)
+    assert "dossiers  (1)" in [t for t, _ in z] and "  umzug" in [t for t, _ in z]
 
 
 def test_inhalt_skills_name_status_herkunft():
@@ -138,7 +151,7 @@ def test_oeffnen_und_abschnitte_wechseln(backend):
     _tippe(g, "3")
     assert g.abschnitt() == "ziele"
     _tippe(g, 9)
-    assert g.abschnitt() == "bereiche"
+    assert g.abschnitt() == "themen"
     _tippe(g, 27)
     assert c.AI["gedaechtnis"] is None
 
@@ -185,7 +198,7 @@ def test_skill_umschalten_fehler_mit_klartext(backend):
 def test_enter_in_bereichen_tut_nichts(backend):
     c = FakeChat()
     g = Gedaechtnis(c)
-    g.oeffnen("bereiche")
+    g.oeffnen("themen")
     n = len(backend["aufrufe"])
     _tippe(g, 10, "e", " ")
     assert len(backend["aufrufe"]) == n

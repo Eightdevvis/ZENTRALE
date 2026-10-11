@@ -84,8 +84,8 @@ def _frage_messkurve(args: dict) -> str:
 
 
 def _frage_dossier_neu(args: dict) -> str:
-    wie = (args.get("name") or "das Dossier").strip()
-    return (f'Soll ich das Dossier "{wie}" komplett neu schreiben? '
+    wie = (args.get("name") or "die Datei").strip()
+    return (f'Soll ich "{wie}" im Gedächtnis komplett neu schreiben? '
             f'(Die bisherige Fassung bleibt als .bak liegen.)')
 
 

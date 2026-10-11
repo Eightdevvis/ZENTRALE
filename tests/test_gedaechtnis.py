@@ -47,8 +47,7 @@ def test_ersetzen_legt_eine_sicherung_an():
     gedaechtnis.dossier_notieren("dossiers/Umzug", "alter Stand")
     gedaechtnis.dossier_ersetzen("dossiers/Umzug", "neuer, sauberer Stand")
     assert gedaechtnis.dossier_lesen("umzug") == "neuer, sauberer Stand"
-    with open(gedaechtnis._pfad("dossiers", "umzug") + ".bak",
-              encoding="utf-8") as f:
+    with open(gedaechtnis.finden("umzug")[0] + ".bak", encoding="utf-8") as f:
         assert "alter Stand" in f.read()
 
 
@@ -87,7 +86,7 @@ def test_suche_findet_ueber_tagebuch_und_dossiers():
     gedaechtnis.dossier_notieren("dossiers/Umzug", "Spanien-Kisten stehen noch rum")
     treffer = gedaechtnis.suchen("Spanien")
     assert "tagebuch" in treffer
-    assert "dossiers/umzug" in treffer
+    assert "allgemein/umzug" in treffer
 
 
 def test_suche_sagt_ehrlich_wenn_nichts_da_ist():
@@ -119,16 +118,15 @@ def test_leeres_gedaechtnis_erzeugt_keinen_block():
     assert gedaechtnis.kopf_block() == ""
 
 
-def test_steckbrief_und_ziele_stehen_im_kopf():
-    with open(gedaechtnis._pfad("", gedaechtnis.STECKBRIEF), "w",
-              encoding="utf-8") as f:
-        f.write("Fokus und Fertigstellen hat Vorrang.")
-    with open(gedaechtnis._pfad("", gedaechtnis.ZIELE), "w",
-              encoding="utf-8") as f:
-        f.write("Spagat, L-Sit, Zugspitze.")
+def test_steckbrief_im_kopf_ziele_nur_im_index():
+    """Seit 2026-10-11 (nach Themen, wie Claudes MEMORY.md): der Steckbrief
+    steht ganz im Kopf, die Ziele nur mit Namen und Haken im Index."""
+    gedaechtnis.kernakte_schreiben("steckbrief", "Fokus und Fertigstellen hat Vorrang.")
+    gedaechtnis.kernakte_schreiben("ziele", "Spagat, L-Sit, Zugspitze.")
     block = gedaechtnis.kopf_block()
     assert "Fokus und Fertigstellen" in block
-    assert "Zugspitze" in block
+    assert "Zugspitze" not in block
+    assert "themen/person/ziele.md" in block
 
 
 # ── Der Graph ist aus, das Rohmaterial läuft weiter ───────────────────
@@ -196,8 +194,8 @@ def test_name_findet_seinen_bereich():
     nicht ueber Pfade nachdenken muessen."""
     gedaechtnis.dossier_notieren(
         "kataloge/ideen", "## Fourier-Visualisierer\n- thema: fourier\n- status: idee")
-    assert gedaechtnis._finden("kataloge/ideen") == ("kataloge", "ideen")
-    assert gedaechtnis._finden("ideen") == ("kataloge", "ideen")
+    assert gedaechtnis.finden("kataloge/ideen")[0].endswith("/ideen.katalog.md")
+    assert gedaechtnis.finden("ideen") == gedaechtnis.finden("kataloge/ideen")
     assert "Fourier" in gedaechtnis.dossier_lesen("ideen")
 
 
@@ -207,9 +205,10 @@ def test_unbekannter_name_landet_formlos():
     Fakt ("7 Minuten zur Geigenschule") hatte damit keinen Ort mehr, und
     die KI schrieb ihn ins am wenigsten falsche vorhandene Dossier.
 
-    `notizen` ist jetzt der ungefaehrliche Default: formlos, ohne Kopf,
-    ohne Katalog-Eintrag."""
-    assert gedaechtnis._finden("voellig neues ding")[0] == "notizen"
+    Eine Notiz ist der ungefaehrliche Default: formlos, ohne Katalog-
+    Eintrag — seit 2026-10-11 im Thema „allgemein", wenn keins genannt ist."""
+    antwort = gedaechtnis.notieren("voellig neues ding", "ein Fakt")
+    assert "allgemein/voellig-neues-ding (notiz)" in antwort
 
 
 def test_notiz_bekommt_keine_datums_ueberschrift():
@@ -235,22 +234,24 @@ def test_vorhandenes_dossier_bleibt_ein_dossier():
     """Der Default gilt nur fuer NEUE Namen — sonst wuerde jede Notiz zu
     einem laufenden Vorhaben das Gedaechtnis in zwei Dateien spalten."""
     gedaechtnis.dossier_notieren("dossiers/umzug", "Kisten stehen rum")
-    assert gedaechtnis._finden("umzug")[0] == "dossiers"
+    gedaechtnis.dossier_notieren("umzug", "Regal steht")
+    assert len(gedaechtnis.finden("umzug")) == 1
+    assert "art: dossier" in open(gedaechtnis.finden("umzug")[0], encoding="utf-8").read()
 
 
 def test_die_vorlage_macht_aus_der_notiz_ein_vorhaben():
     """Ein Vorhaben entsteht nicht mehr aus Versehen durch einen neuen
     Namen, sondern absichtlich dadurch, dass sie die Vorlage ausfuellt."""
     gedaechtnis.dossier_notieren("kueche", "erstmal nur so ne idee")
-    assert gedaechtnis._finden("kueche")[0] == "notizen"
+    pfad = gedaechtnis.finden("kueche")[0]
+    assert "art: notiz" in open(pfad, encoding="utf-8").read()
 
     gedaechtnis.dossier_notieren("kueche", KOPF)
-    assert gedaechtnis._finden("kueche")[0] == "dossiers"
-    # Die Datei zieht MIT um: zwei Dateien unter demselben Namen waeren
-    # genau die stille Divergenz, gegen die das Kopf-im-Dossier-Modell
-    # gebaut ist.
-    import os
-    assert not os.path.exists(gedaechtnis._pfad("notizen", "kueche"))
+    # Seit 2026-10-11 bleibt die Datei, wo sie ist — nur die Art im Kopf
+    # wechselt. Zwei Dateien unter demselben Namen waeren genau die stille
+    # Divergenz, gegen die das Kopf-im-Dossier-Modell gebaut ist.
+    assert gedaechtnis.finden("kueche") == [pfad]
+    assert "art: dossier" in open(pfad, encoding="utf-8").read()
     assert "erstmal nur so ne idee" in gedaechtnis.dossier_lesen("kueche")
     # Und der Katalog-Eintrag entsteht dabei wie bei jedem Dossier.
     assert "kueche" in gedaechtnis.dossier_lesen("kataloge/ideen")
@@ -262,8 +263,8 @@ def test_suche_deckt_alle_bereiche_ab():
     gedaechtnis.dossier_notieren("quellen/modulhandbuch", "Signalverarbeitung: fourier")
     gedaechtnis.dossier_notieren("dossiers/organoide", "MEA misst fourier nicht")
     treffer = gedaechtnis.suchen("fourier")
-    for bereich in ("kataloge", "quellen", "dossiers"):
-        assert bereich in treffer
+    for ort in ("allgemein/ideen.katalog", "allgemein/modulhandbuch", "allgemein/organoide"):
+        assert ort in treffer
 
 
 def test_prosa_kommt_nicht_in_einen_katalog():
@@ -298,17 +299,18 @@ def test_katalog_bekommt_keine_datums_ueberschrift():
     assert "## 20" not in gedaechtnis.dossier_lesen("kataloge/ideen")
 
 
-def test_kopf_block_zeigt_die_bereiche_und_das_status_vokabular():
+def test_kopf_block_zeigt_die_arten_und_die_vorlage_das_status_vokabular():
     """Sie muss wissen, dass es Kataloge gibt und welche Zustaende ein
     Eintrag haben darf — sonst erfindet sie sich eigene, und wir haetten
-    dasselbe Problem wie beim Graphen."""
-    gedaechtnis.dossier_notieren("kataloge/ideen", "x")
+    dasselbe Problem wie beim Graphen. Die Zustaende stehen seit 2026-10-11
+    in der Katalog-Vorlage, die der Kopf nennt (Text-Budget im Kopf)."""
+    gedaechtnis.dossier_notieren("kataloge/ideen", "## A\n- thema: x\n- status: idee")
     gedaechtnis.dossier_notieren("dossiers/umzug", "y")
     block = gedaechtnis.kopf_block()
-    assert "kataloge/" in block and "dossiers/" in block
+    assert "(katalog)" in block and "(dossier)" in block
+    assert "vorlagen/katalog" in block and "vorlagen/dossier" in block
     for zustand in ("idee", "priorisiert", "queued", "in_schedule"):
-        assert zustand in block
-    assert "thema" in block and "dossier" in block
+        assert zustand in gedaechtnis.vorlage("katalog")
 
 
 # ── Aus dem Netz holen, an EINEN Ort ──────────────────────────────────
@@ -341,11 +343,11 @@ def test_binaeres_landet_als_datei_mit_vermerk(monkeypatch, tmp_path):
     import os
     _fake_abruf(monkeypatch, b"\x89PNG\r\n\x1a\n" + b"x" * 100, "image/png")
     antwort = gedaechtnis.dokument_holen("https://x/plan.png", "stundenplan")
-    assert "quellen/dateien" in antwort
-    datei = os.path.join(gedaechtnis._wurzel(), gedaechtnis.DATEIEN,
-                         "stundenplan.png")
+    assert "dateien/stundenplan.png" in antwort
+    datei = os.path.join(gedaechtnis._wurzel(), "themen", "allgemein",
+                         gedaechtnis.DATEIEN, "stundenplan.png")
     assert os.path.exists(datei)
-    vermerk = gedaechtnis.dossier_lesen("quellen/stundenplan")
+    vermerk = gedaechtnis.dossier_lesen("stundenplan")
     assert "Binaerdatei" in vermerk and "stundenplan.png" in vermerk
 
 
@@ -484,9 +486,7 @@ def test_der_kernprompt_bleibt_code():
 def test_titel_wird_nicht_doppelt_gerendert():
     """Im Kopf steht schon eine Ueberschrift; die aus der Datei waere
     doppelt — dreimal zwei Zeilen, bei jedem Cache-Write bezahlt."""
-    with open(gedaechtnis._pfad("", gedaechtnis.STECKBRIEF), "w",
-              encoding="utf-8") as f:
-        f.write("# Sasha\n\nStudiert Biophysik.\n")
+    gedaechtnis.kernakte_schreiben("steckbrief", "# Sasha\n\nStudiert Biophysik.\n")
     block = gedaechtnis.kopf_block()
     assert "Studiert Biophysik." in block
     assert "# Sasha" not in block
@@ -582,8 +582,8 @@ def test_unbekannter_katalog_wird_angelegt_und_gesagt():
     """Anlegen ja — aber sichtbar, damit kein stiller Wildwuchs entsteht."""
     antwort = gedaechtnis.dossier_notieren(
         "loeten", KOPF.replace("katalog: ideen", "katalog: werkstatt"))
-    assert "werkstatt" in antwort and "neu angelegt" in antwort
-    assert "werkstatt" in gedaechtnis.liste("kataloge")
+    assert "werkstatt" in antwort and "neu angelegt" in antwort.lower()
+    assert gedaechtnis.finden("werkstatt.katalog")
 
 
 def test_vorlagen_gibt_es_und_die_dossier_vorlage_traegt_den_kopf():
@@ -605,7 +605,7 @@ def test_konsistenz_findet_beide_waisen():
     gedaechtnis.dossier_notieren("kueche", KOPF)
     gedaechtnis.dossier_notieren("dossiers/verwaist", "Prosa ohne Kopf.")
     import os
-    os.remove(gedaechtnis._pfad("dossiers", "kueche"))
+    os.remove(gedaechtnis.finden("kueche")[0])
     befund = " ".join(gedaechtnis.konsistenz())
     assert "kueche" in befund          # Eintrag zeigt ins Leere
     assert "verwaist" in befund        # Dossier ohne Kopf
@@ -669,10 +669,8 @@ def test_suche_findet_auch_steckbrief_ziele_und_hausregeln():
     Steckbrief stand, war per search_memory unauffindbar."""
     import os
     os.makedirs(gedaechtnis._wurzel(), exist_ok=True)
-    with open(gedaechtnis._pfad("", gedaechtnis.STECKBRIEF), "w", encoding="utf-8") as f:
-        f.write("# Sasha\n\nSpielt Geige seit Juni.\n")
-    with open(gedaechtnis._pfad("", gedaechtnis.ZIELE), "w", encoding="utf-8") as f:
-        f.write("# Ziele\n\nGeige jeden Tag eine halbe Stunde.\n")
+    gedaechtnis.kernakte_schreiben("steckbrief", "# Sasha\n\nSpielt Geige seit Juni.\n")
+    gedaechtnis.kernakte_schreiben("ziele", "# Ziele\n\nGeige jeden Tag eine halbe Stunde.\n")
     gedaechtnis.regel_notieren("Bei Geige nicht korrigieren, nur zuhören.")
     ergebnis = gedaechtnis.suchen("geige")
     assert "[Steckbrief] Spielt Geige seit Juni." in ergebnis

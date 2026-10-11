@@ -122,12 +122,15 @@ _GEDAECHTNIS = {
         {"akte": "steckbrief", "stand": "b2", "text": "# Sasha\n\n## Alltag\n"
          + "Studiert, faehrt Rad, spielt Geige. " * 8 + "\n\n## Wege\n- Uni: 20 min Rad\n"},
         {"akte": "ziele", "stand": "", "text": ""}],
-    "bereiche": [
-        {"bereich": "dossiers", "titel": ["umzug", "geige", "fahrrad-werkstatt"]},
-        {"bereich": "notizen", "titel": ["wegzeiten"]},
-        {"bereich": "kataloge", "titel": ["ideen"]},
-        {"bereich": "quellen", "titel": []},
-        {"bereich": "vorlagen", "titel": ["dossier", "katalog"]}],
+    "themen": [
+        {"thema": "sport", "dateien": [
+            {"name": "spagat", "art": "dossier", "beschreibung": "Voller Spagat — wo es blockiert, Plan, Stand"},
+            {"name": "training", "art": "katalog", "beschreibung": "Was am Körper trainiert wird"},
+            {"name": "parkour", "art": "messreihe", "beschreibung": "Messreihe parkour (Uhrzeit)"}]},
+        {"thema": "alltag", "dateien": [
+            {"name": "wegzeiten", "art": "notiz", "beschreibung": "Wie lange er wohin braucht"}]},
+        {"thema": "tagebuch", "dateien": [
+            {"name": "2026-10", "art": "tagebuch", "beschreibung": "Tagebuch Oktober 2026"}]}],
     "skills": [
         {"name": "kurz", "beschreibung": "Wenn Sasha eine schnelle Auskunft will.",
          "status": "aktiv", "herkunft": "sasha", "erstellt": "2026-10-07"},

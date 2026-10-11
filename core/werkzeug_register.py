@@ -708,18 +708,18 @@ WERKZEUGE = [
         name="read_note",
         klein=None,
         gross=(
-            "Liest eine Gedaechtnis-Datei am Stueck. 'name' ist ein "
-            "Dossier-Titel aus dem Kopf-Block (z.B. 'umzug', 'training'), "
-            "oder 'sasha' fuer den Steckbrief, 'ziele' fuer die Ziele, "
-            "'tagebuch' fuer den heutigen Tag. Lies das Dossier, BEVOR du "
-            "ueber die Sache redest oder planst — der Kopf-Block nennt nur "
-            "Titel, nicht Inhalte."
+            "Liest eine Gedaechtnis-Datei am Stueck. 'name' wie im Index "
+            "('sport/spagat', oder nur 'spagat'), 'ziele', 'tagebuch' (heute) "
+            "bzw. 'tagebuch/JJJJ-MM', 'index'. Lies die Datei, BEVOR du ueber "
+            "die Sache redest oder planst — der Index nennt nur Namen und Haken."
         ),
         parameter={
             "type": "object",
             "properties": {
                 "name": {"type": "string",
-                         "description": "Dossier-Titel, oder sasha/ziele/tagebuch."},
+                         "description": "thema/name aus dem Index, oder ziele/tagebuch/index."},
+                "thema": {"type": "string",
+                          "description": "Optional, wenn der Name in mehreren Themen vorkommt."},
             },
             "required": ["name"],
         },
@@ -734,39 +734,38 @@ WERKZEUGE = [
         immer_erlaubbar=False,
         klein=None,
         gross=(
-            "Haelt etwas fest — haengt an, loescht nie. Verwendungen: "
-            "name='tagebuch' fuer das, was gerade passiert ist oder was "
-            "Sasha erzaehlt hat (in SEINEN Worten, nicht destilliert); ein "
-            "Dossier-Titel fuer den STAND einer laufenden Sache ('Kueche: "
-            "Regale haengen, Apparatur fehlt'); ein NEUER Titel fuer "
-            "alles Uebrige — das landet formlos in notizen/, ohne "
-            "Vorlage, und ist der Ort fuer einzelne Fakten und kurze "
-            "Listen (Wegzeiten, Gewohnheiten). Schwankst du: koennte es "
-            "einen STATUS haben, also etwas sein, das er TUN "
-            "koennte? Dann Katalog-Eintrag, sonst Notiz. Beides "
-            "zur selben Sache ist falsch. "
-            "Wird daraus ein VORHABEN, fuellst du die Vorlage aus "
-            "(read_note 'vorlagen/dossier' bzw. 'vorlagen/katalog'); die "
-            "Notiz wird dann zum Dossier und der Katalog-Eintrag entsteht "
-            "von selbst. "
-            "name='hausregeln' ist der Sonderfall: dort "
-            "landen Sashas Verhaltens-Ansagen an dich, und die stehen "
-            "bei jedem Turn ganz oben im Kopf. "
-            "Du fragst dafuer nicht um Erlaubnis, du "
-            "machst es einfach — so wie jemand mitschreibt, der "
-            "danebensitzt. Und du antwortest danach ganz normal weiter: "
-            "mitschreiben IST keine Antwort, und ein stummer Turn wirkt "
-            "wie ein Absturz."
+            "Haelt etwas fest — haengt an, loescht nie. 'name' einer "
+            "vorhandenen Datei: dort ergaenzen (ein Katalog nimmt nur "
+            "Eintraege nach Schema und ersetzt gleichnamige). Neuer Name: "
+            "Datei wird angelegt — dann 'thema', 'art' und 'beschreibung' "
+            "mitgeben. name='tagebuch' fuer das, was gerade passiert ist "
+            "(in SEINEN Worten); name='hausregeln' fuer Sashas "
+            "Verhaltens-Ansagen an dich. Koennte es einen STATUS haben, also "
+            "etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst "
+            "Notiz; beides zur selben Sache ist falsch. Du fragst dafuer "
+            "nicht um Erlaubnis, und du antwortest danach ganz normal weiter "
+            "— mitschreiben IST keine Antwort."
         ),
         parameter={
             "type": "object",
             "properties": {
                 "name": {"type": "string",
-                         "description": "'tagebuch', ein Dossier-Titel, "
-                                        "oder ein neuer Titel fuer eine "
-                                        "formlose Notiz."},
+                         "description": "'tagebuch', 'hausregeln', thema/name "
+                                        "einer Datei aus dem Index, oder ein "
+                                        "neuer Name."},
                 "text": {"type": "string",
                          "description": "Der Eintrag, in ganzen Saetzen."},
+                # 2026-10-11: Gedächtnis nach Themen (core/gedaechtnis_ablage.py).
+                "thema": {"type": "string",
+                          "description": "Thema einer neuen Datei (vorhandenes "
+                                         "nehmen, z.B. 'sport'); sonst 'allgemein'."},
+                "art": {"type": "string",
+                        "description": "Neue Datei: notiz (Standard), dossier, "
+                                       "katalog, quelle, ziel, projekt."},
+                "beschreibung": {"type": "string",
+                                 "description": "Neue Datei: eine Zeile fuer den "
+                                                "Index — woran du spaeter "
+                                                "erkennst, ob du sie liest."},
                 # 2026-10-08, Skill import-memory: nur ergänzen, zeilenweise.
                 "herkunft": {"type": "string",
                              "description": "Nur beim Import aus einer anderen "
@@ -807,8 +806,8 @@ WERKZEUGE = [
         alltag="dossiers neu schreiben",
         klein=None,
         gross=(
-            "Schreibt ein Dossier KOMPLETT neu — zum Aufraeumen, wenn aus "
-            "vielen angehaengten Absaetzen ein sauberer Stand werden soll. "
+            "Schreibt eine Gedaechtnis-Datei KOMPLETT neu — zum Aufraeumen, "
+            "wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. "
             "Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher "
             "mit read_note gelesen werden, sonst wirfst du weg, was du nicht "
             "kennst."
@@ -816,9 +815,10 @@ WERKZEUGE = [
         parameter={
             "type": "object",
             "properties": {
-                "name":    {"type": "string", "description": "Dossier-Titel."},
+                "name":    {"type": "string", "description": "thema/name aus dem Index."},
                 "content": {"type": "string",
                             "description": "Der vollstaendige neue Inhalt."},
+                "thema":   {"type": "string", "description": "Optional."},
             },
             "required": ["name", "content"],
         },
@@ -839,7 +839,7 @@ WERKZEUGE = [
             "Holt etwas aus dem Netz ODER aus Input/ und LEGT ES AB — Modulhandbuch, "
             "Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu "
             "Text, HTML entrumpelt, Binaeres als Datei mit Vermerk "
-            "abgelegt. Danach lesbar mit read_note und durchsuchbar mit "
+            "abgelegt (unter 'thema'). Danach lesbar mit read_note und durchsuchbar mit "
             "search_memory. Unterschied zu fetch_url: das liest etwas "
             "JETZT und vergisst es; hier wird abgelegt, um es spaeter "
             "wiederzufinden. Gib einen sprechenden 'name' — daraus wird "
@@ -853,6 +853,8 @@ WERKZEUGE = [
                                         "Pfad in Input/ oder Output/."},
                 "name": {"type": "string",
                          "description": "Kurzer Titel, z.B. 'modulhandbuch'."},
+                "thema": {"type": "string",
+                          "description": "Thema, unter dem es liegt, z.B. 'studium'."},
             },
             "required": ["url", "name"],
         },
@@ -874,8 +876,8 @@ WERKZEUGE = [
             "bestaetigt, damit aus Tippfehlern keine Halde halbtoter "
             "Kurven wird. Typen: 'number' (Zahl mit Einheit), 'scale' "
             "(1-10), 'time' (nur dass es an dem Tag war), 'period' "
-            "(von-bis). Danach traegst du Werte mit log_series ein und "
-            "verlinkst die Reihe im Dossier der Sache."
+            "(von-bis). Mit 'thema' liegt sie im Gedaechtnis unter dem Thema "
+            "der Sache. Danach traegst du Werte mit log_series ein."
         ),
         parameter={
             "type": "object",
@@ -885,6 +887,8 @@ WERKZEUGE = [
                            "enum": ["number", "scale", "time", "period"]},
                 "einheit": {"type": "string",
                             "description": "z.B. 'cm', 's', 'km'. Optional."},
+                "thema":   {"type": "string",
+                            "description": "z.B. 'sport', 'gesundheit'."},
             },
             "required": ["name", "typ"],
         },
@@ -1283,6 +1287,20 @@ WERKZEUGE.append(Werkzeug(
                    "von": {"type": "string", "description": "YYYY-MM-DD."},
                    "bis": {"type": "string", "description": "YYYY-MM-DD, sonst heute."},
                }},
+))
+
+
+# Archivieren (2026-10-11): die KI legt selbst weg, was nicht mehr stimmt — nach
+# _archiv/, nie gelöscht; frei wie write_note, Kernakten lehnt gedaechtnis ab.
+WERKZEUGE.append(Werkzeug(
+    name="archive_note", schreibt=True,
+    beweis="prüft, dass die Datei unter dem Namen nicht mehr liegt",
+    gross=("Legt eine Gedaechtnis-Datei, die nicht mehr stimmt oder doppelt ist, "
+           "ins Archiv (nichts wird geloescht). Vorher lesen; Teile, die noch "
+           "gelten, erst mit write_note in die richtige Datei uebernehmen."),
+    parameter={"type": "object", "required": ["name"], "properties": {
+        "name": {"type": "string", "description": "thema/name aus dem Index."},
+        "thema": {"type": "string", "description": "Optional."}}},
 ))
 
 

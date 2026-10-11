@@ -52,7 +52,7 @@ def cal(tmp_path, monkeypatch):
 def test_das_ergebnis_sagt_wo_es_steht(mem):
     """"Notiert." beantwortet die Frage nicht, die man hinterher stellt."""
     antwort = mem.dossier_notieren("kataloge/ideen", EINTRAG)
-    assert "kataloge/ideen" in antwort
+    assert "ideen.katalog" in antwort   # seit 2026-10-11: thema/ideen.katalog
     assert "Fraktal-Rendering" in antwort
 
 
@@ -98,7 +98,7 @@ def test_dieselbe_sache_nicht_an_zwei_orten(mem):
     mem.dossier_notieren("kataloge/ideen", EINTRAG)
     antwort = mem.dossier_notieren("fraktal-rendering",
                                    "Interesse geweckt durch einen Kanal.")
-    assert "kataloge/ideen" in antwort
+    assert "ideen.katalog" in antwort   # seit 2026-10-11: thema/ideen.katalog
     assert "Nichts geschrieben" in antwort
     assert "Interesse geweckt" not in mem.dossier_lesen("fraktal-rendering")
 

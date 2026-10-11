@@ -4,7 +4,7 @@
 #
 #   GET  /api/skills                  die Skill-Liste (Phase 4)
 #   POST /api/skills/<name>/status    Skill an/aus (Phase 3)
-#   GET  /api/gedaechtnis             Kernakten, Bereiche (Titel), Skills
+#   GET  /api/gedaechtnis             Kernakten, Themen (Namen + Haken), Skills
 #   PUT  /api/gedaechtnis/<akte>      eine der drei Kernakten ersetzen
 #
 # Geschrieben wird hier NUR, was Sasha selbst in der TUI tut (Gedächtnis-
@@ -58,12 +58,16 @@ def _kernakte(akte):
 @bp.route('/api/gedaechtnis')
 def api_gedaechtnis():
     """Alles auf einen Blick: {kernakten: [{akte, text, stand}],
-    bereiche: [{bereich, titel: [...]}], skills: [...], skill_liste}. Kernakten in der
-    festen Reihenfolge Hausregeln, Steckbrief, Ziele."""
+    themen: [{thema, dateien: [{name, art, beschreibung, ort}]}], skills: [...],
+    skill_liste}. Kernakten in der festen Reihenfolge Hausregeln, Steckbrief,
+    Ziele. `bereiche` ({bereich, titel}) ist dieselbe Liste in der alten Form,
+    für eine TUI, die noch nicht nachgezogen ist (2026-10-11, nach Themen)."""
+    themen = gedaechtnis.themen_uebersicht()
     return jsonify({
         "kernakten": [_kernakte(a) for a in gedaechtnis.KERNAKTEN],
-        "bereiche": [{"bereich": b, "titel": gedaechtnis.liste(b)}
-                     for b in gedaechtnis.BEREICHE],
+        "themen": themen,
+        "bereiche": [{"bereich": t["thema"], "titel": [d["name"] for d in t["dateien"]]}
+                     for t in themen],
         "skills": skills.alle(),
         "skill_liste": skills.liste_lage(),
     })

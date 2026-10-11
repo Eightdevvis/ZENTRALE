@@ -226,7 +226,9 @@ def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, m
     schreibend = {w.name for w in werkzeug_register.WERKZEUGE if w.schreibt}
     kalender = {n for n in schreibend if "calendar" in n}
     # create_series: eine neue Reihe, die nachgelesen fehlt — eigener Test unten.
-    assert schreibend - kalender - gesehen == {"create_series"}
+    # archive_note (2026-10-11): braucht eine vorhandene Datei — eigener Test in
+    # tests/test_gedaechtnis_themen.py (test_archivieren_abbruch_legt_zurueck).
+    assert schreibend - kalender - gesehen == {"create_series", "archive_note"}
 
 
 def test_create_series_abbruch_laesst_alles_wie_es_war(wurzeln, monkeypatch):

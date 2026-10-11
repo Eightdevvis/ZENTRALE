@@ -37,7 +37,7 @@ def api_data(category_id):
     Die Daten liegen in data/<category_id>.json auf Disk.
     Leere Liste wenn noch keine Einträge existieren.
     """
-    log_file = os.path.join(_DATA_DIR, f'{category_id}.json')
+    log_file = graphs.reihe_pfad(category_id, os.path.join(_DATA_DIR, f'{category_id}.json'))
     if not os.path.exists(log_file):
         return jsonify([])
     with open(log_file, 'r', encoding='utf-8') as f:
@@ -160,7 +160,7 @@ def api_log():
     upsert      = bool(entry.get('upsert'))   # True → Eintrag mit gleichem Datum ersetzen
 
     os.makedirs(_DATA_DIR, exist_ok=True)  # data/ erstellen falls noch nicht vorhanden
-    log_file = os.path.join(_DATA_DIR, f'{category_id}.json')
+    log_file = graphs.reihe_pfad(category_id, os.path.join(_DATA_DIR, f'{category_id}.json'))
 
     # Bestehende Einträge laden (oder leere Liste starten)
     logs = []

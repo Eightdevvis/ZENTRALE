@@ -59,46 +59,66 @@ def _skill(name, status="aktiv"):
 
 # ── GET ────────────────────────────────────────────────────────────────
 
-def test_get_liefert_kernakten_bereiche_und_skills(client):
-    _schreiben("hausregeln", "# Hausregeln\n\n- Nicht duzen.\n")
-    _schreiben("sasha", "# Sasha\n\nStudiert.\n")
-    os.makedirs(os.path.join(gedaechtnis._DIR, "dossiers"), exist_ok=True)
-    _schreiben("dossiers/umzug", "# umzug\n")
+def test_get_liefert_kernakten_themen_und_skills(client):
+    gedaechtnis.kernakte_schreiben("hausregeln", "# Hausregeln\n\n- Nicht duzen.\n")
+    gedaechtnis.kernakte_schreiben("steckbrief", "# Sasha\n\nStudiert.\n")
+    gedaechtnis.notieren("umzug", "Kisten.", thema="wohnen", art="dossier",
+                         beschreibung="Umzug fertig kriegen")
     _skill("plan")
     d = client.get("/api/gedaechtnis").get_json()
     assert [k["akte"] for k in d["kernakten"]] == ["hausregeln", "steckbrief", "ziele"]
     akten = {k["akte"]: k for k in d["kernakten"]}
     assert "Nicht duzen" in akten["hausregeln"]["text"]
-    assert "Studiert" in akten["steckbrief"]["text"]       # Datei heißt sasha.md
+    assert "Studiert" in akten["steckbrief"]["text"]
+    assert "name:" not in akten["steckbrief"]["text"]      # ohne Datei-Kopf
     assert akten["ziele"]["text"] == "" and akten["ziele"]["stand"]
-    bereiche = {b["bereich"]: b["titel"] for b in d["bereiche"]}
-    assert bereiche["dossiers"] == ["umzug"] and bereiche["notizen"] == []
-    assert "skills" not in bereiche
+    themen = {t["thema"]: t["dateien"] for t in d["themen"]}
+    assert themen["wohnen"] == [{"name": "umzug", "art": "dossier",
+                                 "beschreibung": "Umzug fertig kriegen", "ort": "wohnen/umzug"}]
+    assert "skills" not in themen and "ki" not in themen
+    # Alte Form für eine TUI, die noch nicht nachgezogen ist.
+    assert {b["bereich"]: b["titel"] for b in d["bereiche"]}["wohnen"] == ["umzug"]
     assert [s["name"] for s in d["skills"]] == ["plan"]
+
+
+def test_get_zeigt_den_alten_aufbau_bis_zum_umzug(client):
+    """Vor dem Umzug (scripts/gedaechtnis_umzug.py) liest die Ansicht den alten
+    Bestand mit — Sasha sieht nach dem Update nicht plötzlich ein leeres
+    Gedächtnis."""
+    _schreiben("sasha", "# Sasha\n\nStudiert.\n")
+    os.makedirs(os.path.join(gedaechtnis._DIR, "dossiers"), exist_ok=True)
+    _schreiben("dossiers/umzug", "# umzug\n")
+    d = client.get("/api/gedaechtnis").get_json()
+    assert "Studiert" in {k["akte"]: k for k in d["kernakten"]}["steckbrief"]["text"]
+    assert {t["thema"]: t for t in d["themen"]}["dossiers (alter aufbau)"]["dateien"][0]["name"] \
+        == "umzug"
 
 
 # ── PUT Kernakte ───────────────────────────────────────────────────────
 
 def test_put_schreibt_atomar_mit_bak(client):
-    _schreiben("ziele", "# Ziele\n\n- alt\n")
+    gedaechtnis.kernakte_schreiben("ziele", "# Ziele\n\n- alt\n")
     r = client.put("/api/gedaechtnis/ziele", json={"text": "# Ziele\n\n- Marathon\n"})
     assert r.status_code == 200
     assert "Marathon" in r.get_json()["text"]
-    with open(_datei("ziele"), encoding="utf-8") as f:
-        assert f.read() == "# Ziele\n\n- Marathon\n"
-    with open(_datei("ziele") + ".bak", encoding="utf-8") as f:
+    pfad = gedaechtnis.kern_pfad("ziele")
+    with open(pfad, encoding="utf-8") as f:
+        text = f.read()
+    # Datei-Kopf (Claude-Format) bleibt, darunter genau Sashas Text.
+    assert text.startswith("---\nname: ziele\n") and text.endswith("\n# Ziele\n\n- Marathon\n")
+    with open(pfad + ".bak", encoding="utf-8") as f:
         assert "- alt" in f.read()
-    # Was im Kopf der KI steht, ist die neue Fassung.
-    assert "Marathon" in gedaechtnis.kopf_block()
+    # Was die KI liest, ist die neue Fassung (die Ziele stehen im Index).
+    assert "Marathon" in gedaechtnis.ziele()
     # Keine Zwischendatei bleibt liegen.
-    assert not [n for n in os.listdir(gedaechtnis._DIR) if n.endswith(".tmp")]
+    assert not [n for n in os.listdir(os.path.dirname(pfad)) if n.endswith(".tmp")]
 
 
 def test_put_legt_eine_fehlende_akte_an_ohne_bak(client):
     r = client.put("/api/gedaechtnis/hausregeln", json={"text": "- Kurz antworten."})
     assert r.status_code == 200
-    assert os.path.exists(_datei("hausregeln"))
-    assert not os.path.exists(_datei("hausregeln") + ".bak")
+    assert os.path.exists(gedaechtnis.kern_pfad("hausregeln"))
+    assert not os.path.exists(gedaechtnis.kern_pfad("hausregeln") + ".bak")
 
 
 @pytest.mark.parametrize("akte", ["dossiers", "sasha", "notizen", "skills", "tagebuch",

@@ -63,7 +63,7 @@ def _find_graph():
 def _logged_days(gid):
     """Alle Tage mit echtem Wert, sortiert. Liest dieselbe Messwert-Datei, die
     /api/log schreibt. Kaputte/leere Datei → []."""
-    path = os.path.join(graphs._DATA_DIR, gid + '.json')
+    path = graphs._values_path(gid)
     if not os.path.exists(path):
         return []
     try:

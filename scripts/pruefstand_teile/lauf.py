@@ -76,9 +76,8 @@ def ausgangszustand(fall: dict) -> None:
             for p in punkte or []:
                 lists.add_item(liste["id"], _text(p))
     for name, inhalt in (fall.get("gedaechtnis") or {}).items():
-        bereich, _, datei = str(name).rpartition("/")
-        with open(gedaechtnis._pfad(bereich, datei), "w", encoding="utf-8") as f:
-            f.write(str(inhalt))
+        # 'sasha'/'ziele' → Kernakte, sonst eine Datei (nach Themen seit 2026-10-11)
+        gedaechtnis.ersetzen(str(name), str(inhalt))
 
 
 def kalender_ansicht(tage_vor: int = 1, tage_nach: int = 35) -> str:

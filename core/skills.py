@@ -105,7 +105,7 @@ def ordner() -> str:
     """Der Skill-Ordner. Bei jedem Zugriff: alte Dateien umziehen
     (skill_umzug) und fehlende Vorlagen nachliefern — beides tut nichts,
     wenn nichts zu tun ist."""
-    pfad = gedaechtnis.bereich_ordner(gedaechtnis.SKILLS)
+    pfad = gedaechtnis.skills_ordner()   # ki/skills/ (vor dem Umzug: skills/)
     with _SPERRE:
         os.makedirs(pfad, exist_ok=True)
         skill_umzug.umziehen(pfad)

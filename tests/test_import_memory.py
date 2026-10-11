@@ -39,6 +39,17 @@ def eigener_ordner(tmp_path, monkeypatch):
 
 
 def _datei(rel):
+    """Der Inhalt, wie ihn die alte Datei `rel` hatte: seit 2026-10-11 liegt
+    er unter themen/<thema>/ mit Datei-Kopf; der Name dort entspricht der
+    alten Titelzeile. Gibt es (noch) keine neue Datei, die alte selbst."""
+    akte = {"sasha": "steckbrief", "hausregeln": "hausregeln"}.get(rel)
+    if akte:
+        return gedaechtnis.kernakte_lesen(akte)
+    treffer = gedaechtnis.finden(rel)
+    if treffer:
+        with open(treffer[0], encoding="utf-8") as f:
+            rumpf = gedaechtnis.ablage.zerlegen(f.read())[1]
+        return f"# {rel.split('/')[-1]}\n\n" + rumpf
     with open(os.path.join(gedaechtnis._DIR, rel + ".md"), encoding="utf-8") as f:
         return f.read()
 
@@ -63,7 +74,7 @@ def test_neue_notiz_bekommt_zeilen_mit_herkunftsvermerk():
     assert text.startswith("# vorlieben\n\n")
     assert f"- Mag schwarzen Tee.  {VERMERK}]" in text
     assert f"- Hört Techno beim Löten.  {VERMERK}]" in text
-    assert "Neu angelegt: notizen/vorlieben: 2 Zeile(n)" in aus
+    assert "Neu angelegt: allgemein/vorlieben: 2 Zeile(n)" in aus
 
 
 def test_vorhandenes_bleibt_wort_fuer_wort_und_steht_vorne():
@@ -87,7 +98,7 @@ def test_zweiter_gleicher_import_schreibt_nichts():
     vorher = _datei("notizen/vorlieben")
     aus = _import("vorlieben", "Mag Tee.\nHört Techno.")
     assert _datei("notizen/vorlieben") == vorher
-    assert "Nichts geschrieben in notizen/vorlieben" in aus
+    assert "Nichts geschrieben in allgemein/vorlieben" in aus
 
 
 def test_zeilen_mit_link_oder_bild_werden_nicht_uebernommen():
@@ -110,9 +121,11 @@ def test_ueberschriften_im_export_machen_aus_der_notiz_kein_dossier():
     """Ein Katalog-Kopf im Import würde die Notiz sonst befördern (dossier_
     notieren) — als Aufzählungszeile ist er nur Text."""
     _import("ideen-import", "## Fourier\n- status: idee\n- thema: signale")
-    assert os.path.exists(os.path.join(gedaechtnis._DIR, "notizen", "ideen-import.md"))
-    assert not os.path.exists(os.path.join(gedaechtnis._DIR, "dossiers", "ideen-import.md"))
-    assert gedaechtnis.liste("kataloge") == []
+    pfad = gedaechtnis.finden("ideen-import")
+    assert pfad and "art: notiz" in open(pfad[0], encoding="utf-8").read()
+    assert not [p for t in os.listdir(os.path.join(gedaechtnis._DIR, "themen"))
+                for p in os.listdir(os.path.join(gedaechtnis._DIR, "themen", t))
+                if p.endswith(".katalog.md")]
 
 
 def test_dossier_bekommt_eine_ueberschrift_je_tag_und_herkunft():
@@ -133,13 +146,14 @@ def test_nicht_in_kataloge_tagebuch_quellen(name):
     assert "Nichts geschrieben" in aus
     assert _datei("kataloge/ideen") == "# ideen\n\n## Fourier\n- status: idee\n"
     assert not os.path.isdir(os.path.join(gedaechtnis._DIR, "tagebuch"))
+    assert not os.path.isdir(os.path.join(gedaechtnis._DIR, "themen", "tagebuch"))
 
 
 def test_zu_viele_zeilen_alles_oder_nichts():
     zeilen = "\n".join(f"Fakt {i}" for i in range(gedaechtnis.IMPORT_MAX_ZEILEN + 1))
     aus = _import("viel", zeilen)
     assert "teil es auf" in aus
-    assert not os.path.exists(os.path.join(gedaechtnis._DIR, "notizen", "viel.md"))
+    assert not gedaechtnis.finden("viel")
 
 
 def test_herkunft_wird_zum_einen_wort():
@@ -161,7 +175,7 @@ def test_hausregeln_bekommen_ihren_kopf():
 
 def test_kein_halber_schreibvorgang_bleibt_liegen():
     _import("x", "Eins.")
-    rest = [n for n in os.listdir(os.path.join(gedaechtnis._DIR, "notizen"))
+    rest = [n for n in os.listdir(os.path.join(gedaechtnis._DIR, "themen", "allgemein"))
             if n != "x.md"]
     assert rest == []
 
@@ -279,6 +293,7 @@ def test_probelauf_mit_beispiel_export(monkeypatch):
     # Steckbrief nach Ja geschrieben, Hausregel nach Nein nicht.
     assert "Maschinenbau" in _datei("sasha")
     assert not os.path.exists(os.path.join(gedaechtnis._DIR, "hausregeln.md"))
+    assert not os.path.exists(gedaechtnis.kern_pfad("hausregeln"))
     # Das Modell bekam die Beweise zurück.
     texte = [t for _, t, _ in modell.ergebnisse]
     assert "steht schon da" in texte[0]

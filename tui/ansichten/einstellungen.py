@@ -36,7 +36,7 @@ from .text import md_zeilen
 ABSCHNITTE = [("skills", "Skills"), ("memory", "Memory"), ("usage", "Usage"),
               ("capabilities", "Capabilities"), ("permissions", "Permissions"),
               ("model", "Model"), ("feedback", "Feedback")]
-AKTEN = ["hausregeln", "steckbrief", "ziele", "bereiche"]
+AKTEN = ["hausregeln", "steckbrief", "ziele", "themen"]
 NAV = 18                                  # Breite der Leiste links
 VON = {"sasha": "you", "ki": "the ki", "anthropic": "Anthropic"}   # „Created by"
 

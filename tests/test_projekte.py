@@ -61,7 +61,7 @@ def test_anlegen_zweimal_derselbe_name_geht_nicht():
 def test_projekte_stehen_nicht_in_den_gedaechtnis_bereichen():
     """Sonst stünden sie als Titel in jedem Kopf und write_note erreichte sie."""
     projekte.anlegen("Geige", "Anweisung")
-    assert "projekte" not in gedaechtnis.BEREICHE
+    assert "projekte" not in gedaechtnis.ablage.themen(gedaechtnis._DIR)
     assert "geige" not in gedaechtnis.kopf_block()
 
 

@@ -4,9 +4,8 @@
 # 2026-10-07): eine Überlagerung IM Chat-Kasten wie die Gesprächsliste,
 # geöffnet mit /gedaechtnis (bzw. /skills, dann gleich bei den Skills).
 #
-# Zeigt in fünf Abschnitten: Hausregeln, Steckbrief, Ziele (die drei
-# Kernakten, die bei jedem Zug ganz im Kopf der KI stehen), die Bereiche
-# (nur Titel) und die Skills. Ändern kann Sasha hier zweierlei:
+# Zeigt in fünf Abschnitten: Hausregeln, Steckbrief, Ziele (die Kernakten),
+# die Themen (Dateien mit Haken, seit 2026-10-11) und die Skills. Ändern kann Sasha hier zweierlei:
 #   - eine Kernakte im Editor ($VISUAL/$EDITOR, sonst nano, sonst vi) —
 #     zurück geht sie über PUT /api/gedaechtnis/<akte>; das Backend legt die
 #     alte Fassung als .bak ab. Die TUI kann auf dem Laptop gegen das
@@ -36,7 +35,7 @@ from .basis import api_call
 from .text import md_zeilen
 
 ABSCHNITTE = [("hausregeln", "hausregeln"), ("steckbrief", "steckbrief"),
-              ("ziele", "ziele"), ("bereiche", "bereiche"), ("skills", "skills")]
+              ("ziele", "ziele"), ("themen", "themen"), ("skills", "skills")]
 KERNAKTEN = ("hausregeln", "steckbrief", "ziele")
 
 # Wörter, die Sasha sieht (keine Fachwörter aus der Datei).
@@ -103,18 +102,8 @@ def inhalt_zeilen(daten, abschnitt, breite, wahl=0):
         if not text:
             return [("(noch leer) — e öffnet sie im editor", "leise")], 0
         return md_zeilen(text, breite), 0
-    if abschnitt == "bereiche":
-        zeilen = [("was die ki nachlesen kann (nur die titel stehen in ihrem kopf):",
-                   "leise"), ("", "")]
-        for b in (daten or {}).get("bereiche") or []:
-            titel = b.get("titel") or []
-            zeilen.append(("%s/  (%d)" % (b.get("bereich"), len(titel)), "kopf"))
-            if titel:
-                for z in md_zeilen(", ".join(titel), breite - 2):
-                    zeilen.append(("  " + z[0], ""))
-            else:
-                zeilen.append(("  —", "leise"))
-        return zeilen, 0
+    if abschnitt == "themen":
+        return _themen_zeilen(daten, breite), 0
     # skills
     skills = (daten or {}).get("skills") or []
     if not skills:
@@ -142,6 +131,31 @@ def inhalt_zeilen(daten, abschnitt, breite, wahl=0):
                 for z in md_zeilen("%s: %s" % (wort, s[feld]), breite - 4)[:2]:
                     zeilen.append(("    " + z[0], "leise"))
     return zeilen, ziel
+
+
+def _themen_zeilen(daten, breite):
+    """Das Gedächtnis nach Thema (2026-10-11): je Thema eine Kopfzeile, darunter
+    je Datei Name, Art und der Haken, nach dem die KI entscheidet, ob sie sie
+    liest. Ein Backend ohne `themen` liefert noch `bereiche` (alte Form)."""
+    zeilen = [("was die ki nachlesen kann (namen und haken stehen in ihrem kopf):",
+               "leise"), ("", "")]
+    themen = (daten or {}).get("themen")
+    if themen is None:
+        themen = [{"thema": b.get("bereich"), "dateien": [{"name": t} for t in b.get("titel") or []]}
+                  for b in (daten or {}).get("bereiche") or []]
+    if not themen:
+        return zeilen + [("noch nichts abgelegt", "leise")]
+    for t in themen:
+        dateien = t.get("dateien") or []
+        zeilen.append(("%s  (%d)" % (t.get("thema"), len(dateien)), "kopf"))
+        for d in dateien:
+            art = d.get("art") or ""
+            kopf = "  %s%s" % (d.get("name") or "?", " · " + art if art and art != "notiz" else "")
+            haken = d.get("beschreibung") or ""
+            zeilen.append(((kopf + (" — " + haken if haken else ""))[:breite], ""))
+        if not dateien:
+            zeilen.append(("  —", "leise"))
+    return zeilen
 
 
 # ── Die Überlagerung ─────────────────────────────────────────────────────

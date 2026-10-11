@@ -98,7 +98,7 @@ WOHER = [
      "core/profil/klein.py  ->  _MIC_INPUT_HINT",
      "gilt fuer jedes Modell gleich"),
     ("Was sie ueber Sasha weiss (Steckbrief, Ziele, Ablage-Titel)",
-     "data/gedaechtnis/sasha.md + ziele.md, gerendert von gedaechtnis.kopf_block()",
+     "Hausregeln + Steckbrief + INDEX (data/gedaechtnis/), gerendert von gedaechtnis.kopf_block()",
      "steht im GECACHTEN Kopf — Inhalte holt sie per read_note"),
     ("Was heute und morgen ansteht",
      "core/kalender.py  ->  imprint_for_prompt()",
