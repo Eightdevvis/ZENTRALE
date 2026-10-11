@@ -13,6 +13,7 @@ import threading
 import time
 
 from .basis import _num, api_call
+from .tasten import Tasten
 
 
 # Telemetrie-Reihen: (label, key, einheit). Quelle ist /api/telemetry.pc
@@ -206,6 +207,19 @@ class Technik:
     (mit Laufschrift), outbound — als Technik-Ansicht aus dem Technik-Rad
     (Vollbild) und als Spalten des alten Dashboards. Zustand in self.TECH
     (auch z.TECH); den Lauf-Wunsch (z.LAUF) besitzt run_ui (/lauf, Takt)."""
+
+    # Die Vollbild-Ansicht zeigt nur; esc geht zurück aufs Rad (Tastentabelle,
+    # tasten.py, 2026-10-11).
+    TASTEN = Tasten({"anzeige": [("esc", "zurueck", "back")]})
+
+    def ansicht(self):
+        return "anzeige"
+
+    def taste(self, ch):
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def aktion_zurueck(self, _taste):
+        self.TECH["active"] = False
 
     def __init__(self, z):
         self.z = z

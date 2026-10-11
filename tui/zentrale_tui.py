@@ -827,8 +827,7 @@ def taste_verteilen(u, ch):
         if notizen.taste(ch) == BEENDEN:
             return BEENDEN
     elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
-        if ch == 27:
-            TECH["active"] = False
+        u.technik.taste(ch)
     elif PIANO["active"]:                  # Klavier hat den Fokus
         klavier.taste(ch)
     elif AI["active"]:                     # KI-Chat hat den Fokus
@@ -840,45 +839,10 @@ def taste_verteilen(u, ch):
     elif u.WERK["active"]:                 # Werkstatt (2026-10-10)
         u.werkstatt.taste(ch)
     else:                                  # Startseite: das Rad
-        # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→
-        # dreht, enter öffnet die App vorn, space die KI. Theme, Laufschrift
-        # und Beenden gehen über die Befehlszeile (/theme, /lauf, /quit),
-        # Weglegen über Cmd+z. `taste` ist der Schlüssel der Wahl in der
-        # Tabelle ansichten/rad_wahl.OEFFNEN (seit 2026-10-10).
-        taste = None
-        if not DASH["an"]:
-            # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad,
-            # alt+←/→ wechselt das Rad (dieselbe Alt-Erkennung wie die Karte).
-            was = {curses.KEY_LEFT: "links", curses.KEY_RIGHT: "rechts",
-                   10: "enter", 13: "enter", curses.KEY_ENTER: "enter"}.get(ch)
-            if was is None:
-                alt = karte.m_alt_arrow(ch)
-                if alt == "esc":                   # Esc allein: ZENTRALE zuklappen
-                    fenster_zuklappen()
-                was = {"left": "alt_links", "right": "alt_rechts"}.get(alt)
-            if ch == ord(" "):
-                taste = "a"
-            elif was:
-                wahl = meta_taste(META, RAD, TRAD, was, ERAD)
-                if wahl and wahl[0] == "technik":
-                    TECH["active"] = True; TECH["view"] = wahl[1]
-                elif wahl:                     # App oder Erschaffen: rad_wahl.OEFFNEN
-                    taste = wahl[1]
-        elif ch == 27:                         # altes Dashboard: Esc klappt auch zu
-            fenster_zuklappen()
-        elif ch == curses.KEY_LEFT:
-            RAD["sel"] -= 1; rad_anstoss(RAD, -1)
-        elif ch == curses.KEY_RIGHT:
-            RAD["sel"] += 1; rad_anstoss(RAD, 1)
-        elif ch == ord(" "):
-            taste = "a"
-        elif ch in (10, 13, curses.KEY_ENTER):
-            taste = rad_apps()[rad_index(RAD["sel"])][0]
-        # Öffnen: eine Tabelle statt if-Kette (2026-10-10, ansichten/rad_wahl.py).
-        if taste and ansichten.rad_wahl.oeffnen(u, taste) == BEENDEN:
+        # Tastentabelle der Startseite (ansichten/startseite.py, 2026-10-11);
+        # was Enter öffnet: ansichten/rad_wahl.OEFFNEN. '/' greift oben global.
+        if u.startseite.taste(ch) == BEENDEN:
             return BEENDEN
-        # '/' wird global oben abgefangen (greift in JEDEM Fenster), darum
-        # hier kein eigener Zweig mehr.
 
 
 def bild_zeichnen(u):
@@ -1255,7 +1219,8 @@ def run_ui(stdscr, store):
         notizen=notizen, post=post, safe_addstr=safe_addstr, app_start=app_start,
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
         DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop,
-        WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene)
+        WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene,
+        zuklappen=lambda: fenster_zuklappen())
     # Jedes Programm beim Horcher anmelden: er fragt einmal nach den Tasten
     # je Ansicht, die Leiste schlägt danach nur noch nach (2026-10-11).
     ansichten.fenster.verkabeln(z, u)

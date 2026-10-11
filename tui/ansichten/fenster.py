@@ -41,6 +41,8 @@ def verkabeln(z, u):
     z.programme = {n: getattr(u, n) for n in namen if getattr(u, n, None) is not None}
     z.horcher = Horcher()
     for n, p in z.programme.items():
+        if hasattr(p, "anbinden"):       # wer das Bündel braucht (Startseite)
+            p.anbinden(u)
         z.horcher.verkabeln(n, p)
 
 

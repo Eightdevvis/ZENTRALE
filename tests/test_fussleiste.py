@@ -309,6 +309,7 @@ def welt(monkeypatch, tmp_path):
         u.bz = A.befehle.Befehlszeile(z)
         u.app_start = A.app_start.AppStart(z, u.bz)
         u.aufrufe, u.nebenwirkung = aufrufe, nebenwirkung
+        u.zuklappen = lambda: zt.fenster_zuklappen()     # wie run_ui
         A.fenster.verkabeln(z, u)            # wie run_ui: Horcher fragt jedes Programm
         return u
     return bauen

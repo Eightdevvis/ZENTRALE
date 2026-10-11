@@ -13,6 +13,9 @@
 import curses
 import time
 
+from . import rad_wahl
+from .tasten import Tasten
+
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
@@ -283,8 +286,25 @@ def symbol_rad(sel=0):
 
 class Startseite:
     """Die Startseite: Galaxie mit App-Rad und Technik-Rad (oder im alten
-    Dashboard nur das App-Rad). Zeichnet; welche Taste was öffnet, entscheidet
-    run_ui, weil es dafür alle Ansichten kennen muss."""
+    Dashboard nur das App-Rad). Zeichnet und nimmt die Tasten des Rads; was
+    Enter öffnet, steht in rad_wahl.OEFFNEN und braucht das Bündel der
+    Hauptschleife (anbinden, beim Verkabeln)."""
+
+    # Seit 02.10.2026 keine Buchstaben-Shortcuts mehr (Sasha): ←/→ dreht,
+    # enter öffnet die App vorn, space die KI. Theme, Laufschrift und Beenden
+    # gehen über die Befehlszeile (/theme, /lauf, /quit). Tastentabelle seit
+    # 2026-10-11 (tasten.py) — bis dahin eine Kette in zentrale_tui.
+    TASTEN = Tasten({
+        "galaxie": [
+            ("←→", "drehen", "turn"), ("alt+←→", "rad_wechseln", "wheel"),
+            ("enter", "oeffnen", "open"), ("space", "chat", "ai chat"),
+            ("esc", "zuklappen", "hide"),
+        ],
+        "dashboard": [                      # altes Dashboard (/dashboard an)
+            ("←→", "drehen", "turn"), ("enter", "oeffnen", "open"),
+            ("space", "chat", "ai chat"), ("esc", "zuklappen", "hide"),
+        ],
+    })
 
     def __init__(self, z, rad, meta, trad, technik, erad=None):
         self.z = z
@@ -292,6 +312,48 @@ class Startseite:
         self.RAD, self.META, self.TRAD = rad, meta, trad
         self.ERAD = erad if erad is not None else symbol_rad()
         self.technik = technik              # die letzten Log-Zeilen unten
+        self.u = None                       # Bündel der Hauptschleife (anbinden)
+
+    def anbinden(self, u):
+        """fenster.verkabeln reicht das Bündel: Öffnen braucht alle Ansichten,
+        u.DASH sagt Galaxie oder altes Dashboard, u.zuklappen klappt zu."""
+        self.u = u
+
+    def ansicht(self):
+        return "dashboard" if self.u is not None and self.u.DASH["an"] else "galaxie"
+
+    def taste(self, ch):
+        return self.TASTEN.verteilen(self, self.ansicht(), ch)
+
+    def aktion_drehen(self, taste):
+        richtung = -1 if taste == "left" else 1
+        if self.ansicht() == "galaxie":
+            # Galaxie (seit 03.10.2026): ←/→ dreht das gewählte Rad.
+            meta_taste(self.META, self.RAD, self.TRAD,
+                       "links" if richtung < 0 else "rechts", self.ERAD)
+        else:
+            self.RAD["sel"] += richtung; rad_anstoss(self.RAD, richtung)
+
+    def aktion_rad_wechseln(self, taste):
+        meta_taste(self.META, self.RAD, self.TRAD,
+                   "alt_links" if taste == "alt+left" else "alt_rechts", self.ERAD)
+
+    def aktion_oeffnen(self, _taste):
+        if self.ansicht() == "dashboard":
+            return rad_wahl.oeffnen(self.u, rad_apps()[rad_index(self.RAD["sel"])][0])
+        wahl = meta_taste(self.META, self.RAD, self.TRAD, "enter", self.ERAD)
+        if wahl and wahl[0] == "technik":
+            self.technik.TECH["active"] = True; self.technik.TECH["view"] = wahl[1]
+            return None
+        # App oder Erschaffen: rad_wahl.OEFFNEN (2026-10-10)
+        return rad_wahl.oeffnen(self.u, wahl[1]) if wahl else None
+
+    def aktion_chat(self, _taste):
+        return rad_wahl.oeffnen(self.u, "a")
+
+    def aktion_zuklappen(self, _taste):
+        # Esc: ZENTRALE zuklappen wie $mod+z (Sasha, 04.10.2026)
+        self.u.zuklappen()
 
     @staticmethod
     def rad_symbol_vorn(rad, labels):
