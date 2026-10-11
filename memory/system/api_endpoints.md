@@ -144,8 +144,8 @@ Einträge liegen inline (`core/lists.py`); kein `/api/log`-Sharing. Front:
 TUI-Mitte Taste `l` (`memory/system/dashboard.md` → TUI).
 
 **Zwei-Dateien-Speicher (isoliert):** Sashas private Listen liegen in
-`data/lists.json`, der **`zentrale`-Feature-Tracker** (Liste `l_zentrale`, von
-Claude gepflegt) in `data/features.json`. `core/lists._load()` liest **beide
+`data/lists.json`, der **`zentrale`-Feature-Tracker** (Liste `l_zentrale`, seit
+2026-10-04 pflegt sie nur Sasha) in `data/features.json`. `core/lists._load()` liest **beide
 gemerged** (API/TUI/Box sehen alles), `_save()` schreibt jede Liste zurück in
 ihre Datei und fasst nur die wirklich geänderte an — Feature-Pflege berührt
 `lists.json` nicht und umgekehrt. Beide sind gitignored (`data/*.json`). Details

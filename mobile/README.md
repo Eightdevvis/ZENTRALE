@@ -1,3 +1,3 @@
-# zen_mobile
+# ZEN-MOBILE
 
-A new Flutter project.
+Die Handy-App von ZENTRALE (Flutter). Doku: `../memory/system/zen_mobile.md`.

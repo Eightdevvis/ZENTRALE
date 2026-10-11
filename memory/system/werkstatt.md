@@ -1,6 +1,6 @@
 # Werkstatt — der Schmied baut eigene Apps aus Vorlagen
 
-**Stand 2026-10-10: gebaut (Branch `worktree-werkstatt`).** Sasha: ein
+**Stand 2026-10-10: gebaut, auf `main` (Commit b195f79).** Sasha: ein
 drittes Rad „erschaffen" neben App- und Technik-Rad, darin die **Werkstatt**
 und ein Platz für den **Shop**. In der Werkstatt fragt der Schmied mit
 kurzen Sätzen Schritt für Schritt und baut aus einer Vorlage eine eigene

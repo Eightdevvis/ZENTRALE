@@ -1028,11 +1028,11 @@ passendes ASCII-Bild übernimmt kurz den Dashboard-Kern. Sie **malt nicht
 selbst** – ein 9b-Modell ist mies im freien ASCII-Malen (2D-Layout über
 1D-Tokenstrom), aber gut im Greppen. Also kuratiert es aus einer hand-
 gepflegten Bibliothek (`data/ascii/*.txt`, Modul
-[`core/ascii_lib.py`](../core/ascii_lib.py); Ordner per Env
+[`core/ascii_lib.py`](../../core/ascii_lib.py); Ordner per Env
 `ZENTRALE_ASCII_DIR`).
 
 **Kein Tool, sondern ein Inline-Marker.** Das war eine bewusste Kehrt-
-wende, gemessen mit [`scripts/bench_ascii.py`](../scripts/bench_ascii.py):
+wende, gemessen mit [`scripts/bench_ascii.py`](../../scripts/bench_ascii.py):
 als Tool (`zeige_ascii`) feuerte die KI bei impliziten Prompts nur **2,7 %**
 (N=200) – und tippte den Aufruf oft als Text-Marker `[[zeige_ascii: name]]`
 statt einen echten Tool-Call zu machen (Mimikry vom alten `[[emoji:]]`-
@@ -1077,7 +1077,7 @@ zwei Tools sind das einzige, was bewusst nach draußen telefoniert:
   überläuft). Typischer Ablauf: erst `web_suche`, dann `hole_url` auf einen
   Treffer.
 
-**Implementation:** [`core/web.py`](../core/web.py). Die eigentliche Such-
+**Implementation:** [`core/web.py`](../../core/web.py). Die eigentliche Such-
 Quelle steckt bewusst in **einer** Funktion: seit 2026-06-08 ist das primär
 **SearXNG self-hosted** (`_searxng_search`, lokaler Docker-Container auf
 `localhost:8888`, JSON-Modus). SearXNG ist ein Meta-Such-Aggregator – ER

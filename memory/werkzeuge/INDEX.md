@@ -24,5 +24,6 @@ Python fängt den Tool-Call ab und fragt, bevor irgendetwas passiert. Nicht
 modellgetrieben. Siehe [../ki/ki_system.md](../ki/ki_system.md).
 
 Die **Listen** gehören Sasha (`data/lists.json`) — bis auf die eine Liste
-`zentrale`, den Feature-Tracker, den Claude pflegt (`data/features.json`).
-Details in `CLAUDE.md`.
+`zentrale`, den Feature-Tracker (`data/features.json`). Den pflegt seit
+2026-10-04 ebenfalls nur Sasha; Claude liest ihn höchstens. Details in
+`CLAUDE.md`.

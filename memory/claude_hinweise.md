@@ -207,8 +207,9 @@ verletzt dieses Prinzip — Logik gehört nach `core/`, nicht in die Front.
   die das **WARUM** erklären.
 - Lieber zu viele Kommentare als zu wenige – der User möchte den Code
   ohne externe Erklärung lesen können.
-- Struktur des Tutors (neue Datei, Route, Sprachpaket) → `memory/tutor/INDEX.md`
-  im selben Commit, sonst wird `tests/test_tutor_bauplan.py` rot.
+- Struktur des Kerns (neues Modul) → `memory/system/bauplan_kern.md` im
+  selben Commit, sonst wird `tests/test_kern_bauplan.py` rot. Der Tutor hat
+  seinen Bauplan seit 2026-10-09 im eigenen Repo `language-tutor`.
 
 ### Doku-Änderungen
 

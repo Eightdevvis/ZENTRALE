@@ -1,71 +1,23 @@
 ZENTRALE
 ========
 
-Event-getriebene Zentrale für einen Wand-Monitor. Backend läuft auf
-einem Linux-PC, der Raspberry Pi ist nur noch Display-Kiosk +
-Sensor-Bridge (siehe `memory/topologie.md`). Sensoren und Zeitgeber
-erzeugen Events, der Core verarbeitet sie, das Web-Dashboard zeigt
-alles an – im Normalbetrieb vollständig offline.
+Sashas event-getriebener Assistent für Wohnung, Wand-Monitor und Rechner
+(PC als Kern, Raspberry Pi als Aussenposten, Laptop, Handy), auf dem Weg zum
+Hub: eine leere Plattform, in die Kalender, Mail, Assistent, Tutor … als Apps
+geladen werden. Front ist die TUI, der KI-Chat läuft in der Cloud (lokales
+Ollama als Option).
 
-KI läuft lokal via Ollama (Chat-Default `qwen3.5:9b` per `OLLAMA_MODEL`,
-Embeddings `bge-m3` per `OLLAMA_EMBED_MODEL`, beide umstellbar).
+Starten
+-------
 
-Es gibt zusätzlich einen Cloud-Kern (`core/cloud.py`, Anthropic), der die
-Offline-Eigenschaft für den CHAT bewusst bricht – als Opt-in, standardmäßig
-aus. Er ist erst aktiv, wenn ein API-Key hinterlegt UND `chat_backend` auf
-`cloud` gestellt ist. Dann verlassen Frage, Gesprächsverlauf, ein eigener
-Memory-Graph und alle Tool-Ergebnisse (Dateiinhalte, Kalender, Mail-Betreffs)
-das Heimnetz. Alles unterhalb der Modellschicht bleibt in jedem Fall lokal:
-Whisper, TTS, Kalender, Mail, News, Sensorik und die Embeddings.
-Details + Bedrohungsmodell: `memory/ki_system.md`, `memory/sicherheit.md`.
+- Einrichten (venv, Modelle, Stimmen): `memory/betrieb/setup.md`
+- Alltag: Backend als Dienst auf dem PC, Entwicklung: `zentrale` startet die
+  TUI, `scripts/start_local.sh` alle drei Dienste in einem Terminal —
+  `memory/betrieb/starten.md`
 
+Doku
+----
 
-Quick Start
------------
-
-```bash
-# Einmalig
-python3 -m venv venv
-venv/bin/pip install -r requirements.txt
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen3.5:9b
-ollama pull bge-m3
-venv/bin/python services/download_tts_model.py
-
-# Start (alle drei Services in einem Terminal, mit Farb-Prefixen)
-zentrale
-```
-
-`zentrale` ist ein Symlink in `~/.local/bin/` auf
-`scripts/start_local.sh` und fährt Event-Loop + Flask, Whisper-STT
-und TTS parallel hoch. `Ctrl+C` beendet alles sauber.
-
-Sensoren werden im Default-Modus per HTTP getriggert:
-
-```bash
-curl -X POST http://localhost:5000/api/sensor/button
-curl -X POST http://localhost:5000/api/sensor/motion
-```
-
-Für Tastatur-Sim (`b`/`l`/`m`): `./scripts/start_local.sh --with-keyboard`
-(läuft `core/main.py` unter `sudo`, sonst hört die `keyboard`-Lib nichts).
-
-Drei-Terminal-Variante und Env-Vars: `memory/starten.md`.
-
-Dashboard: http://localhost:5000
-
-
-Dokumentation
--------------
-
-Die komplette Doku ist modular im Ordner `memory/` abgelegt.
-Einstieg über das Inhaltsverzeichnis:
-
-→ `memory/INDEX.md`
-
-Dort liegen jeweils eigene Files für: Architektur, Event-System,
-KI-System, Tutor, Audio, Dashboard, Tastatur, API-Endpoints, Setup,
-Starten, Hardware, Deployment, Dateizugriffe und Claude-Hinweise.
-
-Doku-Änderungen gehören in das passende Thema-File, nicht in dieses
-README.
+- Für Claude: `CLAUDE.md`
+- Einstieg, Stand und Fahrplan: `memory/ueberblick.md`
+- Alles Weitere über `memory/INDEX.md`

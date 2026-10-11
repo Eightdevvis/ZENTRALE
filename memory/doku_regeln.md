@@ -1,4 +1,7 @@
-# Doku-Regeln für `memory/` — und der einmalige Umbau
+# Doku-Regeln für `memory/`
+
+**Stand 2026-10-11:** Die acht Regeln unten gelten für jede Datei unter
+`memory/`. Der einmalige Umbau vom 18.09. ist erledigt (Historie unten).
 
 **Warum (Sasha, 2026-09-18):** Die Doku ist Claudes wichtigstes Hilfsmittel —
 und sie driftet. Zwei Fälle an einem Tag: `betrieb/auto_unlock.md` behauptete
@@ -7,8 +10,9 @@ wurde zuerst geglaubt. Eine falsche Doku ist schlimmer als keine.
 
 Was die Doku leisten muss, kann der Code nicht: das **Warum** (Entscheidungen,
 Fehlschläge, Absichten). Was der Code kann — Struktur, Dateien, Routen — gehört
-nicht in Prosa, sondern in einen Bauplan mit Test (`tutor/INDEX.md`,
-`tests/test_tutor_bauplan.py`).
+nicht in Prosa, sondern in einen Bauplan mit Test (z. B.
+`system/bauplan_kern.md` + `tests/test_kern_bauplan.py`; der Tutor-Bauplan
+ist am 2026-10-09 mit ins Repo `language-tutor` gezogen).
 
 ## Die Regeln (gelten ab jetzt für jede Datei unter `memory/`)
 
@@ -34,23 +38,8 @@ nicht in Prosa, sondern in einen Bauplan mit Test (`tutor/INDEX.md`,
 8. **Beim Anfassen sofort.** Jede Datei, die man aus einem anderen Grund
    editiert, wird dabei auf diese Regeln gebracht.
 
-## Der einmalige Umbau (Hintergrund-Agent, 2026-09-18)
+## Historie
 
-Auftrag: alle `memory/**/*.md` außer `INDEX.md`-Dateien auf die Regeln 1–7
-bringen. Reihenfolge nach Nutzen: `betrieb/`, `system/`, `tutor/`, `ki/`,
-`werkzeuge/`, `maps/`, dann `ueberblick.md`, `claude_hinweise.md`.
-
-Pro Datei:
-- Stand-Block oben (aus dem, was in der Datei als aktuell erkennbar ist —
-  neuestes Datum gewinnt; bei Zweifel gegen den Code prüfen).
-- Warum/Entscheidungen behalten; Historie nach unten und eindampfen.
-- Mehrfachnennungen zwischen Dateien auflösen (eine Heimat, sonst Verweis).
-- Widersprüche mit `⚠ prüfen:` markieren, nicht auflösen durch Raten.
-- Verweise (`siehe …`, Pfade) müssen nach dem Umbau noch stimmen.
-- `INDEX.md`-Zeilen nur anpassen, wenn sich Dateinamen oder Themen ändern.
-
-Nicht anfassen: `tutor/INDEX.md`, `tutor/INDEX.md`,
-`betrieb/wachplan.md`, `system/audio_strasse.md` (frisch, schon in Form).
-
-Ergebnis: ein Commit je Bereich auf dem Arbeits-Branch, nicht gepusht —
-Claude schaut den Diff durch, dann geht es nach `main`.
+- **2026-09-18** — Einmaliger Umbau durch einen Hintergrund-Agenten: alle
+  `memory/**/*.md` außer den Indizes auf die Regeln 1–7 gebracht (ein Commit
+  je Bereich). Erledigt; seither gilt Regel 8 („beim Anfassen sofort").

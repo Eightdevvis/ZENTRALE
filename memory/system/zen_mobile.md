@@ -3,7 +3,7 @@
 **Stand 2026-10-08.** Flutter-App in `mobile/` (Android). Sasha: „sie muss
 eigentlich nicht viel können" — die ZENTRALE-KI unterwegs, statt der
 Claude-App, damit Gedächtnis und Gespräche nicht auseinanderlaufen
-(Fahrplan Punkt 3).
+(Fahrplan Punkt 3, `memory/ueberblick.md` → „Fahrplan").
 
 ## Was man sieht
 

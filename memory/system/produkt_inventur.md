@@ -62,5 +62,6 @@ Prüfstand, `bench_*`, Devtools, `zentrale_testguard`, Theme-Skripte
 4. **Recht:** Urheberrecht an KI-geschriebenem Code klären (Anwalt IT-Recht),
    Datenschutz (Stimme, Gespräche, Gesundheit), Anbieter-Bedingungen.
 5. **Repo-Wurzel aufräumen:** Bilder, Zips, Notizdateien (`trying.txt`,
-   `zentrale-cloud-plan.md`, `languagetutor.md` …) gehören Sasha — fragen,
-   wohin.
+   `zentrale-cloud-plan.md` …) gehören Sasha — fragen, wohin.
+   `languagetutor.md` und `microphone_test` liegen seit 2026-10-11 im Archiv
+   (`memory/archive/fruehe_tutor_prompts.md`).

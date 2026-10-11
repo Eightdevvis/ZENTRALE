@@ -1,6 +1,6 @@
 # Archiv — Index
 
-Code, der aus dem Live-System entfernt wurde, aber wiederverwendbar sein
+Code (und lose Prompt-/Notizdateien), der aus dem Live-System entfernt wurde, aber wiederverwendbar sein
 könnte. Jede Datei: was er tat, warum er raus ist, wann er wieder nützlich
 wäre, woran er hing — und der Code wörtlich (Pfad, Zeilen, Commit).
 Was hier steht, läuft NICHT. Reiner Müll kommt nicht hierher, der ist gelöscht.
@@ -13,3 +13,4 @@ Was hier steht, läuft NICHT. Reiner Müll kommt nicht hierher, der ist gelösch
 | [ui_hooks.md](ui_hooks.md) | DOM-Hooks des noch älteren `index.html` | war schon als veraltet markiert, gehört zur Browser-Front |
 | [beiseite_daten.md](beiseite_daten.md) | Liste der Daten-Dateien in `data/_beiseite/` | kein Code liest sie mehr; Sasha geht sie Stück für Stück durch |
 | [tui_zeit_plot.md](tui_zeit_plot.md) | `draw_time_plot` — 24h-Gitter für einen time/period-Graphen | nirgends aufgerufen, `draw_overlay` zeichnet die Graphen |
+| [fruehe_tutor_prompts.md](fruehe_tutor_prompts.md) | `languagetutor.md` + `microphone_test` — Prompt-Entwürfe des Tutors vom März 2026, wörtlich | lagen lose in der Repo-Wurzel, kein Code las sie; Tutor ist seit 09.10. eigenes Repo |

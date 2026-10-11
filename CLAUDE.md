@@ -4,7 +4,7 @@ Event-getriebenes Dashboard mit eigenem KI-Assistenten (Laptop, Linux-PC,
 Raspberry Pi; später Handy als weiterer Knoten). Die KI läuft über die
 Cloud (Claude, andere Anbieter per Einstellung) mit lokalem Ollama als
 Option. Sashas Daten bleiben auf seinen Rechnern; abgeglichen wird über
-eine Mitte (siehe Fahrplan in `memory/ki/claude_web_plan.md`). Ein
+eine Mitte (`memory/betrieb/abgleich.md`; Fahrplan: `memory/ueberblick.md`). Ein
 Gedächtnis, ein Assistent — egal von welchem Gerät.
 
 ## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
@@ -84,7 +84,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 | System | gebaut: Architektur, Events, Topologie, API, Dashboard, Tastatur | `memory/system/INDEX.md` |
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
 | Maps | die Karte: Layer, Quellen-Charta, Design-Brief | `memory/maps/INDEX.md` |
-| Tutor | eigenes Projekt in `tutor/` | `memory/tutor/INDEX.md` |
+| Tutor | seit 2026-10-09 eigene App (Repo `language-tutor`), hier nur Zeiger | `memory/tutor/INDEX.md` |
 
 Flach geblieben: `memory/ueberblick.md` (Einstieg, was ZENTRALE ist) und
 `memory/claude_hinweise.md` (Architektur-Entscheidungen für mich).
