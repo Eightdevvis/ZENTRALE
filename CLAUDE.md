@@ -63,6 +63,23 @@ habe, hat ihn nachhaltig verwirrt.
   `memory/system/topologie.md`; der Weg über die Mitte (gebaut, aktiv erst
   nach `umstellen mitte`): `memory/betrieb/abgleich.md`.
 
+## Tests — Regeln (Anlass 10.10.2026)
+
+Die volle Suite brauchte 16+ min, etwa die Hälfte davon durch eine schlechte
+Fixture-Architektur: 8 autouse-Fixtures riefen bei jedem Test
+`tmp_path_factory.mktemp()` — jeder Aufruf liest den ganzen Basetemp-Ordner,
+die Kosten wuchsen quadratisch. Das darf nicht wieder passieren:
+
+- conftest-Autouse-Fixtures nehmen `_test_ordner` + `_frisch()`, nie
+  `tmp_path`/`tmp_path_factory`; `mktemp` nie im Funktions-Scope
+  (Wächter: `tests/test_testarchitektur.py`).
+- PTY-Tests warten auf den Schirm (`warte_auf`/`warte_auf_antwort` in
+  `tests/_tui_fuzz.py`), keine festen Sleeps.
+- Parametrize nur für Fälle, die einzeln etwas bedeuten; keine Regex über
+  eingebettete Blobs; `kalender_beide` nur an Tests mit Kalender-Speicher.
+
+Details, Messwerte, alle Regeln: `memory/betrieb/tests.md`.
+
 ## Wo die Doku liegt
 
 Die gesamte Projekt-Doku ist modular nach Thema abgelegt im Ordner

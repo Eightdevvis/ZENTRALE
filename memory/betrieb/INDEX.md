@@ -15,6 +15,7 @@ hier ist „Maschine", nicht „Feature".
 | Remote-LUKS-Unlock via Dropbear im Initramfs | [auto_unlock.md](auto_unlock.md) |
 | Browser: Theme-Kopplung, Terminal-Browsing, Tor-Einordnung | [browser.md](browser.md) |
 | **Browser der KI** einrichten: Paket + Chromium nachladen, Pi, Fallen | [ki_browser.md](ki_browser.md) |
+| **Testarchitektur:** warum die Suite 16+ min brauchte (mktemp pro Test → quadratisch), Messwerte, Regeln für neue Tests, Wächter | [tests.md](tests.md) |
 
 ## Sicherheit
 
