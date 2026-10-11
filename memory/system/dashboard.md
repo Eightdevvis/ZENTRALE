@@ -769,9 +769,13 @@ schlichtes Listen-Werkzeug `l` + Projektansicht/Fokus `f`; jetzt verschmolzen un
 einheitlich **„Fokus"** genannt, Taste `f`). `l` öffnet dasselbe noch als
 **stiller Alt-Alias** (Muskelgedächtnis), taucht aber in KEINER Legende/Einladung
 mehr auf — überall steht nur noch `f · fokus`. Geteilte Logik (`core/lists.py` + `/api/lists`),
-hier in curses verbaut. Gezeichnet wird durchweg über `proj_render`: jede Zeile =
-**Titel + Erfüllungsleiste** (2 Zeilen), `▸` = reindivebar, `◆`/Bernstein-Balken =
-Fokus. Zustandsmodell `L` (`view`: `forest`/`view`/`place`/`move`/`move_new`).
+hier in curses verbaut. Seit 2026-10-11 ist **jeder Knoten ein Kasten**
+(`Fokus.kasten_render`, Rahmen `┌─┐│└┘`, 3 Zeilen, volle Breite) mit **nur dem
+Titel** drin — kein Zähler, keine Erfüllungsleiste mehr je Eintrag. `▸` =
+reindivebar, `◆` = Fokus, `★` = Projekt-Eintrag. Gewählt: Rahmen hell, Titel
+invers; sonst Rahmen dezent. **Status** zeigt allein die Bernsteinleiste oben in
+der Ebenen-Sicht. (`proj_render` mit Leisten zeichnet nur noch die Fokus-Box
+im Backup-Dashboard.) Zustandsmodell `L` (`view`: `forest`/`view`/`place`/`move`/`move_new`).
 Die **Wurzel** (`forest`) ist **zweigeteilt**: oben die geflaggten Projekte
 (`/api/projects`), Trennlinie `── listen ──`, drunter **alle Nicht-Projekt-Listen**
 — beide top-level, per **Enter reindivebar** (wie die frühere Projektansicht;
@@ -781,13 +785,13 @@ Liste (inline), `s` reindiven + gleich anhängen, `r` umbenennen (Liste ODER Ein
 inline), `d` löschen (Liste mit `j`/Enter-Nachfrage `L["confirm"]`, Eintrag direkt),
 `p` Projekt-Flag (schiebt in die obere Zone), `m` verschieben, `>` forest-weit
 einordnen, **`f` setzt den Knoten als alleinigen Fokus** (`/api/projects/focus`,
-Toggle → rendert dann allein in der rechten FOCUS-Box). `Esc`/`l` schließt.
+Toggle; als Box angezeigt nur im Backup-Dashboard, `/dashboard an`). `Esc`/`l` schließt.
 Reindivt man in eine Liste, ist es die normale Ordner-Sicht (`view`, s.u.); `Esc`
 geht eine Ebene zurück, auf der obersten zurück zur Wurzel.
 In **view** die Einträge der offenen Liste — **Ordner-Navigation statt
 aufgeklapptem Baum**: jeder Eintrag kann eigene
 Unterpunkte tragen; ein Eintrag MIT Kindern ist eine anklickbare Ordner-Zeile
-(Marker `▸`, Anzeige `(erledigt/gesamt)`), KEIN eingerückter Teilbaum. `L["path"]`
+(Marker `▸`), KEIN eingerückter Teilbaum. `L["path"]`
 ist der Drill-Pfad (Eintrags-ids) in der offenen Liste, `l_container()` löst die
 gerade offene Ebene + Breadcrumb auf, `isel` zählt nur die DIREKTEN Kinder —
 und zwar in der **Anzeige-Reihenfolge** `l_vitems()` = `liste_ordnen(…)`:
@@ -850,8 +854,10 @@ drunter), nur ist die **listen-Zone unten angedockt** (Flex-Feder `.lf-spring` i
 Projekte bleiben oben. Reindive per Klick auf eine Zeile, Aktionen (Fokus ◆ /
 Projekt ☆★ / ＋ / ✎ / ✕) als Hover-Icons.
 
-**FOCUS-Box (rechts, alle Fronten):** zwischen `lifestyle` und `outbound` steht
-eine `focus`-Box. Quelle ist der schlanke Endpoint **`/api/projects/focused`**
+**Fokus-Box (nur im Backup-Dashboard):** Die Box gibt es **nur noch im alten
+3-Spalten-Layout** (`/dashboard an`, `tui/ansichten/dashboard.py`), nicht im
+normalen Betrieb (siehe oben: Galaxie ohne Lifestyle-/focus-Box). Dort steht sie
+zwischen `lifestyle` und `outbound`. Quelle ist der schlanke Endpoint **`/api/projects/focused`**
 (`core.lists.focused_subtree`): der EINE aktuell fokussierte Knoten (per `f` im
 Listen·Fokus-Werkzeug gesetzt, `set_focus`) als Teilbaum — oder **nichts** (Box
 entfällt dann ganz). **Darstellung rekursiv:** Knoten **ohne** Unterprojekte →
@@ -859,11 +865,11 @@ entfällt dann ganz). **Darstellung rekursiv:** Knoten **ohne** Unterprojekte �
 Knoten **mit** Unterprojekten → **gerahmter Kasten** (Titel im Rahmen, Unterprojekte
 drin, KEINE eigene Leiste). Bei Platzmangel wird ab dem Punkt einfach aufgehört
 (kein Überlauf). **Reine Anzeige** (Zusammenfassung) — gesetzt/geändert wird im
-Listen·Fokus-Werkzeug. In der TUI teilt sie sich `proj_render` mit dem Werkzeug
-(BYTE-gleiche Optik, Rahmen aus `┌─┐│└┘`); die Box nimmt `outbound` Höhe ab, nur
+Listen·Fokus-Werkzeug. Gezeichnet über `proj_render` (Rahmen aus `┌─┐│└┘`;
+das Werkzeug selbst zeichnet seit 2026-10-11 eigene Kästen); die Box nimmt `outbound` Höhe ab, nur
 wenn dort ≥5 Zeilen bleiben; pollt über `Store._poll_projects` (alle 5 s).
-Monolith/Laptop (`#projects`) pollen `/api/projects/focused` (30 s) und rendern
-rekursiv `renderNode` (verschachtelte `.prj-box`/`.prj`, `overflow:hidden` clippt).
+Der frühere Monolith/Laptop (`#projects`, heute Archiv) pollte
+`/api/projects/focused` (30 s) und renderte rekursiv `renderNode` (verschachtelte `.prj-box`/`.prj`, `overflow:hidden` clippt).
 
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
 1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner

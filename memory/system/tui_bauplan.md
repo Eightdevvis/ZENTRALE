@@ -66,7 +66,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kalender_phasen.py` | Kasten „Rhythmus" (Taste R): Liste der Phasen, Formular anlegen/ab jetzt ändern, nur an einem Tag, Zeitraum, löschen → Backend-Aufrufe | — |
 | `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen) | `K["w"]` |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |
-| `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug, Bernsteinleiste, `proj_render` | `L` |
+| `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug (Knoten als Kästen, `kasten_render`), Bernsteinleiste, `proj_render` (Fokus-Box, nur im Backup-Dashboard `/dashboard an`) | `L` |
 | `ansichten/notizen.py` | `Notizen`: Notiz-Werkzeug | `NOTE` |
 | `ansichten/klavier.py` | `Klavier` + Klaviatur-Geometrie (`piano_*`) | `PIANO` |
 | `ansichten/karte.py` | `Karte`: Weltkarte, Overlays, Länder-Fokus | `M` |

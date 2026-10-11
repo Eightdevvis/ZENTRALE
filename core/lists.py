@@ -687,7 +687,8 @@ def get_focus():
 
 def focused_subtree():
     """Der aktuell fokussierte Knoten (Liste ODER Eintrag, egal ob project-
-    geflaggt) als Anzeige-Teilbaum für die FOCUS-Box — oder None. Gezeigt wird
+    geflaggt) als Anzeige-Teilbaum für die Fokus-Box (die gibt es in der TUI
+    nur im Backup-Dashboard, /dashboard an) — oder None. Gezeigt wird
     NUR EINE Ebene tief: der Knoten selbst + seine DIREKTEN Unterpunkte; deren
     eigene Unterpunkte sind EINGEKLAPPT (nur als `branch: true` markiert, damit
     die Front ein ▸ setzen kann, plus aggregierter Fortschritt). Form:

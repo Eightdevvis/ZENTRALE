@@ -199,7 +199,8 @@ class Store:
             pass
 
     def _poll_projects(self):
-        """NUR den fokussierten Projekt-Teilbaum ziehen (FOCUS-Box). Kein
+        """NUR den fokussierten Projekt-Teilbaum ziehen (für die Fokus-Box, die
+        es nur im Backup-Dashboard gibt, /dashboard an). Kein
         Fallback auf alle Projekte — die Gesamtübersicht lebt allein in der
         Projektansicht (Taste 'f', holt /api/projects selbst). Als Liste
         gehalten ([node] oder []), damit die Box-Render-Schleife unverändert
@@ -298,7 +299,7 @@ class Store:
 
     def projects_snapshot(self):
         """Der fokussierte Projekt-Teilbaum als Liste ([node] oder []) für die
-        FOCUS-Box — NICHT alle Projekte (die Übersicht lebt in der Projektansicht)."""
+        Fokus-Box des Backup-Dashboards (/dashboard an) — NICHT alle Projekte (die Übersicht lebt in der Projektansicht)."""
         with self._lock:
             return [dict(p) for p in self.projects if isinstance(p, dict)]
 

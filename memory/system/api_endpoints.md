@@ -181,10 +181,11 @@ die Front einfach ab. Reine Anzeige; markiert wird im **Listen·Fokus-Werkzeug**
 (TUI Taste `l`/`f` → `p` auf einer Liste/einem Eintrag in der Wurzel bzw. in der
 view-Ebene; geflaggte tragen ein `◆`).
 
-**Fokus (FOCUS-Box):** genau EIN Knoten (Liste ODER Eintrag) kann als alleiniger
+**Fokus:** genau EIN Knoten (Liste ODER Eintrag) kann als alleiniger
 *Fokus* markiert sein (`focus: bool`, `set_focus`, höchstens einer). Ist ein Fokus
-gesetzt, zeigt die rechte **`focus`-Box** in allen Fronten NUR ihn (Quelle
-`/api/projects/focused`); sonst ist die Box leer. Gesetzt wird per `f` im
+gesetzt, liefert `/api/projects/focused` NUR ihn. Als **Box** angezeigt wird er
+nur noch im alten 3-Spalten-Dashboard der TUI (Backup, `/dashboard an`); die
+normale Oberfläche hat keine Fokus-Box mehr. Gesetzt wird per `f` im
 Listen·Fokus-Werkzeug (Toggle).
 
 | Endpoint                              | Methode | Beschreibung                          |

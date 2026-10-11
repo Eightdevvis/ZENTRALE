@@ -77,3 +77,50 @@ def test_steine_werfen_nie():
         cols = bernstein_steine(*args)
         assert isinstance(cols, list)
         assert all(c in ("L", "U", " ") for c in cols)
+
+
+# ── Einträge als Kästen (seit 2026-10-11) ───────────────────────────
+# Jeder Eintrag ist nur noch ein Kasten mit dem Titel; Status zeigt allein
+# der Bernstein oben, keine pinke Leiste und kein Zähler je Eintrag.
+
+def _schirm(h=24, w=40):
+    """Fokus mit einem Schein-Bildschirm (Zeilen als Zeichenlisten)."""
+    import types
+    from tui.ansichten.fokus import Fokus
+    gitter = [[" "] * w for _ in range(h)]
+
+    def setzen(y, x, text, attr=0):
+        for i, c in enumerate(str(text)):
+            if 0 <= y < h and 0 <= x + i < w:
+                gitter[y][x + i] = c
+
+    C = {k: 0 for k in ("bright", "faint", "dim", "acc", "amber", "amberhi",
+                        "amberdk", "graph", "warn")}
+    z = types.SimpleNamespace(
+        C=C, safe_addstr=setzen, draw_box=lambda *a, **k: None,
+        addclip=lambda y, x, t, mw, attr=0, strike=False: setzen(y, x, str(t)[:max(0, mw)]),
+        PIX={"voll": False, "pairs": {}}, PIX_MODUS="off", pix_attr=lambda *a: 0)
+    f = Fokus.__new__(Fokus)
+    f.z = z
+    return f, gitter
+
+
+def test_eintrag_ist_kasten_mit_titel_ohne_leiste():
+    f, gitter = _schirm()
+    f.L = {"view": "view", "path": [], "showdone": False, "isel": 0,
+           "adding": False, "msg": "", "imode": "add", "input": "",
+           "def": {"id": "l1", "name": "einkauf", "items": [
+               _blatt(1), _blatt(2, done=True),
+               _ordner(3, [_blatt(4), _blatt(5)])]}}
+    f.draw_list_tool(0, 0, 24, 40)
+    zeilen = ["".join(r) for r in gitter]
+    titel = [i for i, z in enumerate(zeilen) if "▸ o3" in z or " p1 " in z]
+    assert len(titel) == 2                          # beide offenen Einträge da
+    for i in titel:                                 # je ein 3-Zeilen-Kasten
+        assert zeilen[i - 1].strip().startswith("┌") and zeilen[i - 1].strip().endswith("┐")
+        assert zeilen[i].strip().startswith("│") and zeilen[i].strip().endswith("│")
+        assert zeilen[i + 1].strip().startswith("└")
+        assert "/" not in zeilen[i]                 # kein Zähler im Kasten
+    unter_bernstein = zeilen[titel[0] - 1:]
+    assert not any("█" in z or "░" in z for z in unter_bernstein)  # keine Leiste
+    assert "1/4" in "".join(zeilen[:titel[0]])      # Status nur im Bernstein oben

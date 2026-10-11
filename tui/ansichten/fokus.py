@@ -46,8 +46,9 @@ def l_toggle_msg(it):
 class Fokus:
     """Das Listen-/Fokus-Werkzeug (Mitte, Taste 'f'): oben die Projekte,
     darunter die anderen Listen, reindiven wie Ordner, abhaken, umbenennen,
-    verschieben, einordnen, fokussieren. proj_render zeichnet auch die
-    focus-Box des alten Dashboards. Zustand in self.L (auch z.L)."""
+    verschieben, einordnen, fokussieren. Knoten = Kästen (kasten_render);
+    proj_render zeichnet die Fokus-Box, die es nur noch im alten
+    3-Spalten-Dashboard gibt (Backup, /dashboard an). Zustand in self.L (auch z.L)."""
 
     def __init__(self, z):
         self.z = z
@@ -71,14 +72,14 @@ class Fokus:
         # der Drill-Pfad (Eintrags-ids) innerhalb der offenen Liste def; isel zählt
         # die DIREKTEN Kinder der gerade offenen Ebene.
         # ── Listen-/Fokus-Werkzeug (füllt die MITTE-Box, Taste 'f'/'l') ─────
-        # EIN gemergtes Werkzeug: Look + Reindive-Navigation der früheren
-        # Projektansicht (verschachtelte Kästen + Erfüllungsleisten, proj_render)
-        # PLUS die volle Editier-Macht des alten Listen-Werkzeugs. Die Wurzel
+        # EIN gemergtes Werkzeug: Reindive-Navigation der früheren
+        # Projektansicht, jeder Knoten ein Kasten nur mit Titel (kasten_render;
+        # Status allein im Bernstein der Ebene) PLUS die volle Editier-Macht des alten Listen-Werkzeugs. Die Wurzel
         # ("forest") ist ZWEIGETEILT: oben die geflaggten Projekte (/api/projects),
         # eine Trennlinie, drunter alle anderen (Nicht-Projekt-)Listen — beide
         # top-level, per enter reindivebar. Ab da ist es die normale Ordner-Sicht
         # einer Liste ("view", def+path). 'f'/space setzt JEDEN Knoten als
-        # alleinigen Fokus (rendert dann allein in der rechten FOCUS-Box).
+        # alleinigen Fokus (als Box angezeigt nur im Backup-Dashboard, /dashboard an).
         #   view : "forest" (zwei-Zonen-Wurzel) | "view" (in einer Liste) |
         #          "new" (Liste anlegen/umbenennen) | "place"/"move"/"move_new"
         #   proots : Projekt-Roots als Deskriptoren [{lid,iid}] (iid None = Liste)
@@ -145,8 +146,8 @@ class Fokus:
 
     def l_desc_view(self, desc):
         """Flacher Anzeige-Knoten {name,done,total,branch,focus,project,whole,
-        lid,iid} für proj_render (KEINE children → als eingeklappte Zeile mit
-        Leiste gezeichnet, ▸ wenn er Unterpunkte hätte)."""
+        lid,iid} für kasten_render (KEINE children → ein Kasten mit nur dem
+        Titel, ▸ wenn er Unterpunkte hat; done/total zeichnet dort keiner)."""
         l_realnode = self.l_realnode
         node = l_realnode(desc)
         if node is None:
@@ -757,12 +758,13 @@ class Fokus:
 
     def draw_list_tool(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn das Listen-/Fokus-Werkzeug Fokus hat.
-        Gezeichnet wird durchweg im FOCUS-Look (proj_render): jede Zeile =
-        Titel + Erfüllungsleiste (2 Zeilen), ▸ = reindivebar, ◆ = Fokus."""
+        Jeder Knoten ist ein Kasten (kasten_render, 3 Zeilen) mit nur dem
+        Titel drin, ▸ = reindivebar, ◆ = Fokus. Status zeigt allein die
+        Bernsteinleiste oben in der Ebenen-Sicht."""
         C, L, addclip, draw_box = self.z.C, self.L, self.z.addclip, self.z.draw_box
         l_container, l_forest_rows = self.l_container, self.l_forest_rows
         l_forest_targets, l_move_targets = self.l_forest_targets, self.l_move_targets
-        l_vitems, proj_render = self.l_vitems, self.proj_render
+        l_vitems, kasten_render = self.l_vitems, self.kasten_render
         safe_addstr = self.z.safe_addstr
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2          # Hinweiszeile unten in der Box
@@ -770,11 +772,11 @@ class Fokus:
             return
 
         def rows_render(nodes, sel_idx, y0, y_max, mark_focus=True):
-            """Flache proj_render-Knoten (2 Zeilen je Eintrag) mit Cursor-Fenster
+            """Flache Knoten als Kästen (3 Zeilen je Eintrag) mit Cursor-Fenster
             zeichnen. Liefert (nächste_y, wieviele_unten_abgeschnitten)."""
             if not nodes:
                 return y0, 0
-            per = 2
+            per = 3
             avail = max(1, (y_max - y0 + 1) // per)
             start = (max(0, min(sel_idx - avail + 1, len(nodes) - avail))
                      if len(nodes) > avail else 0)
@@ -783,8 +785,8 @@ class Fokus:
             for n in nodes[start:start + avail]:
                 if y > y_max:
                     break
-                y = proj_render(n, ix, y, iw, y_max, sel_node=sel_node,
-                                mark_focus=mark_focus)
+                y = kasten_render(n, ix, y, iw, y_max, sel=(n is sel_node),
+                                  mark_focus=mark_focus)
             rest = len(nodes) - (start + avail)
             return y, max(0, rest)
 
@@ -813,19 +815,17 @@ class Fokus:
                     leer = "noch leer — 'a' hängt was an"
                 addclip(y0, ix, leer, iw, C["faint"])
             else:
-                # Jeden Eintrag im FOCUS-Look: Titel + Leiste (proj_render).
-                # Blatt = eigene done/1-Leiste, Ordner = Blätter-Fortschritt.
+                # Jeder Eintrag ein Kasten mit nur dem Titel (kasten_render);
+                # Fortschritt steht allein im Bernstein oben, nicht je Eintrag.
                 nodes = []
                 for it in vis:
                     kids = it.get("items")
-                    folder = isinstance(kids, list) and bool(kids)
-                    d, t = l_count(kids) if folder else (1 if it.get("done") else 0, 1)
                     nm = str(it.get("text") or "")
                     if it.get("project"):             # als Projekt markiert → ★
                         nm += " ★"
-                    nodes.append({"name": nm, "branch": folder,
-                                  "focus": bool(it.get("focus")),
-                                  "done": d, "total": t})
+                    nodes.append({"name": nm,
+                                  "branch": isinstance(kids, list) and bool(kids),
+                                  "focus": bool(it.get("focus"))})
                 _, rest = rows_render(nodes, L["isel"], y0, list_bottom)
                 if rest:
                     safe_addstr(list_bottom, ix + iw - 5, "+%d" % rest, C["faint"])
@@ -909,7 +909,7 @@ class Fokus:
                 addclip(by + 3, ix, "noch nichts — 'n' legt eine liste an",
                         iw, C["faint"])
             else:
-                # Token-Stream: Zonen-Label (1 Zeile) + Knoten (2 Zeilen). Ein
+                # Token-Stream: Zonen-Label (1 Zeile) + Kasten (3 Zeilen). Ein
                 # zeilenbasiertes Fenster (auf Token-Grenze eingerastet) hält den
                 # Cursor sichtbar, auch wenn beide Zonen zusammen überlaufen.
                 y0 = by + 2
@@ -922,7 +922,7 @@ class Fokus:
                 seq.append(("lbl", "── listen ──" if ndiv else "listen"))
                 for j in range(ndiv, len(rows)):
                     seq.append(("node", rows[j], j))
-                heights = [2 if t[0] == "node" else 1 for t in seq]
+                heights = [3 if t[0] == "node" else 1 for t in seq]
                 starts, acc = [], 0
                 for h in heights:
                     starts.append(acc); acc += h
@@ -931,26 +931,24 @@ class Fokus:
                                  if t[0] == "node" and t[2] == L["fsel"]), 0)
                 top_line = 0
                 if total_lines > Hh:
-                    target = max(0, min(sel_line - (Hh - 2), total_lines - Hh))
-                    for s in starts:                    # auf Token-Grenze einrasten
-                        if s <= target:
-                            top_line = s
-                        else:
-                            break
+                    target = max(0, min(sel_line - (Hh - 3), total_lines - Hh))
+                    # auf Token-Grenze einrasten — AUFrunden, sonst rutscht
+                    # der gewählte Kasten unten halb aus dem Fenster
+                    top_line = next((s for s in starts if s >= target), target)
                 sel_node = rows[L["fsel"]] if 0 <= L["fsel"] < len(rows) else None
                 for k, t in enumerate(seq):
                     ln = starts[k]
                     if ln + heights[k] - 1 < top_line:  # ganz oberhalb → weg
                         continue
                     yy = y0 + (ln - top_line)
-                    if yy > grid_bottom:
+                    if yy + heights[k] - 1 > grid_bottom:   # nur ganze Kästen
                         break
                     if t[0] == "lbl":
                         if t[1]:
                             addclip(yy, ix, t[1], iw, C["faint"])
                     else:
-                        proj_render(t[1], ix, yy, iw, grid_bottom,
-                                    sel_node=sel_node, mark_focus=True)
+                        kasten_render(t[1], ix, yy, iw, grid_bottom,
+                                      sel=(t[1] is sel_node), mark_focus=True)
                 if total_lines > top_line + Hh:
                     safe_addstr(grid_bottom, ix + iw - 5, "+", C["faint"])
             if L["adding"]:                        # neue Liste / umbenennen tippen
@@ -1023,10 +1021,36 @@ class Fokus:
         if sel:
             safe_addstr(y, bx + 1, "›", C["bright"])
 
+    def kasten_render(self, node, x, y, w, y_max, sel=False, mark_focus=False):
+        """EIN Knoten des Fokus-Werkzeugs als Kasten (3 Zeilen, Breite w):
+        Rahmen ┌─┐│└─┘, innen nur der Titel — kein Zähler, keine Leiste.
+        ▸ = reindivebar, ◆ = Fokus (mark_focus). Gewählt (sel): Rahmen hell,
+        Titel invers; sonst Rahmen dezent. Was unter y_max fiele, entfällt.
+        Liefert die nächste freie y-Zeile."""
+        C, addclip, safe_addstr = self.z.C, self.z.addclip, self.z.safe_addstr
+        if y > y_max or w < 5:
+            return y_max + 1
+        name = str(node.get("name") or "")
+        if node.get("branch"):                  # hat Unterpunkte → reindivebar
+            name = "▸ " + name
+        if mark_focus and node.get("focus"):
+            name += " ◆"
+        rand = C["bright"] if sel else C["faint"]
+        tattr = (C["bright"] | curses.A_REVERSE) if sel else C["bright"]
+        inner = w - 2
+        safe_addstr(y, x, "┌" + "─" * inner + "┐", rand)
+        if y + 1 <= y_max:                      # Titelzeile: │ titel │
+            safe_addstr(y + 1, x, "│" + " " * inner + "│", rand)
+            addclip(y + 1, x + 2, name, inner - 2, tattr)
+        if y + 2 <= y_max:
+            safe_addstr(y + 2, x, "└" + "─" * inner + "┘", rand)
+        return y + 3
+
     def proj_render(self, node, x, y, w, y_max, sel_node=None, mark_focus=False):
-        """EINE Render-Routine für die verschachtelte Projekt-Anzeige — geteilt
-        von der FOCUS-Box (rechts) und der Projektansicht (Mitte), damit beide
-        BYTE-GLEICH aussehen. Blatt-Projekt = Titel + Erfüllungsleiste (2 Zeilen);
+        """Render-Routine für die verschachtelte Projekt-Anzeige der Fokus-Box —
+        die gibt es nur noch im alten 3-Spalten-Dashboard (Backup, /dashboard an,
+        tui/ansichten/dashboard.py); das Listen-Werkzeug zeichnet seit 2026-10-11
+        Kästen (kasten_render). Blatt-Projekt = Titel + Erfüllungsleiste (2 Zeilen);
         Knoten mit Unterprojekten = dünner Rahmen (Titel im oberen Rand) um die
         rekursiv gezeichneten Kinder. `sel_node` (Objekt-Identität) wird invers
         hervorgehoben (Cursor der Projektansicht); `mark_focus` hängt an den
