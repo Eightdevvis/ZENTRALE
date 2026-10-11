@@ -151,8 +151,23 @@ def args_pruefen(aktion: dict, args: dict, ablehnen) -> dict:
             except ValueError:
                 ablehnen(feld_x(aktion, name).get("ungueltig") or "DATUM-UNGUELTIG",
                          f"{name} {wert!r} ist kein Datum (YYYY-MM-DD)")
+        _rest_pruefen(f, name, wert, code, ablehnen)
         sauber[name] = wert.strip() if isinstance(wert, str) else wert
     return sauber
+
+
+def _rest_pruefen(f: dict, name: str, wert, code: str, ablehnen) -> None:
+    """Alles, was JSON Schema sonst noch sagt (pattern, minLength, items,
+    minItems, minimum …): seit 2026-10-11, damit eine angebundene Quelle
+    (Anbindungs-Beschreibung) ihre Auflagen nicht nur der KI sagt, sondern
+    erzwingt. Type und enum prüft die Schleife davor (mit eigenen Meldungen)."""
+    rest = {k: v for k, v in f.items() if k not in ("type", "enum", "format", X)}
+    if not rest:
+        return
+    import jsonschema
+    fehler = jsonschema.exceptions.best_match(jsonschema.Draft202012Validator(rest).iter_errors(wert))
+    if fehler is not None:
+        ablehnen(code, f"{name}: {fehler.message[:200]}")
 
 
 # ── Zuschnitt je Modellprofil ──────────────────────────────────────────

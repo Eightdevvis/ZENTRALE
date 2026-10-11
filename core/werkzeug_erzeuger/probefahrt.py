@@ -311,3 +311,14 @@ def bericht(zeilen: list, ausfuehrlich: bool = False) -> str:
     ok = sum(1 for z in zeilen if z["ok"])
     out.append(f"{ok} von {len(zeilen)} in Ordnung")
     return "\n".join(out)
+
+
+def wsgi_sender(client):
+    """Ein HTTP-Absender, der statt des Netzes einen WSGI-Test-Client (Flask
+    `app.test_client()`) benutzt — für Tests und für „Probefahrt gegen den
+    eigenen Kalender“ ohne laufenden Server. Passt zu HttpTransport(sender=…)."""
+    def senden(methode, url, kopf, body, zeitlimit):
+        pfad = url[url.index("/", url.index("//") + 2):]
+        r = client.open(pfad, method=methode, data=body, headers=kopf)
+        return r.status_code, r.get_data()
+    return senden

@@ -1,0 +1,309 @@
+{
+  "format": "zentrale-anbindung/1",
+  "name": "kalender_kern",
+  "titel": "Eigener Kalender über die HTTP-Schnittstelle",
+  "beschreibung": "Probe der Anbindungs-Pipe am eigenen Kalender (/api/calendar): dieselbe Sorte Beschreibung, mit der sich ein fremdes Programm anbinden lässt. Die handgeschriebenen Kalender-Werkzeuge bleiben in Betrieb; diese Anbindung ist aus und dient der Probefahrt und dem Vergleich.",
+  "praefix": "KK",
+  "bereich": "kalender",
+  "transport": {"art": "http", "basis": "http://127.0.0.1:5000", "zeitlimit": 15},
+  "nachlesen": {
+    "termin": {
+      "aufruf": {"methode": "GET", "pfad": "/api/calendar", "abfrage": {"view": "week", "ref": "{kennung.day}"}},
+      "teile": ["day", "label"],
+      "eintraege": "/days/{kennung.day}",
+      "wo": {"label": "{kennung.label}"},
+      "zeile": "Termin „{e.label}“ am {kennung.day} {e.time}"
+    },
+    "routine": {
+      "aufruf": {"methode": "GET", "pfad": "/api/calendar", "abfrage": {"view": "month", "ref": "{kennung.day}"}},
+      "teile": ["day", "label"],
+      "eintraege": "/days/*",
+      "wo": {"label": "{kennung.label}", "recurring": "true"},
+      "zeile": "Routine „{e.label}“ ab {kennung.day} {e.time}"
+    }
+  },
+  "fehler": [
+    {
+      "wenn": {"status": 400, "text_enthaelt": "nicht gefunden"},
+      "code": "NICHT-GEFUNDEN",
+      "grund": "Dazu gibt es im Kalender nichts."
+    },
+    {"wenn": {"status": 409}, "code": "GESPERRT", "grund_aus": "/error"}
+  ],
+  "aktionen": [
+    {
+      "name": "kk_read_day",
+      "description": "Liest die Einträge eines Tages (Termine und Wiederholungen) mit Kennung.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"day": {"type": "string", "format": "date", "description": "Tag, YYYY-MM-DD."}},
+        "required": ["day"]
+      },
+      "x-zentrale": {"art": "lesen"},
+      "aufruf": {"methode": "GET", "pfad": "/api/calendar", "abfrage": {"view": "week", "ref": "{day}"}},
+      "ausgabe": {
+        "eintraege": "/days/{day}",
+        "kopf": "Einträge am {day}:",
+        "zeile": "- {e.time|ganztägig} {e.label} {e.ort|} (Kennung: {day}|{e.label})",
+        "leer": "Am {day} ist nichts eingetragen."
+      },
+      "probe": {"vorher": "kk_add_entry", "erwartet": "Probe-Termin", "argumente": {"day": "2026-11-03"}}
+    },
+    {
+      "name": "kk_add_entry",
+      "description": "Trägt einen Einmal-Termin ein. Ende und Ort nur angeben, wenn sie bekannt sind.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "day": {"type": "string", "format": "date", "description": "Tag, YYYY-MM-DD.", "x-zentrale": {"wort": "Tag"}},
+          "label": {
+            "type": "string",
+            "description": "Kurzer Titel, ohne Ort.",
+            "x-zentrale": {"wort": "Titel", "fehlt": "TITEL-LEER"}
+          },
+          "time": {
+            "type": "string",
+            "description": "Beginn HH:MM (24h, zweistellig, z. B. 09:00); weglassen, wenn ganztägig.",
+            "x-zentrale": {"wort": "um"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ende": {
+            "type": "string",
+            "description": "Ende HH:MM (24h, zweistellig, z. B. 09:00), wenn bekannt.",
+            "x-zentrale": {"wort": "bis"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ort": {"type": "string", "description": "Ort, wenn bekannt.", "x-zentrale": {"wort": "Ort"}}
+        },
+        "required": ["day", "label"]
+      },
+      "x-zentrale": {
+        "art": "anlegen",
+        "alltag": "Termine eintragen",
+        "worte": ["Termin eingetragen", "Termin eintragen"],
+        "frage": "einen Termin eintragen"
+      },
+      "aufruf": {
+        "methode": "POST",
+        "pfad": "/api/calendar/entry",
+        "body": {"day": "{day}", "label": "{label}", "time": "{time}", "ende": "{ende}", "ort": "{ort}"}
+      },
+      "kennung_aus": {"teile": ["day", "label"]},
+      "nachlesen": "termin",
+      "vergleich": {"label": {"norm": "text"}, "time": {"norm": "uhrzeit"}, "ende": {"norm": "uhrzeit"}, "ort": {"norm": "text"}},
+      "zurueck": {
+        "loeschen": {
+          "methode": "DELETE",
+          "pfad": "/api/calendar/eintrag",
+          "body": {"day": "{kennung.day}", "label": "{kennung.label}"}
+        }
+      },
+      "probe": {"argumente": {"day": "2026-11-03", "label": "Probe-Termin", "time": "09:00", "ende": "09:45", "ort": "Praxis"}}
+    },
+    {
+      "name": "kk_edit_entry",
+      "description": "Ändert Beginn, Ende oder Ort eines Einmal-Termins (Kennung aus kk_read_day). Nur genannte Felder ändern sich.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kennung": {"type": "string", "description": "Kennung aus kk_read_day: Tag|Titel.", "x-zentrale": {"ziel": true}},
+          "time": {
+            "type": "string",
+            "description": "Neuer Beginn HH:MM (zweistellig, z. B. 09:00).",
+            "x-zentrale": {"wort": "um"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ende": {
+            "type": "string",
+            "description": "Neues Ende HH:MM (zweistellig, z. B. 09:00).",
+            "x-zentrale": {"wort": "bis"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ort": {"type": "string", "description": "Neuer Ort.", "x-zentrale": {"wort": "Ort"}}
+        },
+        "required": ["kennung"]
+      },
+      "x-zentrale": {
+        "art": "aendern",
+        "alltag": "Termine ändern",
+        "worte": ["Termin geändert", "Termin ändern"],
+        "frage": "den Termin ändern"
+      },
+      "aufruf": {
+        "methode": "PUT",
+        "pfad": "/api/calendar/eintrag",
+        "body": {
+          "day": "{kennung.day}",
+          "label": "{kennung.label}",
+          "new": {"time": "{time}", "ende": "{ende}", "ort": "{ort}"}
+        }
+      },
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "termin",
+      "vergleich": {"time": {"norm": "uhrzeit"}, "ende": {"norm": "uhrzeit"}, "ort": {"norm": "text"}},
+      "zurueck": {
+        "schreiben": {
+          "methode": "PUT",
+          "pfad": "/api/calendar/eintrag",
+          "body": {
+            "day": "{kennung.day}",
+            "label": "{kennung.label}",
+            "new": {"time": "{alt.time|}", "ende": "{alt.ende|}", "ort": "{alt.ort|}"}
+          }
+        }
+      },
+      "probe": {"vorher": "kk_add_entry", "argumente": {"ende": "10:30", "ort": "Praxis Nord"}}
+    },
+    {
+      "name": "kk_delete_entry",
+      "description": "Löscht genau einen Einmal-Termin (Kennung aus kk_read_day).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kennung": {"type": "string", "description": "Kennung aus kk_read_day: Tag|Titel.", "x-zentrale": {"ziel": true}}
+        },
+        "required": ["kennung"]
+      },
+      "x-zentrale": {
+        "art": "loeschen",
+        "alltag": "Termine löschen",
+        "worte": ["Termin gelöscht", "Termin löschen"],
+        "frage": "den Termin löschen"
+      },
+      "aufruf": {
+        "methode": "DELETE",
+        "pfad": "/api/calendar/eintrag",
+        "body": {"day": "{kennung.day}", "label": "{kennung.label}"}
+      },
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "termin",
+      "zurueck": {
+        "wiederherstellen": {
+          "methode": "POST",
+          "pfad": "/api/calendar/entry",
+          "body": {
+            "day": "{kennung.day}",
+            "label": "{kennung.label}",
+            "time": "{alt.time}",
+            "ende": "{alt.ende}",
+            "ort": "{alt.ort}"
+          }
+        }
+      },
+      "probe": {"vorher": "kk_add_entry", "argumente": {}}
+    },
+    {
+      "name": "kk_add_routine",
+      "description": "Trägt eine wöchentliche Wiederholung mit Zeitraum von/bis ein. Fehlt das Ende, nachfragen statt eins anzunehmen.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Kurzer Titel, ohne Ort.",
+            "x-zentrale": {"wort": "Titel", "fehlt": "TITEL-LEER"}
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "Erster Tag der Serie, YYYY-MM-DD.",
+            "x-zentrale": {"wort": "ab", "fehlt": "ZEITRAUM-FEHLT"}
+          },
+          "bis": {
+            "type": "string",
+            "format": "date",
+            "description": "Letzter Tag der Serie, YYYY-MM-DD.",
+            "x-zentrale": {"wort": "bis", "fehlt": "ZEITRAUM-FEHLT"}
+          },
+          "wochentage": {
+            "type": "array",
+            "items": {"enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]},
+            "minItems": 1,
+            "description": "Wochentage der Wiederholung.",
+            "x-zentrale": {"wort": "an"}
+          },
+          "time": {
+            "type": "string",
+            "description": "Beginn HH:MM (24h, zweistellig, z. B. 09:00).",
+            "x-zentrale": {"wort": "um"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ende": {
+            "type": "string",
+            "description": "Ende HH:MM (24h, zweistellig, z. B. 09:00).",
+            "x-zentrale": {"wort": "bis Uhrzeit"},
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "ort": {"type": "string", "description": "Ort, wenn bekannt.", "x-zentrale": {"wort": "Ort"}}
+        },
+        "required": ["label", "day", "bis", "wochentage"]
+      },
+      "x-zentrale": {
+        "art": "anlegen",
+        "alltag": "Routinen eintragen",
+        "worte": ["Routine eingetragen", "Routine eintragen"],
+        "frage": "eine Routine eintragen"
+      },
+      "aufruf": {
+        "methode": "POST",
+        "pfad": "/api/calendar/routine",
+        "body": {
+          "label": "{label}",
+          "freq": "w",
+          "intervall": 1,
+          "seit": "{day}",
+          "bis": "{bis}",
+          "wochentage": "{wochentage}",
+          "time": "{time}",
+          "ende": "{ende}",
+          "ort": "{ort}"
+        }
+      },
+      "kennung_aus": {"teile": ["day", "label"]},
+      "nachlesen": "routine",
+      "vergleich": {
+        "label": {"norm": "text"},
+        "time": {"norm": "uhrzeit"},
+        "bis": {"norm": "datum", "feld": "/rrule", "muster": "UNTIL=(\\d{8})"}
+      },
+      "zurueck": {
+        "loeschen": {
+          "methode": "DELETE",
+          "pfad": "/api/calendar/routine",
+          "body": {"label": "{kennung.label}", "day": "{kennung.day}"}
+        }
+      },
+      "fehler": [{"wenn": {"antwort": "/deleted", "gleich": 0}, "code": "NICHT-GEFUNDEN", "grund": "Keine solche Routine."}],
+      "probe": {
+        "argumente": {"label": "Probe-Routine", "day": "2026-11-03", "bis": "2026-12-01", "wochentage": ["TU"], "time": "18:00"}
+      }
+    },
+    {
+      "name": "kk_delete_routine",
+      "description": "Löscht eine ganze Wiederholung mit allen Vorkommen (Kennung: Tag|Titel eines Vorkommens). Lässt sich nicht zurückholen.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kennung": {"type": "string", "description": "Kennung: Tag eines Vorkommens|Titel.", "x-zentrale": {"ziel": true}}
+        },
+        "required": ["kennung"]
+      },
+      "x-zentrale": {
+        "art": "loeschen",
+        "alltag": "Routinen löschen",
+        "worte": ["Routine gelöscht", "Routine löschen"],
+        "frage": "die ganze Routine löschen"
+      },
+      "aufruf": {
+        "methode": "DELETE",
+        "pfad": "/api/calendar/routine",
+        "body": {"label": "{kennung.label}", "day": "{kennung.day}"}
+      },
+      "kennung_aus": {"argument": "kennung"},
+      "nachlesen": "routine",
+      "zurueck": {"keins": true},
+      "fehler": [{"wenn": {"antwort": "/deleted", "gleich": 0}, "code": "NICHT-GEFUNDEN", "grund": "Keine solche Routine."}],
+      "probe": {"vorher": "kk_add_routine", "argumente": {}}
+    }
+  ]
+}
