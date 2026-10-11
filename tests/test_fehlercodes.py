@@ -19,6 +19,7 @@ import browser_sitzung
 import fehlercodes
 import gedaechtnis
 import input_dateien
+import ki_ablage_adapter
 import ki_pdf_word
 import ki_werkzeuge
 import skills
@@ -135,7 +136,10 @@ def _vorbereiten():
     pdf = ki_werkzeuge._verteilen("create_pdf", {"titel": "P", "inhalt": "# P\n\nText."})
     docx = ki_werkzeuge._verteilen("create_docx", {"titel": "B", "inhalt": "# B\n\nLiebe Frau Meier,"})
     ids = [r.split("(id ", 1)[1].split(",", 1)[0].split(")", 1)[0] for r in (doc, pdf, docx)]
-    return dict(zip(("doc", "pdf", "docx"), ids))
+    # Ein Dokument im Papierkorb für restore_document (2026-10-11).
+    weg = ablage.anlegen("Weg", "x", "text")["id"]
+    ablage.papierkorb(weg, True, grund="von Sasha entfernt")
+    return dict(zip(("doc", "pdf", "docx", "weg"), ids + [weg]))
 
 
 def _faelle(ids):
@@ -170,6 +174,14 @@ def _faelle(ids):
          [(ki_pdf_word, "_docx_beleg", lambda *a, **k: None)]),
         ("edit_docx", {"quelle": ids["docx"], "ersetzen": [{"alt": "Frau Meier", "neu": "Herr K"}]},
          [(ki_pdf_word, "_docx_beleg", lambda *a, **k: None)]),
+        # Ablage ersetzen/Papierkorb (2026-10-11): nachgelesen stimmt es nicht.
+        ("replace_document", {"id": ids["doc"], "inhalt": "neu"},
+         [(ki_ablage_adapter, "_lesbar", lambda neu, inhalt: False)]),
+        ("trash_document", {"id": ids["doc"]},
+         [(ki_ablage_adapter.AblageAdapter, "nachlesen", lambda self, k: {"id": k})]),
+        ("restore_document", {"id": ids["weg"]},
+         [(ki_ablage_adapter.AblageAdapter, "nachlesen",
+           lambda self, k: {"id": k, "papierkorb": "2026-10-11T00:00:00+00:00"})]),
         # Browser-Bild (2026-10-09): eine offene Seite als Attrappe.
         ("browser_screenshot", {},
          [(browser_sitzung, "offen", lambda gid: True),

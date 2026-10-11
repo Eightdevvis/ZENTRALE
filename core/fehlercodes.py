@@ -183,6 +183,26 @@ CODES = {
     "A-DATEI-NICHT-LESBAR": (
         "Die Datei aus dem Programm-Lauf fehlt, ist zu groß oder liegt außerhalb des Arbeitsordners.",
         "Den Dateinamen aus dem Lauf-Ergebnis nehmen."),
+    # Ersetzen und Papierkorb (2026-10-11, core/ki_ablage_adapter.py)
+    "A-DATEI-ERSETZEN": (
+        "Eine PDF-, Word- oder Excel-Datei bekommt keine neue Fassung.",
+        "replace_document (PDF/Word, Inhalt als Markdown) bzw. edit_xlsx nehmen: neue "
+        "Fassung, das alte kommt in den Papierkorb — keine Kopie daneben."),
+    "A-ERSETZEN-ART": (
+        "Diese Art Dokument lässt sich nicht aus Text neu bauen (Bild, Seite) oder hat ein "
+        "eigenes Werkzeug (Excel: edit_xlsx).",
+        "Das passende Werkzeug nehmen; ein Bild bleibt, wie es ist."),
+    "A-IM-PAPIERKORB": (
+        "Das Dokument liegt (schon) im Papierkorb.",
+        "Erst restore_document, wenn es wieder gebraucht wird."),
+    "A-NICHT-IM-PAPIERKORB": (
+        "Das Dokument liegt nicht im Papierkorb — nichts zurückzuholen.",
+        "Die id prüfen; es ist schon in der Ablage."),
+    "A-PFLICHTFELD": ("Eine nötige Angabe fehlt.", "Die fehlende Angabe ergänzen."),
+    "A-WERT-UNGUELTIG": ("Eine Angabe hat die falsche Form.", "Laut Fehlertext korrigieren."),
+    "A-UNBEKANNTES-FELD": (
+        "Der Aufruf nennt ein Feld, das es nicht gibt.",
+        "Nur die Felder des Werkzeugs nehmen."),
     "A-KEIN-TEXT-ODER-BILD": (
         "Die Datei ist weder Text noch ein Bild.",
         "Als Text (csv, md, txt) oder Bild (png, jpg) schreiben lassen."),

@@ -196,6 +196,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `werkzeug_browser` | 3 | Einträge und Fragen der Browser-Werkzeuge; Erlaubnis je Host und Gespräch; hinten ans Register gehängt |
 | `ki_browser` | 3 | Was die Browser-Werkzeuge tun: Seite als Text für die KI (Adresse als Beleg, Inhalt = Daten), Liste, Suchen, Bild in die Ablage |
 | `ki_pdf_word` | 3 | Was die PDF-/Word-Werkzeuge tun: Quelle (Ablage oder Datei), lesen, neue Datei in die Ablage, nachlesen mit Beleg |
+| `werkzeug_ablage` | 3 | Die Ablage als Quelle des Werkzeug-Erzeugers: Schemas von replace_document, trash_document, restore_document und ihr Gate (Sashas Dokumente: jedes Mal fragen) |
+| `ki_ablage_adapter` | 3 | Adapter der Ablage für den Erzeuger: ersetzen (neu + alt in den Papierkorb), wegräumen, zurückholen; Fragen und Sätze |
 | `werkzeug_nutzer_ordner` | 3 | Einträge und Fragen von find_files, search_files, import_skill, unzip, remove_input (hinten ans Register) und die gross-Fassung von list_files |
 | `ki_nutzer_ordner` | 3 | Was find_files, search_files, import_skill, unzip und remove_input tun: Suchen als Befund mit `vollstaendig`, übernehmen/auspacken/wegräumen mit Beleg |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |

@@ -460,6 +460,14 @@ def papierkorb(doc_id, an=True, ersetzt_durch=None, grund=None) -> dict:
     return _kopf_aendern(doc_id, papierkorb=None, ersetzt_durch=None, papierkorb_grund=None)
 
 
+def papierkorb_zuruecksetzen(doc_id, vorher: dict) -> dict:
+    """Die Papierkorb-Felder genau wie in `vorher` (Rücknahme eines
+    Werkzeugs, core/ki_ablage_adapter.py). -> kopf"""
+    return _kopf_aendern(doc_id, papierkorb=vorher.get("papierkorb"),
+                         ersetzt_durch=vorher.get("ersetzt_durch"),
+                         papierkorb_grund=vorher.get("papierkorb_grund"))
+
+
 def ersetzen(alt_id, inhalt, *, titel=None, art=None, gespraech=None, quelle=None) -> tuple:
     """Die neue Fassung als NEUES Dokument anlegen und das alte in den
     Papierkorb legen — ganz oder gar nicht: scheitert das Anlegen, bleibt

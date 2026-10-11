@@ -75,7 +75,8 @@ def test_jede_ausfuehrer_funktion_in_ki_werkzeuge_ist_angemeldet():
     # Erzeugte Werkzeuge (2026-10-10) melden sich nicht per Dekorator an:
     # ihren Ausführer baut der Erzeuger (core/werkzeug_erzeuger/).
     mit_ausfuehrer = {w.name: w.ausfuehrer.__name__ for w in reg.WERKZEUGE
-                      if w.ausfuehrer and not any(w is e for e in reg.ERZEUGT)}
+                      if w.ausfuehrer
+                      and not any(w is e for e in reg.ERZEUGT + reg.ERZEUGT_FEST)}
     assert dekoriert == mit_ausfuehrer
 
 

@@ -187,13 +187,16 @@ def test_der_schnitt_haelt():
     reihen = {"read_series"}
     # 10.10.2026: antwort mit Selbstauskunft — eigener Deckel unten.
     selbst = {"antwort"}
+    # 11.10.2026: Ablage ersetzen/Papierkorb (erzeugt) — eigener Deckel unten.
+    ablage_pflege = {"replace_document", "trash_document", "restore_document"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
-        - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen
+        - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen \
+        - ablage_pflege
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import | input_ | reihen | selbst)
+                | fehler | browser | datei_import | input_ | reihen | selbst | ablage_pflege)
     # antwort (10.10.2026, Selbstauskunft): ~240 Zeichen. Deckel 300: der
     # Text sagt nur, DASS jede Antwort hierüber geht und allein; was die
     # Felder bedeuten, steht in den Feldern (zählen nicht).
@@ -316,6 +319,13 @@ def test_der_schnitt_haelt():
     besch_reihen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                        if t["function"]["name"] in reihen)
     assert 0 < besch_reihen < 200
+    # Ablage ersetzen/Papierkorb (11.10.2026, Führerschein-Gespräch: jede
+    # Änderung eines PDFs wurde eine Kopie daneben). Drei Werkzeuge, ~270
+    # Zeichen; Deckel 350: WEM ein Dokument gehört und wann gefragt wird,
+    # entscheidet das Gate, nicht der Text.
+    besch_pflege = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                       if t["function"]["name"] in ablage_pflege)
+    assert 0 < besch_pflege < 350
 
 
 def test_import_parameter_bleibt_klein():

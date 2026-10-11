@@ -61,7 +61,17 @@ data/ablage/<id>/v<n>-<rechner><endung>  eine Fassung, nie überschrieben
 | `create_document(titel, inhalt, art?, sprache?)` | neues Dokument, art markdown/text/code/csv | frei |
 | `read_document(id)` | Inhalt lesen (für eine Änderung nötig) | frei |
 | `update_document(id, inhalt)` | neue Fassung, die alte bleibt | frei |
+| `replace_document(id, inhalt, titel?)` | neue Fassung als neues Dokument (Text wörtlich, PDF/Word aus Markdown), das alte in den Papierkorb; die lesbare Datei behält ihren Namen | KI-Dokument frei, **Sashas jedes Mal** („… hast du abgelegt — …?", nur einmal/nein) |
+| `trash_document(id)` / `restore_document(id)` | in den Papierkorb (löscht nie) / zurück | wie oben / frei |
 | `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf in die Ablage — nur auf Sashas Wunsch | **gefragt** (seit 07.10. abends, ohne „immer") |
+
+Seit 2026-10-11 (Führerschein-Gespräch: jede Änderung eines PDFs wurde eine
+Kopie daneben) über den Werkzeug-Erzeuger (`core/werkzeug_ablage.py`,
+`core/ki_ablage_adapter.py`, Vorsilbe `A`): wem ein Dokument gehört, steht im
+Kopf (`abgelegt_von`; ohne Feld gehört nur Herkunft `ki` der KI — im Zweifel
+Sasha). `update_document` auf PDF/Word/Excel bricht mit `A-DATEI-ERSETZEN` ab
+und nennt den Weg. Satz: „„Titel“ ERSETZT (#neu): alt <id> liegt im
+Papierkorb (zurück mit restore_document)." Tests: `tests/test_ablage_werkzeuge.py`.
 
 Die ersten drei **ungegatet** (Entscheidung 07.10.): geschrieben wird nur in `data/ablage/`,
 nie überschrieben, nie gelöscht, nichts geht nach draußen; das Dokument

@@ -22,6 +22,7 @@ import datetime as _dt
 import os as _os
 
 import ablage
+import ki_ablage_adapter
 import chat_suche
 import context
 import gedaechtnis
@@ -784,6 +785,12 @@ def _update_document(args: dict) -> str:
     was = f"Neue Fassung von {doc_id or '?'}"
     if not doc_id or not ablage.gibt_es(doc_id):
         return abgebrochen(was, "A-DOK-UNBEKANNT", "kein Dokument mit dieser id in der Ablage")
+    # PDF/Word/Excel bekommen keine neue Fassung — der Weg ist ersetzen
+    # (2026-10-11: vorher endete das in „ABGEBROCHEN" und die KI legte eine
+    # Kopie nach der anderen daneben).
+    art = ablage.kopf(doc_id).get("art")
+    if art in ablage.DATEIEN:
+        return abgebrochen(was, "A-DATEI-ERSETZEN", ki_ablage_adapter.ersetzen_hinweis(art, doc_id))
     sicherung = schreib_sicherung.Sicherung(ordner=[_os.path.join(ablage.ordner(), doc_id)])
     try:
         k = ablage.neue_fassung(doc_id, str(args.get("inhalt") or ""))

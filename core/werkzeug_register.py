@@ -50,6 +50,7 @@ import werkzeug_erzeuger
 import werkzeug_gedaechtnis
 import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
 import werkzeug_kalender
+import werkzeug_ablage
 
 
 SCHIENEN = ("klein", "gross")
@@ -1381,6 +1382,12 @@ def erzeugte_einsetzen(an: bool) -> None:
 
 
 erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
+
+# Ablage ersetzen/Papierkorb (2026-10-11, core/werkzeug_ablage.py): auch
+# erzeugt, aber immer da (kein handgeschriebener Zwilling); hinten an.
+ERZEUGT_FEST = list(werkzeug_ablage.EINTRAEGE)
+WERKZEUGE += ERZEUGT_FEST
+_NACH_NAME.update({w.name: w for w in ERZEUGT_FEST})
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht

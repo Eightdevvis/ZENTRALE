@@ -146,7 +146,9 @@ BEREICH = {
 
 # Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/) bringen Bereich
 # und Erledigt-Worte selbst mit — aus der Quelle, nicht von Hand hier.
-BEREICH.update({w.name: w.bereich for w in werkzeug_register.ERZEUGT + werkzeug_register.ANGEBUNDEN
+BEREICH.update({w.name: w.bereich
+                for w in werkzeug_register.ERZEUGT + werkzeug_register.ANGEBUNDEN
+                + werkzeug_register.ERZEUGT_FEST
                 if w.bereich and w.name not in BEREICH})
 
 # Wie Sasha einen Bereich liest — für die Warnungen (2026-10-09). Eine
@@ -186,7 +188,9 @@ WORTE = {
     "unzip": ("ausgepackt", "Auspacken"),
     "remove_input": ("in den Papierkorb gelegt", "In den Papierkorb legen"),
 }
-WORTE.update({w.name: w.worte for w in werkzeug_register.ERZEUGT + werkzeug_register.ANGEBUNDEN
+WORTE.update({w.name: w.worte
+              for w in werkzeug_register.ERZEUGT + werkzeug_register.ANGEBUNDEN
+              + werkzeug_register.ERZEUGT_FEST
               if w.worte and w.name not in WORTE})
 
 _KOPF = re.compile(r"^\[ergebnis: (\w+)\]")
