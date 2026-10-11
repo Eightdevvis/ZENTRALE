@@ -15,7 +15,7 @@ Messungen dazu existiert.
 | Kalender-Werkzeuge der KI ohne Fallen: Kennungen, genau ein Eintrag, Serien nur mit Zeitraum | [ki_kalender.md](ki_kalender.md) |
 | Sandbox `run_code`: bubblewrap, was abgeschottet ist, Zeitlimit, Arbeitsordner | [sandbox.md](sandbox.md) |
 | Skills: drei Stufen, Liste im Kopf, `load_skill`/`propose_skill`/`edit_skill`, Anthropic-Skills | [skills.md](skills.md) |
-| Nutzerordner `~/Zentrale`, Suchen, Claude-Skills übernehmen, `unzip`, `remove_input`, Reichweite von gross | [nutzerordner.md](nutzerordner.md) |
+| Dateien der KI (seit 2026-10-11 nur die Ablage, vorher Nutzerordner Input/Output): Suchen mit Vollständigkeit, `read_file`/`list_files` auf gross, Claude-Skills übernehmen, `unzip` | [nutzerordner.md](nutzerordner.md) |
 | Internet-Pipe (`web_search`/`fetch_url`, SearXNG) und Netz-Transparenz | [internet_netz.md](internet_netz.md) |
 | Transparenz: Devtools-Terminal, Tool-Calls und Denken im Chat, Ablauf-Protokoll „trace ›" | [transparenz.md](transparenz.md) |
 | Chat in der TUI: Slash-Befehle, Markdown im Terminal, Bild-Marker `[[bild: name]]`, Bewertungen (wofür, wo sie liegen) | [chat_bedienung.md](chat_bedienung.md) |

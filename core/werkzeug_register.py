@@ -45,7 +45,7 @@ import selbstauskunft
 from werkzeug_eintrag import Werkzeug  # noqa: F401  — Name bleibt hier öffentlich
 import werkzeug_pdf_word
 import werkzeug_browser
-import werkzeug_nutzer_ordner
+import werkzeug_dateien
 import werkzeug_erzeuger
 import werkzeug_gedaechtnis
 import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
@@ -442,20 +442,10 @@ WERKZEUGE = [
             "Nutze list_files zuerst um zu sehen was verfügbar ist. "
             "Nützlich wenn der User nach Daten, Code oder Notizen fragt."
         ),
-        # gross seit 2026-10-09: nur Input/ und Output/ (core/context.py) —
-        # ~/codicus gehört später der Coder-App. klein bleibt byte-gleich.
-        gross=(
-            "Liest eine Textdatei aus Input/ oder Output/ (bloßer Name = "
-            "Input/). Finden: list_files, find_files."
-        ),
-        gross_parameter={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string",
-                         "description": "z.B. 'Input/brief.md'."},
-            },
-            "required": ["path"],
-        },
+        # gross seit 2026-10-11: ein Dokument der Ablage (vorher Input/ und
+        # Output/, core/werkzeug_dateien.py). klein bleibt byte-gleich.
+        gross=werkzeug_dateien.READ_FILE_GROSS_TEXT,
+        gross_parameter=werkzeug_dateien.READ_FILE_GROSS_PARAMETER,
         parameter={
             "type": "object",
             "properties": {
@@ -472,11 +462,10 @@ WERKZEUGE = [
         klein=(
             "Listet alle Dateien auf die gelesen werden können. Aufrufen bevor read_file."
         ),
-        # gross seit 2026-10-09: EIN Ordner im Nutzerordner (Input/ Output/),
-        # wie ls — die 300er-Gesamtliste hat die Chefkoch-Zip verschluckt.
-        # klein behält die alte Liste (Text und Schema byte-gleich).
-        gross=werkzeug_nutzer_ordner.LIST_FILES_GROSS_TEXT,
-        gross_parameter=werkzeug_nutzer_ordner.LIST_FILES_GROSS_PARAMETER,
+        # gross seit 2026-10-11: die Ablage (vorher EIN Ordner in Input/
+        # Output/). klein behält die alte Liste (Text und Schema byte-gleich).
+        gross=werkzeug_dateien.LIST_FILES_GROSS_TEXT,
+        gross_parameter=werkzeug_dateien.LIST_FILES_GROSS_PARAMETER,
         parameter={
             "type":       "object",
             "properties": {},
@@ -1272,9 +1261,9 @@ WERKZEUGE.append(Werkzeug(
 # sieht, über Text bedient. Hinten an, nur gross.
 WERKZEUGE += werkzeug_browser.EINTRAEGE
 
-# Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09,
-# core/werkzeug_nutzer_ordner.py): hinten an, nur gross.
-WERKZEUGE += werkzeug_nutzer_ordner.EINTRAEGE
+# Suchen, Skills übernehmen, Zips auspacken (2026-10-09; seit 2026-10-11 in
+# der Ablage, core/werkzeug_dateien.py): hinten an, nur gross.
+WERKZEUGE += werkzeug_dateien.EINTRAEGE
 
 # Messreihen lesen (2026-10-09): bis dahin las die KI Schlaf, Stimmung & Co.
 # per read_file aus data/<reihe>.json. Seit read_file auf gross nur noch
@@ -1380,6 +1369,15 @@ def erzeugte_einsetzen(an: bool) -> None:
     (aus) — Tests und Prüfstand schalten hiermit um. profil.gross.TOOLS
     entsteht beim Import; wer danach umschaltet, baut mit schema() neu."""
     werkzeug_erzeuger.einsetzen(WERKZEUGE, _NACH_NAME, ERZEUGT, an, _VON_HAND)
+    # Was danach angehängt wurde (Ablage, Tabellen; 2026-10-11), bleibt hinter
+    # den erzeugten Kalender-Werkzeugen — sonst ergäbe aus/an eine andere
+    # Reihenfolge als beim Import (Prompt-Cache, gross.TOOLS).
+    for w in _HINTEN:
+        WERKZEUGE.remove(w)
+        WERKZEUGE.append(w)
+
+
+_HINTEN: list = []
 
 
 erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
@@ -1391,6 +1389,7 @@ WERKZEUGE += ERZEUGT_FEST
 _NACH_NAME.update({w.name: w for w in ERZEUGT_FEST})
 # Tabellen (2026-10-11, Skill excel, core/werkzeug_tabelle.py): hinten an.
 WERKZEUGE += werkzeug_tabelle.EINTRAEGE
+_HINTEN += ERZEUGT_FEST + list(werkzeug_tabelle.EINTRAEGE)
 _NACH_NAME.update({w.name: w for w in werkzeug_tabelle.EINTRAEGE})
 
 

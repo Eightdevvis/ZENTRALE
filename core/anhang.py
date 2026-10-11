@@ -62,6 +62,9 @@ def art_fuer(name: str, daten: bytes) -> tuple:
             raise Abgelehnt("das ist kein Bild, das ich lesen kann (png, jpg, webp, gif)")
         return "bild", echt, None
     datei_art = ablage_text.art_von(daten)
+    if datei_art == "zip":
+        # Eine Zip als Original (2026-10-11): Skills übernehmen, auspacken.
+        return "zip", ".zip", None
     if datei_art:
         erg = ablage_text.aus_bytes(datei_art, daten)
         if erg["fehler"]:
@@ -72,7 +75,7 @@ def art_fuer(name: str, daten: bytes) -> tuple:
                         "als .docx bzw. .xlsx ohne Passwort speichern")
     if b"\x00" in daten[:8192]:
         raise Abgelehnt("diese Art Datei kann ich nicht lesen — nur Text, Code, PDF, "
-                        "Word (.docx), Excel (.xlsx) und Bilder")
+                        "Word (.docx), Excel (.xlsx), Zip und Bilder")
     try:
         text = daten.decode("utf-8")
     except UnicodeDecodeError:

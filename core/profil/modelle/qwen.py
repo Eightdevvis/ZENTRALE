@@ -156,11 +156,10 @@ _GRUPPEN = {
                 r"vorlesungsverzeichnis|login|online|einloggen",
                 ("browser_open", "browser_click", "browser_type", "browser_find",
                  "browser_read", "browser_back", "browser_close", "browser_screenshot")),
-    "dateien": (r"datei|ordner|input|output|\bzip|skill|code|python|rechne|sandbox|"
-                r"skript|script|csv|tabelle",
+    "dateien": (r"datei|ordner|ablage|\bzip|skill|code|python|rechne|sandbox|"
+                r"skript|script|csv|tabelle|papierkorb|such",
                 ("read_file", "list_files", "find_files", "search_files", "unzip",
-                 "remove_input", "import_skill", "fetch_document", "save_from_sandbox",
-                 "run_code")),
+                 "import_skill", "fetch_document", "save_from_sandbox", "run_code")),
     "dokumente": (r"pdf|word|docx|dokument|brief|bewerbung|lebenslauf|schreiben|"
                   r"anschreiben|formular",
                   ("read_pdf", "create_pdf", "combine_pdf", "read_docx", "create_docx",

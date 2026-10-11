@@ -29,14 +29,15 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" in [prompt_aufbau.md](
 
 | kanonisch | in `klein` | Funktion |
 |---|---|---|
-| `read_file`   | =            | `klein`: Datei aus der Whitelist bzw. ~/codicus lesen. `gross` (seit 2026-10-09): NUR Input/ und Output/ des Nutzerordners (s. „Reichweite von gross" in [nutzerordner.md](nutzerordner.md)) |
+| `read_file`   | =            | `klein`: Datei aus der Whitelist bzw. ~/codicus lesen. `gross` (seit 2026-10-11): ein Dokument der Ablage per id oder genauem Titel ([nutzerordner.md](nutzerordner.md)) |
 | `read_series` | nur `gross`  | Messreihen lesen (Liste mit letztem Wert, oder Werte einer Reihe, Standard letzte 30 Tage) — ersetzt `read_file` auf `data/<reihe>.json` |
-| `list_files`  | =            | `klein`: Gesamtliste der lesbaren Dateien (höchstens 300, wie bisher). `gross` (seit 2026-10-09): EINEN Ordner im Nutzerordner wie ls, `ordner` = Input (Standard) / Output / Unterordner |
-| `find_files`  | nur `gross`  | Dateien/Ordner nach Namen in Input/ und Output/ suchen, wie find (`*.zip`, `*chefkoch*`, Namensteil) — mit Vollständigkeits-Angabe (s. [nutzerordner.md](nutzerordner.md)) |
-| `search_files` | nur `gross` | Text in Dateien in Input/ und Output/ suchen, wie grep — `pfad:zeile: auszug`, mit Vollständigkeits-Angabe |
-| `import_skill` | nur `gross` | Claude-Skill(s) aus .zip oder Ordner in Input/ übernehmen, gegatet |
-| `unzip` | nur `gross` | Eine .zip aus Input/ nach Output/<name>/ auspacken (gegatet), `ansehen=true` zeigt nur den Inhalt (frei) |
-| `remove_input` | nur `gross` | Datei/Ordner direkt aus Input/ in `.Papierkorb/<Datum>/` legen (gegatet, löscht nie) |
+| `list_files`  | =            | `klein`: Gesamtliste der lesbaren Dateien (höchstens 300, wie bisher). `gross` (seit 2026-10-11): die Ablage wie ls, `papierkorb=true` den Papierkorb |
+| `find_files`  | nur `gross`  | Dokumente der Ablage nach Titel suchen, wie find — mit Vollständigkeits-Angabe (s. [nutzerordner.md](nutzerordner.md)) |
+| `search_files` | nur `gross` | Text in den Dokumenten der Ablage (auch PDF/Word/Excel), wie grep — mit Vollständigkeits-Angabe |
+| `import_skill` | nur `gross` | Claude-Skill(s) aus einer Zip der Ablage übernehmen, gegatet |
+| `unzip` | nur `gross` | Eine Zip der Ablage auspacken: jede Datei ein Dokument (gegatet), `ansehen=true` zeigt nur den Inhalt (frei) |
+| `replace_document`, `trash_document`, `restore_document` | nur `gross` | Ablage: ersetzen (alt in den Papierkorb), wegräumen, zurückholen — KI-Dokumente frei, Sashas jedes Mal gefragt ([ablage.md](ablage.md); ersetzt `remove_input`, 2026-10-11) |
+| `read_xlsx`, `create_xlsx`, `edit_xlsx` | nur `gross` | Tabellen (Excel/CSV) in der Ablage ([tabellen.md](tabellen.md)) |
 | `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort, `nur_am` und Pflicht-Zeitraum `von`/`bis` bei Routinen (s. [ki_kalender.md](ki_kalender.md)) |
 | `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
 | `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |

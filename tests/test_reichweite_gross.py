@@ -1,12 +1,12 @@
-"""gross liest nur noch im Nutzerordner (2026-10-09, core/context.py).
+"""gross liest Dateien nur noch aus der Ablage (2026-10-11; vorher
+Input/ und Output/ des Nutzerordners, 2026-10-09).
 
-Sasha: der Assistent arbeitet mit ~/Zentrale (Input/, Output/) und seinem
-Gedächtnis; ~/codicus und der ZENTRALE-Code gehören später zur Coder-App.
+Sasha: „ja einfach nur die ablage dann" — wie Claude Web EIN Ort für Dateien.
 Geprüft wird an den Werkzeugen, wie die KI sie ruft:
-  - gross: read_file, read_pdf/read_docx, fetch_document erreichen weder
-    ZENTRALE/core noch data/ noch ~/codicus — mit festem Fehlercode;
-  - Input/ und Output/ gehen weiter, Verstecktes, Schlüssel und Verweise
-    nach draußen nicht;
+  - gross: read_file, read_pdf/read_docx, fetch_document erreichen keinen
+    Dateipfad mehr — weder ZENTRALE/core noch data/ noch ~/codicus noch
+    Input/ — mit festem Fehlercode;
+  - read_file liest Ablage-Dokumente per id oder genauem Titel;
   - klein liest wie bisher (ZENTRALE-Whitelist, ~/codicus);
   - read_series ersetzt das Lesen von data/<reihe>.json.
 """
@@ -15,6 +15,7 @@ import os
 
 import pytest
 
+import ablage
 import context
 import gedaechtnis
 import ki_werkzeuge
@@ -51,88 +52,52 @@ def lauf(name, args):
     return ki_werkzeuge._verteilen(name, args)
 
 
-# ── gross: draußen ist zu ───────────────────────────────────────────────
+# ── gross: kein Dateipfad ───────────────────────────────────────────────
 
 @pytest.mark.parametrize("pfad", [
     os.path.join(ROOT, "core", "context.py"),
-    os.path.join(ROOT, "notes.md"),
     os.path.join(ROOT, "data", "sleep_quality.json"),
-    "../../core/context.py",
-    "/etc/hostname",
+    "../../core/context.py", "/etc/hostname", "Input/notiz.md", "notiz.md",
 ])
-def test_gross_liest_keinen_zentrale_code_und_keine_daten(gross, input_ordner, pfad):
+def test_gross_read_file_kennt_keine_pfade(gross, input_ordner, pfad):
     r = lauf("read_file", {"path": pfad})
-    assert r.startswith("[Zugriff verweigert") and "Z-AUSSERHALB" in r, r
+    assert r.startswith("[Nicht in der Ablage"), r
+    assert "Eisen" not in r and "Whitelist" not in r
 
 
-@pytest.mark.parametrize("pfad", ["core/context.py", "data/sleep_quality.json", "notes.md"])
-def test_gross_relativ_heisst_input(gross, input_ordner, pfad):
-    """Ein relativer Pfad meint den Nutzerordner — die alten Projektpfade
-    treffen dort nichts, und die Meldung sagt, wo gesucht wurde."""
-    assert lauf("read_file", {"path": pfad}) == f"[Datei nicht gefunden: Input/{pfad}]"
-
-
-def test_gross_liest_nichts_unter_codicus(gross, input_ordner, tmp_path, monkeypatch):
-    baum = tmp_path / "codicus"
-    (baum / "projekt").mkdir(parents=True)
-    (baum / "projekt" / "notiz.md").write_text("geheimes Projekt")
-    monkeypatch.setattr(context, "_CODICUS", str(baum))
-    monkeypatch.setattr(context, "_WURZELN", [ROOT, str(baum)])
-    assert "Z-AUSSERHALB" in lauf("read_file", {"path": str(baum / "projekt" / "notiz.md")})
-    assert "geheimes" not in lauf("read_file", {"path": "projekt/notiz.md"})
-
-
-def test_gross_pdf_und_word_von_draussen_mit_code(gross, input_ordner):
+def test_gross_pdf_und_word_nur_aus_der_ablage(gross, input_ordner):
     for name in ("read_pdf", "read_docx"):
         r = lauf(name, {"quelle": os.path.join(ROOT, "core", "context.py")})
-        assert r.status == werkzeug_befund.FEHLGESCHLAGEN
-        assert "P-QUELLE-AUSSERHALB" in r
+        assert r.status == werkzeug_befund.FEHLGESCHLAGEN and "P-QUELLE-FEHLT" in r
 
 
-def test_gross_fetch_document_von_draussen_legt_nichts_ab(gross, input_ordner):
-    r = lauf("fetch_document", {"url": os.path.join(ROOT, "core", "context.py"),
-                                "name": "code"})
+@pytest.mark.parametrize("url", [os.path.join(ROOT, "core", "context.py"), "Input/notiz.md"])
+def test_gross_fetch_document_mit_pfad_legt_nichts_ab(gross, input_ordner, url):
+    r = lauf("fetch_document", {"url": url, "name": "code"})
     assert r.status == werkzeug_befund.FEHLGESCHLAGEN and "Z-AUSSERHALB" in r
     assert not gedaechtnis.dossier_lesen("quellen/code")
 
 
-def test_gross_kein_verweis_aus_input_hinaus(gross, input_ordner):
-    os.symlink(os.path.join(ROOT, "core", "context.py"),
-               os.path.join(input_ordner, "weg.py"))
-    r = lauf("read_file", {"path": "Input/weg.py"})
-    assert "Z-AUSSERHALB" in r
+# ── gross: die Ablage ──────────────────────────────────────────────────
+
+def test_gross_read_file_liest_die_ablage(gross, input_ordner):
+    k = ablage.anlegen("Metalle", "Eisen und Zink", "markdown")
+    assert "Eisen und Zink" in lauf("read_file", {"path": k["id"]})
+    assert "Eisen und Zink" in lauf("read_file", {"path": "metalle"})       # genauer Titel
+    assert "Eisen und Zink" in lauf("read_file", {"path": "Metalle.md"})    # wie im Ordner
+    ablage.anlegen("Metalle", "anders", "markdown")
+    r = lauf("read_file", {"path": "Metalle"})
+    assert r.startswith("[Mehrere Dokumente") and k["id"] in r
 
 
-# ── gross: Input/ und Output/ gehen weiter ──────────────────────────────
-
-@pytest.mark.parametrize("pfad", ["notiz.md", "Input/notiz.md", "input/notiz.md"])
-def test_gross_liest_input(gross, input_ordner, pfad):
-    assert lauf("read_file", {"path": pfad}).startswith("Eisen und Zink")
-
-
-def test_gross_liest_output_und_absolut(gross, input_ordner):
-    aus = nutzer_ordner.unterordner(nutzer_ordner.OUTPUT)
-    with open(os.path.join(aus, "plan.md"), "w", encoding="utf-8") as f:
-        f.write("Plan A")
-    assert lauf("read_file", {"path": "Output/plan.md"}) == "Plan A"
-    assert lauf("read_file", {"path": os.path.join(aus, "plan.md")}) == "Plan A"
-
-
-def test_gross_versteckt_und_schluessel_bleiben_zu(gross, input_ordner):
-    for name in (".geheim.md", "api_token.txt"):
-        with open(os.path.join(input_ordner, name), "w") as f:
-            f.write("x")
-        assert lauf("read_file", {"path": "Input/" + name}).startswith("[Zugriff verweigert")
-
-
-def test_gross_fetch_document_aus_input(gross, input_ordner):
-    r = lauf("fetch_document", {"url": "Input/notiz.md", "name": "metalle"})
-    assert r.status == werkzeug_befund.OK, r
-    assert "Eisen und Zink" in gedaechtnis.dossier_lesen("quellen/metalle")
-
-
-def test_fehlende_datei_heisst_nicht_gefunden(gross, input_ordner):
-    assert lauf("read_file", {"path": "gibtsnicht.md"}).startswith("[Datei nicht gefunden")
+def test_gross_list_files_ist_die_ablage(gross, input_ordner):
+    k = ablage.anlegen("Metalle", "Eisen", "markdown")
+    r = lauf("list_files", {})
+    assert r.startswith("Ablage — 1 Dokumente, vollständig") and k["id"] in r
+    assert "notiz.md" not in r
+    ablage.papierkorb(k["id"])
+    assert lauf("list_files", {}).startswith("Ablage — leer")
+    assert k["id"] in lauf("list_files", {"papierkorb": True})
 
 
 # ── klein: unverändert ──────────────────────────────────────────────────

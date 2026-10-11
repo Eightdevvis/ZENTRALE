@@ -27,14 +27,12 @@ import chat_suche
 import context
 import gedaechtnis
 import gespraeche
-import input_aufraeumen
 import kalender
 import ki_kalender
 import ki_kalender_aendern
 import ki_prompt
 import mail
 import news
-import nutzer_suche
 import projekte
 import sandbox
 import skills
@@ -135,25 +133,21 @@ ausfuehrer = werkzeug_register.ausfuehrer
 
 @ausfuehrer("read_file")
 def _read_file(args: dict) -> str:
-    roh = args.get("path", "")
-    text = context.read_file(roh)
-    # Aus Input/ fertig gelesen → Aufräum-Zeile (core/input_aufraeumen.py).
-    # Erfolg an der Datei gemessen, nicht am Text: eine JSON-Datei beginnt
-    # auch mit „[".
-    pfad = context.pfad_aufloesen(roh) if str(roh or "").strip() else ""
-    if pfad and not context.erlaubt(pfad) and _os.path.isfile(pfad) \
-            and not text.startswith("[Lesefehler"):
-        return input_aufraeumen.nach_verarbeitung(text, pfad)
-    return text
+    # gross (seit 2026-10-11): ein Dokument der Ablage — sie ist der eine Ort
+    # für Dateien (core/ki_dateien.py). klein liest weiter über context.
+    if schiene() == "gross":
+        import ki_dateien
+        return ki_dateien.lesen(args.get("path"))
+    return context.read_file(args.get("path", ""))
 
 
 @ausfuehrer("list_files")
 def _list_files(args: dict) -> str:
-    # gross (seit 2026-10-09): EIN Ordner in Sashas Nutzerordner, wie ls
-    # (core/nutzer_suche.py). klein liest weiter die alte Gesamtliste.
+    # gross (seit 2026-10-11): die Ablage, neueste zuerst (core/ablage_suche.py).
+    # klein liest weiter die alte Gesamtliste.
     if schiene() == "gross":
-        import ki_nutzer_ordner
-        return ki_nutzer_ordner.befund(nutzer_suche.auflisten(str(args.get("ordner") or "")))
+        import ki_dateien
+        return ki_dateien.liste(args)
     files = context.list_available_files()
     return "Verfügbare Dateien:\n" + "\n".join(f"  {f}" for f in files)
 
@@ -443,12 +437,8 @@ def _fetch_document(args: dict) -> str:
             return None
         beleg = f"{ort} hat {len(jetzt)} Zeichen."
         return f"Dokument „{name}“ ABGELEGT in {ort}: {len(jetzt)} Zeichen.", beleg
-    ergebnis = _transaktion(f"Dokument „{name}“ ablegen", "nichts abgelegt", "D-ABGELEHNT",
-                            sicherung, roh, pruefen)
-    url = str(args.get("url") or "").strip()
-    if url and not url.lower().startswith(("http://", "https://")):
-        return input_aufraeumen.nach_verarbeitung(ergebnis, context.pfad_aufloesen(url))
-    return ergebnis
+    return _transaktion(f"Dokument „{name}“ ablegen", "nichts abgelegt", "D-ABGELEHNT",
+                        sicherung, roh, pruefen)
 
 
 # ── Messreihen ──
@@ -863,7 +853,7 @@ def _read_project_file(args: dict, projekt=None) -> str:
 import ki_pdf_word  # noqa: E402,F401
 # Browser (2026-10-09): eigene Datei, meldet ihre Ausführer beim Import an.
 import ki_browser  # noqa: E402,F401
-# Suchen im Nutzerordner und Claude-Skills übernehmen (2026-10-09): ebenso.
-import ki_nutzer_ordner  # noqa: E402,F401
+# Suchen, Skills übernehmen, Zips auspacken — in der Ablage (2026-10-11): ebenso.
+import ki_dateien  # noqa: E402,F401
 # Tabellen (2026-10-11, Skill excel): read_xlsx, create_xlsx, edit_xlsx.
 import ki_tabelle  # noqa: E402,F401

@@ -83,16 +83,14 @@ def test_scan_und_passwort_werden_ehrlich_gemeldet():
     assert r.code == "P-DATEI-KAPUTT" and "Passwort" in r
 
 
-def test_quelle_als_pfad_nur_mit_derselben_sperre_wie_read_file(tmp_path, monkeypatch):
+def test_quelle_ist_nur_eine_ablage_id(tmp_path):
+    """Seit 2026-10-11 ist die Ablage der eine Ort für Dateien — ein Pfad,
+    auch einer, den es gibt, wird nicht gelesen."""
     datei = tmp_path / "plan.pdf"
     datei.write_bytes(text_pdf("Plan"))
-    monkeypatch.setattr(context, "erlaubt", lambda p: "ausserhalb von ZENTRALE und ~/codicus")
     r = lauf("read_pdf", {"quelle": str(datei)})
-    assert r.code == "P-QUELLE-GESPERRT" and "anhängen" in r
-    monkeypatch.setattr(context, "erlaubt", lambda p: "")
-    r = lauf("read_pdf", {"quelle": str(datei)})
-    assert r.status == "ok" and "„plan.pdf“ (Datei)" in r
-    assert lauf("read_pdf", {"quelle": str(tmp_path / "gibtsnicht.pdf")}).code == "P-QUELLE-FEHLT"
+    assert r.code == "P-QUELLE-FEHLT" and "Plan" not in r
+    assert lauf("read_pdf", {"quelle": _ablegen(text_pdf("Plan"), "pdf")}).status == "ok"
 
 
 def test_alter_text_anhang_sagt_dass_das_original_fehlt():

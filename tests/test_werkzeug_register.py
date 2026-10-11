@@ -62,9 +62,10 @@ def test_jede_ausfuehrer_funktion_in_ki_werkzeuge_ist_angemeldet():
     importiert) — beide zählen."""
     knoten_alle = []
     # Seit 2026-10-09 auch der Browser (ki_browser) und der Nutzerordner
-    # (ki_nutzer_ordner: find_files, search_files, import_skill).
+    # (ki_nutzer_ordner: find_files, search_files, import_skill; seit 2026-10-11
+    # ki_dateien, alles in der Ablage).
     # Seit 2026-10-11 auch die Tabellen (ki_tabelle: read_xlsx, create_xlsx, edit_xlsx).
-    for datei in ("ki_werkzeuge.py", "ki_pdf_word.py", "ki_browser.py", "ki_nutzer_ordner.py",
+    for datei in ("ki_werkzeuge.py", "ki_pdf_word.py", "ki_browser.py", "ki_dateien.py",
                   "ki_tabelle.py"):
         with open(os.path.join(CORE, datei), encoding="utf-8") as f:
             knoten_alle += ast.parse(f.read()).body

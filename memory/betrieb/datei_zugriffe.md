@@ -1,11 +1,12 @@
 # Dateizugriffe
 
 **Seit 2026-10-09 zwei Reichweiten:** Auf der Cloud-Schiene (`gross`) liest
-die KI NUR noch Input/ und Output/ des Nutzerordners (`~/Zentrale`) — kein
-ZENTRALE-Code, kein `data/`, kein ~/codicus (gehört später zur Coder-App).
+die KI seit 2026-10-11 NUR noch die Ablage (`~/Zentrale/Ablage`, per id —
+kein Dateipfad; vom 09. bis 11.10. Input/ und Output/ des Nutzerordners) —
+kein ZENTRALE-Code, kein `data/`, kein ~/codicus (gehört später zur Coder-App).
 Was unten steht (Whitelist + ~/codicus), gilt nur noch für die lokale
-Schiene `klein`. Einzelheiten: `memory/ki/nutzerordner.md`, „Reichweite von
-gross".
+Schiene `klein`. Einzelheiten: `memory/ki/nutzerordner.md`, Abschnitt „Wie es
+gebaut ist".
 
 **Stand 2026-09-18:** `core/context.py` entscheidet in einer Funktion
 (`erlaubt(abs_pfad)`), was die lokale Core-KI lesen darf: **Secret-Sperre

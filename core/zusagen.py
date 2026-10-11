@@ -121,7 +121,7 @@ def hinzufuegen(gid, neue, zug: int) -> list:
 
 def merken(gid, art: str, satz: str, zug: int) -> str | None:
     """Eine Zusage, die ein WERKZEUG einträgt, nicht die Erkennung im Text
-    (2026-10-09: „input_aufraeumen: <datei>", core/input_aufraeumen.py).
+    (2026-10-09 bis 10-11: „input_aufraeumen: <datei>" — mit Input/ abgebaut).
     `art` ist ihr Schlüssel: dieselbe Art kommt nicht doppelt, und abgehakt
     wird sie nur von dem, der sie eingetragen hat — nachfuehren lässt sie
     in Ruhe (kein Verfall, kein „irgendein Werkzeug lief"). -> id oder None."""

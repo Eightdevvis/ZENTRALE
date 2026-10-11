@@ -79,11 +79,11 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `kidebug` | 1 | Devtools-Bus der KI (`scripts/ai_devtools.py`) |
 | `transkript` | 1 | Rohes Gesagtes, append-only jsonl |
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
-| `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus |
+| `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus — seit 2026-10-11 nicht mehr für die KI (die liest die Ablage), nur noch Desk-Bilder und Werkstatt |
 | `ablage_ort` | 1 | WO die Ablage liegt (Einstellung `ablage_dir`, Standard ~/Zentrale/Ablage; Köpfe/Fassungen versteckt in `.ablage/dokumente/`) — für Ablage und Abgleich |
 | `tabelle_formel` | 1 | Excel-Formeln: deutsch → Excel-Standard (englisch, Komma) sicher übersetzen, unbekannte Funktionen ablehnen |
 | `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
-| `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `input_dateien` |
+| `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `ablage_zip` |
 | `melden` | 1 | Meldung auf dem Desktop |
 | `glossary` | 1 | Kuratiertes Mini-Glossar |
 | `categories` | 1 | Data-Collection-Kategorien |
@@ -149,13 +149,12 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `skill_format` | 2 | Das Skill-Format von Claude: SKILL.md mit YAML-Kopf lesen (auch fremde Felder) und schreiben, gültige Namen |
 | `skill_umzug` | 2 | Umzug alter Skill-Dateien (`<name>.md`) ins Claude-Format, alte beiseite nach `_alt/`; „kurz“ → Hausregel |
 | `skill_import` | 2 | Claude-Skills aus .zip oder Ordner übernehmen (Plugin, Skill-Ordner, SKILL.md in der Wurzel): sicher auspacken, prüfen, atomar in den Skill-Ordner, ganz oder gar nicht; nur aus Input/ |
-| `nutzer_suche` | 2 | Suchen im Nutzerordner wie find (Name, Platzhalter) und grep (Text), ein Ordner wie ls — jede Suche sagt, ob sie vollständig war |
-| `input_dateien` | 2 | Dateien aus Input/: Zip ansehen und nach Output/<name>/ auspacken (ganz oder gar nicht, überschreibt nie), Erledigtes in `.Papierkorb/<Datum>/` verschieben (löscht nie) |
-| `input_aufraeumen` | 2 | Nach fertig verarbeiteter Input-Datei: feste Zeile „Frag Sasha jetzt, ob … weg soll" ans Ergebnis und offene Zusage `input_aufraeumen: <datei>`, abgehakt nach remove_input oder Sashas Nein |
 | `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge, Eingeworfenes — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen; Papierkorb als Feld, ersetzen, wem es gehört |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF/Word als Original, Text dazu), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `ablage_text` | 2 | Der Text einer PDF- oder Word-Datei (Anhang, Ablage-Vorschau), gemerkt nach Inhalt |
 | `ablage_sichtbar` | 2 | Die Ablage als Ordner für Sasha: neueste Fassung als lesbare Datei, Einwurf (fremde Datei → Dokument), Änderung → Fassung, Umbenennen/Löschen nachziehen; Stand je Rechner |
+| `ablage_suche` | 2 | Suchen in der Ablage: nach Titel (find_files), nach Text auch in PDF/Word/Excel (search_files), auflisten (list_files gross) — jede Suche sagt, wie vollständig sie war |
+| `ablage_zip` | 2 | Eine Zip der Ablage ansehen oder auspacken: jede Datei ein Dokument (Sashas), ganz oder gar nicht |
 | `tabelle_datei` | 2 | Excel (.xlsx) lesen/anlegen/ändern — openpyxl im begrenzten Kindprozess, Zip-Bomben-Prüfung, Verlust-Prüfung; CSV lesen/schreiben; Tabelle als Text |
 | `textbloecke` | 2 | Kleines Markdown → Blöcke (Überschrift, Absatz, Liste, Tabelle, Code) und Stücke normal/fett — für PDF- und Word-Schreiber |
 | `pdf_datei` | 2 | PDFs lesen (Text je Seite, Tabellen geraten, Formularfelder), zusammenfügen, Seiten herausnehmen — pypdf im begrenzten Kindprozess |
@@ -202,8 +201,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_ablage_adapter` | 3 | Adapter der Ablage für den Erzeuger: ersetzen (neu + alt in den Papierkorb), wegräumen, zurückholen; Fragen und Sätze |
 | `werkzeug_tabelle` | 3 | Einträge und Gate von read_xlsx, create_xlsx, edit_xlsx (Skill excel); hinten ans Register |
 | `ki_tabelle` | 3 | Was die Tabellen-Werkzeuge tun: Werte/Formeln prüfen, anlegen, ändern (ersetzen, daneben, CSV-Fassung), nachlesen mit Beleg |
-| `werkzeug_nutzer_ordner` | 3 | Einträge und Fragen von find_files, search_files, import_skill, unzip, remove_input (hinten ans Register) und die gross-Fassung von list_files |
-| `ki_nutzer_ordner` | 3 | Was find_files, search_files, import_skill, unzip und remove_input tun: Suchen als Befund mit `vollstaendig`, übernehmen/auspacken/wegräumen mit Beleg |
+| `werkzeug_dateien` | 3 | Einträge und Fragen von find_files, search_files, import_skill, unzip (alles Ablage) und die gross-Fassung von list_files/read_file |
+| `ki_dateien` | 3 | Was find_files, search_files, import_skill, unzip tun; list_files/read_file auf gross lesen die Ablage |
 | `werkzeug_fragen` | 3 | Die Ja/Nein-Fragen an Sasha vor bestätigungspflichtigen Werkzeugen und die Regeln, die von den Argumenten abhängen |
 | `ki_kalender` | 3 | Der Kalender, wie die KI ihn liest: Kennungen (`#r3f9c`), alle Felder, Warnungen frisch, Belege nach dem Schreiben |
 | `ki_kalender_aendern` | 3 | Die schreibenden Kalender-Werkzeuge der KI: genau EIN Eintrag, nur genannte Felder, mit Beleg und Status |

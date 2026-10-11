@@ -17,7 +17,7 @@ dann versprechen.
 
 | App | Status | Lizenz | Was zum Fertigsein fehlt |
 |---|---|---|---|
-| KI-Assistent (Chat) | 🟡 | Abo | Prüfstand 4/5, Prüfer frisch; Mail-Anbindung; Zugriff nur auf Input/Output ✅ seit 09.10. auf der Cloud-Schiene (lokale Schiene liest noch ~/codicus) |
+| KI-Assistent (Chat) | 🟡 | Abo | Prüfstand 4/5, Prüfer frisch; Mail-Anbindung; Zugriff nur auf die Ablage ✅ seit 11.10. auf der Cloud-Schiene (09.–11.10. Input/Output) (lokale Schiene liest noch ~/codicus) |
 | Kalender | 🟡 | frei | .ics + Kennungen seit 09.10.; Ansichten A/B/C entscheiden |
 | Notizen / Listen | 🟡 | frei | eigene App-Grenze, Feature-Tracker `l_zentrale` ist Sashas Privatliste |
 | Morgenblick | 🟡 | Abo | erst 08.10.; „im Browser öffnen" aus /files |

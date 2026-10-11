@@ -182,7 +182,7 @@ def test_der_schnitt_haelt():
     # 09.10.2026: Suchen im Nutzerordner und Claude-Skills übernehmen — eigener Deckel unten.
     datei_import = {"find_files", "search_files", "import_skill"}
     # 09.10.2026: Zips auspacken und Input/ aufräumen — eigener Deckel unten.
-    input_ = {"unzip", "remove_input"}
+    input_ = {"unzip"}
     # 09.10.2026: Messreihen lesen (Ersatz für read_file auf data/) — eigener Deckel unten.
     reihen = {"read_series"}
     # 10.10.2026: antwort mit Selbstauskunft — eigener Deckel unten.

@@ -15,8 +15,8 @@ geänderte Kopien an — alles landet als neues Dokument in der Ablage
 | `create_docx(titel, inhalt)` | neue .docx aus Markdown | **ja** |
 | `edit_docx(quelle, ersetzen?[{alt, neu}], anhaengen?, titel?)` | geänderte Kopie: wörtlich ersetzen (auch über Formatwechsel, in Kopf-/Fußzeilen), Markdown hinten anhängen | **ja** |
 
-`quelle` = Ablage-id (auch Anhänge) oder Pfad in Input/ bzw. Output/ des
-Nutzerordners (seit 2026-10-09; vorher ~/codicus, außerhalb jetzt
+`quelle` = Ablage-id (auch Anhänge und Eingeworfenes; seit 2026-10-11 nur
+noch die Ablage — vorher auch Pfade in Input/ bzw. Output/, außerhalb
 `P-QUELLE-AUSSERHALB`) — dieselbe Sperre wie `read_file` (`context.erlaubt`). Nur Cloud-Schiene (`gross`); das
 lokale qwen sieht die Werkzeuge nicht.
 

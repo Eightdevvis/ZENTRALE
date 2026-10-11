@@ -164,6 +164,8 @@ _AKTIONEN = {"replace_document": ersetzen, "trash_document": wegraeumen,
 
 def ersetzen_hinweis(art: str, doc_id: str) -> str:
     """Für update_document auf PDF/Word/Excel: welcher Weg statt einer Kopie."""
+    if art == "zip":
+        return "eine Zip bekommt keine neue Fassung — unzip packt sie aus"
     weg = "edit_xlsx" if art == "xlsx" else "replace_document"
     return (f"eine {str(art).upper()}-Datei bekommt keine neue Fassung — {weg}"
             f"(id=\"{doc_id}\", …) legt die neue an und das alte in den Papierkorb")

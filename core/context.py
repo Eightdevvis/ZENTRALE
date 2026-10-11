@@ -23,7 +23,7 @@ import werkzeug_befund
 # und Output/ — für read_file, read_pdf/read_docx und fetch_document, die alle
 # hier fragen. klein behält vorerst die alte Reichweite (ZENTRALE-Whitelist +
 # ~/codicus): das qwen ist darauf gemessen, es zieht später nach.
-AUSSERHALB = "Z-AUSSERHALB: liegt nicht in Input/ oder Output/ des Nutzerordners"
+AUSSERHALB = "Z-AUSSERHALB: ein Dateipfad — Dateien gibt es nur in der Ablage (per id)"
 
 
 def nur_nutzer_ordner() -> bool:
@@ -126,7 +126,10 @@ def erlaubt(abs_pfad: str) -> str:
     Sicherheitsluecke, die niemand bemerkt.
     """
     abs_pfad = os.path.abspath(abs_pfad)
-    if nur_nutzer_ordner() and not nutzer_ordner.im_unterordner(abs_pfad):
+    # gross seit 2026-10-11: gar kein Dateipfad mehr — Dateien gibt es für die
+    # Cloud-KI nur in der Ablage (per id, core/ki_dateien.py). Vorher waren
+    # Input/ und Output/ offen (2026-10-09). klein liest wie bisher.
+    if nur_nutzer_ordner():
         return AUSSERHALB
     # Sashas Nutzerordner (Input/, Output/; core/nutzer_ordner.py, seit
     # 2026-10-09): dort liegt, was er der KI gibt — lesbar bis auf Secrets

@@ -1,7 +1,8 @@
 # core/zip_sicher.py
 #
 # Eine Zip sicher lesen und auspacken — das Handwerk, das import_skill
-# (core/skill_import.py) und unzip (core/input_dateien.py) teilen.
+# (core/skill_import.py) und unzip (core/ablage_zip.py, seit 2026-10-11 in der
+# Ablage) teilen.
 #
 # 2026-10-09 aus skill_import herausgezogen, als unzip dazukam: zwei Kopien
 # derselben Prüfung („kein .., kein absoluter Pfad, kein Verweis, nicht zu

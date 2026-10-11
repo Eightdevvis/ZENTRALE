@@ -70,7 +70,7 @@ eigenen Dateien (Grenze 600 Zeilen, [../doku_regeln.md](../doku_regeln.md)):
 | Werkzeuge aus dem Schema | [werkzeug_erzeuger.md](werkzeug_erzeuger.md) |
 | Sandbox `run_code` | [sandbox.md](sandbox.md) |
 | Skills | [skills.md](skills.md) |
-| Nutzerordner, Suchen, Claude-Skills übernehmen, Reichweite von gross | [nutzerordner.md](nutzerordner.md) |
+| Dateien der KI (nur die Ablage), Suchen, Claude-Skills übernehmen, Reichweite von gross | [nutzerordner.md](nutzerordner.md) |
 | Browser der KI | [browser.md](browser.md) |
 | Internet-Pipe, Netz-Transparenz | [internet_netz.md](internet_netz.md) |
 | Devtools, Tool-Calls im Chat, Ablauf-Protokoll („trace ›") | [transparenz.md](transparenz.md) |

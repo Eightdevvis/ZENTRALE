@@ -62,20 +62,24 @@ import dateien
 # Bytes, keine neue Fassung (eine geänderte Datei ist ein neues Dokument,
 # das Original bleibt daneben liegen).
 # xlsx (2026-10-11, Skill excel): eine Excel-Tabelle, Bytes wie pdf/docx.
-ARTEN = ("markdown", "text", "code", "csv", "bild", "html", "pdf", "docx", "xlsx")
-BINAER = ("bild", "pdf", "docx", "xlsx")
-DATEIEN = ("pdf", "docx", "xlsx")          # fertige Dateien: keine neue Fassung
-# einwurf (2026-10-11): was Sasha in den Einwurf-Ordner wirft (core/einwurf.py).
-HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick", "ablauf", "einwurf")
+# zip (2026-10-11): seit die Ablage der einzige Ort für Dateien ist (Input/
+# ist abgebaut), kommen Skill-Zips und andere Zips hierher (import_skill, unzip).
+ARTEN = ("markdown", "text", "code", "csv", "bild", "html", "pdf", "docx", "xlsx", "zip")
+BINAER = ("bild", "pdf", "docx", "xlsx", "zip")
+DATEIEN = ("pdf", "docx", "xlsx", "zip")   # fertige Dateien: keine neue Fassung
+# einwurf (2026-10-11): was Sasha in ~/Zentrale/Ablage legt (core/ablage_sichtbar.py);
+# ausgepackt: eine Datei aus einer Zip der Ablage (unzip).
+HERKUENFTE = ("ki", "sandbox", "anhang", "morgenblick", "ablauf", "einwurf", "ausgepackt")
 VON = ("sasha", "ki")
 
 _ENDUNG = {"markdown": ".md", "text": ".txt", "csv": ".csv", "html": ".html",
-           "pdf": ".pdf", "docx": ".docx", "xlsx": ".xlsx"}
+           "pdf": ".pdf", "docx": ".docx", "xlsx": ".xlsx", "zip": ".zip"}
 DATEI_MIME = {"pdf": "application/pdf",
               "docx": "application/vnd.openxmlformats-officedocument."
                       "wordprocessingml.document",
               "xlsx": "application/vnd.openxmlformats-officedocument."
-                      "spreadsheetml.sheet"}
+                      "spreadsheetml.sheet",
+              "zip": "application/zip"}
 _CODE_ENDUNG = {
     "python": ".py", "py": ".py", "shell": ".sh", "bash": ".sh", "sh": ".sh",
     "javascript": ".js", "js": ".js", "typescript": ".ts", "ts": ".ts",
@@ -250,7 +254,8 @@ def _pruefen_inhalt(art, inhalt, grenze=TEXT_MAX_ZEICHEN):
             raise Fehler(f"Datei zu groß (höchstens {DATEI_MAX_BYTES // 1024 // 1024} MB).")
         kopf = bytes(inhalt[:1024])
         if (art == "pdf" and b"%PDF-" not in kopf) or \
-                (art in ("docx", "xlsx") and kopf[:4] != b"PK\x03\x04"):
+                (art in ("docx", "xlsx") and kopf[:4] != b"PK\x03\x04") or \
+                (art == "zip" and kopf[:4] not in (b"PK\x03\x04", b"PK\x05\x06")):
             raise Fehler(f"Das ist keine {art.upper()}-Datei.")
         return bytes(inhalt)
     if art == "bild":

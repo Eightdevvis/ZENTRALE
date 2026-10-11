@@ -18,8 +18,8 @@ import ablage
 import browser_sitzung
 import fehlercodes
 import gedaechtnis
-import input_dateien
 import ki_ablage_adapter
+import ki_dateien
 import ki_pdf_word
 import ki_tabelle
 import ki_werkzeuge
@@ -122,9 +122,7 @@ def _stand(wurzeln):
 @pytest.fixture
 def wurzeln(umgebung):  # noqa: F811
     import graphs
-    import nutzer_ordner
-    return [gedaechtnis._DIR, ablage.ordner(), skills.ordner(), graphs._DATA_DIR,
-            nutzer_ordner.wurzel()]
+    return [gedaechtnis._DIR, ablage.ordner(), skills.ordner(), graphs._DATA_DIR]
 
 
 def _vorbereiten():
@@ -199,24 +197,17 @@ def _faelle(ids):
     ]
 
 
-def _skill_ordner_bauen(name):
-    """Ein gültiger Skill-Ordner in Input/ für import_skill (2026-10-09)."""
-    import nutzer_ordner
-    from pathlib import Path
-    wo = Path(nutzer_ordner.unterordner()) / name
-    wo.mkdir()
-    (wo / "SKILL.md").write_text(f"---\nname: {wo.name}\ndescription: Wenn z.\n---\n\n1. B.\n",
-                                 encoding="utf-8")
-    return name
-
-
-def _zip_bauen(name):
-    """Eine Zip in Input/ für unzip/remove_input (2026-10-09)."""
+def _zip_bauen(name, skill=None):
+    """Eine Zip in der Ablage für import_skill/unzip (seit 2026-10-11; vorher Input/)."""
+    import io
     import zipfile
-    import nutzer_ordner
-    with zipfile.ZipFile(os.path.join(nutzer_ordner.unterordner(), name), "w") as z:
-        z.writestr("a.txt", "eins")
-    return name
+    roh = io.BytesIO()
+    with zipfile.ZipFile(roh, "w") as z:
+        if skill:
+            z.writestr("SKILL.md", f"---\nname: {skill}\ndescription: Wenn z.\n---\n\n1. B.\n")
+        else:
+            z.writestr("a.txt", "eins")
+    return ablage.anlegen(name, roh.getvalue(), "zip", herkunft="einwurf")["id"]
 
 
 def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, monkeypatch):  # noqa: F811
@@ -224,14 +215,11 @@ def test_abbruch_nach_dem_schreiben_laesst_alles_wie_es_war(wurzeln, umgebung, m
     gesehen = set()
     faelle = _faelle(ids) + [
         # Nachgelesen nicht in der Liste → der neue Ordner ist wieder weg.
-        ("import_skill", {"pfad": _skill_ordner_bauen("probe-import")},
+        ("import_skill", {"id": _zip_bauen("probe.zip", skill="probe-import")},
          [(skills, "aktive", lambda: [])]),
-        # unzip/remove_input (2026-10-09): nachgezählt falsch → Output/ wie vorher;
-        # nachgesehen nicht im Papierkorb → zurück in Input/.
-        ("unzip", {"datei": _zip_bauen("probe.zip")},
-         [(input_dateien, "nachgezaehlt", lambda ziel: (0, 0))]),
-        ("remove_input", {"datei": _zip_bauen("weg.zip")},
-         [(input_dateien, "liegt", lambda neu, alt: False)]),
+        # unzip (seit 2026-10-11 in der Ablage): nachgezählt falsch → keins da.
+        ("unzip", {"id": _zip_bauen("probe2.zip")},
+         [(ki_dateien, "nachgezaehlt", lambda angelegt: [])]),
     ]
     for name, args, attrappen in faelle:
         vorher = _stand(wurzeln)

@@ -93,8 +93,7 @@ def _frage_docx_aendern(args: dict) -> str:
 # ── Einträge ────────────────────────────────────────────────────────────
 
 _QUELLE = {"type": "string",
-           "description": "Ablage-id (auch Anhang) oder Pfad in Input/ bzw. "
-                          "Output/, z.B. 'Input/plan.pdf'."}
+           "description": "Ablage-id (auch Anhang oder was Sasha in die Ablage gelegt hat)."}
 _MARKDOWN = {"type": "string",
              "description": "Markdown: # Überschriften, Absätze, **fett**, Listen, "
                             "| Tabellen |, ``` Code."}

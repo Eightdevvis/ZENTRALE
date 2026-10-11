@@ -15,8 +15,8 @@
 # Vorsilben: W allgemein, K Kalender (K-<CODE> des Kalender-Kerns kommen
 # gleichnamig dazu), N Notizen/Gedächtnis, A Ablage, D Download, M
 # Messreihen, S Skills, P PDF/Word, T Tabellen (Excel/CSV, seit 2026-10-11),
-# I Internet (lesend), B Browser, Z Sashas
-# Nutzerordner (~/Zentrale: unzip, remove_input; read_file und fetch_document auf gross).
+# I Internet (lesend), B Browser, Z Zips und Dateipfade (bis 2026-10-11:
+# Sashas Nutzerordner Input/Output — seitdem ist die Ablage der eine Ort).
 # tests/test_fehlercodes.py hält die
 # Tabelle und den Code deckungsgleich. Angebundene Programme (Anbindungs-
 # Beschreibung, seit 2026-10-11) wählen eine eigene Vorsilbe aus 1–3 Buchstaben
@@ -226,22 +226,19 @@ CODES = {
     "S-ABGELEHNT": (
         "Die Anleitung wurde nicht gespeichert (Grund im Ergebnis: Name, Format, schreibgeschützt).",
         "Den Grund beheben; eine mitgelieferte Anleitung nicht überschreiben."),
-    # Skills übernehmen (import_skill, 2026-10-09, core/skill_import.py)
+    # Skills übernehmen (import_skill, 2026-10-09; seit 2026-10-11 aus der Ablage)
     "S-QUELLE-FEHLT": (
-        "Die genannte Zip-Datei bzw. der Ordner existiert nicht in Input/ (oder kein Pfad angegeben).",
-        "Mit find_files nach dem Namen suchen und den gefundenen Pfad nehmen."),
-    "S-QUELLE-AUSSERHALB": (
-        "Der Pfad liegt nicht in Sashas Input/-Ordner; übernommen wird nur von dort.",
-        "Sasha bitten, die Zip bzw. den Ordner in seinen Input/-Ordner zu legen."),
-    "S-QUELLE-GESPERRT": (
-        "Die Datei ist versteckt oder sieht nach einem Schlüssel aus.",
-        "Nicht umgehen. Sasha fragen."),
+        "Kein Dokument mit dieser id in der Ablage (oder keine id angegeben).",
+        "Mit find_files nach dem Titel suchen und die id nehmen."),
+    "S-KEINE-ZIP": (
+        "Das Dokument ist keine Zip.",
+        "Die Zip nehmen, in der der Skill steckt (find_files '*.zip')."),
     "S-ZIP-KAPUTT": (
-        "Die Datei ist keine lesbare Zip (kaputt, verschlüsselt, oder gar keine Zip).",
-        "Sasha sagen; er soll die Zip neu herunterladen oder den ausgepackten Ordner nennen."),
+        "Die Datei ist keine lesbare Zip (kaputt oder verschlüsselt).",
+        "Sasha sagen; er soll die Zip neu herunterladen und in die Ablage legen."),
     "S-UNSICHER": (
-        "Die Zip oder der Ordner enthält einen Pfad nach draußen (absolut oder mit ..) "
-        "oder einen Verweis (Symlink). Es wurde nichts ausgepackt.",
+        "Die Zip enthält einen Pfad nach draußen (absolut oder mit ..) oder einen "
+        "Verweis (Symlink). Es wurde nichts ausgepackt.",
         "Nicht umgehen. Sasha sagen, dass die Datei so nicht übernommen wird."),
     "S-ZU-GROSS": (
         "Zu groß: entpackt über 20 MB oder über 500 Dateien.",
@@ -256,26 +253,16 @@ CODES = {
     "S-SKILL-GIBT-ES": (
         "Einen Skill mit diesem Namen gibt es schon; überschrieben wird nie. Nichts übernommen.",
         "Sasha fragen, was er will (den alten mit load_skill zeigen). Nicht selbst umbenennen."),
-    # ── Nutzerordner: unzip, remove_input (2026-10-09, core/input_dateien.py) ──
-    "Z-QUELLE-FEHLT": (
-        "Die genannte Datei gibt es nicht in Input/ (oder kein Name angegeben).",
-        "Mit find_files nach dem Namen suchen und den gefundenen Namen nehmen."),
-    "Z-QUELLE-AUSSERHALB": (
-        "Der Pfad liegt nicht in Sashas Input/-Ordner; nur von dort wird ausgepackt "
-        "bzw. weggeräumt.",
-        "Sasha bitten, die Datei in seinen Input/-Ordner zu legen."),
-    # read_file und fetch_document auf gross (2026-10-09, core/context.py):
-    # gelesen wird nur noch in Input/ und Output/, nicht mehr im Projektbaum.
+    # ── Zips auspacken: unzip (2026-10-09; seit 2026-10-11 in der Ablage,
+    #    core/ablage_zip.py) ──
+    # read_file/fetch_document mit Pfad auf gross (core/context.py, 2026-10-09):
+    # Dateien gibt es für die KI nur noch in der Ablage (seit 2026-10-11).
     "Z-AUSSERHALB": (
-        "Der Pfad liegt nicht in Input/ oder Output/ des Nutzerordners; Dateien "
-        "liest du nur dort (und Anhänge/Dokumente aus der Ablage per id).",
-        "Nicht umgehen. Darum bitten, die Datei in Input/ zu legen oder im Chat anzuhängen."),
-    "Z-QUELLE-GESPERRT": (
-        "Die Datei ist versteckt oder sieht nach einem Schlüssel aus.",
-        "Nicht umgehen. Sasha fragen."),
+        "Ein Dateipfad — Dateien liest du nur aus der Ablage (per id oder Titel).",
+        "Nicht umgehen. Sasha bitten, die Datei in ~/Zentrale/Ablage zu legen oder anzuhängen."),
     "Z-KEINE-ZIP": (
-        "Die Datei ist keine Zip (oder ein Ordner).",
-        "Den Namen prüfen (find_files); andere Dateien mit read_file/read_pdf lesen."),
+        "Das Dokument ist keine Zip.",
+        "Die id prüfen (find_files '*.zip'); andere Dokumente mit read_file/read_pdf lesen."),
     "Z-ZIP-KAPUTT": (
         "Die Zip ist kaputt oder verschlüsselt. Es wurde nichts ausgepackt.",
         "Sasha sagen; er soll sie neu herunterladen."),
@@ -284,21 +271,15 @@ CODES = {
         "Verweis (Symlink). Es wurde nichts ausgepackt.",
         "Nicht umgehen. Sasha sagen, dass die Zip so nicht ausgepackt wird."),
     "Z-ZU-GROSS": (
-        "Zu groß: entpackt über 20 MB oder über 500 Dateien. Nichts ausgepackt.",
+        "Zu groß: entpackt über 20 MB oder über 50 Dateien (jede würde ein Dokument). "
+        "Nichts ausgepackt.",
         "Sasha sagen; mit unzip ansehen=true lässt sich der Inhalt trotzdem zeigen."),
     "Z-LEER": (
-        "In der Zip liegt nichts, was ausgepackt würde (leer, oder nur Verstecktes/"
-        "Ballast/Schlüssel).",
+        "In der Zip liegt nichts, was die Ablage aufnimmt (leer, nur Verstecktes/Ballast/"
+        "Schlüssel, oder nur Dateien ohne bekannte Art).",
         "Sasha sagen, was drin ist (unzip ansehen=true)."),
-    "Z-ZIEL-GIBT-ES": (
-        "Den Ordner Output/<name>/ gibt es schon; überschrieben wird nie. Nichts ausgepackt.",
-        "Sasha fragen: den vorhandenen Ordner ansehen oder erst wegräumen lassen."),
-    "Z-NICHT-DIREKT": (
-        "Die Datei liegt in einem Unterordner von Input/; weggeräumt wird nur, was "
-        "direkt in Input/ liegt.",
-        "Den obersten Ordner in Input/ nennen — nach Sashas Ja."),
-    "Z-VERSCHIEBEN": (
-        "Das Verschieben in den Papierkorb ging nicht (Grund im Ergebnis). Nichts verschoben.",
+    "Z-ABGELEHNT": (
+        "Die Ablage hat eine ausgepackte Datei abgelehnt (Grund im Ergebnis); nichts ausgepackt.",
         "Sasha sagen; nicht wiederholen."),
     # ── Internet (lesend) ──
     "I-SUCHE-AUS": (
@@ -351,15 +332,8 @@ CODES = {
     "B-KEIN-ZURUECK": ("Es gibt keine vorige Seite.", "browser_open mit einer Adresse."),
     # ── PDF / Word ──
     "P-QUELLE-FEHLT": (
-        "Keine Quelle angegeben, oder es ist weder eine Ablage-id noch eine Datei.",
-        "Ablage-id oder Dateipfad angeben."),
-    "P-QUELLE-AUSSERHALB": (
-        "Der Dateipfad liegt nicht in Input/ oder Output/ des Nutzerordners; nur dort "
-        "(oder per Ablage-id) wird gelesen.",
-        "Darum bitten, die Datei in Input/ zu legen oder im Chat anzuhängen."),
-    "P-QUELLE-GESPERRT": (
-        "Diese Datei darf die KI nicht lesen.",
-        "Sasha bitten, die Datei anzuhängen."),
+        "Keine Quelle angegeben, oder kein Dokument mit dieser id in der Ablage.",
+        "Ablage-id angeben (find_files sucht nach Titel)."),
     "P-FALSCHE-ART": (
         "Die Quelle ist keine Datei dieser Art (z. B. kein PDF).",
         "Das passende Werkzeug nehmen (read_document, read_docx, read_pdf)."),

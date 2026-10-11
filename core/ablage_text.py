@@ -13,7 +13,9 @@
 # Dienst (Schicht 2, memory/system/bauplan_kern.md).
 
 import hashlib
+import io
 import threading
+import zipfile
 from collections import OrderedDict
 
 import ablage
@@ -34,7 +36,27 @@ def art_von(daten: bytes) -> str | None:
         return "docx"
     if tabelle_datei.ist_xlsx(daten):        # Excel (2026-10-11, Skill excel)
         return "xlsx"
+    if daten[:4] in (b"PK\x03\x04", b"PK\x05\x06"):   # sonst eine Zip (2026-10-11)
+        return "zip"
     return None
+
+
+ZIP_LISTE = 300           # so viele Einträge zeigt die Vorschau einer Zip
+
+
+def _zip_liste(daten: bytes) -> dict:
+    """Was in einer Zip steckt — Namen und Größen, nichts ausgepackt."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(daten)) as z:
+            infos = [i for i in z.infolist() if not i.is_dir()]
+    except zipfile.BadZipFile:
+        return {"art": "zip", "text": "", "fehler": "Die Zip ist kaputt."}
+    zeilen = [f"Zip mit {len(infos)} Dateien (unzip packt aus, import_skill übernimmt Skills):"]
+    zeilen += [f"  {i.filename}  ({max(1, round(i.file_size / 1024))} KB)"
+               for i in infos[:ZIP_LISTE]]
+    if len(infos) > ZIP_LISTE:
+        zeilen.append(f"  … {len(infos) - ZIP_LISTE} weitere")
+    return {"art": "zip", "text": "\n".join(zeilen), "fehler": "", "leer": not infos}
 
 
 def _zerlegen(art: str, daten: bytes) -> dict:
@@ -48,6 +70,8 @@ def _zerlegen(art: str, daten: bytes) -> dict:
         return {"art": art, "text": "\n\n".join(teile), "fehler": "",
                 "seiten": r.get("seiten_gesamt") or 0, "felder": r.get("felder") or 0,
                 "leer": not teile}
+    if art == "zip":
+        return _zip_liste(daten)
     if art == "xlsx":
         try:
             r = tabelle_datei.lesen(daten)
@@ -99,4 +123,7 @@ def kopfzeile(erg: dict, doc_id: str) -> str:
     if erg.get("art") == "xlsx":
         return (f"(Excel-Tabelle — Original in der Ablage, id {doc_id}; mehr: read_xlsx, "
                 f"ändern: edit_xlsx)")
+    if erg.get("art") == "zip":
+        return (f"(Zip — Original in der Ablage, id {doc_id}; auspacken: unzip, "
+                f"Skills übernehmen: import_skill)")
     return (f"(Word-Datei — Original in der Ablage, id {doc_id}; ändern: edit_docx)")

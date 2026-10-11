@@ -16,8 +16,6 @@ import os
 
 import ablage
 import ablage_text
-import context
-import input_aufraeumen
 import pdf_datei
 import pdf_schreiben
 import textbloecke
@@ -43,14 +41,17 @@ class _Fehlt(Exception):
         self.code, self.grund = code, grund
 
 
-# ── Quelle: Ablage-id oder Datei ────────────────────────────────────────
+# ── Quelle: Ablage-id ───────────────────────────────────────────────────
+# Seit 2026-10-11 nur noch die Ablage (Sasha: „ja einfach nur die ablage
+# dann") — vorher auch Pfade in Input/ und Output/. Was Sasha selbst hat,
+# legt er in ~/Zentrale/Ablage oder hängt es an.
 
 def _quelle(quelle, art: str) -> tuple:
-    """→ (bytes, name, ablage_id|None). art: "pdf" | "docx"."""
+    """→ (bytes, name, ablage_id). art: "pdf" | "docx"."""
     q = str(quelle or "").strip()
     wort = "PDF" if art == "pdf" else "Word-Datei"
     if not q:
-        raise _Fehlt("P-QUELLE-FEHLT", "keine Quelle angegeben — Ablage-id oder Dateipfad")
+        raise _Fehlt("P-QUELLE-FEHLT", "keine Quelle angegeben — Ablage-id")
     if ablage.gibt_es(q):
         k = ablage.kopf(q)
         if k.get("art") != art:
@@ -62,30 +63,14 @@ def _quelle(quelle, art: str) -> tuple:
             raise _Fehlt("P-FALSCHE-ART", f"„{k.get('titel')}“ ist keine {wort} "
                          f"(Art {k.get('art')})")
         return ablage.roh(q), k.get("titel") or q, q
-    pfad = context.pfad_aufloesen(q)
-    # Dieselbe Sperre wie read_file und fetch_document (context.erlaubt):
-    # eine dritte Antwort auf „was darf sie sehen" wäre ein Umweg.
-    grund = context.erlaubt(pfad)
-    if grund == context.AUSSERHALB:
-        # gross seit 2026-10-09: nur Input/ und Output/ (core/context.py).
-        raise _Fehlt("P-QUELLE-AUSSERHALB", f"{q} liegt nicht in Input/ oder Output/ "
-                     "des Nutzerordners")
-    if grund:
-        raise _Fehlt("P-QUELLE-GESPERRT", f"{q} — {grund}. Sasha kann die Datei anhängen")
-    if not os.path.isfile(pfad):
-        raise _Fehlt("P-QUELLE-FEHLT", f"weder eine Ablage-id noch eine Datei: {q}")
-    if os.path.getsize(pfad) > pdf_datei.MAX_BYTES:
-        raise _Fehlt("P-ZU-GROSS", "die Datei ist zu groß (höchstens 30 MB)")
-    with open(pfad, "rb") as f:
-        return f.read(), os.path.basename(pfad), None
+    raise _Fehlt("P-QUELLE-FEHLT", f"kein Dokument „{q}“ in der Ablage — Ablage-id nehmen "
+                 "(find_files sucht nach Titel)")
 
 
 def _fertig(ergebnis, quelle, doc_id):
-    """Eine Datei (keine Ablage-id) ganz gelesen: liegt sie direkt in Input/,
-    hängt die Aufräum-Zeile an (core/input_aufraeumen.py, 2026-10-09)."""
-    if doc_id:
-        return ergebnis
-    return input_aufraeumen.nach_verarbeitung(ergebnis, context.pfad_aufloesen(quelle))
+    """Bis 2026-10-11 hängte das die Aufräum-Zeile für Input/ an; die Ablage
+    braucht sie nicht (wegräumen: trash_document)."""
+    return ergebnis
 
 
 def _herkunft(name: str, doc_id) -> str:

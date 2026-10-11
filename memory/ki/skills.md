@@ -5,7 +5,7 @@
 festen Kopf (Deckel 6.000 Zeichen, wird nicht gleichmäßig gekürzt), Anleitung
 per `load_skill`, Dateien per `load_skill(datei=…)`; Skripte nur über
 `run_code(skill=…)`. Anlegen/Umschreiben ist gegatet, abschalten kann nur Sasha.
-14 Anthropic-Skills als Vorlagen. Übernehmen von Claude-Skills aus Input/:
+14 Anthropic-Skills als Vorlagen. Übernehmen von Claude-Skills aus einer Zip der Ablage (seit 2026-10-11; vorher Input/):
 [nutzerordner.md](nutzerordner.md).
 
 **Warum:** Sasha: echte Claude-Skills sollen ohne Umbau hineinpassen. Ein Skill

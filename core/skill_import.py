@@ -7,8 +7,10 @@
 # den ZENTRALE-Ordner und bat, den Skill zu importieren. Es gab keinen Weg —
 # die KI hätte ihn höchstens Datei für Datei abschreiben können.
 #
-# Woher: nur aus Sashas Input/ (core/nutzer_ordner.py) — dorthin legt er,
-# was die KI übernehmen soll.
+# Woher: seit 2026-10-11 eine Zip in der Ablage (Ablage-id) — Sasha legt sie
+# in ~/Zentrale/Ablage oder hängt sie an. Vorher aus Input/ (core/
+# nutzer_ordner.py); Input/ ist für die KI abgebaut, die Ablage ist der eine
+# Ort für Dateien (Sasha: „ja einfach nur die ablage dann").
 #
 # Erkannte Formen (nach dem Auspacken; ein einzelner Hüllordner wird
 # übersprungen):
@@ -30,6 +32,7 @@
 #
 # Dienst (Schicht 2, memory/system/bauplan_kern.md).
 
+import contextlib
 import json
 import os
 import shutil
@@ -38,10 +41,9 @@ import uuid
 import zipfile
 from datetime import date
 
-import context
+import ablage
 import datasync
 import dateien
-import nutzer_ordner
 import skill_format
 import skills
 import zip_sicher
@@ -62,28 +64,31 @@ class Fehler(Exception):
 
 # ── Quelle ─────────────────────────────────────────────────────────────
 
-def quelle(pfad) -> str:
-    """Der echte Pfad zu dem, was Sasha nennt — NUR in seinem Input/
-    (core/nutzer_ordner.py, seit 2026-10-09: der Assistent greift nicht mehr
-    in den Projektbaum). „x.zip" und „Input/x.zip" meinen dasselbe; ein
-    absoluter Pfad zählt nur, wenn er (Verweise aufgelöst) in Input/ liegt."""
-    roh = str(pfad or "").strip()
-    if not roh:
-        raise Fehler("S-QUELLE-FEHLT", "kein Pfad angegeben")
-    echt = nutzer_ordner.aufloesen(roh, erlaubt=(nutzer_ordner.INPUT,))
-    if echt is None:
-        raise Fehler("S-QUELLE-AUSSERHALB",
-                     f"„{roh}“ liegt nicht in {nutzer_ordner.anzeige(nutzer_ordner.unterordner())}/")
-    if not os.path.exists(echt):
-        raise Fehler("S-QUELLE-FEHLT", f"„{roh}“ gibt es nicht in Input/ — mit find_files suchen")
-    if os.path.basename(echt) == skill_format.SKILL_MD:
-        echt = os.path.dirname(echt)              # die SKILL.md selbst genannt
-    rel = os.path.relpath(echt, nutzer_ordner.wurzel())
-    if any(t.startswith(".") for t in rel.split(os.sep)) or context._is_secret(rel):
-        raise Fehler("S-QUELLE-GESPERRT", "versteckt oder nach Schlüssel aussehend")
-    if os.path.isfile(echt) and not zipfile.is_zipfile(echt):
-        raise Fehler("S-ZIP-KAPUTT", f"„{os.path.basename(echt)}“ ist keine Zip-Datei")
-    return echt
+@contextlib.contextmanager
+def _quelle(angabe):
+    """Ablage-id einer Zip → Pfad einer Wegwerf-Kopie (heißt wie das
+    Dokument, für die Quellen-Angabe). Wirft Fehler (mit Code)."""
+    q = str(angabe or "").strip()
+    if not q:
+        raise Fehler("S-QUELLE-FEHLT", "keine Ablage-id angegeben")
+    if not ablage.gibt_es(q):
+        raise Fehler("S-QUELLE-FEHLT", f"kein Dokument „{q}“ in der Ablage — mit find_files suchen")
+    k = ablage.kopf(q)
+    if k.get("art") != "zip":
+        raise Fehler("S-KEINE-ZIP", f"„{k.get('titel')}“ ist keine Zip (Art {k.get('art')})")
+    name = "".join(z for z in str(k.get("titel") or q) if z not in "/\\\x00").lstrip(".") or q
+    if not name.lower().endswith(".zip"):
+        name += ".zip"
+    tmp = tempfile.mkdtemp(prefix="zentrale_skill_quelle_")
+    try:
+        pfad = os.path.join(tmp, name)
+        with open(pfad, "wb") as f:
+            f.write(ablage.roh(q))
+        if not zipfile.is_zipfile(pfad):
+            raise Fehler("S-ZIP-KAPUTT", f"„{k.get('titel')}“ ist keine lesbare Zip")
+        yield pfad
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ── Auspacken ──────────────────────────────────────────────────────────
@@ -265,32 +270,36 @@ def inhalt_zaehlen(ordner: str) -> dict:
 
 # ── Vorschau (für die Frage an Sasha) und Übernehmen ───────────────────
 
-def vorschau(pfad) -> tuple:
+def vorschau(angabe) -> tuple:
     """(dateiname, [skill-namen]) — für die Frage am Gate. Packt in einen
     Wegwerf-Ordner aus und prüft wie beim Übernehmen; geht das nicht, sind
     die Namen leer (der Fehler kommt dann beim Übernehmen mit Code)."""
-    name = os.path.basename(str(pfad or "").rstrip("/")) or "?"
+    name = str(angabe or "").strip() or "?"
     try:
-        echt = quelle(pfad)
-    except Fehler:
-        return name, []
-    tmp = tempfile.mkdtemp(prefix="zentrale_skill_vorschau_")
-    try:
-        _auspacken(echt, tmp)
-        return os.path.basename(echt), [n for n, _, _ in _pruefen(_finden(tmp)[0])]
+        with _quelle(angabe) as echt:
+            name = os.path.basename(echt)
+            tmp = tempfile.mkdtemp(prefix="zentrale_skill_vorschau_")
+            try:
+                _auspacken(echt, tmp)
+                return name, [n for n, _, _ in _pruefen(_finden(tmp)[0])]
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
     except (Fehler, OSError):
-        return os.path.basename(echt), []
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        return name, []
 
 
-def uebernehmen(pfad) -> dict:
+def uebernehmen(angabe) -> dict:
+    """Die Skills aus der Zip mit dieser Ablage-id übernehmen (siehe _aus)."""
+    with _quelle(angabe) as echt:
+        return _aus(echt)
+
+
+def _aus(echt: str) -> dict:
     """Die Skills aus `pfad` übernehmen: status aktiv (Sasha hat am Gate ja
     gesagt), herkunft sasha. Ganz oder gar nicht: bricht etwas ab oder steht
     danach nicht in der Skill-Liste, ist jeder neue Ordner wieder weg.
     → {namen, inhalt: {name: inhalt_zaehlen}, ausgelassen, quelle}.
     Wirft Fehler (mit Code)."""
-    echt = quelle(pfad)
     wurzel = skills.ordner()
     arbeit = os.path.join(wurzel, f".import.{os.getpid()}.{uuid.uuid4().hex[:8]}")
     angelegt = []
@@ -332,5 +341,4 @@ def uebernehmen(pfad) -> dict:
     return {"namen": namen,
             "inhalt": {n: inhalt_zaehlen(os.path.join(wurzel, n)) for n in namen},
             "ausgelassen": ausgelassen,
-            "quelle": _quelle_text(echt, plugin, gepruefte[0][2]),
-            "echt": echt}
+            "quelle": _quelle_text(echt, plugin, gepruefte[0][2])}

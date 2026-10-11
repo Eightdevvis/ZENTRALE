@@ -252,10 +252,11 @@ Speicher `core/ablage.py`, Anhänge `core/anhang.py`, Doku `memory/ki/ablage.md`
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
-| `/api/ablage` | GET | `{dokumente: [{id, titel, art, herkunft, gespraech, gespraech_titel?, erstellt, geaendert, fassung, archiviert}]}`, neueste Änderung zuerst. `?archiv=1` → nur archivierte. |
+| `/api/ablage` | GET | `{dokumente: [{id, titel, art, herkunft, abgelegt_von, gespraech, gespraech_titel?, erstellt, geaendert, fassung, archiviert, papierkorb?}], ordner, eingeworfen: [{id, titel, zeit}]}`, neueste Änderung zuerst. `?archiv=1` → nur archivierte; `?papierkorb=1` → nur der Papierkorb (sonst ausgeblendet, seit 2026-10-11). `ordner` = ~/Zentrale/Ablage, `eingeworfen` = was Sasha in den letzten 10 Min. hineingelegt hat. |
 | `/api/ablage/<id>` | GET | `{kopf, fassung, inhalt (Text) \| null (Bild, PDF, Word), bytes, mime?, pfad}`; PDF/Word zusätzlich `text` (gelesener Text, Vorschau) und `text_fehler` (seit 2026-10-08, `memory/ki/pdf_word.md`); `?fassung=n` für eine ältere. Unbekannt → 404. |
-| `/api/ablage/<id>/roh` | GET | Die neueste Fassung einer **html**-Seite (der Morgenblick) als `text/html`, mit strenger CSP (`default-src 'none'`, kein Skript, `sandbox`). **pdf/docx** (seit 2026-10-08) als Download (`Content-Disposition: attachment`, `nosniff`). Andere Arten / unbekannt → 404. Seit 2026-10-08, `memory/werkzeuge/morgenblick.md`. |
+| `/api/ablage/<id>/roh` | GET | Die neueste Fassung einer **html**-Seite (der Morgenblick) als `text/html`, mit strenger CSP (`default-src 'none'`, kein Skript, `sandbox`). **pdf/docx/xlsx/zip** (seit 2026-10-08 bzw. -11) als Download (`Content-Disposition: attachment`, `nosniff`). Andere Arten / unbekannt → 404. Seit 2026-10-08, `memory/werkzeuge/morgenblick.md`. |
 | `/api/ablage/<id>/archiv` | POST | `{an: true}` archivieren (Standard), `{an: false}` zurückholen. Nie löschen. |
+| `/api/ablage/<id>/papierkorb` | POST | `{an: true}` in den Papierkorb (Standard), `{an: false}` zurückholen (Sasha selbst, aus der TUI; seit 2026-10-11). Nie löschen. Unbekannt → 404. |
 | `/api/anhang` | POST | `{pfad, daten (base64), gespraech?}` — die TUI schickt die Bytes, das Backend öffnet den Pfad nie, prüft ihn aber gegen die Sperrliste. → `{id, titel, art, zeichen, gekappt, hinweis}`; gesperrt/zu groß/unlesbar/kaputt → 400 mit Klartext. |
 
 ## Morgenblick (`ui/routen/morgenblick.py`, seit 2026-10-08)

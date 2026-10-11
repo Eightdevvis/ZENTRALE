@@ -69,10 +69,10 @@ Tutor.
      Wörter) nennt.
    - TUI: „offen: …" leise unter der letzten Antwort (Feld `offen`).
    - **Werkzeug-Zusagen** (seit 2026-10-09): ein Werkzeug darf selbst eine
-     Zusage eintragen (`zusagen.merken`, Feld `art`) — heute nur „Input
-     aufräumen" (`core/input_aufraeumen.py`, s. [nutzerordner.md](nutzerordner.md)). Sie verfallen nicht und werden nicht von beliebigen
-     Werkzeugen abgehakt, nur von ihrem eigenen Ablauf (remove_input lief,
-     Datei weg, Sasha sagte in einer Knopf-Frage nein).
+     Zusage eintragen (`zusagen.merken`, Feld `art`). Sie verfallen nicht und
+     werden nicht von beliebigen Werkzeugen abgehakt, nur von ihrem eigenen
+     Ablauf. Der einzige Nutzer („Input aufräumen", 2026-10-09) ist mit Input/
+     am 2026-10-11 entfallen ([nutzerordner.md](nutzerordner.md)); der Weg bleibt.
 
 4. **„Nicht da"** (seit 2026-10-09, Gespräch 20261009-155510: „Ich seh in
    der Liste keine chefkoch-Datei oder ZIP" — die Liste war nur bei 300 von
@@ -82,7 +82,7 @@ Tutor.
    PDF, Dokument, Endung, Input/Output — und einer Nicht-da-Wendung; nicht bei
    Frage oder Bedingung), muss in DIESEM Zug eine **vollständige** Suche ohne
    Treffer gelaufen sein: `find_files`/`search_files` mit der Kopfzeile
-   „Suche vollständig: 0 Treffer" (core/nutzer_suche.py; die Kopfzeile steht
+   „Suche vollständig: 0 Treffer" (core/ablage_suche.py; die Kopfzeile steht
    immer vorn und in fester Form, dazu `Befund.vollstaendig`) oder `read_file`
    mit „Datei nicht gefunden" (`ehrlichkeit.suche_belegt`). Sonst Befund
    `nicht_da` → dieselbe eine Korrekturrunde: „Du sagst ‚nicht da', hast aber
@@ -185,7 +185,7 @@ melden`.
 Suche: genau der Chefkoch-Satz (ein echter Fall, kein Falschtreffer).
 Prüfstand 48 Antworten → 0 Treffer. **0 Falschtreffer in 73 Antworten** —
 aber die Stichprobe hat nur einen einzigen echten Fall; nachmessen, sobald
-Sasha mit Input/ arbeitet.
+Sasha mit der Ablage arbeitet.
 
 ## Was als Nächstes zu messen ist
 

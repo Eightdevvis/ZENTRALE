@@ -109,7 +109,7 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
     # (test_bild_landet_in_der_ablage_mit_beleg, ohne Chromium).
     abgedeckt = {n for n, _ in AUFRUFE} | {"update_document", "combine_pdf", "edit_docx",
                                            "browser_screenshot", "import_skill",
-                                           "unzip", "remove_input"}
+                                           "unzip"}
     # Erzeugte Kalender-Werkzeuge (2026-10-10): belegt in
     # tests/test_werkzeug_kalender_erzeugt.py (Phasen, Gruppe, Ebene, Stil).
     abgedeckt |= {"set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
@@ -139,23 +139,19 @@ def test_jedes_schreibende_werkzeug_belegt_echt(umgebung):
     assert isinstance(r, Befund) and r.status == "ok" and r.beleg, r
     r = ki_werkzeuge._verteilen("update_document", {"id": doc_id, "inhalt": "drei"})
     assert isinstance(r, Befund) and r.status == "ok" and "Fassung 2" in r.beleg
-    # import_skill braucht eine Datei (2026-10-09): ein Skill-Ordner in Input/.
-    import nutzer_ordner
-    from pathlib import Path
-    skill = Path(nutzer_ordner.unterordner()) / "beleg-import"
-    skill.mkdir()
-    (skill / "SKILL.md").write_text("---\nname: beleg-import\ndescription: Wenn x.\n---\n\n1. A.\n",
-                                    encoding="utf-8")
-    r = ki_werkzeuge._verteilen("import_skill", {"pfad": "beleg-import"})
-    assert isinstance(r, Befund) and r.status == "ok" and "beleg-import" in r.beleg, r
-    # unzip und remove_input (2026-10-09): eine Zip in Input/, ausgepackt, weggeräumt.
+    # import_skill und unzip brauchen eine Zip in der Ablage (seit 2026-10-11;
+    # vorher in Input/).
+    import io
+    import ablage
     import zipfile
-    with zipfile.ZipFile(Path(nutzer_ordner.unterordner()) / "beleg.zip", "w") as z:
-        z.writestr("a.txt", "eins")
-    r = ki_werkzeuge._verteilen("unzip", {"datei": "beleg.zip"})
-    assert isinstance(r, Befund) and r.status == "ok" and "1 Datei" in r.beleg, r
-    r = ki_werkzeuge._verteilen("remove_input", {"datei": "beleg.zip"})
-    assert isinstance(r, Befund) and r.status == "ok" and "Papierkorb" in r.beleg, r
+    roh = io.BytesIO()
+    with zipfile.ZipFile(roh, "w") as z:
+        z.writestr("SKILL.md", "---\nname: beleg-import\ndescription: Wenn x.\n---\n\n1. A.\n")
+    zid = ablage.anlegen("beleg.zip", roh.getvalue(), "zip", herkunft="einwurf")["id"]
+    r = ki_werkzeuge._verteilen("import_skill", {"id": zid})
+    assert isinstance(r, Befund) and r.status == "ok" and "beleg-import" in r.beleg, r
+    r = ki_werkzeuge._verteilen("unzip", {"id": zid})
+    assert isinstance(r, Befund) and r.status == "ok" and "1 neues Dokument" in r.beleg, r
 
 
 def test_notiz_die_nicht_dasteht_ist_kein_erfolg(monkeypatch):

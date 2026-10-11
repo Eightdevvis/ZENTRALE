@@ -281,7 +281,14 @@ def test_aus_heisst_die_alten_werkzeuge():
         werkzeug_register.erzeugte_einsetzen(True)
     add = werkzeug_register.eintrag("add_calendar_entry")
     assert add.erzeugt == "kalender" and "kategorie" in add.parameter_auf("gross")["required"]
-    namen = [t["function"]["name"] for t in werkzeug_register.schema("gross")]
+    # Hinter den Kalender-Werkzeugen stehen seit 2026-10-11 Ablage und
+    # Tabellen (werkzeug_register._HINTEN) — an der Stelle wie beim Import.
+    hinten = {w.name for w in werkzeug_register._HINTEN}
+    namen = [t["function"]["name"] for t in werkzeug_register.schema("gross")
+             if t["function"]["name"] not in hinten]
+    import profil
+    assert [t["function"]["name"] for t in werkzeug_register.schema("gross")] == \
+        [t["function"]["name"] for t in profil.gross.TOOLS]
     assert namen[-9:] == ["set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
                           "set_calendar_group", "set_calendar_layer", "set_calendar_style",
                           "read_calendar_sources",

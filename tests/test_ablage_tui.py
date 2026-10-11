@@ -281,6 +281,7 @@ def test_papierkorb_ist_ein_eigener_filter_und_a_holt_zurueck(backend):
     assert c.AI["ablage"]["korb"] and [e["id"] for e in c.AI["ablage"]["eintraege"]] == ["alt"]
     assert ("p", "back") in a.tasten() and ("a", "restore") in a.tasten()
     a.zeichnen(0, 0, 24, 80)
+    a.zeichnen(0, 0, 30, 136)
     a.taste(ord("a"))
     assert ("POST", "/api/ablage/alt/papierkorb", {"an": False}) in backend
     assert "zurückgeholt" in c.AI["msg"]
