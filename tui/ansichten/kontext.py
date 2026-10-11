@@ -14,6 +14,10 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
+try:                                    # 24-Bit-Flächen nach refresh (2026-10-11)
+    from tui import echtfarbe
+except ImportError:
+    import echtfarbe
 
 from .farben import DECKKRAFT, KAL, MOTIV_FARBEN, ROLES, THEMES
 
@@ -40,6 +44,11 @@ class Kontext:
         # nächsten Bildes geleert (nie mitten im Bild — Paare sind Referenzen).
         self.PIX = {"pairs": {}, "base": 0, "top": 0, "voll": False}
         self.PIX_MODUS = (os.environ.get("ZENTRALE_PIXEL") or "mix").strip().lower()
+        # 24-Bit-Flächen (2026-10-11, tui/echtfarbe.py): None = aus, dann
+        # zeichnen alle über die 256er-Paare wie bisher. Wer echt malt, ruft
+        # echt_malen(); die Hauptschleife ruft nach refresh nachmalen().
+        self.echt = (echtfarbe.Uebermalung()
+                     if has_color and echtfarbe.truecolor_an() else None)
 
     def pix_farbe(self, rgb):
         """RGB → curses-Farbnummer: 24 Bit, wenn das Terminal es kann (auf
@@ -283,6 +292,8 @@ class Kontext:
         PIX["pairs"].clear()
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
+        if self.echt is not None:        # neue Paare/Grund: echte Flächen neu schreiben
+            self.echt.ungueltig()
 
     # ── Theme-Modus: auto (nach Uhrzeit) | day | night. Taste 't' zykliert. ──
     #
@@ -390,3 +401,31 @@ class Kontext:
         safe_addstr(y + h - 1, x, "└" + "─" * (w - 2) + "┘", C["faint"])
         if title:
             safe_addstr(y, x + 2, " " + title.upper() + " ", title_attr or C["acc"])
+
+    # ── 24-Bit-Flächen (2026-10-11, tui/echtfarbe.py) ───────────────────
+    def echt_malen(self, y, x, zeilen):
+        """Zellen (zeichen, fg_rgb, bg_rgb) ab y, x nach dem refresh in 24 Bit
+        schreiben. curses bekommt dort einen gleichbleibenden Platzhalter
+        (Leerzeichen im Theme-Grund), damit es die Zellen nicht anfasst.
+        → False, wenn 24 Bit aus ist (dann selbst über pix_attr zeichnen)."""
+        if self.echt is None:
+            return False
+        platz = self.C.get("ink", 0)
+        for r, zeile in enumerate(zeilen):
+            self.safe_addstr(y + r, x, " " * len(zeile), platz)
+        H, W = self.stdscr.getmaxyx()
+        if 0 <= y and y + len(zeilen) <= H and 0 <= x and x + max(
+                (len(z) for z in zeilen), default=0) <= W - 1:
+            self.echt.malen(y, x, zeilen, self.stdscr.inch(y, x) if zeilen else None)
+        return True
+
+    def nachmalen(self):
+        """Nach stdscr.refresh(): die 24-Bit-Flächen dieses Bildes schreiben."""
+        if self.echt is not None:
+            self.echt.nachmalen(self.stdscr)
+
+    def groesse_neu(self):
+        """Nach KEY_RESIZE: Zellform neu messen, Flächen neu schreiben."""
+        pixel.zellmass_vergessen()
+        if self.echt is not None:
+            self.echt.ungueltig()

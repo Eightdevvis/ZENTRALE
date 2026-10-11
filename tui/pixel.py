@@ -1049,3 +1049,57 @@ def _auge_zellen(zustand, denkt, farben, modus):
                         else zelle([p or F["bg"] for p in fine], modus))
         zeilen.append(line)
     return zeilen
+
+
+# ── Seitenverhältnis der Zelle (2026-10-11) ─────────────────────────────────
+# Warum (2026-10-11): AY oben rechnet fest mit 9×18-Zellen (1:2). Sashas VTE
+# mit „Monospace 10" hat ~8×17 (1:2,125) — der Farbkreis wurde dadurch ein
+# stehendes Oval. Das Terminal sagt die Pixelgröße selbst (TIOCGWINSZ:
+# ws_xpixel/ws_ypixel); fehlt sie (0) oder ist es tmux' Ersatzwert 16×32,
+# gilt 1:2. AY bleibt unverändert, damit Bernstein, Auge & Co. aussehen wie
+# bisher; wer rund rechnen will, nimmt zell_ay().
+ZELL_SEITEN_ERSATZ = 2.0
+
+
+def _zell_seiten_messen(fd):
+    import fcntl
+    import struct
+    import termios
+    zeilen, spalten, xpix, ypix = struct.unpack(
+        "HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8))
+    if not (zeilen and spalten and xpix and ypix):
+        return None
+    seiten = (ypix / zeilen) / (xpix / spalten)
+    return seiten if 1.0 <= seiten <= 4.0 else None
+
+
+@lru_cache(maxsize=1)
+def zell_seiten():
+    """Zellhöhe / Zellbreite des Terminals (≈ 2 bis 2,3); ohne Auskunft 2,0.
+    Überstimmbar mit ZENTRALE_ZELL_SEITEN=2.125 (Zahl). Nach einer
+    Größenänderung zellmass_vergessen() rufen."""
+    import os
+    roh = os.environ.get("ZENTRALE_ZELL_SEITEN", "").strip()
+    try:
+        if roh and 1.0 <= float(roh) <= 4.0:
+            return float(roh)
+    except ValueError:
+        pass
+    for fd in (1, 0, 2):
+        try:
+            seiten = _zell_seiten_messen(fd)
+        except (OSError, ValueError):
+            continue
+        if seiten:
+            return seiten
+    return ZELL_SEITEN_ERSATZ
+
+
+def zell_ay(seiten=None):
+    """Wie AY (Feinpixel-Höhe/-Breite), aber aus der echten Zellform."""
+    return (zell_seiten() if seiten is None else seiten) * FX / FY
+
+
+def zellmass_vergessen():
+    """Nach KEY_RESIZE: Zellform neu messen (Schriftgröße kann sich ändern)."""
+    zell_seiten.cache_clear()

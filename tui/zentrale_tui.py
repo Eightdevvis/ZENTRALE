@@ -1081,6 +1081,9 @@ def bild_zeichnen(u):
     erinnerung.zeichnen(H, W)
 
     stdscr.refresh()
+    # 24-Bit-Flächen (Farbwähler) erst NACH curses' refresh schreiben
+    # (2026-10-11, tui/echtfarbe.py) — sonst malte curses darüber.
+    z.nachmalen()
 
 
 def run_ui(stdscr, store):
@@ -1302,6 +1305,8 @@ def run_ui(stdscr, store):
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
 
+        if ch == curses.KEY_RESIZE:  # Zellform neu messen (Farbkreis rund), 2026-10-11
+            z.groesse_neu()
         if taste_verteilen(u, ch) == BEENDEN:
             break
         eigene.pflegen()             # eigene Apps ab und zu frisch (Abgleich)

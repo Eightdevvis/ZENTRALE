@@ -113,29 +113,29 @@ def test_kreis_ist_rund_und_aussen_leer():
 # ── Cursor, Zoom, Helligkeit ────────────────────────────────────────────────
 def test_pfeile_schieben_und_bleiben_im_kreis():
     f = fw.Farbwaehler()
+    b, h, seiten = f.geo
+    k = fw.radius_spalten(b, h, seiten)
     f.taste(curses.KEY_RIGHT)
-    assert (f.u, f.v) == (pytest.approx(fw.SCHRITT), 0)
+    assert (f.u, f.v) == (pytest.approx(1 / k), pytest.approx(0, abs=1e-12))   # genau ein Feld
     f.taste(curses.KEY_UP)
-    assert f.v == pytest.approx(fw.SCHRITT)
+    assert f.v == pytest.approx(seiten / k)                                     # eine Zeile
     for _ in range(40):
         f.taste(curses.KEY_RIGHT)
     assert f.u ** 2 + f.v ** 2 == pytest.approx(1)
     assert f.taste(curses.KEY_LEFT) is None
 
 
-def test_zoom_stufen_und_schritt_schrumpft():
+def test_zoom_stufen():
     f = fw.Farbwaehler()
-    schritte = []
+    stufen = []
     for _ in range(7):
-        schritte.append((f.zoom, f.schritt))
+        stufen.append(f.zoom)
         f.taste(ord("+"))
-    assert [z for z, _s in schritte] == [1, 2, 4, 8, 16, 16, 16]
-    assert schritte[4][1] == pytest.approx(fw.SCHRITT / 16)
-    f.taste(curses.KEY_RIGHT)
-    assert f.u == pytest.approx(fw.SCHRITT / 16)
+    assert stufen == [1, 2, 4, 8, 16, 16, 16]
+    assert f.hinweis == fw.FEINER_NICHT                 # am Ende: leise sagen, warum nichts passiert
     for _ in range(9):
         f.taste(ord("-"))
-    assert f.zoom == 1
+    assert f.zoom == 1 and f.mitte() == (0.0, 0.0)
     f.taste(ord("="))
     assert f.zoom == 2
 
@@ -600,3 +600,244 @@ def test_stylebox_zeichnen_haelt_das_budget():
     schmal = _Z()
     sb.zeichne(schmal, 0, 0, 20, 40)                         # Vorschau rutscht nach unten
     assert "Beispiel" in schmal.text()
+
+
+# ── Farbkreis-Reparatur 2026-10-11: je Fehler ein Regressionstest ───────────
+# Gemessen vorher (tmux 120×40): Pfeil senkrecht bewegte die Marke nur 4 von
+# 6 Mal; ab Zoom 2 schob jeder Druck 180–550 von 578 Kreiszellen; bei Zoom 16
+# zeigte der Kreis 4 Farben; das Oval war bei 8×17-Zellen 6 % zu hoch.
+from tui import echtfarbe  # noqa: E402
+
+PFEILE = {curses.KEY_RIGHT: (0, 1), curses.KEY_LEFT: (0, -1),
+          curses.KEY_UP: (-1, 0), curses.KEY_DOWN: (1, 0)}
+
+
+@pytest.mark.parametrize("stufe", range(len(fw.ZOOM)))
+@pytest.mark.parametrize("pfeil", list(PFEILE))
+def test_jeder_pfeil_genau_ein_feld_bei_jedem_zoom(stufe, pfeil):
+    f = fw.Farbwaehler("#e0e0ff")                       # wenig Sättigung: weit weg vom Rand
+    for _ in range(stufe):
+        f.taste(ord("+"))
+    dr, dc = PFEILE[pfeil]
+    for _ in range(3):                                  # innerhalb des Rands: der Ausschnitt steht
+        r0, c0 = f._marke(f.geo[1], f.geo[0])
+        blick = f.mitte()
+        f.taste(pfeil)
+        r1, c1 = f._marke(f.geo[1], f.geo[0])
+        assert (r1 - r0, c1 - c0) == (dr, dc), (f.zoom, pfeil)
+        assert f.mitte() == blick
+
+
+def test_ausschnitt_steht_und_wandert_erst_am_rand():
+    f = fw.Farbwaehler("#ffffff")
+    f.taste(ord("+"))
+    f.taste(ord("+"))
+    b, h, seiten = f.geo
+    blick = f.mitte()
+    bilder = []
+    spalten = []
+    for _ in range(b):
+        f.taste(curses.KEY_RIGHT)
+        bilder.append(f.mitte())
+        spalten.append(f._marke(h, b)[1])
+    rand = b - 1 - fw.RAND
+    erst = spalten.index(rand)
+    assert all(m == blick for m in bilder[:erst + 1])  # bis zum Rand: kein Bildsprung
+    assert spalten[erst:] == [rand] * (len(spalten) - erst)   # dann bleibt die Marke am Rand …
+    k = fw.radius_spalten(b, h, seiten) * f.zoom
+    for a, n in zip(bilder[erst:], bilder[erst + 1:]):        # … und das Bild rückt um genau ein Feld
+        assert n[0] - a[0] == pytest.approx(1 / k)
+    # Zoom setzt den Ausschnitt auf den Cursor (Mitte des mittleren Feldes)
+    f.taste(ord("-"))
+    assert f._marke(h, b) == (h // 2, b // 2)
+
+
+def test_raster_je_zoom_fest_beim_schieben():
+    f = fw.Farbwaehler("#ff8040")
+    f.taste(ord("+"))
+    gesehen = set()
+    for _ in range(6):
+        f.zeichne(_Z(true=True), 0, 0, 22, 70)            # je Bild frische Paare wie die TUI
+        gesehen.add(f.stufen_jetzt)
+        f.taste(curses.KEY_UP)
+    assert len(gesehen) == 1
+
+
+def test_echte_farben_werden_mit_dem_zoom_feiner():
+    f = fw.Farbwaehler("#ff8040")
+    b, h, seiten = f.geo
+
+    def bild(zoom):
+        return fw.rad_echt(b, h, (f.u, f.v) if zoom > 1 else (0.0, 0.0), zoom, 1.0,
+                           seiten, (0, 0, 0))
+
+    def farben(zellen):
+        return {c for zeile in zellen for _ch, a, u in zeile for c in (a, u)}
+    assert len(farben(bild(8))) > len(farben(bild(4))) > len(farben(bild(1)))
+    gleich = lambda c: c                                       # noqa: E731
+    assert fw.unterscheidbar(bild(8), gleich) > 0.95          # Nachbarn verschieden: keine Stufen
+    # derselbe Ausschnitt in 256 Farben wäre fast nur Stufen (das war Fehler 3)
+    grob = fw.rad_zellen(b, h, (f.u, f.v), 8, 1.0, fw.STUFEN[0], (0, 0, 0), "half", seiten)
+    assert fw.unterscheidbar(grob, pixel.rgb_256) < fw.GRENZE_256
+
+
+@pytest.mark.parametrize("start", ["#ffffff", "#ff8040", "#3366cc", "#20c060"])
+def test_256_farben_zoom_endet_wo_es_nicht_feiner_wird(start):
+    f = fw.Farbwaehler(start)
+    f.weg = "256"
+    for _ in range(6):
+        f.taste(ord("+"))
+    assert f.zoom < 16 and f.hinweis == fw.FEINER_NICHT
+    b, h, seiten = f.geo
+    if f.zoom > 1:                                      # was erreicht wird, zeigt noch Verlauf
+        zellen = fw.rad_zellen(b, h, f.mitte(), f.zoom, 1.0, fw.STUFEN[0], (0, 0, 0), "half", seiten)
+        assert fw.unterscheidbar(zellen, pixel.rgb_256) >= fw.GRENZE_256
+    z = _Z()
+    f.zeichne(z, 0, 0, 22, 70)
+    assert fw.FEINER_NICHT in z.text()
+    f.taste(curses.KEY_LEFT)
+    assert f.hinweis == ""
+
+
+@pytest.mark.parametrize("seiten", [2.0, 2.125, 2.3])
+def test_kreis_ist_in_pixeln_rund(seiten):
+    kh, kb = fw.Farbwaehler.masse(19, 66, seiten)
+    zellen = fw.rad_echt(kb, kh, (0.0, 0.0), 1, 1.0, seiten, (0, 0, 0))
+    halb = [(2 * r + i, c) for r, zeile in enumerate(zellen)
+            for c, (_ch, oben, unten) in enumerate(zeile)
+            for i, farbe in enumerate((oben, unten)) if farbe != (0, 0, 0)]
+    breite = (max(c for _r, c in halb) - min(c for _r, c in halb) + 1)          # Spaltenbreiten
+    hoehe = (max(r for r, _c in halb) - min(r for r, _c in halb) + 1) * seiten / 2
+    assert hoehe / breite == pytest.approx(1, abs=0.06)
+    assert kh % 2 and kb % 2                            # Mitte = Mitte eines Feldes
+
+
+def test_zellform_aus_tiocgwinsz_und_ersatz(monkeypatch):
+    import fcntl
+    import os
+    import pty
+    import struct
+    import termios
+    herr, knecht = pty.openpty()
+    try:
+        fcntl.ioctl(herr, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 960, 680))
+        assert pixel._zell_seiten_messen(knecht) == pytest.approx(17 / 8)
+        fcntl.ioctl(herr, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+        assert pixel._zell_seiten_messen(knecht) is None          # Terminal sagt nichts
+    finally:
+        os.close(herr)
+        os.close(knecht)
+    monkeypatch.setattr(pixel, "_zell_seiten_messen", lambda fd: None)
+    monkeypatch.delenv("ZENTRALE_ZELL_SEITEN", raising=False)
+    pixel.zellmass_vergessen()
+    assert pixel.zell_seiten() == 2.0
+    monkeypatch.setenv("ZENTRALE_ZELL_SEITEN", "2.2")
+    assert pixel.zell_seiten() == 2.0                   # gemerkt bis zur Größenänderung
+    pixel.zellmass_vergessen()
+    assert pixel.zell_seiten() == 2.2
+    assert pixel.zell_ay() == pytest.approx(2.2 * pixel.FX / pixel.FY)
+    assert pixel.AY == pytest.approx(2 / 3)             # alte Motive unverändert
+    pixel.zellmass_vergessen()
+
+
+def test_truecolor_erkennung_und_einstellung(tmp_path):
+    leer = str(tmp_path)
+    assert echtfarbe.truecolor_an({}, leer) is False
+    assert echtfarbe.truecolor_an({"COLORTERM": "truecolor"}, leer) is True
+    assert echtfarbe.truecolor_an({"COLORTERM": "24bit"}, leer) is True
+    assert echtfarbe.truecolor_an({"COLORTERM": "truecolor",
+                                   "ZENTRALE_FARBE_TRUECOLOR": "aus"}, leer) is False
+    (tmp_path / "farbe_truecolor").write_text("an\n")
+    assert echtfarbe.truecolor_an({}, leer) is True
+    (tmp_path / "farbe_truecolor").write_text("auto")
+    assert echtfarbe.truecolor_an({"COLORTERM": "truecolor"}, leer) is True
+
+
+def test_sgr_folge_setzt_farben_und_stellt_zurueck():
+    zeilen = ((("▀", (255, 0, 0), (0, 0, 255)), ("▀", (255, 0, 0), (0, 0, 255)),
+               ("○", (0, 0, 0), (1, 2, 3))),)
+    b = echtfarbe.sequenz([(4, 10, zeilen, None)]).decode()
+    assert b.startswith("\x1b7")                        # Cursor + SGR merken
+    assert b.endswith("\x1b[0m\x1b8")                   # zurück, curses' Zustand stimmt wieder
+    assert "\x1b[5;11H" in b                            # 1-basiert
+    assert b.count("\x1b[38;2;255;0;0;48;2;0;0;255m") == 1      # gleiche Farbe nicht doppelt
+    assert "\x1b[38;2;0;0;0;48;2;1;2;3m○" in b
+    maske = ((True, False, True),)
+    b = echtfarbe.sequenz([(0, 0, zeilen, maske)]).decode()
+    assert "\x1b[1;1H" in b and "\x1b[1;3H" in b and b.count("▀") == 1
+
+
+class _Schirm:
+    def __init__(self, platz=7):
+        self.platz, self.anders, self.neu, self.refreshs = platz, set(), [], 0
+
+    def inch(self, y, x):
+        return -1 if (y, x) in self.anders else self.platz
+
+    def redrawln(self, y, n):
+        self.neu.append((y, n))
+
+    def refresh(self):
+        self.refreshs += 1
+
+
+def test_uebermalung_malt_nur_wenn_noetig_und_raeumt_auf():
+    raus, uhr = [], [0.0]
+    u = echtfarbe.Uebermalung(raus.append, lambda: uhr[0])
+    s = _Schirm()
+    zeilen = [[("▀", (1, 1, 1), (2, 2, 2))] * 3] * 2
+    u.malen(5, 5, zeilen, 7)
+    u.nachmalen(s)
+    assert len(raus) == 1
+    u.malen(5, 5, zeilen, 7)
+    u.nachmalen(s)
+    assert len(raus) == 1                               # unverändert: nichts schreiben, kein Flackern
+    uhr[0] = 10.0
+    u.malen(5, 5, zeilen, 7)
+    u.nachmalen(s)
+    assert len(raus) == 2                               # ab und zu doch (falls curses darüber malte)
+    s.anders.add((6, 6))                                # jemand zeichnete über die Fläche
+    u.malen(5, 5, zeilen, 7)
+    u.nachmalen(s)
+    assert raus[-1].decode().count("▀") == 5
+    u.nachmalen(s)                                      # Modal zu: Zeilen neu malen lassen
+    assert s.neu == [(5, 2)] and s.refreshs == 1
+    u.malen(5, 5, zeilen, 7)
+    u.ungueltig()
+    u.nachmalen(s)
+    assert len(raus) == 4
+
+
+class _EchtZ(_Z):
+    def __init__(self, **k):
+        super().__init__(**k)
+        self.echt = True
+        self.flaechen = []
+
+    def echt_malen(self, y, x, zeilen):
+        self.flaechen.append((y, x, [list(z) for z in zeilen]))
+        return True
+
+
+def test_mit_truecolor_echte_flaeche_ohne_farbpaare():
+    z = _EchtZ()
+    f = fw.Farbwaehler("#ff8040")
+    f.zeichne(z, 0, 0, 22, 70)
+    assert f.weg == "echt"
+    assert not [k for k in z.PIX["pairs"] if k[0] != "x"]     # keine 256er-Paare verbraucht
+    (y, x, kreis), (_y2, _x2, feld) = z.flaechen
+    kh, kb = f.geo[1], f.geo[0]
+    assert len(kreis) == kh and all(len(zeile) == kb + 4 for zeile in kreis)
+    assert {c[0] for zeile in kreis for c in zeile[:kb]} <= {"▀", fw.MARKE}
+    assert feld[0][0][1] == (255, 128, 64)              # Farbfeld exakt, nicht ≈ 256
+    assert "≈ 256" not in z.text()
+    for _ in range(4):
+        f.taste(ord("+"))
+    assert f.zoom == 16                                 # mit 24 Bit kein Deckel
+
+
+def test_ohne_truecolor_bleibt_der_256er_weg():
+    z = _Z()
+    f = fw.Farbwaehler("#ff8040")
+    f.zeichne(z, 0, 0, 22, 70)
+    assert f.weg == "256" and [k for k in z.PIX["pairs"] if k[0] != "x"]

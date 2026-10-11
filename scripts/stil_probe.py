@@ -50,7 +50,10 @@ def lauf(stdscr, thema):
             y, x, h, w = modal.mittig(H - 2, W, 22, 70)
             modal.zeichne(z, y + 2, x, h, w)
         stdscr.refresh()
+        z.nachmalen()                                   # 24-Bit-Flächen nach refresh
         ch = stdscr.getch()
+        if ch == curses.KEY_RESIZE:
+            z.groesse_neu()
         if modal is None:
             if ch == ord("q"):
                 return

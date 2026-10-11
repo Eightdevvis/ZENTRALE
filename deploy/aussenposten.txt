@@ -24,6 +24,8 @@ tui/boot_loader.py
 # 06.10.2026) die Ansichten als eigenes Paket — sonst startet die TUI auf
 # dem Knoten gar nicht (tests/test_tui_ansichten.py prüft das).
 tui/pixel.py
+# 24-Bit-Flächen nach curses' refresh (Farbwähler, 2026-10-11), Kontext importiert sie.
+tui/echtfarbe.py
 tui/ansichten/
 tui/bausteine/
 # Reine Helfer, die Ansichten und Kacheln teilen (2026-10-10): stdlib-only,

@@ -1,6 +1,6 @@
 # Farbwähler und Stylebox — zwei Bausteine für jede Ansicht
 
-Stand 2026-10-10. Sasha wollte einen Farbwähler als Regenbogen-Kreis mit
+Stand 2026-10-11 (Farbkreis repariert: Cursor, Zoom, 24 Bit, rund). Sasha wollte einen Farbwähler als Regenbogen-Kreis mit
 einem kleinen Kreis darin, den man mit den Pfeilen verschiebt und mit + / −
 heranzoomt, und eine „Stylebox", in der man das Aussehen eines Objekts
 einstellt — für alle Apps, nicht nur den Kalender. Beide sind Bausteine
@@ -14,6 +14,8 @@ Angebot für einen Kasten steht als `stil.KASTEN` in `core/stil.py` (dort auch
 | Was | Wo |
 |---|---|
 | Farbwähler | `tui/bausteine/farbwaehler.py` |
+| 24-Bit-Flächen nach curses' refresh (Farbwähler) | `tui/echtfarbe.py`, eingehängt über `Kontext.echt_malen`/`nachmalen` |
+| Zellform (Höhe/Breite) aus dem Terminal | `pixel.zell_seiten()`, `pixel.zell_ay()` |
 | Stylebox | `tui/bausteine/stylebox.py` |
 | CSS-Wörter, Schema, Prüfung, Hex | `core/stil.py` (Schicht 1, Tür `tui/` in [bauplan_kern.md](bauplan_kern.md)) |
 | Ausprobieren ohne Backend | `venv/bin/python scripts/stil_probe.py` (`--tag` für Tag-Theme): f = Farbwähler, s = Stylebox, q = Ende |
@@ -64,32 +66,60 @@ self.modal.zeichne(self.z, y, x, h, w)
   Uhrzeigersinn: 90° Gelbgrün oben, 180° Cyan links, 270° Blau-Violett unten),
   Abstand zur Mitte = Sättigung (Mitte weiß), Helligkeit als Regler rechts.
   HSV statt HSL, weil der HSL-Kreis bei voller Helligkeit nur weiß wäre.
-- **Zoom** 1×, 2×, 4×, 8×, 16× (`ZOOM`): ab 2× zeigt der Kreis den
-  Ausschnitt um den Cursor (Lupe, der Cursor bleibt in der Mitte). Pfeil-
-  und Helligkeits-Schritt teilen sich durch den Zoom (1/12 Radius bzw. 5 %
-  bei 1×). Gerastert wird **relativ zum Ausschnitt** (`STUFEN`: Farbtöne ×
-  Sättigungen je Ausschnitt), deshalb zeigt das Hineinzoomen feinere Stufen,
-  ohne mehr Farben zu brauchen.
-- **Pixel**: jedes Feld EINE Farbe auf dem Grund des Themes, am Kreisrand
-  ein Sextant (Modus `ZENTRALE_PIXEL=half`: Halbblock) aus `pixel.sextant`.
-  So kostet jede Farbe genau ein Farbpaar. Zwei Farben je Feld (wie
-  `pixel.zellen`) brauchten bei 30×15 Feldern über 250 Paare — mehr als es
-  gibt ([pixelstil.md](pixelstil.md)).
-- **Paar-Budget**: vor dem Zeichnen zählt `rad_fuer_budget`, wie viele
-  Paare die feinste Rasterung bräuchte, und nimmt die erste aus `STUFEN`,
-  die in die freien Paare passt (minus Reserve für Regler, Feld, Marke).
-  Reicht nicht einmal die gröbste: nur Text („zu wenig farben frei"), keine
-  Farbe — so läuft `PIX` nie mitten im Bild über und färbt nichts anderes um.
-- **256 Farben / 24 Bit**: die Farbnummer wählt `Kontext.pix_farbe` (nächste
-  der 256, sonst 24 Bit auf 16er-Stufen). Bei 256 steht unter dem Feld
-  „≈ 256: n". Der Hex-Wert ist immer genau; feiner als das Terminal zeigt,
-  kann man trotzdem wählen (Zoom, Hex tippen).
+- **Cursor** (seit 11.10.2026): Zustand ist HSV (Farbton, Sättigung,
+  Helligkeit), jeder Pfeil schiebt um **genau ein Feld** des gerade
+  gezeigten Bildes (auf die Mitte des Nachbarfeldes), bei jedem Zoom. Vorher
+  war der Schritt 1/12 Radius = 1,4 Spalten bzw. 0,7 Zeilen — senkrecht
+  bewegte jeder dritte Druck nichts. Kreis-Felder sind immer ungerade
+  breit/hoch, damit die Kreismitte (weiß) genau ein Feld ist.
+- **Zoom** 1×, 2×, 4×, 8×, 16× (`ZOOM`): `+` legt den Ausschnitt mit dem
+  Cursor in die Mitte (eigener Zustand `blick`), danach **steht** der
+  Ausschnitt; erst wenn der Cursor `RAND` = 2 Felder an den Rand kommt,
+  rückt er um ganze Felder nach (vorher war er stets um den Cursor
+  zentriert, jeder Druck schob das ganze Bild). Helligkeits-Schritt 5 % bei
+  1×, geteilt durch den Zoom.
+- **Zwei Farbwege** — welcher gilt, entscheidet der Kontext:
+  - **24 Bit** (`tui/echtfarbe.py`): curses zeichnet an Kreis, Regler und
+    Farbfeld nur einen gleichbleibenden Platzhalter (Leerzeichen im
+    Theme-Grund); nach `stdscr.refresh()` schreibt `Kontext.nachmalen()` die
+    Flächen selbst mit `38;2`/`48;2`-SGR. Je Feld ein Halbblock `▀` mit zwei
+    exakten Farben (`rad_echt`, Halbpixel ≈ quadratisch, Rand weich in den
+    Grund), keine Rasterung, keine Farbpaare. Weil der Platzhalter gleich
+    bleibt, fasst curses die Zellen nicht an (kein Flackern); verschwindet
+    die Fläche oder wandert sie, malt `redrawln` die Zeilen neu (keine
+    Geisterbilder). Unverändert wird nur alle 2 s neu geschrieben. Die TUI
+    selbst bleibt bei 256 Farben (`TERM=xterm-direct` würde die Theme-Farben
+    als RGB lesen — alles blau).
+    **Einstellung `farbe_truecolor`**: `auto` | `an` | `aus` aus
+    `ZENTRALE_FARBE_TRUECOLOR` oder der Datei `~/.config/zentrale/farbe_truecolor`
+    (ein Wort, wie `theme`). `auto` = an, wenn `COLORTERM` `truecolor`/`24bit`
+    sagt (VTE setzt das; tmux reicht 24 Bit mit `terminal-features *:RGB` durch).
+  - **256 Farben** (Ersatz): wie bisher über curses-Paare — EINE Farbe je
+    Feld, am Rand ein Sextant (`ZENTRALE_PIXEL=half`: Halbblock), gerastert
+    **relativ zum Ausschnitt** (`STUFEN`), die Rasterstufe wird je Zoom
+    einmal gewählt und danach höchstens gröber (`rad_fuer_budget`, Paar-
+    Budget wie gehabt; reicht nicht einmal die gröbste: „zu wenig farben
+    frei"). **Zoom endet**, wo benachbarte Felder nicht mehr verschiedene
+    Terminal-Farben zeigen (`unterscheidbar` < `GRENZE_256` = 25 %); dann
+    steht leise „feiner geht hier nicht". Gemessen 11.10.: der xterm-Würfel
+    hat 6 Stufen je Kanal, bei Zoom 16 zeigte der Kreis nur noch 4 Farben.
+    Unter dem Farbfeld steht „≈ 256: n". Mit `TERM=xterm-direct` (curses
+    selbst 24 Bit) rundet `Kontext.pix_farbe` auf 16er-Stufen; dort gilt
+    derselbe Deckel.
+  Der Hex-Wert ist immer genau; feiner als das Terminal zeigt, kann man
+  trotzdem wählen (Hex tippen).
+- **Rund** (seit 11.10.2026): die Zellform kommt aus dem Terminal
+  (`pixel.zell_seiten()`: `TIOCGWINSZ` ws_xpixel/ws_ypixel mit Zeilen/Spalten;
+  fehlt sie: 1:2; überstimmbar `ZENTRALE_ZELL_SEITEN=2.125`), nach
+  `KEY_RESIZE` neu gemessen (`Kontext.groesse_neu`). Vorher galt fest 9×18
+  (1:2); Sashas VTE mit „Monospace 10" hat ~8×17 (1:2,125) → der Kreis war
+  6 % höher als breit. Die Kreisbreite folgt der Zellform (`masse`).
 - **Ohne Farben** (8-Farben-Terminal): kein Kreis, Hex tippen geht.
 
 | Taste | was |
 |---|---|
-| ← → ↑ ↓ | Cursor im Kreis (bleibt im Kreis) |
-| `+` (auch `=`) / `-` (auch `_`) | Zoom hinein / hinaus |
+| ← → ↑ ↓ | Cursor genau ein Feld weiter (bleibt im Kreis); am Rand rückt der Ausschnitt nach |
+| `+` (auch `=`) / `-` (auch `_`) | Zoom hinein (Ausschnitt um den Cursor) / hinaus; bei 256 Farben endet es mit „feiner geht hier nicht" |
 | Bild↑ / Bild↓ (auch `]` / `[`) | heller / dunkler |
 | `#` | Hex-Feld: `0–9 a–f` tippen, bei 6 Ziffern sofort gesetzt; ⌫ löscht; Enter nimmt (3 Ziffern = Kurzform); Esc schließt nur das Feld; ein Pfeil schließt es und bewegt |
 | Enter | nehmen → `("fertig", "#rrggbb")` |
@@ -177,5 +207,8 @@ die Box (die Box bleibt offen), sein Esc lässt den alten Wert stehen.
 
 - Icon hochladen (Datei aus `~/Zentrale/Input` wie die Desk-Bilder).
 - Andere Oberflächen (Fenster, Handy) bauen ihren Dialog aus `stil.schema()`.
-- Feiner als 16er-Stufen zeigt die TUI im 24-Bit-Modus nicht
-  (`pix_farbe` rundet für das Paar-Budget); der Hex-Wert stimmt trotzdem.
+- Mit 256 Farben (ohne `COLORTERM=truecolor`/`farbe_truecolor an`) bleibt der
+  Kreis grob und der Zoom kurz — das ist die Grenze des Terminals; der
+  Hex-Wert stimmt trotzdem.
+- Bei Zoom 16 liegen Nachbarn im 24-Bit-Kreis oft nur noch 1 Stufe (von
+  255) auseinander — feiner kann keine Bildschirmfarbe.
