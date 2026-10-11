@@ -1755,7 +1755,8 @@ wer denkt.
 (Bis 08/2026 stand hier `claude-opus-5` / `effort: medium` /
 `ZENTRALE_CLOUD_EFFORT` — die Env-Variable gibt es nicht mehr.)
 
-**Fallen der aktuellen API** (gelten auch für `tutor/cloud.py`):
+**Fallen der aktuellen API** (gelten auch für den Tutor — Repo `language-tutor`,
+`tutor/modell/weg_anthropic.py`, dort `docs/tutor_system.md`):
 - `temperature` / `top_p` / `top_k` → **400**. Kürze/Reproduzierbarkeit
   kommen nur noch aus dem Prompt.
 - `thinking: {budget_tokens: N}` → **400**. Steuerung läuft über `effort`.
@@ -1890,10 +1891,11 @@ dem Vorgeplänkel vor einem Tool-Call, das der Chat sonst schluckt), `ai.tool`,
   Verbinden selbst an; den vollen Prompt im Speicher zu halten lohnt nur, wenn
   jemand zuschaut.
 - **Endpunkt:** `GET /api/ai/debug/stream` (SSE).
-- **Eigener Bus, nicht der des Tutors.** `tutor/debug.py` bleibt getrennt: der
-  Tutor ist ein Addon und muss am Stück rausziehbar bleiben, der Kern darf
-  nicht aus `tutor/` importieren. (Die Anbieter-Liste dagegen ist seit
-  2026-10-08 nur noch eine: `core/providers.py`.)
+- **Eigener Bus, nicht der des Tutors.** Der Tutor hat seinen eigenen
+  (`tutor/debug.py`, seit 2026-10-09 im Repo `language-tutor`); der Kern
+  importiert nichts von ihm. Seit dem Auszug hat der Tutor auch wieder eine
+  eigene Anbieter-Liste (`tutor/modell/anbieter_liste.py`); in ZENTRALE ist
+  es nur `core/providers.py`.
 
 ⚠ Hier geht der komplette Prompt raus, inklusive Graph-Kontext — also Sashas
 Zustände und Erlebnisse. So privat wie der Graph selbst.

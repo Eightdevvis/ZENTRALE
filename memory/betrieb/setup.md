@@ -87,7 +87,7 @@ venv/bin/python services/download_tts_model.py es
 Neue Sprache hinzufügen: Modell-Loader in `services/tts_service.py`
 ergänzen (`_try_load_<lang>()`) und in `download_tts_model.py` einen
 neuen `download_<lang>()` anlegen. Was sonst noch zu einer neuen
-Tutor-Sprache gehört: `memory/tutor/INDEX.md` (Checkliste).
+Tutor-Sprache gehört: Repo `language-tutor`, `docs/bauplan.md` Abschnitt 4 (Checkliste).
 
 ## System-Pakete (für Pi)
 

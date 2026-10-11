@@ -14,8 +14,8 @@ Muster wie `.env`, `token`), darunter zwei Wurzeln — ZENTRALE per Whitelist
 (`data/*.json`, `core/*.py`, `ui/app.py`, `notes.md`) und `~/codicus`
 komplett, minus gesperrte Ordner (`.git`, `venv`, `worktrees`, … und
 `learning`). Gelesenes wird nach 8000 Zeichen abgeschnitten, die Liste bei
-300 Einträgen gedeckelt. Der Tutor hat keine Dateisicht, nur seine
-12 Tools (`tutor.tools._ALLOWED`). Nicht in git: `data/*.json`, `data/*.enc`,
+300 Einträgen gedeckelt. Der Tutor (eigene App) hat keine Dateisicht in
+ZENTRALE (Sandbox: Repo `language-tutor`, `docs/tutor_system.md`). Nicht in git: `data/*.json`, `data/*.enc`,
 Modelle, `tutor/data/**` (Lernstand), venv.
 
 ## Whitelist – was die KI lesen darf
@@ -45,8 +45,8 @@ notes.md
 > neue Secret-Dateien in `_SECRET_BASENAMES`/`_SECRET_SUFFIXES` eintragen, nicht
 > darauf hoffen, dass die Whitelist sie zufällig verfehlt.
 >
-> Der Lernstand des Tutors (`tutor/data/staende/<id>/<lang>/vocab.json`, siehe
-> `memory/tutor/INDEX.md`) stand nie in der Whitelist und ist der lokalen
+> Der Lernstand des Tutors (`tutor/data/staende/<id>/<lang>/vocab.json`, Pfade
+> im Repo `language-tutor`, `docs/bauplan.md`) stand nie in der Whitelist und ist der lokalen
 > KI unsichtbar — das passt zur Tutor-Sandbox.
 
 ## Zweite Wurzel: `~/codicus`
@@ -88,9 +88,9 @@ Deckel auf und ausgerechnet das, was sie täglich braucht, fällt heraus.
 `read_file` erreicht auch das Nichtgelistete.
 
 Die Whitelist gilt für die **lokale Core-KI**. Der Tutor hat eine **eigene,
-strengere** Sandbox (`tutor.tools._ALLOWED`) und kann gar keine Dateien lesen —
-nur seine 12 Tools aufrufen (Liste in `memory/tutor/INDEX.md`, Verhalten in
-`memory/tutor/INDEX.md`).
+strengere** Sandbox und kann gar keine Dateien lesen. Tutor-Interna (Tools,
+Allowlist): Repo `language-tutor`, Datei `docs/tutor_system.md` →
+„Tutor-Tools (Sandbox)".
 
 `notes.md` ist explizit zum freien Reinschreiben gedacht – alles dort
 landet beim nächsten KI-Call im Kontext (sofern die KI das File liest).
@@ -112,7 +112,7 @@ Bedacht, damit das Context-Window des Modells nicht überläuft.
 | `data/ai_config.json` | **API-Keys** + Kill-Switches (`core/ai_config.py`)             |
 | `data/*.enc`          | verschlüsselter Mail-Zugangsdaten-Blob (`core/mail_secrets.py`)|
 | `data/tts_model/`     | Modelldateien, viel zu groß für Git                           |
-| `tutor/data/**`       | (Seit 2026-10-09 nur noch der ALTE Ort, den die Tutor-App `language-tutor` weiter liest, bis Sasha umzieht.) Spielstände des Tutors (`staende/<id>/<lang>/…`: vocab, game, srs, persona_mem …), `tutor_config.json` (Provider-Wahl), Persona-Medien — Pfade in `memory/tutor/INDEX.md` |
+| `tutor/data/**`       | (Seit 2026-10-09 nur noch der ALTE Ort, den die Tutor-App `language-tutor` weiter liest, bis Sasha umzieht.) Spielstände des Tutors (`staende/<id>/<lang>/…`: vocab, game, fsrs, persona_mem …), `tutor_config.json` (Provider-Wahl), Persona-Medien — Pfade: Repo `language-tutor`, `docs/bauplan.md` Abschnitt 2 |
 | `venv/`               | Python-Virtualenv (lokal); auf dem Pi heißt der Ordner `.venv` |
 | `core/__pycache__/`   | Python-Bytecode                                               |
 
@@ -126,8 +126,8 @@ ignoriert – lokaler Inhalt, kein Repo-Material.
 | Pfad           | Grund                                                       |
 |----------------|-------------------------------------------------------------|
 | `data/ascii/`  | handgepflegte ASCII-Bibliothek für den Bild-Marker `[[bild: name]]` – Inhalt, kein Privatkram. `.txt` (`# tags:`-Zeile + Art). Ordner per Env `ZENTRALE_ASCII_DIR` überschreibbar. Siehe `memory/ki/ki_system.md`. |
-| `tutor/langs/<lang>/` (Repo language-tutor) | die **Sprache** selbst (Pflichtdateien in `memory/tutor/INDEX.md`) – Inhalt, kein Lernstand. Trennlinie: `langs/` = Sprache (getrackt), `tutor/data/` = Fortschritt (ignoriert). |
-| `*.example`    | `data/ai_config.json.example`, `tutor/data/tutor_config.json.example` – Vorlagen ohne Secrets. |
+| `tutor/langs/<lang>/` (Repo language-tutor) | gehört dem Tutor-Repo: Sprache getrackt, Lernstand ignoriert — dessen `.gitignore` und `docs/bauplan.md` Abschnitt 4. |
+| `*.example`    | `data/ai_config.json.example` – Vorlage ohne Secrets (die Tutor-Vorlage `tutor/data/tutor_config.json.example` liegt seit 2026-10-09 im Repo `language-tutor`). |
 
 ## Auto-erstellte Files
 

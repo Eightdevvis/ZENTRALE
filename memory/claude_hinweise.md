@@ -7,7 +7,7 @@ seit 2026-10-09 eine eigene App (Repo `language-tutor`): ZENTRALE importiert
 nichts von ihm, startet ihn nur und schickt ihm Ereignisse per HTTP
 (`core/apps.py`, `core/hub_ereignisse.py`, `memory/system/hub_bauplan.md`);
 Logik lebt front-agnostisch in `core/` hinter einem `/api/`-Kontrakt, Fronten
-zeichnen nur; Struktur des Tutors gehört in `memory/tutor/INDEX.md` (Drift-Test),
+zeichnen nur; Struktur des Tutors steht im Repo `language-tutor` (`docs/bauplan.md`, Drift-Test),
 Doku folgt `memory/doku_regeln.md`; jede Änderung wird erklärt, kommentiert (WARUM)
 und getestet oder als ungetestet benannt. Git-Workflow und Feature-Tracker:
 `CLAUDE.md`.
@@ -62,8 +62,8 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
   Tutor. Ob er reagiert (nonverbal, nur in eine laufende Session, Cooldown),
   entscheidet er selbst (seine Einstellung `presence_react`). Der Hub
   importiert nie App-Code.
-  Dass die Persona von sich aus spricht, entscheidet das **Zimmer** aus
-  Mikro/PIR (`memory/tutor/INDEX.md`), nicht dieser Pfad.
+  Wann die Persona von sich aus spricht, entscheidet die App selbst (Repo
+  `language-tutor`, `tutor/ansprache.py`, `docs/bauplan.md`), nicht dieser Pfad.
 - Wann ZENTRALE selbst spricht (Termin-Erinnerung), entscheidet der Takt im
   Code, nie der Prompt (`memory/system/takt.md`). Die Uhrzeit steht bewusst nicht im
   Prompt.
@@ -102,31 +102,27 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 
 ### Cloud→Lokal-Trennung (HARTE Invariante)
 
-Die **Cloud-/Tutor-AI darf NICHT in die lokale AI greifen.** Lokale AI =
+Die **Tutor-KI darf NICHT in die lokale AI greifen.** Lokale AI =
 `ai.py`-Chat + Gedächtnis (`gedaechtnis.py`, ehemals Graph) + Consolidation.
-Die Tutor-KI (auf einem Cloud-Provider) lebt in ihrem eigenen Environment.
-Was sie sieht/anfassen kann, ist GENAU: ihr Tutor-Prompt, ihre eigene
-Tutor-History, und die **12 Tutor-Tools** (`tutor.tools.tools_for(lang)`,
-Liste in `memory/tutor/INDEX.md`). Die fassen an: die Dateien des aktiven
-Spielstands (`tutor/data/staende/<id>/<lang>/…`) und **UI-State des
-Persona-Zimmers** (`express`, `show_thought`, `watch_tv`, `play_music`) —
-mehr nicht, nie die Core-KI. Durchgesetzt durch:
+Tutor-Interna (was die Tutor-KI sieht, Choke-Point `_ALLOWED`, ihre Tools):
+Repo `language-tutor`, Datei `docs/tutor_system.md` → „Cloud→Lokal-Trennung".
 
-- **Choke-Point `tutor.tools.execute_tool`** – geschlossene Allowlist (`_ALLOWED`);
-  jeder andere Tool-Name wird abgelehnt **und** ins stdout-Log geflaggt.
-- **`ai.py`-Gates** (`if tools is None`): bei gesetzten Tools KEINE
-  Gedächtnis-Injektion und KEINE Consolidation → Tutor-Gespräche landen NIE
-  im lokalen Memory.
-- Dieselben Gates in `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode =
-  tools is not None`): kein Graph, kein Gate, keine Bild-Marker, kein
-  Jetzt-Block. (Die Tutor-Seite dieser Trennung lebt seit 09.10. im Repo
-  `language-tutor`; `tutor.tools`/`_ALLOWED` oben sind dort.)
+ZENTRALE-seitig gilt:
+
+- Der Tutor ist seit 2026-10-09 eigener Prozess; ZENTRALE importiert nichts
+  von ihm und er nichts von ZENTRALE (Hub-Regel, `memory/system/hub_bauplan.md`).
+  Kontakt nur per HTTP-Ereignis (`core/hub_ereignisse.py`).
+- Die **Gates für fremde Tool-Sets** bleiben: `ai.py` (`if tools is None`) und
+  `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode = tools is not None`) —
+  bei gesetzten Tools keine Gedächtnis-Injektion, keine Consolidation, kein
+  Graph, kein Gate, keine Bild-Marker, kein Jetzt-Block. Heute übergibt kein
+  Aufrufer in ZENTRALE `tools=`; wer das wieder tut, muss diese Gates kennen.
 
 Umgekehrt gilt für den **Cloud-Kern**: lokal sieht alles von Cloud, Cloud
 nichts von lokal (eigener Store; `memory/ki/ki_system.md` → Isolations-Invariante).
 
-Wer hier etwas ändert (neuen Tutor-Tool, anderes Tool-Set an einen Cloud-Pfad
-hängen), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
+Wer hier etwas ändert (ein Tool-Set an einen Cloud-Pfad hängen, die Gates
+lockern), weicht diese Trennung bewusst auf – im Zweifel sein lassen.
 
 ### Audio-Architektur
 
@@ -236,3 +232,6 @@ verletzt dieses Prinzip — Logik gehört nach `core/`, nicht in die Front.
 - **2026-09-18** — auf `memory/doku_regeln.md` gebracht; veraltete Sätze (Audio
   hartkodiert auf zh, `memory.py`, RELEASE-Bump für den Pi, 15 Tools)
   entfernt.
+- **2026-10-11** — Tutor-Interna der Cloud→Lokal-Trennung ins Repo
+  `language-tutor` verschoben (`docs/tutor_system.md`); hier bleibt die
+  ZENTRALE-Seite.
