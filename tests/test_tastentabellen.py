@@ -51,8 +51,7 @@ FAELLE = [(p, a) for p, z in ZUSTAENDE.items() for a, auf in z.items() if auf is
 
 def _programm(u, name):
     p = u.z.programme.get(name)
-    if getattr(p, "TASTEN", None) is None:
-        pytest.skip("%s hat noch keine Tastentabelle" % name)
+    assert getattr(p, "TASTEN", None) is not None, "%s hat keine Tastentabelle" % name
     return p
 
 

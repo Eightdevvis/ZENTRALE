@@ -12,8 +12,9 @@
 #      offenen Ansicht — nachgeschlagen beim Horcher (horcher.py), der jedes
 #      Programm beim Verkabeln einmal nach seiner Tastentabelle gefragt hat
 #      (seit 2026-10-11; dieselbe Tabelle verteilt die Tasten, tasten.py).
-#   3. Übergang: ein Programm ohne Tabelle liefert noch selbst (tasten())
-#      oder steht in befehle.CTX_KEYS.
+#   Bis 2026-10-11 stand hier eine Handtabelle (befehle.CTX_KEYS) und jedes
+#   Programm schrieb zusätzlich eine Hinweiszeile in seinen Kasten — beides
+#   lief auseinander. Jetzt gibt es nur diese eine Leiste.
 #   Wo die Befehlszeile aufgeht (kein Freitext-Feld), steht zuletzt „/ commands".
 #
 # Ein Eintrag ist (taste, was), englisch beschriftet (Sasha, 07.10.2026).
@@ -22,8 +23,7 @@
 # muss im Fenster etwas tun.
 
 from . import tasten as T
-from .befehle import CTX_KEYS, CTX_TITLES
-from .fenster import aktives_programm, current_ctx, in_text_entry
+from .fenster import PROGRAMME, STARTSEITE, aktives_programm, in_text_entry, titel
 
 TRENNER = " · "
 
@@ -38,11 +38,6 @@ def codes(taste):
     if taste in KEINE_TASTE or (taste.startswith("/") and len(taste) > 1):
         return None
     return [T.codes(n) for n in T.tt.namen(taste)]
-
-
-def tasten_der_zeile(eintraege):
-    """Nur echte Tasten (die Fußleiste zeigt keine '/…'-Befehle)."""
-    return [(t, w) for t, w in eintraege if not (t.startswith("/") and len(t) > 1)]
 
 
 def text(eintraege):
@@ -82,28 +77,31 @@ def eintraege(u):
 
 
 def programm_tasten(u):
-    """(titel, [(taste, was)]) des fokussierten Programms in seiner Ansicht —
-    für die Leiste und das '/'-Fenster. Ohne Befehle der Befehlszeile."""
-    z = u.z
-    name = aktives_programm(z)
+    """(titel, [(taste, was)]) des fokussierten Programms in seiner offenen
+    Ansicht — für die Leiste und das '/'-Fenster. Nachgeschlagen beim
+    Horcher (keine Rechnung beim Zeichnen)."""
+    name = aktives_programm(u.z)
+    return titel(name), ansicht_tasten(u, name)
+
+
+def ansicht_tasten(u, name):
+    horcher = getattr(u.z, "horcher", None)
     p = getattr(u, name, None)
-    horcher = getattr(z, "horcher", None)
-    if horcher is not None and horcher.kennt(name) and hasattr(p, "ansicht") \
-            and horcher.herkunft(name) != "ohne":
-        return name, horcher.eintraege(name, p.ansicht())
-    # ── Übergang: Programme ohne Tastentabelle ──
-    ck = current_ctx(z)
-    ansicht = ansicht_mit_tasten(u, ck)
-    if ansicht is not None:
-        return CTX_TITLES.get(ck, ck), list(ansicht.tasten())
-    return CTX_TITLES.get(ck, ck) if ck else name, tasten_der_zeile(CTX_KEYS.get(ck, []))
+    if horcher is None or p is None:
+        return []
+    f = getattr(p, "ansicht", None)
+    return horcher.eintraege(name, f() if callable(f) else "start")
 
 
-# Kontext → Name der Ansicht im Bündel, die ihre Tasten selbst liefert.
-ANSICHTEN = {"ai": "chat"}
-
-
-def ansicht_mit_tasten(u, ck):
-    name = ANSICHTEN.get(ck)
-    ansicht = getattr(u, name, None) if name else None
-    return ansicht if hasattr(ansicht, "tasten") else None
+def hilfe(u):
+    """[(programm, „taste was · …")] für /help: je Programm die Tasten seiner
+    ersten (Haupt-)Ansicht, aus dem Horcher — keine zweite Liste von Hand."""
+    horcher = getattr(u.z, "horcher", None)
+    if horcher is None:
+        return []
+    raus = []
+    for name in [STARTSEITE] + [n for _d, n in PROGRAMME]:
+        ansichten = horcher.ansichten(name)
+        if ansichten:
+            raus.append((titel(name), text(horcher.eintraege(name, ansichten[0]))))
+    return raus

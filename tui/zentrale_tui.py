@@ -73,7 +73,7 @@ bar = ansichten.fokus.bar
 fmt_uptime, tele_value = ansichten.technik.fmt_uptime, ansichten.technik.tele_value
 TELE_ROWS = ansichten.technik.TELE_ROWS
 # Welches Fenster hat den Fokus (Freitext? welche Tastenhilfe?): ansichten/fenster.py
-in_text_entry, current_ctx = ansichten.fenster.in_text_entry, ansichten.fenster.current_ctx
+in_text_entry = ansichten.fenster.in_text_entry
 LAUF_TICK_MS = ansichten.technik.LAUF_TICK_MS   # Takt der Schleife, während eine Zeile läuft
 BEENDEN = ansichten.basis.BEENDEN       # 'q' aus einer Ansicht: Hauptschleife verlassen
 STRG_C = 3                              # Strg+C als Zeichen (raw-Modus, run_ui)
@@ -772,12 +772,8 @@ def befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, app_start):
 def taste_verteilen(u, ch):
     """Eine Taste an das Fenster mit dem Fokus (früher die erste Hälfte der
     Hauptschleife von run_ui). -> BEENDEN, wenn die TUI enden soll."""
-    import curses
-    AI, DASH, G, K, L, LAUF, M = u.AI, u.DASH, u.G, u.K, u.L, u.LAUF, u.M
-    MAIL, NOTE, PIANO, TECH, bz = u.MAIL, u.NOTE, u.PIANO, u.TECH, u.bz
-    chat, erinnerung, fokus, graphen = u.chat, u.erinnerung, u.fokus, u.graphen
-    kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
-    post, app_start, store, z = u.post, u.app_start, u.store, u.z
+    DASH, LAUF, TECH, bz = u.DASH, u.LAUF, u.TECH, u.bz
+    chat, erinnerung, app_start, store, z = u.chat, u.erinnerung, u.app_start, u.store, u.z
     if ch == STRG_C:
         # Strg+C kommt seit 07.10.2026 als Zeichen (raw-Modus, siehe run_ui).
         # Im Chat stoppt es die Antwort und beendet NIE die TUI; überall
@@ -806,42 +802,12 @@ def taste_verteilen(u, ch):
         # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
         # '/' ein Zeichen (siehe in_text_entry), darum hier das Guard.
         bz.oeffnen()
-    elif G["active"]:                      # Graph-Werkzeug hat den Fokus
-        if graphen.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif L["active"]:                      # Listen-Werkzeug hat den Fokus
-        if fokus.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif M["active"]:                      # Karte hat den Fokus
-        if karte.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif K["active"]:                      # Kalender hat den Fokus
-        if kalender.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif MAIL["active"] and MAIL["replying"]:   # Antwort-Editor hat den Fokus
-        post.taste_antwort(ch)
-    elif MAIL["active"]:                   # Post/Mail-Panel hat den Fokus
-        if post.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif NOTE["active"]:                   # Notiz-Werkzeug hat den Fokus
-        if notizen.taste(ch) == BEENDEN:
-            return BEENDEN
-    elif TECH["active"]:                   # Technik-Ansicht hat den Fokus
-        u.technik.taste(ch)
-    elif PIANO["active"]:                  # Klavier hat den Fokus
-        klavier.taste(ch)
-    elif AI["active"]:                     # KI-Chat hat den Fokus
-        chat.taste(ch)
-    elif u.DESK["active"]:                 # Desk View hat den Fokus (2026-10-09)
-        u.desk.taste(ch)                   # (auch über der Werkstatt, die darunter wartet)
-    elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
-        u.shop.taste(ch)
-    elif u.WERK["active"]:                 # Werkstatt (2026-10-10)
-        u.werkstatt.taste(ch)
-    else:                                  # Startseite: das Rad
-        # Tastentabelle der Startseite (ansichten/startseite.py, 2026-10-11);
-        # was Enter öffnet: ansichten/rad_wahl.OEFFNEN. '/' greift oben global.
-        if u.startseite.taste(ch) == BEENDEN:
+    else:
+        # Das Programm mit dem Fokus (fenster.PROGRAMME, sonst die Startseite)
+        # verteilt die Taste aus seiner Tastentabelle (tasten.py, 2026-10-11).
+        # Bis dahin stand hier eine Kette je Fenster.
+        p = z.programme.get(ansichten.fenster.aktives_programm(z))
+        if p is not None and p.taste(ch) == BEENDEN:
             return BEENDEN
 
 
@@ -1026,7 +992,7 @@ def bild_zeichnen(u):
 
     # ── Befehls-Overlay (klappt über den Body nach oben auf) ──────────
     if bz.cmd_mode or bz.help_latched:
-        bz.zeichne_overlay(fussleiste.programm_tasten(u), top, bot, W)
+        bz.zeichne_overlay(fussleiste.programm_tasten(u), top, bot, W, fussleiste.hilfe(u))
 
     # ── Trennlinie + Befehlszeile (›) ─────────────────────────────────
     safe_addstr(sep_row, 0, "─" * W, C["faint"])

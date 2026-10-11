@@ -2,9 +2,7 @@
 #
 # Die Befehlszeile der TUI: '/' öffnet sie in jedem Fenster, eine Live-Liste
 # klappt nach oben auf und filtert mit jedem Buchstaben, Enter führt aus.
-# Hier stehen die Befehle, die Tastenhilfe je Fenster (TUI_KEYS/CTX_KEYS —
-# die EINZIGE Wahrheit über die Belegung, siehe memory/system/tastatur.md),
-# die reine Logik (parse_command, overlay_rows; ohne curses, testbar) und der
+# Hier stehen die Befehle, die reine Logik (parse_command, overlay_rows; ohne curses, testbar) und der
 # Zustand der Zeile (Befehlszeile). Was ein Befehl BEWIRKT (Theme, Cloud,
 # Neustart, Hot Reload …), entscheidet die Hauptschleife in zentrale_tui.py —
 # dafür muss man alles kennen, das ist ihr Job.
@@ -26,208 +24,10 @@ TUI_COMMANDS = [
     ("/reboot", "ZENTRALE neu starten: Backend + Fenster, neuer Code"),
     ("/quit",  "ZENTRALE-TUI wirklich beenden  ('q' legt das Fenster nur weg)"),
 ]
-TUI_KEYS = [
-    ("←→",    "Startseite: das gewählte Rad drehen — vorn steht die App, die enter öffnet"),
-    ("alt+←→", "Startseite: das Rad wechseln (apps | technik | erschaffen), die Galaxie dreht mit"),
-    ("enter", "Startseite: die App vorn im gewählten Rad öffnen"),
-    ("esc",   "zurück, Stufe für Stufe bis zur Startseite; dort klappt esc ZENTRALE zu (wie $mod+z)"),
-    # Die Apps im Rad — seit 02.10.2026 nicht mehr per Buchstabe,
-    # sondern übers Rad (Sasha). Links steht deshalb der Name im Rad.
-    ("graph", "Graph-Werkzeug (Mitte): anlegen / eintragen · p vorhersage-ergänzung · r tages-reminder"),
-    ("notizen", "Notizen (Mitte): freie notiz aus blöcken · ↑↓ block · t/l/f text/liste/float · e bearbeiten · d weg (fragt bei inhalt) · r titel · n übersicht · esc speichern & zu"),
-    ("karte", "Karte (Mitte): pan ↑↓←→/hjkl · zoom +/− · 0 reset · Alt+↑↓←→ Land fokussieren · o=Overlay (Handel→Politik→aus) · ,/. Zeit ←→ · ; jetzt · w=Fenster"),
-    ("kalender", "Kalender (Mitte), bedienbar wie calcurse: v dreht A Tagesliste → B Monat → C Woche · a neu (Feld „Advanced“: Typ normal/liste und Stylebox; Typ liste = Titel ist der oberste offene Punkt einer Liste/eines Projekts, ! hakt ihn ab) · e ändern · d löschen · r wiederholen · enter ansehen · c/p kopieren · t/w/m/y springen · g gehe zu · x erledigte · in A tab zwischen Terminen/Kalender/TODO"),
-    ("post", "Post/Mail (Mitte): enter rein · e eingang (neu/ungelesen, ●=ungelesen) · f abhaken (gelesen+einsortieren) · lesen: ←→ vor/zurück, ↓ ausklappen/scrollen, ↑ scrollen · v lesen/liste · a antw · s einsort · d lösch · x abgleich · esc zurück"),
-    ("space", "KI-Chat (Mitte): tippen + enter fragt die KI · alt+enter oder \\ + enter neue zeile · ←→ home end del: cursor · ↑↓ scrollen (in mehrzeiliger eingabe: zeile wechseln, dann pgup/pgdn) · ctrl+c stoppt eine laufende antwort · esc schließt (die antwort läuft weiter, ● wenn fertig) · /help im chat: /new /chats /model /provider /effort /budget /local /cloud /auto"),
-    ("tutor", "Persona-Zimmer (eigene App, eigenes fenster): die person wohnt drin, läuft rum, redet mit stimme · tippen+enter im fenster · Alt+M stumm · braucht einen bildschirm"),
-    ("fokus", "Fokus (Mitte): oben projekte, drunter alle listen · enter reindiven · a/s neu · space abhaken · r name · d weg · p projekt · f setzt den knoten als alleinigen fokus (rendert dann allein in der FOCUS-box) · m/> verschieben"),
-    ("klavier", "Klavier (Mitte): die Tastatur IST die Klaviatur — y x c v b n m , . - weiß, s d g h j l ö schwarz · ←→ oktave · space nimmt eine melodie auf (fragt beim stoppen nach dem namen) · ↑↓ melodie wählen · enter abspielen · r umbenennen · D löschen · k/esc zu"),
-    ("elektronik", "Elektronik: öffnet direkt den desk „Elektronik“ (legt ihn beim ersten mal an) · esc zurück zum rad"),
-    ("werkstatt", "Werkstatt (Rad erschaffen): der schmied baut eine eigene app — name, symbol (bild aus ~/Zentrale/Input oder zufällig), vorlage (desk view) · dazu deine apps und desks: öffnen, umbenennen, symbol ändern, wegwerfen · ↑↓ wählen · enter · esc einen schritt zurück"),
-    ("desk", "Desk View (Mitte, aus elektronik, einer eigenen app oder der werkstatt) · ↑↓←→ kasten wählen · enter greifen, pfeile schieben, enter ablegen (esc zurück) · + neu (zettel, bild, kalender) · e bearbeiten (ctrl+s speichert) · o öffnen (bild, kachel) · v verbinden · d löschen · r größe ändern (pfeile, enter behält, esc zurück) · shift+pfeile ausschnitt schieben"),
-    ("/",   "Befehlszeile öffnen"),
-]
-
-# Kontext-Tasten: was im gerade fokussierten Fenster geht. EINE Tabelle für
-# zwei Anzeigen: das '/'-Overlay UND die Fußleiste ganz unten
-# (fussleiste.py). Seit 07.10.2026 (Sasha: „die leiste zeigt NUR das an was
-# auch tatsächlich in dem modus grad genommen werden kann") prüft
-# tests/test_fussleiste.py für JEDEN Eintrag, dass die Taste im Fenster
-# wirklich etwas tut — eine Zeile hier, die nicht stimmt, macht den Test rot.
-# Beschriftung englisch (Sasha, 07.10.2026); welche Codes eine Beschriftung
-# meint, liest fussleiste.codes(). '/…'-Einträge sind Befehle der
-# Befehlszeile, keine Tasten (die Fußleiste zeigt sie nicht).
-# Schlüssel = Kontext aus current_ctx().
-CTX_KEYS = {
-    "home": [
-        ("←→", "turn"), ("alt+←→", "wheel"),
-        ("enter", "open"), ("space", "ai chat"), ("esc", "hide"),
-        ("/dashboard", "old dashboard"), ("/theme", "theme"),
-        ("/lauf", "stdout ticker"), ("/quit", "quit"),
-    ],
-    "technik": [
-        ("esc", "back"),
-    ],
-    "werkstatt": [
-        ("↑↓", "select"), ("enter", "choose"), ("esc", "back"),
-    ],
-    "note:edit": [
-        ("↑↓", "block"), ("t/l/f", "new text/list/float"),
-        ("e/enter", "edit"), ("d", "delete block"), ("r", "title"),
-        ("n", "overview"), ("esc", "save & close"),
-    ],
-    "note:list": [
-        ("↑↓", "select"), ("enter", "open"), ("n", "new"),
-        ("d", "delete"), ("esc", "back"),
-    ],
-    "piano": [
-        ("y x c v b n m , . -", "white keys"), ("s d g h j l", "black keys"),
-        ("←→", "octave"), ("⌫", "undo note"), ("space", "record"),
-        ("↑↓", "melody"), ("enter", "play / stop"),
-        ("r", "rename"), ("D", "delete melody"),
-        ("L", "lights"), ("t", "theme"), ("k/esc", "close"),
-    ],
-    "graph": [
-        ("↑↓", "select"), ("enter", "open"),
-        ("n", "new"), ("p", "predict"), ("r", "reminder"),
-        ("d", "delete"), ("esc", "close"),
-    ],
-    "list:forest": [
-        ("↑↓", "select"), ("enter", "open / check"), ("s", "open + add"),
-        ("n", "new list"), ("f", "focus"), ("r", "rename"), ("p", "project"),
-        ("m", "move item"), (">", "place"), ("d", "delete"), ("esc/l", "close"),
-    ],
-    "list:view": [
-        ("enter", "open / check"), ("space", "check"), ("a/s", "add"),
-        ("r", "rename"), ("p", "project"), ("f", "focus"), (">", "place"),
-        ("m", "move out"), ("d", "delete"), ("esc", "back"),
-    ],
-    "list:pick": [
-        ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
-    ],
-    "map": [
-        ("↑↓←→", "pan"), ("+/-", "zoom"), ("0", "reset"),
-        ("alt+↑↓←→", "focus country"),
-        ("o", "overlay"), ("w", "window"), ("esc", "close"),
-    ],
-    # Kalender (seit 07.10.2026 nur noch A/B/C, alle wie calcurse bedienbar;
-    # Belegung von der KALENDER-Sitzung, hier nur englisch beschriftet)
-    "cal:a:termine": [
-        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
-        ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
-        ("u", "(un)commit"), ("c/p", "copy/paste"), ("t/w/m/y", "day/week/month/year (caps: back)"),
-        ("g", "go to"), ("x", "show done"), ("R", "rhythm"),
-        ("tab", "box"), ("v", "view"), ("esc", "close"),
-    ],
-    "cal:a:kalender": [
-        ("←→", "day"), ("↑↓", "week"), ("0/$", "week start/end"),
-        ("a", "new"), ("enter", "to entries"), ("R", "rhythm"), ("tab", "box"),
-        ("esc", "close"),
-    ],
-    "cal:a:todo": [
-        ("↑↓", "select"), ("a", "new"), ("e", "edit"), ("d", "delete"),
-        ("!", "done"), ("+/-", "up/down"), ("R", "rhythm"), ("tab", "box"),
-        ("esc", "close"),
-    ],
-    "cal:b": [
-        ("←→", "day"), ("↑↓", "week"), ("enter", "edit day"), ("m/M", "month"),
-        ("g", "go to"), ("R", "rhythm"), ("v", "view"), ("esc", "close"),
-    ],
-    "cal:c": [
-        ("↑↓", "entry"), ("←→", "day"), ("a", "new"), ("e", "edit"),
-        ("d", "delete"), ("r", "repeat"), ("!", "tick off"), ("enter", "view"),
-        ("u", "(un)commit"), ("c/p", "copy/paste"), ("w/W", "week"), ("g", "go to"),
-        ("R", "rhythm"), ("v", "view"), ("esc", "close"),
-    ],
-    "mail:cats": [
-        ("↑↓", "select"), ("enter", "open"), ("e", "inbox"), ("r", "poll"),
-        ("x", "reconcile"), ("z", "recount"), ("esc", "close"),
-    ],
-    "mail:list": [
-        ("↑↓", "select"), ("enter", "read"), ("a", "reply"),
-        ("s", "sort in"), ("d", "delete"), ("x", "reconcile"),
-        ("z", "recount"), ("esc", "back"),
-    ],
-    "mail:read": [
-        ("←→", "prev/next"), ("↓", "expand/scroll"), ("↑", "scroll/fold"),
-        ("a", "reply"), ("s", "sort in"), ("d", "delete"),
-        ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
-    ],
-    # Im Eingang: f hakt ab (gelesen + einsortieren), löschen geht erst danach.
-    "mail:list:eingang": [
-        ("↑↓", "select"), ("enter", "read"), ("f", "done"), ("a", "reply"),
-        ("s", "sort in"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
-    ],
-    "mail:read:eingang": [
-        ("←→", "prev/next"), ("↓", "expand/scroll"), ("↑", "scroll/fold"),
-        ("f", "done"), ("a", "reply"), ("s", "sort in"),
-        ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
-    ],
-    # Desk View (2026-10-09, memory/hub/desk_view.md). Ausschnitt schieben:
-    # W/A/S/D (Großbuchstaben, seit 2026-10-10 die Hauptbelegung — in jedem
-    # Terminal gleich); shift+/alt+↑↓←→ stehen nur in der Hinweiszeile im
-    # Kasten (fussleiste.codes() kennt „shift+" nicht, und Platz ist knapp).
-    "desk:wahl": [
-        ("↑↓", "select"), ("enter", "open"), ("n", "new desk"), ("esc", "close"),
-    ],
-    "desk:canvas": [
-        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("+", "new"), ("e", "edit"),
-        ("r", "size"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
-    ],
-    # Ein Bild hat den Fokus (2026-10-10): o im Bildbetrachter öffnen,
-    # f Vorschau mono/farbe, e Titel.
-    "desk:bild": [
-        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("o", "open"), ("f", "mono/colour"),
-        ("e", "title"), ("r", "size"), ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
-    ],
-    # Eine Kachel hat den Fokus (2026-10-10): o öffnet sie in ihrer App,
-    # Bild↑↓ blättert (alle Tage zugleich).
-    "desk:kachel": [
-        ("↑↓←→", "select"), ("W/A/S/D", "move view"), ("enter", "grab"), ("o", "open"), ("pgup pgdn", "scroll"),
-        ("r", "size"), ("+", "new"), ("v", "connect"), ("d", "delete"), ("esc", "back"),
-    ],
-    "desk:neu": [
-        ("↑↓", "select"), ("enter", "take"), ("esc", "cancel"),
-    ],
-    "desk:greifen": [
-        ("↑↓←→", "move"), ("W/A/S/D", "move view"), ("enter", "drop"), ("esc", "cancel"),
-    ],
-    "desk:verbinden": [
-        ("↑↓←→", "target"), ("W/A/S/D", "move view"), ("enter/v", "connect"),
-        ("esc", "cancel"),
-    ],
-    "desk:frage": [
-        ("j", "yes"), ("n/esc", "no"),
-    ],
-    # Größe ändern (r, 2026-10-10): oben links bleibt, die Ecke unten rechts
-    # wächst; die Größe selbst steht live in der Hinweiszeile im Kasten.
-    "desk:groesse": [
-        ("←→", "width"), ("↑↓", "height"), ("W/A/S/D", "move view"), ("enter", "keep"),
-        ("esc", "undo"),
-    ],
-    # Schaufenster (2026-10-10, memory/hub/shop.md).
-    "shop": [
-        ("←→", "category"), ("↑↓", "select"), ("tab", "theme"), ("enter", "get"),
-        ("esc", "back"),
-    ],
-}
-CTX_TITLES = {
-    "home": "start", "graph": "graph", "list:forest": "fokus",
-    "list:view": "liste", "list:pick": "einordnen", "map": "karte",
-    "cal:a:termine": "kalender · termine", "cal:a:kalender": "kalender · monat",
-    "cal:a:todo": "kalender · todo", "cal:b": "kalender · monat", "cal:c": "kalender · woche",
-    "mail:cats": "post", "mail:list": "post · liste", "mail:read": "post · lesen",
-    "mail:list:eingang": "post · eingang", "mail:read:eingang": "post · eingang",
-    "werkstatt": "werkstatt",
-    "ai": "ki-chat",
-    "note:edit": "notiz", "note:list": "notizen", "piano": "klavier",
-    "technik": "technik",
-    "desk:wahl": "desk", "desk:canvas": "desk", "desk:greifen": "desk · greifen",
-    "desk:verbinden": "desk · verbinden", "desk:frage": "desk",
-    "desk:bild": "desk · bild", "desk:neu": "desk · neu", "desk:kachel": "desk · kachel",
-    "desk:groesse": "desk · größe",
-    "shop": "schaufenster",
-}
+# Die Tasten stehen NICHT hier: jedes Programm trägt seine Tastentabelle
+# (tasten.py, seit 2026-10-11); '/' und /help lesen sie beim Horcher
+# (fussleiste.programm_tasten, fussleiste.hilfe). Bis dahin standen hier
+# TUI_KEYS (Hilfe) und CTX_KEYS (Tasten je Fenster) von Hand.
 
 
 def parse_command(buf, theme_mode):
@@ -278,13 +78,14 @@ def parse_command(buf, theme_mode):
     return None, theme_mode, "unbekannter befehl: /" + name
 
 
-def overlay_rows(cmd_buf, help_latched, ctx=None):
+def overlay_rows(cmd_buf, help_latched, ctx=None, hilfe=()):
     """
     Welche Zeilen zeigt das Befehls-Overlay? PURE Funktion → (titel, rows).
     rows-Einträge: ("cmd", name, desc) | ("key", taste, desc) | ("sep",) |
     ("info", "", text).
 
-    - '/help' (oder help_latched) → volle Hilfe inkl. globaler Tasten.
+    - '/help' (oder help_latched) → alle Befehle, darunter je Programm die
+      Tasten seiner Hauptansicht (hilfe = [(programm, text)], aus dem Horcher).
     - nacktes '/' → die Shortcuts des FOKUSSIERTEN Fensters (ctx) plus die
       globalen Slash-Befehle darunter. ctx = (titel, [(taste, desc), …]) oder
       None (dann nur die globalen Befehle).
@@ -294,7 +95,8 @@ def overlay_rows(cmd_buf, help_latched, ctx=None):
     if full:
         rows = [("cmd", n, d) for n, d in TUI_COMMANDS]
         rows += [("sep",)]
-        rows += [("key", k, d) for k, d in TUI_KEYS]
+        rows += [("key", k, d) for k, d in hilfe]
+        rows += [("key", "/", "Befehlszeile öffnen")]
         return "hilfe", rows
     pref = cmd_buf[1:].split(" ")[0].lower()
     if not pref:                       # nacktes '/': Kontext-Tasten + globale Befehle
@@ -405,7 +207,7 @@ class Befehlszeile:
             self.cmd_buf += chr(ch)
         return None
 
-    def zeichne_overlay(self, ctx, top, bot, W):
+    def zeichne_overlay(self, ctx, top, bot, W, hilfe=()):
         """Das Befehls-Overlay (klappt über den Body nach oben auf), nur bei
         offener Zeile oder stehender Hilfe. ctx = (titel, [(taste, was)]) des
         fokussierten Programms (fussleiste.programm_tasten) oder None."""
@@ -413,7 +215,7 @@ class Befehlszeile:
             return
         z = self.z
         C, addclip, safe_addstr = z.C, z.addclip, z.safe_addstr
-        ov_title, rows = overlay_rows(self.cmd_buf, self.help_latched, ctx)
+        ov_title, rows = overlay_rows(self.cmd_buf, self.help_latched, ctx, hilfe)
         ov_w = min(W - 4, 56)
         ov_h = len(rows) + 2
         ov_x = 2

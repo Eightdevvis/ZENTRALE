@@ -558,11 +558,6 @@ class Post:
             return None
         return self.TASTEN.verteilen(self, self.ansicht(), ch)
 
-    def taste_antwort(self, ch):
-        """Übergang für die Hauptschleife: der Antwort-Editor ist seit
-        2026-10-11 eine Ansicht von taste()."""
-        return self.taste(ch)
-
     def _kategorien(self):
         d = self.MAIL["data"] or {}
         return d.get("categories") if isinstance(d.get("categories"), list) else []

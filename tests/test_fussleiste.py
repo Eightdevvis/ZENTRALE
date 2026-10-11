@@ -58,21 +58,6 @@ def test_zeile_kappt_an_ganzen_eintraegen():
     assert fussleiste.zeile(e, 5) == " ↑↓ s"
 
 
-def test_jede_beschriftung_der_tabelle_ist_lesbar():
-    for ctx, liste in befehle.CTX_KEYS.items():
-        for taste, _was in liste:
-            if taste.startswith("/") and len(taste) > 1:
-                continue
-            assert fussleiste.codes(taste), (ctx, taste)
-
-
-def test_befehle_in_der_tabelle_gibt_es():
-    namen = {n for n, _ in befehle.TUI_COMMANDS}
-    for taste, _was in befehle.CTX_KEYS["home"]:
-        if taste.startswith("/") and len(taste) > 1:
-            assert taste in namen
-
-
 # ── Die TUI ohne Bildschirm ───────────────────────────────────────────
 
 class Schirm:
@@ -334,7 +319,8 @@ def fingerabdruck(u):
     return "\n".join(teile)
 
 
-# Zustände: Name -> (Kontext, den current_ctx dann melden muss, Aufbau)
+# Aufbauten: bringen die TUI in einen Zustand (tests/tasten_zustaende/*
+# nehmen sie für die Ansichten der Programme).
 def _graph(u):
     u.graphen.oeffnen()
 
@@ -472,39 +458,6 @@ def _desk_groesse(u):                       # r: Größe ändern (2026-10-10)
     _desk(u); zt.taste_verteilen(u, ord("r"))
 
 
-ZUSTAENDE = {
-    "home": ("home", lambda u: None),
-    "graph": ("graph", _graph),
-    "list:forest": ("list:forest", _wald),
-    "list:view": ("list:view", _ebene),
-    "note:edit": ("note:edit", _notiz),
-    "note:list": ("note:list", _notizen),
-    "cal:a:termine": ("cal:a:termine", _kal_a),
-    "cal:a:kalender": ("cal:a:kalender", lambda u: _kal_a(u, 1)),
-    "cal:a:todo": ("cal:a:todo", lambda u: _kal_a(u, 2)),
-    "cal:b": ("cal:b", _kal_b),
-    "cal:c": ("cal:c", _kal_c),
-    "mail:cats": ("mail:cats", _post),
-    "mail:list": ("mail:list", _post_liste),
-    "mail:read": ("mail:read", _post_lesen),
-    "mail:list:eingang": ("mail:list:eingang", _eingang_liste),
-    "mail:read:eingang": ("mail:read:eingang", _eingang_lesen),
-    "list:pick": ("list:pick", _einordnen),
-    "piano": ("piano", _klavier),
-    "map": ("map", _karte),
-    "technik": ("technik", _technik),
-    "werkstatt": ("werkstatt", _werkstatt),
-    "desk:wahl": ("desk:wahl", _desk_wahl),
-    "desk:canvas": ("desk:canvas", _desk),
-    "desk:greifen": ("desk:greifen", _desk_greifen),
-    "desk:verbinden": ("desk:verbinden", _desk_verbinden),
-    "desk:frage": ("desk:frage", _desk_frage),
-    "desk:bild": ("desk:bild", _desk_bild),
-    "desk:neu": ("desk:neu", _desk_neu),
-    "desk:kachel": ("desk:kachel", _desk_kachel),
-    "desk:groesse": ("desk:groesse", _desk_groesse),
-    "shop": ("shop", lambda u: u.shop.oeffnen()),          # Schaufenster (2026-10-10)
-}
 
 
 # ── Chat und Überlagerungen (Kontext = None: dort fragt die Leiste die
@@ -721,7 +674,9 @@ def wirkt(welt, aufbau, folge):
     return raus is not None or fingerabdruck(u) != vorher
 
 
-ALLE = dict({n: auf for n, (_c, auf) in ZUSTAENDE.items()}, **UEBERLAGERUNGEN)
+# Die Programme in jeder Ansicht prüft tests/test_tastentabellen.py; hier
+# bleiben die Überlagerungen der Hauptschleife und die Chat-Zustände.
+ALLE = UEBERLAGERUNGEN
 
 
 @pytest.mark.parametrize("name", list(ALLE))
@@ -729,8 +684,6 @@ def test_jede_taste_in_der_leiste_tut_etwas(welt, name):
     """Die Einträge kommen aus der ECHTEN Leiste (fussleiste.eintraege) —
     was dort steht, wird gedrückt."""
     aufbau = ALLE[name]
-    if name in ZUSTAENDE:
-        assert A.fenster.current_ctx(_aufgebaut(welt, aufbau).z) == ZUSTAENDE[name][0]
     eintraege = fussleiste.eintraege(_aufgebaut(welt, aufbau))
     assert eintraege, name
     gelogen = []
@@ -774,8 +727,22 @@ def test_strg_c_im_chat_beendet_nie(welt):
     assert zt.taste_verteilen(u, 3) is None
 
 
-def test_jeder_kontext_hat_einen_zustand_im_test():
-    assert set(befehle.CTX_KEYS) <= {c for c, _ in ZUSTAENDE.values()}
+def test_hilfe_kommt_aus_den_tastentabellen(welt):
+    """/help (2026-10-11): je Programm die Tasten seiner Hauptansicht aus dem
+    Horcher — keine zweite Liste von Hand (früher befehle.TUI_KEYS)."""
+    u = _aufgebaut(welt, lambda u: None)
+    h = dict(fussleiste.hilfe(u))
+    assert "start" in h and "space ai chat" in h["start"]
+    assert {"notizen", "kalender", "liste", "post", "ki-chat", "desk"} <= set(h)
+    _titel, rows = befehle.overlay_rows("/help", True, None, fussleiste.hilfe(u))
+    assert ("key", "notizen", h["notizen"]) in rows
+
+
+def test_keine_handtabelle_mehr():
+    """Die Tasten stehen nur noch in den Tastentabellen der Programme."""
+    for alt in ("CTX_KEYS", "CTX_TITLES", "TUI_KEYS"):
+        assert not hasattr(befehle, alt), alt
+    assert not hasattr(A.fenster, "current_ctx")
 
 
 def test_bewerten_zustaende_bieten_ihre_tasten_an(welt):
