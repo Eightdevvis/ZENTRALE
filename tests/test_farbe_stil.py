@@ -342,12 +342,16 @@ def test_angebot_als_schema_mit_eingeschraenkter_wahl():
     schema["properties"]["border-style"]["oneOf"] = [
         {"const": "solid", "title": "dünn"}, {"const": "double", "title": "doppelt"}]
     sb = Stylebox({}, schema)
-    assert sb.zeilen()[0]["text"] == "—"                     # nicht gesetzt
-    sb.taste(curses.KEY_RIGHT)                               # weiter ab der Vorgabe (solid)
-    assert sb.zeilen()[0]["text"] == "‹ doppelt ›"
-    sb.taste(curses.KEY_RIGHT)
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"             # nicht gesetzt = ausgewählt
+    sb.taste(curses.KEY_RIGHT)                               # keine → dünn → doppelt → keine
     assert sb.werte["border-style"] == "solid"
     assert sb.zeilen()[0]["text"] == "‹ dünn ›"
+    sb.taste(curses.KEY_RIGHT)
+    assert sb.zeilen()[0]["text"] == "‹ doppelt ›"
+    sb.taste(curses.KEY_RIGHT)
+    assert "border-style" not in sb.werte and sb.zeilen()[0]["text"] == "‹ keine ›"
+    sb.taste(curses.KEY_LEFT)                                # rückwärts: keine → doppelt
+    assert sb.werte["border-style"] == "double"
 
 
 def test_wahl_aendern_mit_pfeilen_und_leertaste():
@@ -359,12 +363,59 @@ def test_wahl_aendern_mit_pfeilen_und_leertaste():
     assert sb.werte["border-style"] == "solid"
     for _ in range(4):
         sb.taste(9)                                          # Tab bis zum Muster
+    sb.taste(ord(" "))                                       # ‹ keine › → keins
     sb.taste(ord(" "))
     assert sb.werte["--zentrale-muster"] == "punkte"
     sb.taste(curses.KEY_BACKSPACE)
     assert "--zentrale-muster" not in sb.werte              # entfernt (war nicht gesetzt)
     sb.taste(curses.KEY_UP)
     assert sb.aktuell["name"] == "color"
+
+
+def test_keine_ist_eine_echte_wahl_im_kreis():
+    sb = Stylebox({}, ALLES)
+    texte = [z["text"] for z in sb.zeilen()]
+    assert texte == ["‹ keine ›"] * 5 + ["‹ keine › · noch gesperrt"]
+    reihe = []
+    for _ in range(6):                                       # Rahmen: einmal rundum
+        sb.taste(ord(" "))
+        reihe.append(sb.werte.get("border-style"))
+    assert reihe == ["solid", "dashed", "dotted", "double", "none", None]
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"
+    sb.taste(curses.KEY_LEFT)                                # keine ← … am Ende: none
+    assert sb.werte["border-style"] == "none"
+    sb.taste(curses.KEY_RIGHT)
+    assert "border-style" not in sb.werte                    # ‹ keine › schreibt kein CSS „none"
+    assert sb.taste(ENTER) == ("fertig", {"border-style": None})   # Vertrag wie af5915e
+    assert stil.anwenden({}, sb.ergebnis) == {}
+    sb = Stylebox({}, ALLES)
+    sb.feld = ALLES.index("--zentrale-muster")
+    sb.taste(curses.KEY_RIGHT)
+    assert sb.werte["--zentrale-muster"] == "none" and sb.zeilen()[4]["text"] == "‹ keins ›"
+    sb.taste(curses.KEY_LEFT)
+    assert sb.zeilen()[4]["text"] == "‹ keine ›"
+    sb = Stylebox({"border-style": "dashed"}, ["border-style"])
+    sb.taste(curses.KEY_LEFT)
+    sb.taste(curses.KEY_LEFT)                                # dashed → solid → keine
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"
+    assert sb.taste(ENTER) == ("fertig", {"border-style": None})
+
+
+def test_farbe_keine_setzen_keine():
+    sb = Stylebox({}, ["border-color"])
+    assert sb.zeilen()[0]["text"] == "‹ keine ›" and sb.zeilen()[0]["farbe"] is None
+    sb.taste(curses.KEY_RIGHT)                               # öffnet den Farbwähler
+    tippen(sb, "#33ccff")
+    sb.taste(ENTER)
+    assert sb.waehler is None and sb.zeilen()[0]["text"] == "#33ccff"
+    assert sb.zeilen()[0]["farbe"] == (0x33, 0xcc, 0xff)
+    sb.taste(curses.KEY_DC)                                  # zurück auf ‹ keine ›
+    assert sb.zeilen()[0]["text"] == "‹ keine ›" and "border-color" not in sb.werte
+    assert sb.taste(ENTER) == ("fertig", {"border-color": None})
+    sb = Stylebox({"border-color": "#ff8800"}, ["border-color"])
+    sb.taste(curses.KEY_BACKSPACE)
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"
+    assert sb.taste(ENTER) == ("fertig", {"border-color": None})
 
 
 def test_farbe_oeffnet_farbwaehler_und_schreibt_zurueck():
@@ -415,10 +466,10 @@ def test_entfernen_setzt_nicht_gesetzt_und_gibt_none_zurueck():
         sb.werte["border-style"] = "dashed"
         sb.taste(ch)
         assert "border-style" not in sb.werte
-    assert sb.zeilen()[0]["text"] == "—"
+    assert sb.zeilen()[0]["text"] == "‹ keine ›"
     sb.taste(curses.KEY_DOWN)
     sb.taste(curses.KEY_DC)                                  # Rahmenfarbe weg
-    assert sb.zeilen()[1]["text"] == "—" and sb.zeilen()[1]["farbe"] is None
+    assert sb.zeilen()[1]["text"] == "‹ keine ›" and sb.zeilen()[1]["farbe"] is None
     for _ in range(3):
         sb.taste(9)                                          # Muster: nie gesetzt
     sb.taste(curses.KEY_BACKSPACE)
@@ -431,7 +482,8 @@ def test_entfernen_setzt_nicht_gesetzt_und_gibt_none_zurueck():
 def test_entfernt_wieder_setzen_und_r_zurueck_auf_anfang():
     sb = Stylebox(START, ALLES)
     sb.taste(curses.KEY_BACKSPACE)
-    sb.taste(curses.KEY_RIGHT)                               # wieder gesetzt, ab Vorgabe solid
+    sb.taste(curses.KEY_RIGHT)                               # wieder gesetzt: keine → solid
+    sb.taste(curses.KEY_RIGHT)
     assert sb.werte["border-style"] == "dashed"
     assert sb.taste(ENTER) == ("fertig", {})                 # wie am Anfang
     sb = Stylebox(START, ALLES)
@@ -490,7 +542,7 @@ def test_vorschau_ohne_entfernte_eigenschaft():
     assert sb.vorschau(4, 3)[0][0][0] == RAHMEN_ZEICHEN["solid"][0]
     z = _Z()
     sb.zeichne(z, 0, 0, 14, 70)
-    assert "—" in z.text()
+    assert "‹ keine ›" in z.text()
 
 
 def test_esc_gibt_none():

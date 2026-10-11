@@ -131,13 +131,18 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
 - **Icon**: das Hochladen gibt es noch nicht. Bietet der Aufrufer
   `background-image` an, steht die Zeile da, lässt sich aber nicht öffnen
   (Hinweis „Icon: noch gesperrt"); ein vorhandener Wert bleibt unverändert.
-- **Nicht gesetzt** (seit 10.10.2026): eine Eigenschaft ohne Wert steht in
-  der Liste als „—" (auch eine Auswahl wie Rahmen — die Vorgabe zeigt sich
-  erst, wenn man ändert), die Vorschau zeichnet ohne sie (Farbe des Themes,
-  ohne Rahmenstil durchgezogen). ⌫/Entf entfernt die gewählte Eigenschaft;
-  ←→/Leertaste/`#` setzen sie wie gewohnt wieder (eine Auswahl läuft ab der
-  Vorgabe weiter, der Farbwähler startet weiß). `r` holt den Wert vom Anfang
-  zurück. Enter nimmt immer die ganze Box.
+  Ohne Wert steht da „‹ keine › · noch gesperrt".
+- **‹ keine ›** (seit 11.10.2026, vorher „—"): eine Eigenschaft ohne Wert
+  steht in der Liste als ausgewählte Wahl „‹ keine ›" — bei jeder Art
+  (Rahmen, Farben, Muster, Icon). Bei einer Auswahl ist sie der erste
+  Eintrag im Kreis von ←→/Leertaste: `keine → durchgezogen → gestrichelt →
+  gepunktet → doppelt → keiner → keine` (Muster: `keine → keins → Punkte →
+  …`). ‹ keine › heißt **nicht gesetzt**, nicht CSS `none` (das ist
+  „keiner"/„keins" im Kreis). Eine Farbe zeigt „‹ keine ›", bis
+  Leertaste/→/`#` den Farbwähler öffnen (er startet weiß). ⌫/Entf setzt
+  jede Eigenschaft zurück auf ‹ keine ›. Die Vorschau zeichnet ohne sie
+  (Farbe des Themes, ohne Rahmenstil durchgezogen). `r` holt den Wert vom
+  Anfang zurück. Enter nimmt immer die ganze Box.
 - **Rückgabe** (Vertrag): Enter prüft mit `stil.pruefen` und gibt eine
   **Änderung** zurück — nur, was sich gegenüber dem Anfang geändert hat
   (`stil.unterschied`): neuer Wert als `#rrggbb`/Wort, **entfernt als
@@ -152,8 +157,8 @@ unberührt und kommt nicht zurück. Unbekannte Namen → `ValueError`.
 | Taste | was |
 |---|---|
 | ↑ ↓ (Tab, Shift+Tab) | Eigenschaft wählen |
-| ← → / Leertaste | Auswahl ändern; bei einer Farbe: Leertaste oder → öffnet den Farbwähler (`#` öffnet ihn gleich mit Hex-Feld) |
-| ⌫ / Entf | diese Eigenschaft entfernen („—", Rückgabe None) |
+| ← → / Leertaste | Auswahl ändern (‹ keine › gehört zum Kreis); bei einer Farbe: Leertaste oder → öffnet den Farbwähler (`#` öffnet ihn gleich mit Hex-Feld) |
+| ⌫ / Entf | diese Eigenschaft auf ‹ keine › (nicht gesetzt, Rückgabe None) |
 | `r` | diese Eigenschaft zurück auf den Anfang |
 | Enter | nehmen → `("fertig", {geänderte css, entfernte: None})` |
 | Esc | abbrechen → `("abbruch",)`, `ergebnis` = None |

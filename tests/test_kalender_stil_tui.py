@@ -59,7 +59,8 @@ def test_enter_oeffnet_die_stylebox_fertig_uebernimmt_esc_laesst():
     assert f.box.text == "Uni"                                 # Vorschau mit dem Titel
     f.taste(-1)                                                # Takt der Schleife: nichts
     assert f.box is not None
-    f.taste(curses.KEY_RIGHT)                                  # Rahmen: solid → dashed
+    f.taste(curses.KEY_RIGHT)                                  # Rahmen: ‹ keine › → solid
+    f.taste(curses.KEY_RIGHT)                                  # → dashed
     assert f.taste(10) == "weiter" and f.box is None
     assert _feld(f, "stil").stil == {"border-style": "dashed"}
     f.taste(10)

@@ -13,11 +13,16 @@
 # aus stil.schema() (dort darf der Aufrufer z. B. die Rahmen-Auswahl
 # einschränken: oneOf/enum).
 #
+# Nicht gesetzt heißt „‹ keine ›" und ist eine echte Wahl (11.10.2026,
+# Sasha: „da sollte Rahmen ‹keine› einfach ausgewählt dann sein"): bei einer
+# Auswahl steht sie vorn im Kreis (keine → durchgezogen → … → keine), eine
+# Farbe zeigt sie, bis man eine wählt. ‹ keine › ist NICHT CSS „none" —
+# die Eigenschaft fehlt dann einfach.
+#
 # Tasten: ↑↓ (Tab, Shift+Tab) Eigenschaft; ←→ oder Leertaste ändern eine
 # Auswahl; bei einer Farbe öffnen Leertaste/→ den Farbwähler (# öffnet ihn
-# gleich mit Hex-Feld); ⌫/Entf entfernt die Eigenschaft („—", nicht
-# gesetzt; ändern setzt sie wieder), r setzt sie auf den Anfang zurück;
-# Enter nimmt, Esc bricht ab. Icon hochladen steht da, ist aber gesperrt
+# gleich mit Hex-Feld); ⌫/Entf setzt auf ‹ keine › (nicht gesetzt), r setzt
+# auf den Anfang zurück; Enter nimmt, Esc bricht ab. Icon hochladen steht da, ist aber gesperrt
 # (readOnly) — es lässt sich nicht öffnen.
 #
 # `taste(ch)` → None | ("fertig", {geänderte css, entfernte = None}) |
@@ -44,6 +49,8 @@ RAHMEN_ZEICHEN = {
     "solid": "┌─┐│└┘", "dashed": "┌╌┐╎└┘", "dotted": "┌┈┐┊└┘",
     "double": "╔═╗║╚╝", "none": "      ",
 }
+
+KEINE = "‹ keine ›"                     # Anzeige: Eigenschaft nicht gesetzt
 
 
 def muster_zeichen(name, zeile, spalte):
@@ -103,7 +110,7 @@ class Stylebox:
                     anfang[name] = sauber
         self.anfang = anfang
         self.eingang = set(stil or {}) & set(self.namen)   # angeboten und mitgebracht (auch kaputt)
-        self.werte = dict(anfang)       # fehlt ein Name: nicht gesetzt („—")
+        self.werte = dict(anfang)       # fehlt ein Name: nicht gesetzt (‹ keine ›)
         self.beruehrt = set()           # in dieser Sitzung geändert/entfernt
         self.feld = 0
         self.waehler = None             # offener Farbwähler
@@ -147,20 +154,23 @@ class Stylebox:
         elif f["art"] == "gesperrt" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" "), ord("#")):
             self.hinweis = "%s: noch gesperrt" % f["titel"]
         elif f["art"] == "wahl" and ch in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
-            werte = [w for w, _t in f["wahl"]]
-            jetzt = self.werte.get(f["name"], f["vorgabe"])
+            werte = [None] + [w for w, _t in f["wahl"]]     # None = ‹ keine ›
+            jetzt = self.werte.get(f["name"])
             i = werte.index(jetzt) if jetzt in werte else 0
-            self.werte[f["name"]] = werte[(i + (-1 if ch == curses.KEY_LEFT else 1)) % len(werte)]
-            self.beruehrt.add(f["name"])
+            neu = werte[(i + (-1 if ch == curses.KEY_LEFT else 1)) % len(werte)]
+            if neu is None:
+                self._keine(f["name"])
+            else:
+                self.werte[f["name"]] = neu
+                self.beruehrt.add(f["name"])
         elif f["art"] == "farbe" and ch in (curses.KEY_RIGHT, ord(" "), ord("#")):
             self.waehler = Farbwaehler(self.werte.get(f["name"]))
             if ch == ord("#"):
                 self.waehler.taste(ch)
         elif f["art"] == "gesperrt" and ch in ZURUECK + (curses.KEY_DC, ord("r")):
             self.hinweis = "%s: noch gesperrt" % f["titel"]
-        elif ch in ZURUECK or ch == curses.KEY_DC:      # entfernen: nicht gesetzt
-            if self.werte.pop(f["name"], None) is not None or f["name"] in self.eingang:
-                self.beruehrt.add(f["name"])            # nie Gesetztes kommt nicht zurück
+        elif ch in ZURUECK or ch == curses.KEY_DC:      # ‹ keine ›: nicht gesetzt
+            self._keine(f["name"])
         elif ch == ord("r"):                            # zurück auf den Anfang
             if f["name"] in self.anfang:
                 self.werte[f["name"]] = self.anfang[f["name"]]
@@ -169,27 +179,32 @@ class Stylebox:
             self.beruehrt.discard(f["name"])
         return None
 
+    def _keine(self, name):
+        """Auf ‹ keine › (nicht gesetzt); nie Gesetztes kommt nicht zurück."""
+        if self.werte.pop(name, None) is not None or name in self.eingang:
+            self.beruehrt.add(name)
+
     def tasten(self):
         if self.waehler is not None:
             return self.waehler.tasten()
         return [("↑↓", "wählen"), ("←→", "ändern"), ("space", "farbe"),
-                ("⌫", "entfernen"), ("r", "anfang"), ("enter", "nehmen"), ("esc", "zurück")]
+                ("⌫", "keine"), ("r", "anfang"), ("enter", "nehmen"), ("esc", "zurück")]
 
     # ── Inhalt (rein) ───────────────────────────────────────────────────
     def zeilen(self):
         """Je angebotener Eigenschaft: dict(name, titel, text, art, farbe, aktiv);
-        nicht gesetzt → text „—"."""
+        nicht gesetzt → text „‹ keine ›" (bei jeder Art)."""
         raus = []
         for i, f in enumerate(self.felder):
             wert = self.werte.get(f["name"])
             farbe = None
             if f["art"] == "gesperrt":
-                text = "noch gesperrt"
-            elif f["art"] == "farbe":
-                text = wert or "—"
-                farbe = stil_kern.hex_zu_rgb(wert) if wert else None
+                text = "noch gesperrt" if wert else KEINE + " · noch gesperrt"
             elif wert is None:
-                text = "—"
+                text = KEINE
+            elif f["art"] == "farbe":
+                text = wert
+                farbe = stil_kern.hex_zu_rgb(wert)
             else:
                 text = "‹ %s ›" % next((t for c, t in f["wahl"] if c == wert), wert)
             raus.append({"name": f["name"], "titel": f["titel"], "text": text,
@@ -249,8 +264,9 @@ class Stylebox:
         iy, ix, iw = y + 1, x + 2, w - 4
         farbig = getattr(z, "has_color", False) and C.get("pix_bg") is not None
         rand = max([len(f["titel"]) for f in self.felder] + [4]) + 2
-        listen_breite = rand + 16
-        for i, zl in enumerate(self.zeilen()):
+        zeilen = self.zeilen()
+        listen_breite = rand + max([16] + [len(zl["text"]) + 3 for zl in zeilen])
+        for i, zl in enumerate(zeilen):
             attr = C.get("bright", 0) | curses.A_REVERSE if zl["aktiv"] else C.get("ink", 0)
             z.safe_addstr(iy + i, ix, zl["titel"].ljust(rand)[:iw], attr)
             sx = ix + rand
