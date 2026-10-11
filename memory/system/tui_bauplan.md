@@ -74,10 +74,12 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/technik.py` | `Technik`: external, telemetrie, stdout (Laufschrift), outbound; Zeile „Abgleich" (holt `/api/abgleich` selbst im Hintergrund, alle 30 s) | `TECH` |
 | `ansichten/startseite.py` | `Startseite`: Rad, Galaxie + ihre Geometrie; drei Räder (Apps, Technik, Erschaffen) seit 2026-10-10, `rad_apps()` = feste + eigene Apps, `symbol_rad()` | liest `RAD`/`META`/`TRAD`/`ERAD` |
 | `ansichten/dashboard.py` | `Dashboard`: rechte Spalte des alten Dashboards | — |
-| `ansichten/befehle.py` | Befehle, `TUI_KEYS`/`CTX_KEYS`, `Befehlszeile` | `cmd_mode` … |
-| `ansichten/fussleiste.py` | Tastenzeile ganz unten: `eintraege(u)` (wer hat den Fokus → welche Tasten), `zeile`, `text`, `codes` (Beschriftung → Tastencodes, für den Test) | — |
+| `ansichten/befehle.py` | Befehle (`TUI_COMMANDS`), `overlay_rows` ('/'-Fenster, /help), `Befehlszeile` — keine Tasten-Tabellen mehr | `cmd_mode` … |
+| `ansichten/fussleiste.py` | Die EINE Tastenleiste ganz unten: `eintraege(u)`, `programm_tasten(u)` ('/'-Fenster), `hilfe(u)` (/help) — alles aus dem Horcher; `zeile`, `text`, `codes` | — |
+| `ansichten/tasten.py` | `Tasten`: Tastentabelle eines Programms — verteilt (`verteilen`) UND zeigt (`eintraege`); `Tasten.zusammen` für Teile mit eigener Tabelle; Tastencodes ↔ neutrale Namen (Alt-/Shift-Folgen) | — |
+| `ansichten/horcher.py` | `Horcher`: fragt jedes Programm beim Verkabeln einmal nach seiner Tabelle (sonst app.toml, sonst abhören) und merkt sich die Einträge je Ansicht | `z.horcher` |
 | `ansichten/erinnerung.py` | `Erinnerung`: Graph-Reminder-Kästchen | `nag_*` |
-| `ansichten/fenster.py` | `in_text_entry(z)`, `current_ctx(z)`: wer hat den Fokus | — |
+| `ansichten/fenster.py` | `PROGRAMME` (Reihenfolge), `aktives_programm(z)`, `verkabeln(z, u)`, `in_text_entry(z)` (aus der Tabelle) | `z.programme` |
 | `ansichten/desk.py` | `Desk`: Desk View (seit 2026-10-09) — Auswahl der Desks, dann die Fläche aus dem Baustein `bausteine/canvas.py`; laden/speichern über `/api/desk`, Bearbeiten-Modal mittig, Hinweiszeile; `direkt(name)` öffnet einen Desk ohne Auswahl, legt ihn bei Bedarf an, Esc schließt dann ganz (Elektronik, eigene Apps; 2026-10-10) | `DESK` |
 | `ansichten/shop.py` | `Shop`: Schaufenster (seit 2026-10-10, [shop.md](../hub/shop.md)) — Kategorien ←→, Thema tab, Stücke ↑↓ mit Pixel-Vorschau der Icons, enter holt; über `/api/shop*`; geöffnet von außen per `oeffnen()` (Rad-Platz kommt mit der Werkstatt), nach Hot Reload über `_offen_apps` | `SHOP` |
 | `ansichten/werkstatt.py` | `Werkstatt` (2026-10-10): der Schmied — Schritte `start`/`name`/`icon`/`bild`/`vorlage`/`agent`/`fertig`/`gebaut`, Verwalten `apps`/`app`/`desks`/`desk`/löschen; nur ↑↓ Enter Esc + Tippen; Symbol rechts ([werkstatt.md](../hub/werkstatt.md)) | `WERK` |
@@ -176,16 +178,17 @@ Abschnitt 7). Was für die TUI gilt:
   sie den Cursor — der Verlauf geht dann mit Bild↑↓. Esc: offene Auswahl/
   Erlaubnis-Frage: abbrechen/ablehnen; sonst zu — seit der Durchsicht auch
   während einer Antwort (sie läuft weiter); Stoppen ist Strg+C (unten).
-- **Esc vs. Alt:** `Chat._esc_lesen` wartet nach ESC 50 ms auf Folgetasten
-  (wie `karte.m_alt_arrow`); allein → Esc, + Enter → Alt+Enter, sonst
-  nichts. Die Deutung ist `eingabe.esc_folge` (testbar).
+- **Esc vs. Alt:** seit 2026-10-11 dekodiert `tasten.py` Alt-Folgen für
+  alle Programme; nur Ansichten mit `alt+…`-Tasten (im Chat die Eingabe:
+  alt+enter) warten nach ESC 50 ms auf Folgetasten.
 - **Umlaute:** die Hauptschleife bleibt bei `getch` (alle Ansichten rechnen
   mit Ganzzahlen); der Chat setzt UTF-8-Bytes in `eingabe.utf8_byte`
   zusammen, wie der Post-Antwort-Editor.
 - **Cursor** zeichnet `draw_ai` selbst (invers), `curs_set` bleibt 0.
-- Die Tastenzeile ganz unten liefert `Chat.tasten()`, solange der Chat
-  den Fokus hat (seit 2026-10-07, siehe „Fußleiste"). Esc/Strg+C und die
-  englischen Befehle: „Nachbesserungen nach Sashas Durchsicht".
+- Tasten: `Chat.TASTEN` (Tastentabelle aus Chat und Teilen, `Tasten.zusammen`,
+  siehe „Tastentabelle"); `chat_teil.py` ist das Gemeinsame der Teile.
+  Esc/Strg+C und die englischen Befehle: „Nachbesserungen nach Sashas
+  Durchsicht".
 - Headless geprüft mit `tests/tui_schirm/lauf.py` (Szenarien `ki_eingabe`,
   `ki_befehle`; Größe per `ZTUI_GROESSE=80x24`), das Abspiel-Backend liefert
   dafür erfundene Einstellungen.
@@ -229,7 +232,7 @@ Claude-Web-Plan Phase 3 ([../ki/gedaechtnis_dateien.md](../ki/gedaechtnis_dateie
 - **Überlagerung im Chat-Kasten** wie die Gesprächsliste, geöffnet mit
   `/gedaechtnis` (auch `/gedächtnis`, `/memory`) oder `/skills` (dann gleich
   bei den Skills). Im Chat-Code nur fünf Haken (Konstruktor, `befehl`,
-  `taste`, `draw_ai`, `fusszeile`); alles andere steht in `gedaechtnis.py`.
+  `taste`, `draw_ai`); alles andere steht in `gedaechtnis.py`.
 - **Abschnitte** hausregeln · steckbrief · ziele · bereiche · skills in einer
   Leiste oben (zu schmal → nur der gewählte als „‹ name › n/5"). ←→ oder
   Tab/Shift+Tab wechseln, 1–5 springen, ↑↓ Bild↑↓ blättern, `r` neu laden,
@@ -325,7 +328,7 @@ die TUI gilt:
 - `/neu` aus einem Projekt bleibt im Projekt (Backend), die Statuszeile sagt
   „neues gespräch im projekt „…"".
 - Im Chat-Code nur Haken (Konstruktor, `befehl`, `taste`, `draw_ai`,
-  `fusszeile`, `ai_titel`, `_taste_wahl`); alles andere in `projekte.py`.
+  `ai_titel`); alles andere in `projekte.py`.
 - Headless: Szenario `ki_projekte` in `tests/tui_schirm/lauf.py` (erfundene
   Projekte im Abspiel-Backend); ohne Bildschirm:
   `tests/test_projekte_ansicht.py`.
@@ -570,47 +573,58 @@ wie die Antwort darauf weiterging. Speicher und was drinsteht:
   Headless: Szenario `ki_trace` (`ZTUI_GROESSE=80x24` bzw. `136x30`), das
   Abspiel-Backend liefert ein erfundenes Protokoll.
 
-## Fußleiste (seit 2026-10-07)
+## Tastentabelle und Leiste (seit 2026-10-11)
 
-Sasha: „die leiste zeigt NUR das an was auch tatsächlich in dem modus grad
-genommen werden kann". `fussleiste.eintraege(u)` entscheidet:
+Sasha: „es gibt ganz unten eine leiste mit shortcuts … und dann je nach
+programm noch eine zweite leiste drüber … die shortcuts sind gehardcoded und
+fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
 
-1. Überlagerungen der Schleife: Reminder, Hilfe, offene Befehlszeile.
-2. Eine Ansicht mit `tasten()` liefert ihre Liste selbst — heute der Chat
-   (`fussleiste.ANSICHTEN = {"ai": "chat"}`), der seine Überlagerungen fragt
-   (`Gespraechsliste/Gedaechtnis/Ablageliste/Projekte.tasten()`). Dieselbe
-   Liste ergibt den Hinweis IM Kasten (`fusszeile()` = `fussleiste.text(…)`).
-3. Sonst `befehle.CTX_KEYS[current_ctx(z)]` — dieselbe Tabelle wie das
-   `/`-Overlay. Neue Kontexte: `mail:list:eingang`, `mail:read:eingang`
-   (dort hakt f ab, d löscht nicht); der Kalender liefert `cal:a:termine|
-   kalender|todo`, `cal:b`, `cal:c` (Belegung von der Kalender-Sitzung).
-4. `/ commands` nur, wo `/` die Befehlszeile öffnet (`in_text_entry`); die
-   Zeile darüber zeigt „/ for commands" ebenso nur dort.
+- **Eine Leiste**, die unterste Zeile. Im Kasten eines Programms stehen keine
+  Tasten mehr — nur Frage, Rückmeldung (msg) und Status (z. B. „24×6").
+- **Jedes Programm hat EINE Tastentabelle** (`TASTEN`, `tui/ansichten/tasten.py`,
+  Format neutral in `core/tastentabelle.py`, genauso im app.toml unter
+  `[tasten]`, `GET /api/tasten`): je Ansicht `(taste, aktion[, text])`.
+  `taste(ch)` ist `self.TASTEN.verteilen(self, self.ansicht(), ch)`, die
+  Logik steht in `aktion_<name>(taste)`. Was die Leiste zeigt, IST also, was
+  verarbeitet wird. Ohne `text` = verarbeitet, nicht gezeigt (k/j,
+  Großbuchstaben, q). `type` = Freitext, `any key` = alles übrige.
+- **Ansichten schneiden:** jeder Zustand mit anderen Tasten ist eine eigene
+  Ansicht (Nachfrage, Dialog, leere Liste, „nur ein Eintrag" …), damit dort
+  nur steht, was wirkt. Teile mit eigener Tabelle (Chat-Überlagerungen,
+  Kalender-Kästen, Desk-Canvas/Modale, Bausteine Stylebox/Farbwähler)
+  bindet `Tasten.zusammen` als „teil:ansicht" ein.
+- **Der Horcher** (`horcher.py`) ist der Client der Leiste: `fenster.verkabeln`
+  meldet nach dem Bau jedes Programm an, er liest die Tabelle EINMAL und merkt
+  sich die Einträge je Ansicht; die Leiste schlägt beim Zeichnen nur nach.
+  Ohne Tabelle: Tabelle aus dem app.toml, sonst **abhören** (eine Fabrik baut
+  das Programm in einer Wegwerf-Umgebung, er drückt in jeder Ansicht jede
+  Kandidaten-Taste und notiert, was etwas ändert; im Hintergrund, einmal,
+  ohne Namen). Heute hat jedes eingebaute Programm eine Tabelle.
+- **Hauptschleife:** `taste_verteilen` erledigt nur die Überlagerungen
+  (Reminder, Hilfe, Befehlszeile, '/') und gibt die Taste sonst an
+  `z.programme[aktives_programm(z)]`. '/' öffnet die Befehlszeile, außer die
+  offene Ansicht nimmt Freitext oder '/' selbst (`fenster.in_text_entry`).
+- **'/'-Fenster und /help** lesen ebenfalls den Horcher
+  (`fussleiste.programm_tasten`, `fussleiste.hilfe`: je Programm die Tasten
+  seiner ersten Ansicht). Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
+  `TUI_KEYS`, `fenster.current_ctx` und alle Hinweiszeilen in den Kästen.
+- **Tasten-Namen:** `enter esc tab shift+tab space ⌫ del home end pgup pgdn`,
+  Pfeile `↑↓←→`, `alt+…`, `shift+↑↓←→`, `ctrl+x`, `f1`–`f12`, einzelne
+  Zeichen; mehrere mit `/` oder Leerzeichen (`a/s`, `pgup pgdn`).
+  Leisten-Text englisch (Sasha, 07.10.2026). Umlaute in Freitext: die
+  Tabelle kennt nur ASCII; Programme mit Freitext setzen UTF-8-Bytes vorher
+  zusammen (Post-Antwort, Chat, Desk, Kalender-Kästen, Klavier-Name).
 
-Freitext-Zustände ohne Kontext (Formular, Antwort-Editor, Namen tippen)
-zeigen keine Leiste — ihr Kasten hat eigene Hinweise.
+**Tests:** `tests/test_tastentabellen.py` verlangt für jedes Programm: eine
+Tabelle, zu jeder Aktion eine Methode, zu jeder Ansicht einen Aufbau in
+`tests/tasten_zustaende/<programm>.py` (`ZUSTAENDE = {ansicht: aufbau}`;
+`None` = kommt hier nicht vor), dort zeigt die echte Leiste genau die Tabelle,
+und JEDE Taste der Tabelle (auch ungezeigte) tut etwas.
+`tests/test_fussleiste.py` hält die Überlagerungen und Chat-Zustände und die
+TUI ohne Bildschirm (`welt`), die beide Tests benutzen.
 
-**Warum Tabelle + Test statt einer Tabelle, aus der auch `taste()` liest:**
-das hieße jede `taste()` (zusammen einige tausend Zeilen in 12 Ansichten)
-umzubauen, mitten in der Kalender-Arbeit der parallelen Sitzung.
-Stattdessen baut `tests/test_fussleiste.py` die echte TUI ohne Bildschirm
-(alle Ansichten, gefälschtes Backend, Hintergrund-Threads synchron), bringt
-sie in jeden Zustand und drückt **jede Taste, die die echte Leiste zeigt**,
-über `taste_verteilen`; ändert sich nichts (Zustand, Backend-Aufruf,
-Fenster, Ende), ist der Test rot. Gefunden und behoben: `f` in Post-Listen
-außerhalb des Eingangs, `m` auf einer ganzen Liste im Fokus-Wald und
-Pfeile in leeren Listen.
-
-**Eine neue Ansicht** (z. B. der geplante Chat nach Claude-Web-Vorbild):
-eine Methode `tasten()` → `[(taste, was), …]`, ein Eintrag in
-`fussleiste.ANSICHTEN`, ein Zustand im Test. Beschriftungen, die
-`fussleiste.codes()` lesen kann: `enter esc tab space ⌫ del home end pgup
-pgdn shift+tab alt+enter`, Pfeile `↑↓←→`, `alt+←→`, `ctrl+x`, einzelne
-Zeichen, mehrere mit `/` oder Leerzeichen (`a/s`, `pgup pgdn`); `type` und
-`any key` sind keine Taste.
-
-Headless: Szenario `ki_nachbesserung` in `tests/tui_schirm/lauf.py` (neuer
-Schritt `paste` = tmux-Puffer einfügen; Socket per `ZTUI_SOCK`).
+**Ein neues Programm:** `TASTEN`, `ansicht()`, `taste()`, `aktion_*`; ein
+Eintrag in `fenster.PROGRAMME`; eine Datei in `tests/tasten_zustaende/`.
 
 ## Bausteine (seit 2026-10-09)
 
@@ -635,6 +649,11 @@ Tür `tui/`; den Pfad zu `core/` hängt `bausteine/__init__.py` hinten an.
 API und Tasten: [bausteine_farbe_stil.md](../hub/bausteine_farbe_stil.md).
 
 ## Historie
+
+- **2026-10-11** — Tastentabellen: jedes Programm verteilt seine Tasten aus
+  EINER Tabelle, die der Horcher beim Verkabeln einliest; nur noch eine
+  Leiste ganz unten, Hinweiszeilen in den Kästen weg, `CTX_KEYS`/`TUI_KEYS`/
+  `current_ctx` weg, `taste_verteilen` generisch („Tastentabelle und Leiste").
 
 - **2026-10-05** — Kern-Bauplan friert `run_ui` (7.701 Zeilen) als Riese ein.
 - **2026-10-06/07** — In 16 Schritten zerlegt (Plan zuerst, dann Gerüst,

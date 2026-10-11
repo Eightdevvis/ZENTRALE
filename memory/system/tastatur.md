@@ -1,7 +1,7 @@
 # Tastatur-Belegung
 
-**Stand 2026-10-06:** Für die **TUI** steht die Belegung nur im Code
-(`TUI_KEYS`/`CTX_KEYS` in `tui/ansichten/befehle.py`, `/help` bzw. `/`), hier
+**Stand 2026-10-11:** Für die **TUI** steht die Belegung nur im Code
+(Tastentabelle `TASTEN` jedes Programms, gezeigt in der Leiste, `/` und `/help`), hier
 nur die Tasten, die nichts öffnen. Für das **Zimmer** (`tutor/room.py` im Repo language-tutor:
 Esc-Menü, Alt+Z zur TUI, Alt+P Ruhe, Drill-Pfeiltasten) gilt dasselbe —
 siehe Repo `language-tutor`, `docs/tutor_system.md`; Alt+L (Sprachwechsel im Zimmer) gibt es
@@ -106,13 +106,11 @@ Klaviertaste und öffnet beim Spielen seitdem die Befehlszeile.
 ## In der TUI
 
 Die Belegung steht **nicht hier**, sondern als einzige Wahrheit im Code:
-`TUI_KEYS` (volle Hilfe, `/help`) und `CTX_KEYS` (die Tasten des gerade
-fokussierten Fensters, nacktes `/`) in `tui/ansichten/befehle.py` (bis
-06.10.2026 in `tui/zentrale_tui.py`). Eine zweite
-Liste in der Doku wäre nach dem ersten neuen Werkzeug falsch. Seit 07.10.2026
-liest auch die **Fußleiste** ganz unten aus `CTX_KEYS` (englisch beschriftet),
-und `tests/test_fussleiste.py` drückt jede Taste darin — siehe
-[tui_bauplan.md](tui_bauplan.md), „Fußleiste".
+die **Tastentabelle** jedes Programms (`TASTEN`, seit 2026-10-11) — aus ihr
+verteilt das Programm seine Tasten, und die Leiste ganz unten, das
+'/'-Fenster und /help zeigen sie (über den Horcher). Eine zweite Liste in
+der Doku wäre nach dem ersten neuen Werkzeug falsch. Siehe
+[tui_bauplan.md](tui_bauplan.md), „Tastentabelle und Leiste".
 
 Eine Taste, die man sonst nirgends sieht, weil sie nichts öffnet:
 
