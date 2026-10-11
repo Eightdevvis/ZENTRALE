@@ -11,6 +11,8 @@
 import fnmatch
 import os
 
+import ablage_ort
+
 # Relativ zum ZENTRALE-Ordner. Bewusst NICHT dabei:
 #   data/ai_config.json            Klartext-API-Schlüssel
 #   data/mail_secrets.enc(.bak)    verschlüsselte Mail-Zugänge (Sasha entscheidet)
@@ -83,16 +85,56 @@ def passt(rel, muster=SICHERN):
     return False
 
 
+# ── Was außerhalb des ZENTRALE-Ordners liegt (2026-10-11) ──────────────
+# Die Ablage zog nach ~/Zentrale/Ablage (core/ablage_ort.py). Im Abgleich
+# und in der Sicherung heißt sie weiter „data/ablage/<id>/…" — dieselben
+# Namen wie vorher, also kein Umzug in der Mitte und keine Doppelten; nur
+# WO sie auf diesem Rechner liegt, sagt pfad(). Gilt nur für den echten
+# ZENTRALE-Ordner: ein Test- oder Fremd-Ordner (--quelle) behält sein
+# eigenes data/ablage. Die lesbaren Dateien obendrauf gleicht niemand ab —
+# jeder Rechner baut sie selbst (core/ablage_sichtbar.py).
+AUSSEN = {"data/ablage": ablage_ort.dokumente}
+_PROJEKT = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+
+def _aussen(root) -> dict:
+    """Nur für den echten ZENTRALE-Ordner, und nur, wenn der neue Ort schon
+    da ist: vor dem Umzug (scripts/ablage_umzug.py) sähe der Abgleich sonst
+    eine LEERE Ablage — und hielte alles für gelöscht."""
+    if os.path.realpath(root) != _PROJEKT:
+        return {}
+    return {k: ort for k, ort in ((k, f()) for k, f in AUSSEN.items()) if os.path.isdir(ort)}
+
+
+def pfad(root, rel) -> str:
+    """Wo eine Datei der Auswahl auf diesem Rechner liegt."""
+    rel = rel.replace(os.sep, "/")
+    for vorsatz, ort in _aussen(root).items():
+        if rel.startswith(vorsatz + "/"):
+            return os.path.join(ort, rel[len(vorsatz) + 1:])
+    return os.path.join(root, rel)
+
+
 def auswahl(root, muster=SICHERN):
-    """Relative Pfade aller Dateien unter `root`, die auf der Liste stehen."""
+    """Relative Pfade aller Dateien unter `root`, die auf der Liste stehen
+    (dazu, was nach AUSSEN gezogen ist)."""
     raus = []
+    aussen = _aussen(root)
     for wurzel, dirs, files in os.walk(root):
         rel_w = os.path.relpath(wurzel, root)
-        if rel_w.startswith((".git", ".claude", "venv")) or "__pycache__" in rel_w:
+        if rel_w.startswith((".git", ".claude", "venv")) or "__pycache__" in rel_w \
+                or rel_w.replace(os.sep, "/") in aussen:
             dirs[:] = []
             continue
         for f in files:
             rel = os.path.normpath(os.path.join(rel_w, f)).replace(os.sep, "/")
             if passt(rel, muster):
                 raus.append(rel)
+    for vorsatz, ort in aussen.items():
+        for wurzel, dirs, files in os.walk(ort):
+            for f in files:
+                rel = vorsatz + "/" + os.path.relpath(os.path.join(wurzel, f), ort) \
+                    .replace(os.sep, "/")
+                if passt(rel, muster):
+                    raus.append(rel)
     return sorted(raus)

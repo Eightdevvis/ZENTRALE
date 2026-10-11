@@ -80,6 +80,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `transkript` | 1 | Rohes Gesagtes, append-only jsonl |
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
 | `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus |
+| `ablage_ort` | 1 | WO die Ablage liegt (Einstellung `ablage_dir`, Standard ~/Zentrale/Ablage; Köpfe/Fassungen versteckt in `.ablage/dokumente/`) — für Ablage und Abgleich |
 | `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
 | `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `input_dateien` |
 | `melden` | 1 | Meldung auf dem Desktop |
@@ -150,9 +151,10 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `nutzer_suche` | 2 | Suchen im Nutzerordner wie find (Name, Platzhalter) und grep (Text), ein Ordner wie ls — jede Suche sagt, ob sie vollständig war |
 | `input_dateien` | 2 | Dateien aus Input/: Zip ansehen und nach Output/<name>/ auspacken (ganz oder gar nicht, überschreibt nie), Erledigtes in `.Papierkorb/<Datum>/` verschieben (löscht nie) |
 | `input_aufraeumen` | 2 | Nach fertig verarbeiteter Input-Datei: feste Zeile „Frag Sasha jetzt, ob … weg soll" ans Ergebnis und offene Zusage `input_aufraeumen: <datei>`, abgehakt nach remove_input oder Sashas Nein |
-| `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen |
+| `ablage` | 2 | Die Ablage: Dokumente der KI, Sandbox-Dateien, Anhänge, Eingeworfenes — Ordner pro Dokument, jede Fassung eine neue Datei, nie löschen; Papierkorb als Feld, ersetzen, wem es gehört |
 | `anhang` | 2 | Anhänge im Chat: Sperrliste, Art erkennen (PDF/Word als Original, Text dazu), in die Ablage; Verweise für den Verlauf der KI auflösen |
 | `ablage_text` | 2 | Der Text einer PDF- oder Word-Datei (Anhang, Ablage-Vorschau), gemerkt nach Inhalt |
+| `ablage_sichtbar` | 2 | Die Ablage als Ordner für Sasha: neueste Fassung als lesbare Datei, Einwurf (fremde Datei → Dokument), Änderung → Fassung, Umbenennen/Löschen nachziehen; Stand je Rechner |
 | `textbloecke` | 2 | Kleines Markdown → Blöcke (Überschrift, Absatz, Liste, Tabelle, Code) und Stücke normal/fett — für PDF- und Word-Schreiber |
 | `pdf_datei` | 2 | PDFs lesen (Text je Seite, Tabellen geraten, Formularfelder), zusammenfügen, Seiten herausnehmen — pypdf im begrenzten Kindprozess |
 | `pdf_schreiben` | 2 | Neues PDF aus Markdown: A4, Grundschriften, Umbruch, Tabellen, Seitenzahlen — ohne Fremdbibliothek |
@@ -217,6 +219,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `sensors` | 4 | Sensor-Simulation |
 | `hot_reload` | 4 | Hot Reload fürs Backend |
 | `takt_treiber` | 4 | Der Takt-Thread: fragt `takt`, spricht über den KI-Kern ins Gespräch „Erinnerungen“, meldet |
+| `ablage_wache` | 4 | Thread: alle 3 s `ablage_sichtbar.abgleichen()` (Einstellung `ablage_wache`) |
 
 Schicht 5 liegt außerhalb von `core/` und steht deshalb nicht in der
 Tabelle, sondern im nächsten Abschnitt.

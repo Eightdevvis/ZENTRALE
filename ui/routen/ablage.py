@@ -9,10 +9,12 @@
 
 import base64
 import binascii
+import time
 
 from flask import Blueprint, Response, jsonify, request
 
 import ablage        # type: ignore  – in core/, aber durch sys.path.insert auffindbar
+import ablage_sichtbar  # type: ignore  – meldet sich an: lesbare Dateien in ~/Zentrale/Ablage
 import ablage_text   # type: ignore
 import ai_backends   # type: ignore
 import anhang        # type: ignore
@@ -30,11 +32,19 @@ def _mit_gespraech(k: dict) -> dict:
     return k
 
 
+EINGEWORFEN_S = 600       # so lange gilt Eingeworfenes als „neu" (TUI-Hinweis)
+
+
 @bp.route('/api/ablage')
 def api_ablage_liste():
-    """Alle Dokumente, neueste Änderung zuerst. ?archiv=1: die archivierten."""
+    """Alle Dokumente, neueste Änderung zuerst. ?archiv=1: die archivierten;
+    ?papierkorb=1: was im Papierkorb liegt (sonst ausgeblendet, 2026-10-11).
+    eingeworfen: was Sasha in den letzten 10 Minuten in den Ordner gelegt hat."""
     archiv = request.args.get('archiv') in ('1', 'true', 'ja')
-    return jsonify({"dokumente": [_mit_gespraech(k) for k in ablage.liste(archiv)]})
+    korb = request.args.get('papierkorb') in ('1', 'true', 'ja')
+    return jsonify({"dokumente": [_mit_gespraech(k) for k in ablage.liste(archiv, korb)],
+                    "ordner": ablage.wurzel(),
+                    "eingeworfen": ablage_sichtbar.neu_seit(time.time() - EINGEWORFEN_S)})
 
 
 @bp.route('/api/ablage/<doc_id>')
@@ -44,7 +54,10 @@ def api_ablage_lesen(doc_id):
     text_fehler?}. ?fassung=n für eine ältere Fassung."""
     try:
         d = ablage.lesen(doc_id, request.args.get('fassung'))
-        d["pfad"] = ablage.pfad(doc_id, request.args.get('fassung'))
+        # Wo Sasha die Datei findet: die lesbare in ~/Zentrale/Ablage, für
+        # ältere Fassungen (und im Papierkorb) die versteckte.
+        d["pfad"] = ((not request.args.get('fassung') and ablage_sichtbar.pfad(doc_id))
+                     or ablage.pfad(doc_id, request.args.get('fassung')))
         if d["kopf"].get("art") in ("pdf", "docx"):
             erg = ablage_text.text(doc_id, request.args.get('fassung'))
             d["text"] = erg.get("text") or ""
@@ -98,6 +111,17 @@ def api_ablage_archiv(doc_id):
     an = bool((request.get_json(silent=True) or {}).get('an', True))
     try:
         return jsonify(ablage.archivieren(doc_id, an))
+    except ablage.Unbekannt:
+        return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
+
+
+@bp.route('/api/ablage/<doc_id>/papierkorb', methods=['POST'])
+def api_ablage_papierkorb(doc_id):
+    """Body {an: bool} — in den Papierkorb legen oder zurückholen (Sasha
+    selbst, aus der TUI: ohne Frage — es ist seine Hand)."""
+    an = bool((request.get_json(silent=True) or {}).get('an', True))
+    try:
+        return jsonify(ablage.papierkorb(doc_id, an))
     except ablage.Unbekannt:
         return jsonify({"error": "Dieses Dokument gibt es nicht."}), 404
 

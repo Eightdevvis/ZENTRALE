@@ -13,7 +13,8 @@
 # immer eine Stufe zurück.
 #
 # Tasten Liste: ↑↓ Bild↑↓ wählen · Enter lesen · a archivieren (im Archiv:
-# zurückholen) · z Archiv · Esc zu.  Lesen: ↑↓ Bild↑↓ Pos1 Ende blättern ·
+# zurückholen) · z Archiv · p Papierkorb (dort: a zurückholen) · Esc zu.
+# Der Papierkorb (2026-10-11) ist sonst ausgeblendet.  Lesen: ↑↓ Bild↑↓ Pos1 Ende blättern ·
 # ←→ ältere/neuere Fassung · Esc zurück.
 #
 # Reine Helfer (listen_zeilen, lese_zeilen) sind ohne curses testbar
@@ -29,8 +30,9 @@ from .gespraechsliste import alter_text
 from .text import md_zeilen
 
 ART_KURZ = {"markdown": "text", "text": "text", "code": "code", "csv": "tabelle",
-            "bild": "bild", "pdf": "pdf", "docx": "word"}
-HERKUNFT_KURZ = {"ki": "", "sandbox": "aus code", "anhang": "anhang", "ablauf": "trace"}
+            "bild": "bild", "pdf": "pdf", "docx": "word", "xlsx": "excel"}
+HERKUNFT_KURZ = {"ki": "", "sandbox": "aus code", "anhang": "anhang", "ablauf": "trace",
+                 "einwurf": "von dir"}
 
 
 # ── Reine Helfer ─────────────────────────────────────────────────────────
@@ -64,11 +66,11 @@ def lese_zeilen(dok, breite):
     stil "" | "kopf" | "code" | "liste" (wie md_zeilen) | "leise"."""
     kopf = dok.get("kopf") or {}
     art = kopf.get("art")
-    if art in ("pdf", "docx"):
+    if art in ("pdf", "docx", "xlsx"):
         # PDF/Word (2026-10-08): wo die Datei liegt, dann ihr Text als
         # Vorschau (das Backend liest ihn, die TUI kann es nicht).
         groesse = int(dok.get("bytes") or 0)
-        wort = "eine pdf-datei" if art == "pdf" else "eine word-datei"
+        wort = {"pdf": "eine pdf-datei", "docx": "eine word-datei"}.get(art, "eine excel-tabelle")
         zeilen = ["%s (%d kb) — sie liegt hier:" % (wort, max(1, groesse // 1024)),
                   str(dok.get("pfad") or "?"), ""]
         if dok.get("text_fehler"):
@@ -108,7 +110,7 @@ def lese_zeilen(dok, breite):
 
 class Ablageliste:
     """Zustand in chat.AI["ablage"] (None = zu):
-    {eintraege, idx, archiv, lesen: None | {dok, scroll, fassung},
+    {eintraege, idx, archiv, korb, lesen: None | {dok, scroll, fassung},
      direkt: True, wenn aus dem Chat heraus gelesen wird (Esc → Chat)}."""
 
     def __init__(self, chat):
@@ -116,24 +118,29 @@ class Ablageliste:
         self.AI = chat.AI
 
     # ── Daten ──────────────────────────────────────────────────────────
-    def holen(self, archiv=False):
+    def holen(self, archiv=False, korb=False):
         try:
-            d = api_call("/api/ablage" + ("?archiv=1" if archiv else ""))
+            d = api_call("/api/ablage" + ("?papierkorb=1" if korb else
+                                          "?archiv=1" if archiv else ""))
         except (urllib.error.URLError, OSError, ValueError):
             return None
         if not isinstance(d, dict):
             return None
+        self._eingeworfen = [e for e in d.get("eingeworfen") or [] if isinstance(e, dict)]
         return [e for e in d.get("dokumente") or [] if isinstance(e, dict)]
 
-    def oeffnen(self, archiv=False):
+    def oeffnen(self, archiv=False, korb=False):
         AI = self.AI
-        eintraege = self.holen(archiv)
+        eintraege = self.holen(archiv, korb)
         if eintraege is None:
             AI["msg"] = "keine verbindung — ablage nicht geladen"
             return
-        AI["ablage"] = {"eintraege": eintraege, "idx": 0, "archiv": archiv,
-                        "lesen": None, "direkt": False}
-        AI["msg"] = ""
+        AI["ablage"] = {"eintraege": eintraege, "idx": 0, "archiv": archiv and not korb,
+                        "korb": korb, "lesen": None, "direkt": False}
+        neu = getattr(self, "_eingeworfen", [])
+        # Dezent (2026-10-11): was Sasha gerade in den Ordner gelegt hat.
+        AI["msg"] = ("neu in der ablage: " + ", ".join(str(e.get("titel")) for e in neu[-3:])
+                     if neu and not (archiv or korb) else "")
 
     def lesen(self, doc_id, fassung=None, direkt=False):
         """Ein Dokument zum Lesen öffnen (aus der Liste oder direkt aus dem
@@ -153,7 +160,7 @@ class Ablageliste:
         if not isinstance(dok, dict):
             return
         if AI.get("ablage") is None:
-            AI["ablage"] = {"eintraege": [], "idx": 0, "archiv": False,
+            AI["ablage"] = {"eintraege": [], "idx": 0, "archiv": False, "korb": False,
                             "lesen": None, "direkt": direkt}
         AI["ablage"]["lesen"] = {"dok": dok, "scroll": 0,
                                  "fassung": dok.get("fassung") or 1}
@@ -167,10 +174,13 @@ class Ablageliste:
             mehr = int(kopf.get("fassung") or 1) > 1
             return ([("↑↓", "scroll"), ("pgup pgdn space", "page"), ("home end", "top/end")]
                     + ([("←→", "versions")] if mehr else []) + [("esc", "back")])
+        if A.get("korb"):
+            return [("↑↓", "select"), ("enter", "read"), ("a", "restore"), ("p", "back"),
+                    ("esc", "close")]
         return ([("↑↓", "select"), ("enter", "read")]
                 + ([("a", "restore"), ("z", "back")] if A["archiv"]
                    else [("a", "archive"), ("z", "archive list")])
-                + [("esc", "close")])
+                + [("p", "trash"), ("esc", "close")])
 
     def schliessen(self):
         self.AI["ablage"] = None
@@ -201,8 +211,12 @@ class Ablageliste:
             e = self.gewaehlt()
             if e:
                 self.lesen(e["id"])
-        elif ch == ord("z"):
+        elif ch == ord("z") and not A.get("korb"):
             self.oeffnen(archiv=not A["archiv"])
+        elif ch == ord("p"):
+            self.oeffnen(korb=not A.get("korb"))
+        elif ch == ord("a") and A.get("korb"):
+            self._zurueckholen()
         elif ch == ord("a"):
             self._archivieren()
 
@@ -254,6 +268,24 @@ class Ablageliste:
             AI["ablage"]["idx"] = idx
         AI["msg"] = "archiviert — z zeigt das archiv" if an else "zurückgeholt"
 
+    def _zurueckholen(self):
+        """Aus dem Papierkorb zurück (Sasha selbst — ohne Frage)."""
+        AI, A = self.AI, self.AI["ablage"]
+        e = self.gewaehlt()
+        if not e:
+            return
+        try:
+            api_call("/api/ablage/%s/papierkorb" % urllib.parse.quote(e["id"], safe=""),
+                     "POST", {"an": False})
+        except (urllib.error.URLError, OSError, ValueError):
+            AI["msg"] = "keine verbindung — nicht zurückgeholt"
+            return
+        idx = A["idx"]
+        self.oeffnen(korb=True)
+        if AI.get("ablage"):
+            AI["ablage"]["idx"] = idx
+        AI["msg"] = "zurückgeholt — liegt wieder in der ablage"
+
     # ── Zeichnen ───────────────────────────────────────────────────────
     def zeichnen(self, by, bx, bh, bw):
         A = self.AI["ablage"]
@@ -276,15 +308,18 @@ class Ablageliste:
         C, addclip = z.C, z.addclip
         A = self.AI["ablage"]
         inx, inw = bx + 2, max(6, bw - 4)
-        addclip(by + 1, inx, "ablage · archiv" if A["archiv"] else "ablage", inw, C["acc"])
+        addclip(by + 1, inx, "ablage · papierkorb" if A.get("korb") else
+                "ablage · archiv" if A["archiv"] else "ablage", inw, C["acc"])
         fuss, mit_msg = self._fuss(
             [fussleiste.text(self.tasten())], inw)
         oben, unten = by + 3, by + bh - 2 - len(fuss)
         platz = max(1, unten - oben + 1)
         if not A["eintraege"]:
-            addclip(oben, inx, "archiv ist leer" if A["archiv"] else
-                    "noch nichts abgelegt — die ki legt hier dokumente ab, "
-                    "/attach <pfad> gibt ihr eine datei", inw, C["faint"])
+            addclip(oben, inx, "papierkorb ist leer" if A.get("korb") else
+                    "archiv ist leer" if A["archiv"] else
+                    "noch nichts abgelegt — die ki legt hier dokumente ab; "
+                    "deine dateien: in ~/Zentrale/Ablage legen oder /attach <pfad>",
+                    inw, C["faint"])
         else:
             idx = max(0, min(A["idx"], len(A["eintraege"]) - 1))
             start = max(0, min(idx - platz // 2, len(A["eintraege"]) - platz))

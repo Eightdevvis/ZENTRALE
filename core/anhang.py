@@ -48,7 +48,7 @@ class Abgelehnt(ValueError):
     """Geht nicht als Anhang — der Text ist für Sasha (Statuszeile)."""
 
 
-def _art_fuer(name: str, daten: bytes) -> tuple:
+def art_fuer(name: str, daten: bytes) -> tuple:
     """(art, endung, text|None) — Bild, PDF/Word (Original + Text) oder
     Text/Code."""
     endung = os.path.splitext(name)[1].lower()
@@ -97,7 +97,7 @@ def annehmen(pfad: str, daten: bytes, *, gespraech=None, cloud=True) -> dict:
     if len(daten) > DATEI_MAX_BYTES:
         raise Abgelehnt(f"zu groß — höchstens {DATEI_MAX_BYTES // 1024 // 1024} MB")
     name = os.path.basename(str(pfad).rstrip("/")) or "anhang"
-    art, endung, text = _art_fuer(name, daten)
+    art, endung, text = art_fuer(name, daten)
     try:
         if art in ablage.BINAER:
             k = ablage.anlegen(name, daten, art, herkunft="anhang",

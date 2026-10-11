@@ -78,7 +78,8 @@ def schluessel_funde(pfade, root):
     funde = []
     for rel in pfade:
         try:
-            text = open(os.path.join(root, rel), encoding="utf-8", errors="replace").read()
+            text = open(abgleich_auswahl.pfad(root, rel), encoding="utf-8",
+                        errors="replace").read()
         except OSError:
             continue
         for m in SCHLUESSEL_MUSTER:
@@ -99,7 +100,7 @@ def spiegeln(pfade, quelle, ziel):
             if rel not in soll and rel != "LIESMICH.md":
                 os.remove(os.path.join(wurzel, f))
     for rel in pfade:
-        q, z = os.path.join(quelle, rel), os.path.join(ziel, rel)
+        q, z = abgleich_auswahl.pfad(quelle, rel), os.path.join(ziel, rel)
         os.makedirs(os.path.dirname(z), exist_ok=True)
         shutil.copy2(q, z)
 
@@ -132,7 +133,7 @@ def main(argv=None):
     host = socket.gethostname()
     branch = f"knoten/{host}"
     pfade = auswahl(quelle)
-    groesse = sum(os.path.getsize(os.path.join(quelle, p)) for p in pfade)
+    groesse = sum(os.path.getsize(abgleich_auswahl.pfad(quelle, p)) for p in pfade)
     print(f"{len(pfade)} Dateien, {groesse / 1024:.0f} KB, Ziel {REMOTE} · {branch}")
 
     funde = schluessel_funde(pfade, quelle)

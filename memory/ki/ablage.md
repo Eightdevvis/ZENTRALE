@@ -29,6 +29,8 @@ Sasha gibt der KI Dateien mit.
 
 ## Auf der Platte
 
+**Seit 2026-10-11 in `~/Zentrale/Ablage/`** (lesbare Dateien + versteckt `.ablage/dokumente/<id>/`) — [ablage_ordner.md](ablage_ordner.md). Unten der Aufbau je Dokument (unverändert, nur eine Ebene tiefer).
+
 ```
 data/ablage/<id>/kopf.json               titel, art, erstellt, gespraech,
                                          herkunft (ki|sandbox|anhang|morgenblick),

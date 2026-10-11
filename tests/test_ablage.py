@@ -59,9 +59,14 @@ def test_anlegen_schreibt_nur_in_den_ablage_ordner(tmp_path, monkeypatch):
     assert k["titel"] == "Einkaufsliste für Samstag" and k["art"] == "markdown"
     assert k["herkunft"] == "ki" and k["gespraech"] == "g1" and k["fassung"] == 1
     assert k["id"].endswith(k["id"][-4:]) and "einkaufsliste-fuer-samstag" in k["id"]
-    # Alles liegt unter dem Ordner, sonst nirgends: kopf + eine Fassung.
+    # Alles liegt unter dem Ordner, sonst nirgends: versteckt kopf + eine
+    # Fassung, sichtbar die lesbare Datei (seit 2026-10-11, ~/Zentrale/Ablage)
+    # und was dieser Rechner dort hingelegt hat.
+    d = f"ablage/.ablage/dokumente/{k['id']}"
     assert _alle_dateien(tmp_path) == {
-        f"ablage/{k['id']}/kopf.json", f"ablage/{k['id']}/v1-{dateien.knoten()}.md"}
+        f"{d}/kopf.json", f"{d}/v1-{dateien.knoten()}.md",
+        "ablage/Einkaufsliste für Samstag.md",
+        f"ablage/.ablage/sichtbar-{dateien.knoten()}.json"}
     assert ablage.lesen(k["id"])["inhalt"] == "- Milch\n- Brot"
 
 

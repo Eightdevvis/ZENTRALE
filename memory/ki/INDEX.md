@@ -31,6 +31,7 @@ Messungen dazu existiert.
 | **Projekte** — Anweisungen + Wissensdateien pro Thema, Gespräch → Projekt, Projekt-Block im festen Prompt, `read_project_file`, Sperrliste beim Wissen | [projekte.md](projekte.md) |
 | **Gespräche** — Speicherformat (Ordner pro Gespräch, Datei pro Rechner), Ereignisse (nachricht/verwerfen), warum so wegen des Syncs, Titel, Erinnerungen, Suche quer durch alle Gespräche (`search_chats`) | [gespraeche.md](gespraeche.md) |
 | **Ablage und Anhänge** — Dokumente der KI (`create_document` …), Sandbox-Dateien, Anhänge per `/anhang` oder `/paste` aus der Zwischenablage (Text, PDF, Bilder nur Cloud); Speicherformat, Fassungen, Sync | [ablage.md](ablage.md) |
+| **Die Ablage als Ordner** `~/Zentrale/Ablage` — lesbare Dateien, Einwurf (Sasha legt hinein), ändern/umbenennen/löschen von Hand, Papierkorb, mehrere Rechner, Umzug aus data/ablage | [ablage_ordner.md](ablage_ordner.md) |
 | Warum überhaupt in die Cloud — das Entscheidungs-Dokument vom 10.08.2026 (historisch) | [cloud_umstieg_plan.md](cloud_umstieg_plan.md) |
 | Warum das Memory so aussieht, wie es aussieht — Historie der Phasen A–G, verworfene Ansätze | [ki_memory_plan.md](ki_memory_plan.md) |
 | Wohin die Persönlichkeit soll: vom System-Prompt zum eigenen Modell (Fine-Tuning-Plan) | [ki_personality_plan.md](ki_personality_plan.md) |

@@ -118,6 +118,9 @@ def backend(monkeypatch):
         aufrufe.append((methode, pfad, body))
         if pfad.startswith("/api/ablage?archiv"):
             return {"dokumente": []}
+        if pfad.startswith("/api/ablage?papierkorb"):
+            return {"dokumente": [{"id": "alt", "titel": "Alte Liste", "art": "markdown",
+                                   "papierkorb": _vor(hours=1), "geaendert": _vor(hours=2)}]}
         if pfad == "/api/ablage":
             return {"dokumente": DOKS}
         if pfad.startswith("/api/ablage/d1"):
@@ -266,3 +269,29 @@ def test_anhang_fehler_sind_klartext(tmp_path, monkeypatch):
     monkeypatch.setattr(chat_ablage, "api_call", api)
     c._anhang_senden(str(datei))
     assert c.AI["msg"].startswith("nicht angehängt: der Ordner") and c.AI["anhaenge"] == []
+
+
+def test_papierkorb_ist_ein_eigener_filter_und_a_holt_zurueck(backend):
+    """2026-10-11: der Papierkorb ist sonst ausgeblendet; p zeigt ihn."""
+    c = FakeChat()
+    a = Ablageliste(c)
+    a.oeffnen()
+    assert [e["id"] for e in c.AI["ablage"]["eintraege"]] == ["d1", "d2"]
+    a.taste(ord("p"))
+    assert c.AI["ablage"]["korb"] and [e["id"] for e in c.AI["ablage"]["eintraege"]] == ["alt"]
+    assert ("p", "back") in a.tasten() and ("a", "restore") in a.tasten()
+    a.zeichnen(0, 0, 24, 80)
+    a.taste(ord("a"))
+    assert ("POST", "/api/ablage/alt/papierkorb", {"an": False}) in backend
+    assert "zurückgeholt" in c.AI["msg"]
+    a.taste(ord("p"))
+    assert not c.AI["ablage"]["korb"]
+
+
+def test_eingeworfenes_steht_dezent_in_der_statuszeile(monkeypatch):
+    def api(pfad, methode="GET", body=None, timeout=3.0):
+        return {"dokumente": DOKS, "eingeworfen": [{"id": "x", "titel": "Preise.pdf"}]}
+    monkeypatch.setattr(ablagemod, "api_call", api)
+    c = FakeChat()
+    Ablageliste(c).oeffnen()
+    assert c.AI["msg"] == "neu in der ablage: Preise.pdf"

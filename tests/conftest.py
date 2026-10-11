@@ -310,9 +310,18 @@ def _gespraeche_frisch(_test_ordner, monkeypatch):
 
 
 # 7c. Jeder Test hat seine eigene Ablage (core/ablage.py, 2026-10-07).
+# Seit 2026-10-11 nennt ZENTRALE_ABLAGE_DIR den sichtbaren Ordner
+# (~/Zentrale/Ablage); die lesbaren Dateien hält ablage_sichtbar nach — wie
+# im Backend (ui/routen/ablage.py importiert es), in JEDEM Test, nicht erst,
+# wenn zufällig ein Test die Routen geladen hat. Sein Gedächtnis (zuletzt
+# gesehene Dateien) ist pro Test frisch.
 @pytest.fixture(autouse=True)
 def _ablage_frisch(_test_ordner, monkeypatch):
+    import ablage_sichtbar
     monkeypatch.setenv("ZENTRALE_ABLAGE_DIR", str(_frisch(_test_ordner, "ablage")))
+    ablage_sichtbar._gesehen.clear()
+    ablage_sichtbar._abgelehnt.clear()
+    ablage_sichtbar.NEU.clear()
     yield
 
 

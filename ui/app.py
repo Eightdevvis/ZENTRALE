@@ -47,6 +47,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from flask import Flask
 
 import takt_treiber  # type: ignore  – der Takt-Thread (core/takt_treiber.py)
+import ablage_wache  # type: ignore  – schaut in ~/Zentrale/Ablage (core/ablage_wache.py)
 
 from ui import routen
 
@@ -77,4 +78,5 @@ def start_ui(host='0.0.0.0', port=5000):
                       wecken. Ohne Threading → Deadlock.
     """
     takt_treiber.starten()
+    ablage_wache.starten()
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

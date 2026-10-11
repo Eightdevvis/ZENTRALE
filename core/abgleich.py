@@ -331,7 +331,7 @@ def _vorhaben_abschliessen(wurzel, bericht=None):
         alt = _lesen(os.path.join(v, "alt", rel)) if e["alt"] else None
         if e["alt"] and alt is None:
             alt = neu                     # alt == neu: nur die Basis ändert sich
-        pfad = os.path.join(wurzel, rel)
+        pfad = auswahl.pfad(wurzel, rel)
         jetzt = _lesen(pfad)
         if jetzt == neu:
             pass                          # schon da (oder nach Absturz schon geschrieben)
@@ -427,7 +427,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 sicht.update(fremd)
                 for rel, c in vorschlaege.items():
                     sicht.setdefault(rel, c)
-                lokal = {rel: _lesen(os.path.join(wurzel, rel))
+                lokal = {rel: _lesen(auswahl.pfad(wurzel, rel))
                          for rel in auswahl.auswahl(wurzel, auswahl.ABGLEICH)}
                 bericht.art = ("erstbefuellung" if stand is None else
                                "erstabgleich" if basis_stand is None else "")
