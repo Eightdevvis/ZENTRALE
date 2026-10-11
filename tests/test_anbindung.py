@@ -763,3 +763,21 @@ def test_das_beispiel_in_der_doku_ist_eine_gueltige_beschreibung():
     beispiel = re.search(r"```json\n(.*?)\n```", teil, re.S).group(1)
     p = anbindung.pruefen(json.loads(beispiel))
     assert p.ok and not p.warnungen, (p.fehler, p.warnungen)
+
+
+@pytest.mark.kalender_beide
+def test_kalender_routen_geben_echte_kennung_aber_nehmen_sie_bei_termin_nicht(_kalender_speicher_art):
+    """Grund, warum kalender_kern.json bei Tag+Titel bleibt (11.10.2026): die POST-Routen
+    liefern die echte Kennung und GET /api/calendar gibt sie je Eintrag aus - aber
+    Nachlesen, Ändern und Löschen von Termin/Routine laufen noch über day+label. Wird dieser
+    Test rot, weil eine Route die Kennung annimmt: Vorlage auf kennung_aus antwort umstellen."""
+    app = pytest.importorskip("ui.app").app
+    c = app.test_client()
+    r = c.post("/api/calendar/entry", json={"day": "2026-11-03", "label": "Kennungsprobe", "time": "9:00"}).get_json()
+    assert r["kennung"]
+    tag = c.get("/api/calendar?view=week&ref=2026-11-03").get_json()["days"]["2026-11-03"]
+    e = next(x for x in tag if x["label"] == "Kennungsprobe")
+    assert e["kennung"] == r["kennung"] and e["time"] == "09:00"
+    # Löschen per Kennung (so wie die Vorlage es bräuchte) kennt die Route nicht: Pflichtfelder day+label
+    assert c.delete("/api/calendar/eintrag", json={"kennung": r["kennung"]}).status_code == 400
+    assert c.delete("/api/calendar/eintrag", json={"day": "2026-11-03", "label": "Kennungsprobe"}).get_json()["ok"]

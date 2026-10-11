@@ -380,7 +380,7 @@ Gleich: Schutzschicht, Satzform, Rücknahme, `immer erlauben` nur beim Anlegen. 
 - **Weniger Werkzeuge**, kleinere Felder: Termin anlegen/ändern/löschen, Routine anlegen
   (wöchentlich, von/bis) / löschen, einen Tag lesen. Keine Pausen, Phasen, Gruppen, Ebene,
   Quellen, Serie-Ausschnitte — dafür bräuchte die HTTP-Schnittstelle erst Routen mit Kennung.
-- **Kennung = `Tag|Titel`** statt `#t…`/`#r…`: die Routen vergeben keine Kennung. Zwei
+- **Kennung = `Tag|Titel`** statt `#t…`/`#r…` (Stand 2026-10-11, nach 7f6bf4a): die POST-Routen liefern die echte `kennung` und `GET /api/calendar` gibt sie je Eintrag aus, aber Nachlesen/Ändern/Löschen von Termin und Routine nehmen sie noch nicht an (nur day+label; Ausnahmen wie `/phase`, `/routine/zeitraum` sind andere Aktionen) — Umstellen auf `kennung_aus: {"antwort": "/kennung"}` erst, wenn `PUT/DELETE /eintrag` + ein Lesen per Kennung da sind (Wächter: `test_kalender_routen_geben_echte_kennung…`). Zwei
   gleichnamige Termine am selben Tag sind für die Anbindung nicht trennbar (Nachlesen
   `MEHRDEUTIG`; Anlegen eines zweiten `GIBT-ES-SCHON`). Die handgeschriebenen Werkzeuge
   haben echte, umbenennungsfeste Kennungen.
