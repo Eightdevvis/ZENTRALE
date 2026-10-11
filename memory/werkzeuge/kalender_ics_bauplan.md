@@ -48,6 +48,24 @@ Anlass: die KI änderte per Titel BEIDE gleichnamigen Geigenstunde-Serien.
   `kalender` nicht, `kalender.py` schließt `_load_raw`/`entries_in_range`
   per `kalender_konflikte.anschliessen()` an.
 
+## Routen per Kennung (11.10.2026, Wunsch ASSISTANT)
+
+Fremde Anbindungen gehen nicht mehr über Tag+Titel (`ui/routen/kalender.py`,
+Test `tests/test_kalender_routen_kennung.py`):
+- `GET /api/calendar/eintrag?kennung=…` → Dict wie `kalender_kennung.eintrag`.
+- `PUT /api/calendar/eintrag {kennung, new:{day→tag, label, time, ende, ort,
+  von, bis, times, enden, kategorie, kategorie_name}}` und `PUT
+  /api/calendar/routine {kennung, new:{label, time, ende, ort, rrule, seit,
+  bis, motiv, kategorie, kategorie_name | wiederholung:{freq, intervall,
+  bis, wochentage}}}` → `{ok, eintrag}`. Fehlend = unverändert, "" = löschen;
+  `wiederholung` wird zur Regel ab dem `seit` der Routine (Aus-Tage und
+  Abweichungen bleiben, anders als über Tag+Titel), nicht mit rrule/bis.
+- `DELETE /api/calendar/eintrag|routine {kennung}` → `{ok:true}`.
+- Ohne `kennung` alles wie vorher. Ablehnung immer 400 `{error, code}` —
+  auch eine unbekannte Kennung (KENNUNG-UNBEKANNT, beim GET ebenso; kein
+  404, wie bei allen Kennung-Routen), falsche Art FALSCHE-ART, ein fremdes
+  Feld in `new` UNBEKANNTES-FELD. Abgelehnt = nichts geschrieben.
+
 ## Ebene „uncommitted" (10.10.2026)
 
 Sasha: „ich will nen 2. layer … ‚uncommitted' … mehr transparent … sachen

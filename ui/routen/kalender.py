@@ -335,9 +335,13 @@ def api_calendar_delete_routine():
     (direkte Nutzeraktion). Body: {layer, label, day?, time?}. `day`/`time`
     treffen bei gleichnamigen Routinen nur die, die an dem Tag vorkommt (sonst
     werden Serien gleichen Namens an anderen Wochentagen mitgelöscht).
-    Antwort {deleted:n}.
+    Antwort {deleted:n}. Mit `kennung` im Body genau diese Routine löschen
+    (kalender_kennung.routine_loeschen), Antwort dann {ok:true}.
     """
     body = request.get_json(silent=True) or {}
+    if body.get('kennung'):
+        kalender_kennung.routine_loeschen(body['kennung'])
+        return jsonify({"ok": True})
     layer = (body.get('layer') or 'termine').strip() or 'termine'
     label = (body.get('label') or '').strip()
     if not label:
@@ -359,8 +363,12 @@ def _antwort(ok, fehler):
 def api_calendar_edit_routine():
     """ALLE Vorkommen einer Routine ändern. Body: {layer, label, day, time?,
     new:{label?, time?, ende?, ort?, wiederholung?:{freq, intervall, bis,
-    wochentage}}}. day/time bestimmen, WELCHE Routine gemeint ist."""
+    wochentage}}}. day/time bestimmen, WELCHE Routine gemeint ist.
+    Mit `kennung` im Body genau diese Routine (siehe _routine_per_kennung);
+    Antwort dann {ok, eintrag}."""
     b = request.get_json(silent=True) or {}
+    if b.get('kennung'):
+        return _routine_per_kennung(b['kennung'], b.get('new') or {})
     return _antwort(kalender_bearbeiten.routine_bearbeiten(
         b.get('layer') or 'termine', b.get('label') or '', b.get('day') or '',
         b.get('time') or None, b.get('new') or {}), "routine nicht gefunden/abgelehnt")
@@ -436,13 +444,76 @@ def api_calendar_konflikte():
     return jsonify({"konflikte": k})
 
 
+# ── Per Kennung (seit 11.10.2026, Wunsch ASSISTANT) ────────────────────
+# PUT/DELETE /api/calendar/eintrag und /routine nehmen zusätzlich `kennung`:
+# dann trifft es GENAU diesen Eintrag (kalender_kennung), sonst wie bisher
+# Tag+Titel. Ablehnung = 400 {error, code} (Fehlerhandler oben), auch für
+# eine unbekannte Kennung (KENNUNG-UNBEKANNT) — wie bei allen Kennung-Routen.
+# Felder in `new`: fehlend = unverändert, "" = löschen.
+_EINTRAG_NEU = {'day': 'tag', 'label': 'label', 'time': 'time', 'ende': 'ende',
+                'ort': 'ort', 'von': 'von', 'bis': 'bis', 'times': 'times',
+                'enden': 'enden', 'kategorie': 'kategorie',
+                'kategorie_name': 'kategorie_name'}
+_ROUTINE_NEU = {k: k for k in ('label', 'time', 'ende', 'ort', 'rrule', 'seit', 'bis',
+                               'motiv', 'kategorie', 'kategorie_name')}
+
+
+def _felder(new: dict, erlaubt: dict) -> dict:
+    """`new` aus dem Body → Parameter für kalender_kennung; ein unbekanntes
+    Feld wird abgelehnt statt still übergangen."""
+    if not isinstance(new, dict):
+        raise kalender_kennung.KalenderAbgelehnt("UNBEKANNTES-FELD", "new muss ein Objekt sein")
+    fremd = sorted(set(new) - set(erlaubt))
+    if fremd:
+        raise kalender_kennung.KalenderAbgelehnt(
+            "UNBEKANNTES-FELD", f"unbekannt in new: {', '.join(fremd)}")
+    return {erlaubt[k]: v for k, v in new.items() if v is not None}
+
+
+def _routine_per_kennung(k: str, new: dict):
+    """`new.wiederholung` {freq, intervall, bis, wochentage} wird wie beim
+    Anlegen zur Regel (ab dem `seit` der Routine); Aus-Tage und Abweichungen
+    bleiben dabei — anders als auf dem Weg über Tag+Titel."""
+    new = dict(new) if isinstance(new, dict) else new
+    w = new.pop('wiederholung', None) if isinstance(new, dict) else None
+    felder = _felder(new, _ROUTINE_NEU)
+    if w is not None:
+        if 'rrule' in felder or 'bis' in felder or not isinstance(w, dict):
+            raise kalender_kennung.KalenderAbgelehnt(
+                "UNBEKANNTES-FELD", "wiederholung {…} nicht zusammen mit rrule/bis")
+        alt = kalender_kennung.eintrag(k)
+        seit_s = felder.get('seit') or alt.get('seit') or date.today().isoformat()
+        try:
+            seit = date.fromisoformat(seit_s)
+            ende = date.fromisoformat(w['bis']) if w.get('bis') else None
+        except (TypeError, ValueError):
+            raise kalender_kennung.KalenderAbgelehnt("DATUM-UNGUELTIG")
+        regel = kalender_bearbeiten.regel_bauen(w.get('freq'), seit, w.get('intervall', 1),
+                                                ende, w.get('wochentage'))
+        if not regel:
+            raise kalender_kennung.KalenderAbgelehnt("RRULE-UNGUELTIG")
+        felder['rrule'] = regel
+    return jsonify({"ok": True, "eintrag": kalender_kennung.routine_aendern(k, **felder)})
+
+
+@bp.route('/api/calendar/eintrag')
+def api_calendar_eintrag_lesen():
+    """?kennung=… → das Eintrags-Dict (kalender_kennung.eintrag: kennung,
+    art, layer, kategorie, tag/von, …). Unbekannt → 400 KENNUNG-UNBEKANNT."""
+    return jsonify(kalender_kennung.eintrag(request.args.get('kennung') or ''))
+
+
 @bp.route('/api/calendar/eintrag', methods=['DELETE'])
 def api_calendar_eintrag_loeschen():
     """GENAU einen Einmal-Termin (bzw. eine Spanne an ihrem Start-Tag)
     löschen — exakter Titel, bei Gleichnamigen die Uhrzeit. Body: {layer?,
     day, label, time?}. Anders als DELETE /api/calendar/entry kein
-    Teilstring-Treffer."""
+    Teilstring-Treffer. Mit `kennung` im Body genau diesen Termin bzw. diese
+    Spanne (kalender_kennung.eintrag_loeschen), Antwort {ok:true}."""
     b = request.get_json(silent=True) or {}
+    if b.get('kennung'):
+        kalender_kennung.eintrag_loeschen(b['kennung'])
+        return jsonify({"ok": True})
     return _antwort(kalender_bearbeiten.eintrag_loeschen(
         b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
         b.get('time') or None), "termin nicht gefunden")
@@ -451,8 +522,14 @@ def api_calendar_eintrag_loeschen():
 @bp.route('/api/calendar/eintrag', methods=['PUT'])
 def api_calendar_eintrag_aendern():
     """Einen Einmal-Termin ändern, andere Felder bleiben. Body: {layer?, day,
-    label, time?, new:{day?, label?, time?, ende?, ort?}}."""
+    label, time?, new:{day?, label?, time?, ende?, ort?}}. Mit `kennung` im
+    Body genau diesen Termin bzw. diese Spanne (_EINTRAG_NEU); Antwort dann
+    {ok, eintrag}."""
     b = request.get_json(silent=True) or {}
+    if b.get('kennung'):
+        felder = _felder(b.get('new') or {}, _EINTRAG_NEU)
+        return jsonify({"ok": True,
+                        "eintrag": kalender_kennung.eintrag_aendern(b['kennung'], **felder)})
     return _antwort(kalender_bearbeiten.eintrag_aendern(
         b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
         b.get('time') or None, b.get('new') or {}), "termin nicht gefunden/abgelehnt")
