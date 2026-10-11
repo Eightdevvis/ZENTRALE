@@ -10,6 +10,7 @@ darüber (Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt):
 | **Einstieg.** Gesamt-Architektur: Threads, Datenfluss, Modul-Übersicht | [architektur.md](architektur.md) |
 | **Bauplan des Kerns** — Schichten, wer wen importieren darf, Türen, Altlasten (mit Prüftest) | [bauplan_kern.md](bauplan_kern.md) |
 | **Bauplan der TUI** — wie `tui/` in Ansichten geschnitten ist, Kontext statt Closures, Reihenfolge, Sicherheitsnetz | [tui_bauplan.md](tui_bauplan.md) |
+| **Tastentabelle und Leiste** — EINE Tastenleiste ganz unten; jedes Programm verteilt aus einer Tabelle, der Horcher liest sie beim Verkabeln; Ansichten je Programm | [tastentabelle.md](tastentabelle.md) |
 | **Pixelstil** der TUI — Sextant-Pixel, Braille-Icons, Paletten Tag/Nacht, Motive, Regeln für neue Symbole | [pixelstil.md](pixelstil.md) |
 | Wer läuft wo — PC ↔ Pi ↔ Laptop, Sync der `data/*.json` | [topologie.md](topologie.md) |
 | **Heimnetz (Plan)** — PC als Gehirn ohne Bildschirm, eigener Router, VPN, Sunshine; Übergang bis Glasfaser | [heimnetz.md](heimnetz.md) |

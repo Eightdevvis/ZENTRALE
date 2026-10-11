@@ -63,10 +63,10 @@ Neue Dateien kommen nie auf diese Liste: aufteilen statt eintragen.
 | `system/dashboard.md` | 1308 |
 | `ki/claude_web_plan.md` | 1063 |
 | `werkzeuge/kalender_system.md` | 728 |
-| `system/tui_bauplan.md` | 650 |
+| `system/tui_bauplan.md` | 620 |
 | `werkzeuge/mail_system.md` | 636 |
 | `ki/cloud_umstieg_plan.md` | 621 |
-| `werkzeuge/kalender_ansichten_vorschau.md` | 606 |
+| `werkzeuge/kalender_ansichten_vorschau.md` | 604 |
 
 **Wenn der Test rot wird:**
 - **„neu über der Grenze"** — das neue Thema in eine eigene Datei ziehen,

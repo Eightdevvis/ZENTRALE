@@ -575,56 +575,9 @@ wie die Antwort darauf weiterging. Speicher und was drinsteht:
 
 ## Tastentabelle und Leiste (seit 2026-10-11)
 
-Sasha: „es gibt ganz unten eine leiste mit shortcuts … und dann je nach
-programm noch eine zweite leiste drüber … die shortcuts sind gehardcoded und
-fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
-
-- **Eine Leiste**, die unterste Zeile. Im Kasten eines Programms stehen keine
-  Tasten mehr — nur Frage, Rückmeldung (msg) und Status (z. B. „24×6").
-- **Jedes Programm hat EINE Tastentabelle** (`TASTEN`, `tui/ansichten/tasten.py`,
-  Format neutral in `core/tastentabelle.py`, genauso im app.toml unter
-  `[tasten]`, `GET /api/tasten`): je Ansicht `(taste, aktion[, text])`.
-  `taste(ch)` ist `self.TASTEN.verteilen(self, self.ansicht(), ch)`, die
-  Logik steht in `aktion_<name>(taste)`. Was die Leiste zeigt, IST also, was
-  verarbeitet wird. Ohne `text` = verarbeitet, nicht gezeigt (k/j,
-  Großbuchstaben, q). `type` = Freitext, `any key` = alles übrige.
-- **Ansichten schneiden:** jeder Zustand mit anderen Tasten ist eine eigene
-  Ansicht (Nachfrage, Dialog, leere Liste, „nur ein Eintrag" …), damit dort
-  nur steht, was wirkt. Teile mit eigener Tabelle (Chat-Überlagerungen,
-  Kalender-Kästen, Desk-Canvas/Modale, Bausteine Stylebox/Farbwähler)
-  bindet `Tasten.zusammen` als „teil:ansicht" ein.
-- **Der Horcher** (`horcher.py`) ist der Client der Leiste: `fenster.verkabeln`
-  meldet nach dem Bau jedes Programm an, er liest die Tabelle EINMAL und merkt
-  sich die Einträge je Ansicht; die Leiste schlägt beim Zeichnen nur nach.
-  Ohne Tabelle: Tabelle aus dem app.toml, sonst **abhören** (eine Fabrik baut
-  das Programm in einer Wegwerf-Umgebung, er drückt in jeder Ansicht jede
-  Kandidaten-Taste und notiert, was etwas ändert; im Hintergrund, einmal,
-  ohne Namen). Heute hat jedes eingebaute Programm eine Tabelle.
-- **Hauptschleife:** `taste_verteilen` erledigt nur die Überlagerungen
-  (Reminder, Hilfe, Befehlszeile, '/') und gibt die Taste sonst an
-  `z.programme[aktives_programm(z)]`. '/' öffnet die Befehlszeile, außer die
-  offene Ansicht nimmt Freitext oder '/' selbst (`fenster.in_text_entry`).
-- **'/'-Fenster und /help** lesen ebenfalls den Horcher
-  (`fussleiste.programm_tasten`, `fussleiste.hilfe`: je Programm die Tasten
-  seiner ersten Ansicht). Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
-  `TUI_KEYS`, `fenster.current_ctx` und alle Hinweiszeilen in den Kästen.
-- **Tasten-Namen:** `enter esc tab shift+tab space ⌫ del home end pgup pgdn`,
-  Pfeile `↑↓←→`, `alt+…`, `shift+↑↓←→`, `ctrl+x`, `f1`–`f12`, einzelne
-  Zeichen; mehrere mit `/` oder Leerzeichen (`a/s`, `pgup pgdn`).
-  Leisten-Text englisch (Sasha, 07.10.2026). Umlaute in Freitext: die
-  Tabelle kennt nur ASCII; Programme mit Freitext setzen UTF-8-Bytes vorher
-  zusammen (Post-Antwort, Chat, Desk, Kalender-Kästen, Klavier-Name).
-
-**Tests:** `tests/test_tastentabellen.py` verlangt für jedes Programm: eine
-Tabelle, zu jeder Aktion eine Methode, zu jeder Ansicht einen Aufbau in
-`tests/tasten_zustaende/<programm>.py` (`ZUSTAENDE = {ansicht: aufbau}`;
-`None` = kommt hier nicht vor), dort zeigt die echte Leiste genau die Tabelle,
-und JEDE Taste der Tabelle (auch ungezeigte) tut etwas.
-`tests/test_fussleiste.py` hält die Überlagerungen und Chat-Zustände und die
-TUI ohne Bildschirm (`welt`), die beide Tests benutzen.
-
-**Ein neues Programm:** `TASTEN`, `ansicht()`, `taste()`, `aktion_*`; ein
-Eintrag in `fenster.PROGRAMME`; eine Datei in `tests/tasten_zustaende/`.
+Eine Leiste ganz unten; jedes Programm verteilt seine Tasten aus EINER
+Tabelle, die der Horcher beim Verkabeln einliest. Alles dazu:
+[tastentabelle.md](tastentabelle.md).
 
 ## Bausteine (seit 2026-10-09)
 
@@ -650,10 +603,7 @@ API und Tasten: [bausteine_farbe_stil.md](../hub/bausteine_farbe_stil.md).
 
 ## Historie
 
-- **2026-10-11** — Tastentabellen: jedes Programm verteilt seine Tasten aus
-  EINER Tabelle, die der Horcher beim Verkabeln einliest; nur noch eine
-  Leiste ganz unten, Hinweiszeilen in den Kästen weg, `CTX_KEYS`/`TUI_KEYS`/
-  `current_ctx` weg, `taste_verteilen` generisch („Tastentabelle und Leiste").
+- **2026-10-11** — Tastentabellen statt Hand-Hinweisen ([tastentabelle.md](tastentabelle.md)).
 
 - **2026-10-05** — Kern-Bauplan friert `run_ui` (7.701 Zeilen) als Riese ein.
 - **2026-10-06/07** — In 16 Schritten zerlegt (Plan zuerst, dann Gerüst,

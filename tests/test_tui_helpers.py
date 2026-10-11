@@ -215,8 +215,12 @@ def test_overlay_bare_slash_without_ctx_is_just_commands():
 
 
 def test_overlay_help_still_lists_global_keys():
-    _title, rows = overlay_rows("/help", False, ("liste", [("x", "y")]))
-    assert any(r[:2] == ("key", "space") for r in rows)   # volle Hilfe inkl. globaler Tasten (space = ki)
+    # Seit 2026-10-11 kommen die Tasten der Hilfe aus den Tastentabellen
+    # (fussleiste.hilfe → je Programm eine Zeile), nicht mehr aus TUI_KEYS.
+    hilfe = [("start", "space ai chat · enter open")]
+    _title, rows = overlay_rows("/help", False, ("liste", [("x", "y")]), hilfe)
+    assert ("key", "start", "space ai chat · enter open") in rows
+    assert any(r[:2] == ("key", "/") for r in rows)       # die Befehlszeile selbst
     assert _title == "hilfe"
 
 

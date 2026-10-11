@@ -541,26 +541,7 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
   neue Route `GET /api/calendar/quelle?art=&id=&n=4` → `kalender_quelle.
   vorschau`). `POST /api/calendar/spanne` und die Routine mit `freq` nehmen
   jetzt auch `quelle`.
-- **Fußzeile im Kasten:** seit 11.10.2026 weg (vorher `tasten_hinweis` in
-  drei Breitenstufen) — siehe „Tasten: Tastentabelle" unten.
-
-## Tasten: Tastentabelle (11.10.2026)
-Sasha: die Shortcuts nur noch in EINER Leiste ganz unten, aus der Tabelle,
-aus der das Programm auch verteilt (`tui/ansichten/tasten.py`). Der
-Kalender hat `Kalender.TASTEN` = `Tasten.zusammen` aus
-- den Ansichten (`kalender_bedienung.TASTEN_A/B/C`): `a:termine`,
-  `a:kalender`, `a:todo` (+ `_leer`/`_ohne`, wenn nichts zu wählen ist,
-  + `_vom_monat`, wenn der Tag aus dem Monat geliehen ist: Esc „back to
-  month"), `b:monat`, `c:woche` (+ `_leer`), dazu `ansehen` (jede Taste schließt);
-- jedem Kasten mit eigener Tabelle: `frage:` (Rückfrage: `text`, `jn`, `at`,
-  `ant`, Rückfall `wahl`), `formular:` (`text`/`wahl`/`advanced` = Art des
-  Feldes), `advanced:` (Zeile), `quellen:`, `rhythmus:`, `stylebox:`, `farbe:`
-  (Bausteine: Tabelle in `kalender_kasten.py`, gibt die Taste weiter).
-`Kalender.ansicht()` nennt den innersten offenen Kasten (`Bedienung.kette()`),
-sonst Ansehen, sonst A/B/C. Ohne Text = geht, wird nicht gezeigt (k/j, Groß-
-buchstaben, Strg-A/V/G/T, q). Im Kasten stehen keine Tasten mehr (keine
-Fußzeile, kein „(j/n)", kein „eine taste schließt"); Meldungen ohne Tasten.
-Weg zu jeder Ansicht: `tests/tasten_zustaende/kalender.py`.
+- **Fußzeile im Kasten:** seit 11.10.2026 weg — Tasten: [tastentabelle.md](../system/tastentabelle.md) (Kalender).
 
 ## Stylebox im Formular und der gestylte Kasten (10.10.2026)
 Kern: Abschnitt „stil" in [kalender_ics_bauplan.md](kalender_ics_bauplan.md);
