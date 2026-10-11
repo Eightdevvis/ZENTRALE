@@ -961,8 +961,8 @@ KI-Chat geöffnet wird (`ai_load_history`).
 > Das frühere 3 s-**Dauer**-Polling gegen `/api/tutor/status` ist raus — nicht
 > weil der Tutor pausiert (er läuft), sondern weil es nichts kostet, den Status
 > **bei Bedarf** zu holen: `startTutor()` fragt ihn einmal vor dem Kanalwechsel
-> (`monolith.html`). Die TUI pollt ihn weiterhin für ihr Panel. Siehe
-> `memory/tutor/INDEX.md`.
+> (`monolith.html`). Seit 2026-10-09 gibt es `/api/tutor/*` und das
+> TUI-Panel nicht mehr (Tutor = eigene App). Siehe Repo `language-tutor`, `docs/tutor_system.md`.
 
 Kein WebSocket, kein SSE für Statusdaten – Polling reicht für
 ein Single-User-Dashboard und ist deutlich simpler.

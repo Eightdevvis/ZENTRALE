@@ -110,7 +110,7 @@ Repo `language-tutor`, Datei `docs/tutor_system.md` → „Cloud→Lokal-Trennun
 ZENTRALE-seitig gilt:
 
 - Der Tutor ist seit 2026-10-09 eigener Prozess; ZENTRALE importiert nichts
-  von ihm und er nichts von ZENTRALE (Hub-Regel, `memory/system/hub_bauplan.md`).
+  von ihm und er nichts von ZENTRALE (Hub-Regel, `memory/hub/hub_bauplan.md`).
   Kontakt nur per HTTP-Ereignis (`core/hub_ereignisse.py`).
 - Die **Gates für fremde Tool-Sets** bleiben: `ai.py` (`if tools is None`) und
   `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode = tools is not None`) —

@@ -142,8 +142,8 @@ ZENTRALE/
 │   ├── app.py               # Flask-App anlegen, Bereiche einhängen, Takt, Start
 │   └── routen/              # REST-Routen, ein Modul pro Bereich (reiner Adapter auf core/)
 ├── tutor/                   # ★ EIGENES PROJEKT, wohnt hier mit. Rausziehbar am Stück.
-│                            # Baum, Artefakte, Routen, Sprachpakete: memory/tutor/INDEX.md
-│                            # (mit Drift-Test tests/test_tutor_bauplan.py) — hier bewusst nicht kopiert.
+│                            # ausgezogen 2026-10-09: Baum, Artefakte, Routen, Sprachpakete im
+│                            # Repo language-tutor, docs/bauplan.md (Drift-Test dort).
 ├── tui/                     # Die TUI (curses), einzige Front, redet NUR via HTTP mit den Routen
 │   ├── zentrale_tui.py      # Einstieg: main, Store, Hot Reload, run_ui (Aufbau + Schleife)
 │   ├── ansichten/           # je Ansicht ein Modul (Chat, Kalender, Post, Karte …) — tui_bauplan.md

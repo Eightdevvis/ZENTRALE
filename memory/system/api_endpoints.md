@@ -9,7 +9,7 @@ ist archiviert, `memory/archive/browser_front.md`). Direkte Nutzeraktionen
 (Kalender schreiben, Listen, Graphen, Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
 Chat hängt an Kill-Switches (`/api/ai/backends`). Die `/api/tutor/*`-Routen
 gibt es hier seit 2026-10-09 nicht mehr — sie gehören dem Tutor-Server der
-App `language-tutor` (`memory/tutor/INDEX.md`). Mail-Endpoints: Details in
+App `language-tutor` (Routen: `docs/bauplan.md` dort). Mail-Endpoints: Details in
 `memory/werkzeuge/mail_system.md`, Notizen in `memory/werkzeuge/notizen_system.md`.
 Diese Liste hat **keinen** Drift-Test (nur `openapi.yaml` hat einen); zuletzt
 gegen `ui/routen/` abgeglichen 2026-10-11 (jede Route steht drin).

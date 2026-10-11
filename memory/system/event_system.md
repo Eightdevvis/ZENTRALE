@@ -71,8 +71,9 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
     Reaktion (schaut hoch, Mimik) in eine **bereits laufende** Tutor-Session,
     kein Auto-Start, kein verbaler Gruß. Default an, per `ZENTRALE_TUTOR_PRESENCE_REACT=0`
     aus. Kein `TUTOR_START`-Event (die Kante gibt es nicht). Der Kern geht über
-    den Port, nie an `tutor.*` vorbei. Siehe `memory/tutor/INDEX.md`.
-- Macht selbst keine File-Writes; der `presence_ping` ist ein Port-Aufruf.
+    die Hub-Schnittstelle, nie an `tutor.*` vorbei. Verhalten des Tutors:
+    Repo `language-tutor`, `docs/tutor_system.md`.
+- Macht selbst keine File-Writes; „anwesenheit" geht per HTTP über `core/hub_ereignisse.py` an die App.
 
 ### `core/actions.py`
 - Bewusst sehr klein gehalten: macht nur `print()`-Side-Effects.
