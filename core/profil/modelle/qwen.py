@@ -180,6 +180,9 @@ _GRUPPEN = {
     "gruppe": (r"gruppe|kategorie|block|\buni\b|arbeit|schicht|vielleicht|"
                r"unverbindlich|\bfest\b|zugesagt|monatsansicht",
                ("set_calendar_group", "set_calendar_layer")),
+    # 2026-10-11: Aussehen eines Eintrags — selten, also nur auf ein passendes Wort.
+    "stil": (r"farb|einfärb|rahmen|muster|aussehen|stil|markier|hervorheb|bunt",
+             ("set_calendar_style",)),
     "quelle": (r"liste|todo|to-do|projekt|aufgabe|blocke|block",
                ("read_calendar_sources", "set_calendar_source", "clear_calendar_source")),
 }

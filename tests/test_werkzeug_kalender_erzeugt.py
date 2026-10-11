@@ -282,8 +282,9 @@ def test_aus_heisst_die_alten_werkzeuge():
     add = werkzeug_register.eintrag("add_calendar_entry")
     assert add.erzeugt == "kalender" and "kategorie" in add.parameter_auf("gross")["required"]
     namen = [t["function"]["name"] for t in werkzeug_register.schema("gross")]
-    assert namen[-8:] == ["set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
-                          "set_calendar_group", "set_calendar_layer", "read_calendar_sources",
+    assert namen[-9:] == ["set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
+                          "set_calendar_group", "set_calendar_layer", "set_calendar_style",
+                          "read_calendar_sources",
                           "set_calendar_source", "clear_calendar_source"]
 
 
@@ -370,4 +371,49 @@ def test_quelle_setzen_und_loesen(todo):
     assert r.code == "K-OHNE-QUELLE", r
     p = _schlaf()
     r = tun("set_calendar_source", kennung=p, quelle_art="liste", quelle_id=todo)
+    assert r.code == "K-IST-PHASE", r
+
+
+# ── Aussehen (set_calendar_style, 2026-10-11) ──────────────────────────
+
+def _termin():
+    r = tun("add_calendar_entry", day=MO.isoformat(), label="Zahnarzt", time="09:00",
+            ende="10:00", kategorie="keine")
+    assert r.status == "ok", r
+    return "#" + kennung(r, "t")
+
+
+def test_stil_setzen_nur_genannte_felder_und_beleg():
+    k = _termin()
+    r = tun("set_calendar_style", kennung=k, rahmen="double", rahmenfarbe="#ff8800")
+    assert r.status == "ok" and "GEÄNDERT" in r and "border-style: double" in r, r
+    r = tun("set_calendar_style", kennung=k, hintergrund="#112233")
+    # Beleg aus dem nachgelesenen Eintrag: der alte Rahmen bleibt, die Farbe kommt dazu.
+    assert r.status == "ok" and "border-style: double" in r and "#112233" in r, r
+
+
+def test_stil_entfernen_und_ohne_felder():
+    k = _termin()
+    assert tun("set_calendar_style", kennung=k, muster="punkte").status == "ok"
+    r = tun("set_calendar_style", kennung=k, entfernen="ja")
+    assert r.status == "ok" and "Standard-Aussehen" in r, r
+    vorher = _stand()
+    r = tun("set_calendar_style", kennung=k)
+    assert r.code == "K-STIL-UNGUELTIG", r
+    assert _stand() == vorher
+
+
+def test_stil_ungueltig_schreibt_nichts():
+    k = _termin()
+    vorher = _stand()
+    r = tun("set_calendar_style", kennung=k, rahmen="wellig")
+    assert r.status != "ok" and r.code.startswith("K-"), r
+    r = tun("set_calendar_style", kennung=k, rahmenfarbe="orange")
+    assert r.status != "ok" and r.code.startswith("K-"), r
+    assert _stand() == vorher
+
+
+def test_stil_nicht_fuer_phasen():
+    k = "#" + _schlaf()
+    r = tun("set_calendar_style", kennung=k, rahmen="dashed")
     assert r.code == "K-IST-PHASE", r

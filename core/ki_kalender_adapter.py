@@ -27,6 +27,7 @@ import kalender_quelle
 import kalender_regel
 import kalender_rhythmus
 import ki_kalender as kk
+import stil
 import ki_kalender_aendern as ka
 import werkzeug_fragen
 from kalender_kennung import KalenderAbgelehnt
@@ -212,6 +213,7 @@ def _was(name: str, args: dict) -> str:
     tun = {"edit_calendar_phase": "Phase {} ändern", "delete_calendar_phase": "Phase {} löschen",
            "set_calendar_group": "Gruppe für {} setzen",
            "set_calendar_layer": "Ebene von {} wechseln",
+           "set_calendar_style": "Aussehen von {} ändern",
            "set_calendar_source": "Quelle für {} setzen",
            "clear_calendar_source": "Quelle von {} lösen"}.get(name, name + " {}")
     return tun.format(f"„{_wer(args)}“")
@@ -620,6 +622,36 @@ def ebene_setzen(args: dict) -> Ergebnis:
                     nachsatz=f": jetzt {wie} ({args['ebene']})")
 
 
+# Flache Felder des Werkzeugs → CSS-Eigenschaften des Kerns (stil.KASTEN).
+_STIL_FELDER = {"rahmen": "border-style", "rahmenfarbe": "border-color",
+                "hintergrund": "background-color", "schrift": "color",
+                "muster": stil.MUSTER_EIGENSCHAFT}
+
+
+def stil_setzen(args: dict) -> Ergebnis:
+    """Nur die genannten Felder ändern (der Kern ERSETZT den ganzen Stil,
+    deshalb wird der alte Stil hier mit den neuen Werten zusammengeführt)."""
+    s = _irgendein(args)
+    alt = dict((_vorher(s)["roh"].get("stil")) or {})
+    if _text(args, "entfernen") == "ja":
+        neu = {}
+    else:
+        neu = dict(alt)
+        for feld, css in _STIL_FELDER.items():
+            wert = _text(args, feld)
+            if wert:
+                neu[css] = wert
+        if neu == alt:
+            raise Ablehnung("STIL-UNGUELTIG", "kein Feld fürs Aussehen genannt")
+    kalender_kennung.stil_setzen(s.uid, neu)        # Ablehnung → K-… im Adapter
+    soll = kalender_kennung.eintrag(s.uid).get("stil") or {}
+    return Ergebnis(kennung=s.uid, vorher=_vorher(s),
+                    pruefe=lambda x: [] if (x.get("stil") or {}) == soll and
+                    all(soll.get(k) == v for k, v in neu.items()) and (neu or not soll)
+                    else [f"Aussehen steht {x.get('stil')!r}, verlangt {neu!r}"],
+                    nachsatz=lambda x: ": " + (stil.als_css(x.get("stil")) or "Standard-Aussehen"))
+
+
 # ── Titel aus Liste/Projekt ────────────────────────────────────────────
 
 def quellen_lesen(args: dict) -> Ergebnis:
@@ -662,6 +694,8 @@ def _wiederherstellen(k: str, vorher: dict) -> None:
             (alt.get("kategorie", kalender_kategorie.KEINE), alt.get("kategorie_name")):
         kalender_kennung.kategorie_setzen(k, alt.get("kategorie") or kalender_kategorie.KEINE,
                                           alt.get("kategorie_name"))
+    if (jetzt.get("stil") or {}) != (alt.get("stil") or {}):
+        kalender_kennung.stil_setzen(k, alt.get("stil") or {})
     if (jetzt.get("quelle") or None) != (alt.get("quelle") or None):
         if alt.get("quelle"):
             kalender_kennung.quelle_setzen(k, alt["quelle"]["art"], alt["quelle"]["id"],
@@ -706,6 +740,7 @@ _AKTIONEN = {
     "edit_calendar_phase": phase_aendern,
     "delete_calendar_phase": phase_loeschen,
     "set_calendar_group": gruppe_setzen,
+    "set_calendar_style": stil_setzen,
     "set_calendar_layer": ebene_setzen,
     "read_calendar_sources": quellen_lesen,
     "set_calendar_source": quelle_setzen,

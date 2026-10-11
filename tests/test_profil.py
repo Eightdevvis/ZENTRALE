@@ -168,6 +168,7 @@ def test_der_schnitt_haelt():
                 # 10.10.2026: aus dem Schema erzeugt (core/werkzeug_kalender.py) —
                 # Phasen, Gruppe, Ebene; die bisherigen sind dabei kürzer geworden.
                 "set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase",
+                "set_calendar_style",
                 "set_calendar_group", "set_calendar_layer",
                 "read_calendar_sources", "set_calendar_source", "clear_calendar_source"}
     # 08.10.2026: PDF und Word (Skills pdf/word) ebenso — eigener Deckel unten.
@@ -224,7 +225,10 @@ def test_der_schnitt_haelt():
     # 09.10.2026 von 2.450 auf 2.520: „Pflicht: von/bis (Zeitraum)." und
     # „von/bis: Zeitraum." (~50 Zeichen) — Routinen liefen ohne Ende „für
     # immer". Die eigentliche Erklärung steht in den Feldern (zählen nicht).
-    assert 0 < besch_kalender < 2520
+    # 11.10.2026 von 2.520 auf 2.620: set_calendar_style (~85 Zeichen) —
+    # Sasha: die KI soll die Stylebox bedienen können. Die Feldbedeutungen
+    # (Rahmenarten, Muster, #rrggbb) stehen in den Feldern, nicht hier.
+    assert 0 < besch_kalender < 2620
     besch_eigen = sum(len(t["function"]["description"]) for t in gross.TOOLS
                       if t["function"]["name"] in eigen)
     # 18.08.2026 von 2.500 auf 2.800: write_note verweist jetzt auf die

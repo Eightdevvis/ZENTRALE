@@ -32,6 +32,7 @@ import kalender_kennung
 import kalender_quelle
 import kalender_rhythmus
 import ki_kalender_adapter
+import stil
 import werkzeug_erzeuger
 
 X = "x-zentrale"
@@ -283,6 +284,29 @@ AKTIONEN = [
         pflicht=("kennung", "ebene"),
         art="aendern", alltag="termine fest/vielleicht setzen", frage="umlegen",
         worte=("Ebene gewechselt", "Ebene wechseln"),
+    ),
+    # ── Aussehen eines Eintrags (2026-10-11, Kern: stil, KALENDER 458a658) ──
+    # Flache Felder statt eines CSS-Dicts: schwache Modelle füllen einzelne
+    # Werte zuverlässiger als ein verschachteltes Objekt. Der Adapter baut
+    # daraus das CSS-Dict (stil.KASTEN) für kalender_kennung.stil_setzen.
+    _aktion(
+        "set_calendar_style",
+        "Rahmen, Farben, Muster EINES Eintrags per kennung; nur genannte Felder ändern sich.",
+        {"kennung": _KENNUNG_PFLICHT,
+         "rahmen": {"type": "string", "enum": [w for w, _ in stil.RAHMEN],
+                    "description": "Rahmenart: " + ", ".join(f"{w}={t}" for w, t in stil.RAHMEN),
+                    X: {"wort": "Rahmen", "ungueltig": "STIL-UNGUELTIG"}},
+         "rahmenfarbe": _s("Rahmenfarbe als #rrggbb, z. B. #ff8800."),
+         "hintergrund": _s("Hintergrundfarbe als #rrggbb."),
+         "schrift": _s("Schriftfarbe als #rrggbb."),
+         "muster": {"type": "string", "enum": [w for w, _ in stil.MUSTER],
+                    "description": "Innenmuster: " + ", ".join(f"{w}={t}" for w, t in stil.MUSTER),
+                    X: {"wort": "Muster", "ungueltig": "STIL-UNGUELTIG"}},
+         "entfernen": {"type": "string", "enum": ["ja"],
+                       "description": "'ja' = eigenes Aussehen ganz entfernen."}},
+        pflicht=("kennung",),
+        art="aendern", alltag="termine einfärben", frage="das Aussehen ändern von",
+        worte=("Aussehen geändert", "Aussehen ändern"),
     ),
     # ── Titel aus Liste/Projekt (2026-10-10, Kern: kalender_quelle) ──
     _aktion(
