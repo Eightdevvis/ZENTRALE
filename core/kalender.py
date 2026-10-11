@@ -254,6 +254,24 @@ def _mit_stil(layer: str, extras: dict) -> dict:
     return rest
 
 
+def uhrzeit_weich(wert):
+    """„9:00" → „09:00" (10.10.2026, Fund von ASSISTANT: ungepolstert
+    gespeichert, danach als Text verglichen → „Ende 10:30 liegt nicht nach
+    Beginn 9:00"). Echte Uhrzeiten werden geprüft (25:00 → ZEIT-UNGUELTIG);
+    alles, was gar nicht wie H:MM aussieht (alte Formate), bleibt wie es ist."""
+    import re
+    if isinstance(wert, str) and re.fullmatch(r"\s*\d{1,2}:\d{1,2}\s*", wert):
+        from kalender_fehler import uhrzeit
+        return uhrzeit("Uhrzeit", wert)
+    return wert
+
+
+def _zeiten_normal(time, extras):
+    if extras.get("ende"):
+        extras["ende"] = uhrzeit_weich(extras["ende"])
+    return uhrzeit_weich(time) if time else time
+
+
 def add_entry(layer: str, day: str, label: str,
               time: str | None = None, **extras) -> bool:
     """
@@ -266,6 +284,7 @@ def add_entry(layer: str, day: str, label: str,
       extras – beliebige Zusatzfelder (tags, location, ...)
     """
     label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
+    time = _zeiten_normal(time, extras)
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -667,6 +686,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
         state.push_log(f"[calendar] ungültige rrule {rrule_str!r}")
         return False
     label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
+    time = _zeiten_normal(time, extras)
 
     with _lock:
         data = _load_raw()

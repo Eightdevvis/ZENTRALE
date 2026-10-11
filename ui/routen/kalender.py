@@ -106,6 +106,17 @@ def api_calendar():
     return jsonify(out)
 
 
+def _alle_kennungen() -> set:
+    return {e.get("kennung") for e in kalender_kennung.alle_eintraege()}
+
+
+def _neue_kennung(vorher: set):
+    """Die Kennung des gerade Angelegten (für fremde Anbindungen: nachlesen
+    per Kennung; Wunsch von ASSISTANT, 11.10.2026). None, wenn nicht eindeutig."""
+    neu = _alle_kennungen() - vorher
+    return next(iter(neu)) if len(neu) == 1 else None
+
+
 @bp.route('/api/calendar/entry', methods=['POST'])
 def api_calendar_add_entry():
     """
@@ -150,15 +161,19 @@ def api_calendar_add_entry():
             date.fromisoformat(bis)
         except (TypeError, ValueError):
             return jsonify({"error": "bis muss YYYY-MM-DD sein"}), 400
+        vorher = _alle_kennungen()
         ok = kalender.add_span(layer, day, bis, label, **extras)
         if not ok:
             return jsonify({"error": "spanne abgelehnt (bis<von? layer?)"}), 400
-        return jsonify({"ok": True, "conflicts": [], "spanning": True})
+        return jsonify({"ok": True, "conflicts": [], "spanning": True,
+                        "kennung": _neue_kennung(vorher)})
+    time = kalender.uhrzeit_weich(time) if time else time
     conflicts = kalender.conflicts_for_proposed(layer, day, label, time=time)
+    vorher = _alle_kennungen()
     ok = kalender.add_entry(layer, day, label, time=time, **extras)
     if not ok:
         return jsonify({"error": "eintrag abgelehnt (unbekannter layer?)"}), 400
-    return jsonify({"ok": True, "conflicts": conflicts})
+    return jsonify({"ok": True, "conflicts": conflicts, "kennung": _neue_kennung(vorher)})
 
 
 @bp.route('/api/calendar/entry', methods=['DELETE'])
@@ -275,6 +290,7 @@ def api_calendar_add_routine():
         return jsonify({"error": "label fehlt"}), 400
     if body.get('freq'):
         # calcurse „r": Typ (t/w/m/j), alle wie viele, Ende, ab dem gewählten Tag.
+        vorher = _alle_kennungen()
         ok = kalender_bearbeiten.routine_neu(
             (body.get('layer') or 'termine'), label, body.get('seit') or '',
             body.get('freq'), body.get('intervall') or 1, body.get('bis') or None,
@@ -282,7 +298,7 @@ def api_calendar_add_routine():
             body.get('ende') or None, body.get('ort') or None,
             body.get('kategorie') or None, body.get('kategorie_name') or None,
             body.get('quelle') or None, stil=body.get('stil') or None)
-        return (jsonify({"ok": True}) if ok
+        return (jsonify({"ok": True, "kennung": _neue_kennung(vorher)}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
     if isinstance(raw, list):
@@ -304,10 +320,11 @@ def api_calendar_add_routine():
         extras['quelle'] = body['quelle']
     if body.get('stil'):
         extras['stil'] = body['stil']
+    vorher = _alle_kennungen()
     ok = kalender.add_routine(layer, label, rrule, time=time, **extras)
     if not ok:
         return jsonify({"error": "routine abgelehnt (layer/rrule?)"}), 400
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "kennung": _neue_kennung(vorher)})
 
 
 @bp.route('/api/calendar/routine', methods=['DELETE'])

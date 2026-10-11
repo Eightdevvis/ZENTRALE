@@ -24,7 +24,9 @@ from kalender_fehler import KalenderAbgelehnt
 
 def _nicht_vor(beginn, ende):
     """Seit 09.10.2026 keine stille Korrektur mehr: ein Ende, das nicht nach
-    dem Beginn liegt, wird abgelehnt statt still verworfen."""
+    dem Beginn liegt, wird abgelehnt statt still verworfen. Verglichen wird
+    gepolstert („9:00" = „09:00"), sonst irrt der Textvergleich."""
+    beginn, ende = kalender.uhrzeit_weich(beginn), kalender.uhrzeit_weich(ende)
     if ende and not beginn:
         raise KalenderAbgelehnt("ENDE-OHNE-BEGINN", f"Ende {ende} ohne Beginn-Uhrzeit")
     if beginn and ende and ende <= beginn:

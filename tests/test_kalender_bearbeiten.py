@@ -180,7 +180,7 @@ def test_routen_wiederholung_und_konflikt(client):
     r = client.post("/api/calendar/routine", json={
         "label": "Geige", "freq": "w", "seit": "2026-10-06",
         "wochentage": ["TU", "TH"], "time": "10:00", "ende": "11:00"})
-    assert r.get_json() == {"ok": True}
+    assert r.get_json()["ok"] is True and r.get_json()["kennung"]   # Kennung seit 11.10.2026
     k = client.post("/api/calendar/konflikte", json={
         "day": "2026-10-08", "label": "Zahnarzt", "time": "10:30", "ende": "11:30"}).get_json()
     assert k["konflikte"], "Zahnarzt 10:30–11:30 kollidiert mit Geige 10–11"

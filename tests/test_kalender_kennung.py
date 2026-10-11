@@ -235,3 +235,24 @@ def test_uncommitted_nur_hinweis(cal, monkeypatch):
     assert kf.conflicts_for_proposed("uncommitted", tag, "Neu", "10:45", "11:15") == []
     text = kf.render_range_for_tool(date.today(), date.today())
     assert "[uncommitted · vielleicht]" in text and "Vielleicht" in text
+
+
+# ── Uhrzeiten gepolstert, Kennung beim Anlegen (11.10.2026, Fund von ASSISTANT)
+def test_uhrzeit_wird_gepolstert_und_vergleich_stimmt(cal):
+    from ui.app import app
+    c = app.test_client()
+    r = c.post("/api/calendar/entry", json={"day": "2026-10-20", "label": "Früh",
+                                            "time": "9:00", "ende": "10:30"})
+    assert r.status_code == 200
+    k = r.get_json()["kennung"]
+    e = kk.eintrag(k)
+    assert (e["time"], e["ende"]) == ("09:00", "10:30") and e["label"] == "Früh"
+    # „Ende nach Beginn" vergleicht gepolstert: 9:15 → 10:30 ist erlaubt
+    assert kk.eintrag_aendern(k, time="9:15")["time"] == "09:15"
+    r = c.post("/api/calendar/routine", json={"label": "Lauf", "byday": "MO",
+                                              "time": "7:5", "ende": "8:00"})
+    assert r.status_code == 200
+    rk = r.get_json()["kennung"]
+    assert kk.eintrag(rk)["time"] == "07:05"
+    with pytest.raises(kk.KalenderAbgelehnt):
+        kalender.add_entry("termine", "2026-10-21", "X", time="25:00")
