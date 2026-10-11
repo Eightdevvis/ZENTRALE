@@ -134,6 +134,15 @@ def test_shift_pfeile_kommen_als_eigene_namen():
         assert tasten.name_von(code) == n
 
 
+def test_shift_pfeile_in_den_anderen_formen(monkeypatch):
+    """Terminals ohne KEY_SR …: eigener Keycode kUP2 … oder roh ESC [1;2A."""
+    monkeypatch.setattr(curses, "keyname", lambda c: b"kLFT2" if c == 600 else b"")
+    assert tasten.name_von(600) == "shift+left"
+    schirm = F.Schirm()
+    schirm.folge = [ord(c) for c in "[1;2B"]
+    assert tasten.name_von(27, schirm, alt=True) == "shift+down"
+
+
 def test_teile_bringen_ihre_tabelle_mit():
     class Teil:
         TASTEN = tasten.Tasten({"liste": [("enter", "nehmen", "take")]})

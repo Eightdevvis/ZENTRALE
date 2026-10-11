@@ -65,7 +65,13 @@ _NAME_ZU_CODE = {"up": curses.KEY_UP, "down": curses.KEY_DOWN,
 _NAME_ZU_CODE.update({"f%d" % i: curses.KEY_F0 + i for i in range(1, 13)})
 # Alt+Pfeil als EIN Keycode (terminfo kUP3 …, Modifier 3 = Alt)
 _ALT_KEYNAME = {b"kUP3": "alt+up", b"kDN3": "alt+down",
-                b"kLFT3": "alt+left", b"kRIT3": "alt+right"}
+                b"kLFT3": "alt+left", b"kRIT3": "alt+right",
+                # Shift+Pfeil als eigener Keycode (Modifier 2), wie der Desk
+                # sie vor 2026-10-11 selbst kannte
+                b"kUP2": "shift+up", b"kDN2": "shift+down",
+                b"kLFT2": "shift+left", b"kRIT2": "shift+right"}
+# Roh durchgereichtes Shift+Pfeil (xterm: ESC [ 1 ; 2 A …)
+_SHIFT_FOLGE = (("[1;2A", "up"), ("[1;2B", "down"), ("[1;2C", "right"), ("[1;2D", "left"))
 _PFEIL_FOLGE = (("[1;3A", "up"), ("[1;3B", "down"), ("[1;3C", "right"),
                 ("[1;3D", "left"), ("[A", "up"), ("[B", "down"), ("[C", "right"),
                 ("[D", "left"), ("OA", "up"), ("OB", "down"), ("OC", "right"),
@@ -113,6 +119,9 @@ def _esc_folge(stdscr):
     if len(seq) == 1 and 33 <= seq[0] <= 126:
         return "alt+" + chr(seq[0])
     s = "".join(chr(n) for n in seq if 0 <= n < 256).lstrip("\x1b")
+    for k, v in _SHIFT_FOLGE:
+        if s.startswith(k):
+            return "shift+" + v
     for k, v in _PFEIL_FOLGE:
         if s.startswith(k):
             return "alt+" + v
