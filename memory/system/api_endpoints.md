@@ -142,7 +142,7 @@ dieselbe Registry, im Browser Aufgenommenes spielt also auch das Terminal ab.
 Zur Laufzeit angelegte, abhakbare Listen — Pendant zum Lifestyle-Graph-Werkzeug
 (`/api/graphs`), aber für „random stuff" statt Zeitreihen. Definition UND
 Einträge liegen inline (`core/lists.py`); kein `/api/log`-Sharing. Front:
-TUI-Mitte Taste `l` (`memory/system/dashboard.md` → TUI).
+TUI-Mitte Taste `f` (`l` als stiller Alt-Alias; `memory/hub/listen_app.md` → „Das Werkzeug in der TUI und im Canvas").
 
 **Zwei-Dateien-Speicher (isoliert):** Sashas private Listen liegen in
 `data/lists.json`, der **`zentrale`-Feature-Tracker** (Liste `l_zentrale`, seit

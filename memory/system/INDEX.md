@@ -19,6 +19,7 @@ darüber (Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt):
 | **Audio-Straße** — ein Mikro/Lautsprecher am Pi für Tutor, Assistent und weitere Agenten; Weiche offen | [audio_strasse.md](audio_strasse.md) |
 | Die REST-Endpoints, die alle Fronten benutzen (Kacheln/Desk genau: `openapi.yaml`) | [api_endpoints.md](api_endpoints.md) |
 | Dashboard & Frontend: Modi, Polling, KI-Kern, SSE-Events | [dashboard.md](dashboard.md) |
+| **Fokus-Werkzeug** (Listen, Taste `f`) — Tasten, Ebenen, Bernsteinleiste; steht beim Listenprogramm | [../hub/listen_app.md](../hub/listen_app.md) |
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
 | **ZEN-MOBILE** — die Handy-App (`mobile/`): Auge, KI-Chat, Handy als eigener Knoten an der Mitte | [zen_mobile.md](zen_mobile.md) |
 

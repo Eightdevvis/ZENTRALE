@@ -60,7 +60,7 @@ Neue Dateien kommen nie auf diese Liste: aufteilen statt eintragen.
 
 | Datei (unter `memory/`) | Zeilen höchstens |
 |---|---|
-| `system/dashboard.md` | 1391 |
+| `system/dashboard.md` | 1308 |
 | `ki/claude_web_plan.md` | 1063 |
 | `werkzeuge/kalender_system.md` | 728 |
 | `system/tui_bauplan.md` | 650 |
