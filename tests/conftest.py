@@ -341,8 +341,8 @@ def _desk_frisch(_test_ordner, monkeypatch):
 
 # 7e1. Jeder Test hat seine eigenen Anbindungs-Beschreibungen (2026-10-11).
 @pytest.fixture(autouse=True)
-def _anbindungen_frisch(tmp_path_factory, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_ANBINDUNGEN_DIR", str(tmp_path_factory.mktemp("anbindungen")))
+def _anbindungen_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ANBINDUNGEN_DIR", str(_frisch(_test_ordner, "anbindungen")))
     yield
 
 
