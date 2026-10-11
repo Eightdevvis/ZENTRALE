@@ -1,6 +1,6 @@
 # core/kacheln.py
 #
-# Der Hub für Kacheln (memory/system/hub_bauplan.md „Kacheln", entschieden
+# Der Hub für Kacheln (memory/hub/hub_bauplan.md „Kacheln", entschieden
 # 2026-10-09, gebaut 2026-10-10). Eine Kachel ist ein VERWEIS auf ein Objekt
 # einer anderen App, nie eine Kopie — seit 2026-10-10 die neutrale Adresse
 # des Objekts (core/adressen.py, „ein Objekt, eine Adresse"), z. B.

@@ -10,7 +10,7 @@ seit 2026-10-06 archiviert (`memory/archive/browser_front.md`).
 Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
 schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist seit
 2026-10-09 eine eigene App im Repo `language-tutor` (erste App nach
-`hub_bauplan.md`): eigener Prozess, eigener Schlüssel, eigenes Budget;
+[hub_bauplan.md](../hub/hub_bauplan.md)): eigener Prozess, eigener Schlüssel, eigenes Budget;
 ZENTRALE startet ihn und schickt ihm Ereignisse (`memory/tutor/INDEX.md`). „Lokal &
 offline" gilt nur noch als Default: die gegatete Internet-Pipe (2026-06) und
 der Cloud-Kern als Opt-in (2026-08, `memory/ki/anbieter_modelle.md`) brechen es
@@ -238,7 +238,7 @@ Registry; wer echtes Hot-Plug will, müsste noch das Event-Routing
 - **2026-07-16** — Tutor als eigenes Projekt herausgelöst (`tutor/`,
   einzige Naht `core/tutor_port.py`).
 - **2026-10-09** — Tutor ausgezogen: eigenes Repo `language-tutor`, erste
-  App nach `hub_bauplan.md` (Port, `/api/tutor/*` und Text-Panel weg).
+  App nach [hub_bauplan.md](../hub/hub_bauplan.md) (Port, `/api/tutor/*` und Text-Panel weg).
 - **2026-08** — Cloud-Kern als Opt-in; Arbeit nur noch an der TUI, Browser-
   Fronten aufgegeben (`INDEX.md`, Stand der Fronten).
 - **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI

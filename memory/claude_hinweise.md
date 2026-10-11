@@ -5,7 +5,7 @@ Mitarbeiten nicht verletzt werden darf: Threads reden nur über `state.py`;
 Events laufen Sensor → `main.py` → `brain.py`/`actions.py`; der Tutor ist
 seit 2026-10-09 eine eigene App (Repo `language-tutor`): ZENTRALE importiert
 nichts von ihm, startet ihn nur und schickt ihm Ereignisse per HTTP
-(`core/apps.py`, `core/hub_ereignisse.py`, `memory/system/hub_bauplan.md`);
+(`core/apps.py`, `core/hub_ereignisse.py`, `memory/hub/hub_bauplan.md`);
 Logik lebt front-agnostisch in `core/` hinter einem `/api/`-Kontrakt, Fronten
 zeichnen nur; Struktur des Tutors steht im Repo `language-tutor` (`docs/bauplan.md`, Drift-Test),
 Doku folgt `memory/doku_regeln.md`; jede Änderung wird erklärt, kommentiert (WARUM)

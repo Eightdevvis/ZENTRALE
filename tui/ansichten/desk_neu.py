@@ -2,7 +2,7 @@
 #
 # Was `+` auf dem Desk außer den Arten des Bausteins anbietet: alles, was
 # der Katalog des Hubs als Kachel kennt (`GET /api/kacheln`, 2026-10-10,
-# memory/system/hub_bauplan.md „Katalog"). Der Wähler hinter `+` = die
+# memory/hub/hub_bauplan.md „Katalog"). Der Wähler hinter `+` = die
 # eigenen Arten des Canvas mit `neu_label` (Zettel, Bild) + je Katalog-
 # Eintrag eine KatalogWahl. Eine neue App erscheint so von selbst, ohne
 # dass hier etwas über sie steht.

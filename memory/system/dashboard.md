@@ -19,7 +19,7 @@ Ausschnitt nur einen flachen, kaum gepunkteten Bogen sieht und beide
 **nebeneinander** liegen (App-Rad 55 % der Breite, Technik 36 %).
 **Seit 2026-10-10 drei Räder:** rechts neben technik das **Erschaffen-Rad**
 (`ERAD`, `ERSCHAFFEN_APPS` = `werkstatt`, `shop`; mit Pixel-Symbolen wie das
-App-Rad, Breite 36 %; [werkstatt.md](werkstatt.md)).
+App-Rad, Breite 36 %; [werkstatt.md](../hub/werkstatt.md)).
 **alt+←/→** geht ein Rad weiter (apps | technik | erschaffen, am Rand bleibt
 es stehen; Erkennung wie
 die Karte, `m_alt_arrow`), **←/→ dreht direkt** das gewählte Rad, **enter**

@@ -5,7 +5,7 @@
 # keine scheiße macht — auch schwächere ki kann mit fremden kalender/anderem
 # programm arbeiten, weil unser programm die schnittstelle zum fremden
 # programm so ergänzt, dass die ki damit arbeiten MUSS." Plan:
-# memory/system/hub_bauplan.md „KI-Werkzeuge aus dem Schema erzeugen";
+# memory/hub/hub_bauplan.md „KI-Werkzeuge aus dem Schema erzeugen";
 # Mechanik und wie man eine Quelle anbindet: memory/ki/werkzeug_erzeuger.md.
 #
 #   Quelle (Aktions-Schemas, MCP-Form)  +  Adapter (Grundaktionen)

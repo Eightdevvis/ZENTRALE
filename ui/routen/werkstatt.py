@@ -4,7 +4,7 @@
 # Vorlagen — auflisten, anlegen, Name/Symbol ändern, löschen; dazu was der
 # Schmied zur Wahl stellt (Vorlagen, Bilder aus ~/Zentrale/Input).
 # Desks umbenennen/löschen stehen bei den Desk-Routen (ui/routen/desk.py).
-# Doku: memory/system/werkstatt.md.
+# Doku: memory/hub/werkstatt.md.
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md).
 

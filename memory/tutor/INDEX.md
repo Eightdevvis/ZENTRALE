@@ -2,7 +2,7 @@
 
 Seit 2026-10-09 ist der Sprach-Tutor ein **eigenes Programm** im Repo
 `language-tutor` (liegt neben ZENTRALE, GitHub `Eightdevvis/language-tutor`)
-und die erste App nach dem Hub-Bauplan ([../system/hub_bauplan.md](../system/hub_bauplan.md)).
+und die erste App nach dem Hub-Bauplan ([../hub/hub_bauplan.md](../hub/hub_bauplan.md)).
 Seine ganze Doku ist mitgezogen und liegt dort unter `docs/` (Einstieg
 `docs/INDEX.md`; Bauplan, Verhalten, Persona-Tuning, Zimmer, Diagnose 08.10.).
 Die Geschichte der Dateien ist dort erhalten.

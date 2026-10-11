@@ -4,7 +4,7 @@
 # ihren Punkten, abgehakt oder offen, Unterpunkte eingerückt, oben der
 # Fortschritt (erledigt/alle). Der Hub (core/kacheln.py) fragt hier an —
 # dieselbe Schnittstelle, die später eine ausgezogene Listen-App über HTTP
-# bedient (memory/system/hub_bauplan.md „Kacheln"). 2026-10-10.
+# bedient (memory/hub/hub_bauplan.md „Kacheln"). 2026-10-10.
 #
 # Bezug als Adresse, z. B.
 #   zentrale://fokus/liste?erledigte=false&liste=l_einkauf&tiefe=3

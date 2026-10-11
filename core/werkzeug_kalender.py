@@ -1,7 +1,7 @@
 # core/werkzeug_kalender.py
 #
 # Der eigene Kalender als ERSTE Quelle des Werkzeug-Erzeugers
-# (core/werkzeug_erzeuger/, Plan: memory/system/hub_bauplan.md „KI-Werkzeuge
+# (core/werkzeug_erzeuger/, Plan: memory/hub/hub_bauplan.md „KI-Werkzeuge
 # aus dem Schema erzeugen"). Hier stehen nur die Aktions-Schemas (MCP-Form:
 # name, description, inputSchema, annotations, x-zentrale); was eine Aktion
 # TUT, steht im Adapter (core/ki_kalender_adapter.py).

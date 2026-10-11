@@ -18,7 +18,7 @@ info:
     anderer Apps holt, und die Desk-Ansicht (Flächen mit Zetteln, Bildern und
     Kacheln). Jedes Objekt hat eine Adresse `zentrale://<app>/<pfad>?<abfrage>`
     (eine gewöhnliche URI, RFC 3986; core/adressen.py). Doku:
-    memory/system/hub_bauplan.md, memory/system/desk_view.md.
+    memory/hub/hub_bauplan.md, memory/hub/desk_view.md.
 servers:
   - url: http://localhost:5000
     description: Backend auf diesem Rechner (Flask, ui/app.py)
@@ -355,7 +355,7 @@ paths:
       description: >
         Alle Stücke, auf Wunsch nur eine Kategorie und/oder ein Thema
         (`keywords`). Heute kostet alles 0 EUR; bezahlen kommt später über
-        Sashas Server (memory/system/shop.md).
+        Sashas Server (memory/hub/shop.md).
       parameters:
         - {name: kategorie, in: query, required: false, schema: {$ref: "#/components/schemas/ShopKategorie"}}
         - {name: thema, in: query, required: false, schema: {type: string}, example: pixel}

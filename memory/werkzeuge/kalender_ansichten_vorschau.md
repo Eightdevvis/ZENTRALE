@@ -549,7 +549,7 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
 
 ## Stylebox im Formular und der gestylte Kasten (10.10.2026)
 Kern: Abschnitt „stil" in [kalender_ics_bauplan.md](kalender_ics_bauplan.md);
-Bausteine: [bausteine_farbe_stil.md](../system/bausteine_farbe_stil.md).
+Bausteine: [bausteine_farbe_stil.md](../hub/bausteine_farbe_stil.md).
 Sasha: „Im Terminformular gibt es NUR eine Option ‚Stylebox' … In der
 Stylebox kann man den Kasten genau stylen: Rahmenstil + Rahmenfarbe,
 Innenfarbe, Schriftfarbe, Innenmuster; ‚Icon hochladen' wird angezeigt,

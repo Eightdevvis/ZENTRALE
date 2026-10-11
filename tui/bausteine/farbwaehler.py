@@ -25,7 +25,7 @@
 # sonst über Farbpaare — der Kreis wird so grob gerastert, dass er in die
 # freien Pixel-Paare passt (`rad_fuer_budget`), nie läuft das Budget mitten
 # im Bild über und färbt andere Ansichten um.
-# Doku: memory/system/bausteine_farbe_stil.md.
+# Doku: memory/hub/bausteine_farbe_stil.md.
 
 import colorsys
 import curses

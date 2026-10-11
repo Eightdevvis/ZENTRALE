@@ -21,9 +21,9 @@
 # kennt: file, link, group — nur anzeigen). Der Zettel ist bewusst NICHT
 # die Notiz des Notiz-Tools: dessen Format (data/notes.json) wird erst
 # aufgearbeitet (Sasha, 2026-10-09); umstellen steht als offener Punkt in
-# memory/system/desk_view.md.
+# memory/hub/desk_view.md.
 #
-# Nahtstelle für Kacheln anderer Apps (memory/system/hub_bauplan.md
+# Nahtstelle für Kacheln anderer Apps (memory/hub/hub_bauplan.md
 # „Kacheln", entschieden 2026-10-09): in der Datei ein text-Knoten mit
 # Rückfall-Text und `zentrale_kachel: {v: 2, adresse}` — die eine Adresse
 # des Objekts, z. B. zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7

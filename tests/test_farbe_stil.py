@@ -1,5 +1,5 @@
 """Farbwähler, Stylebox und core/stil.py (2026-10-10,
-memory/system/bausteine_farbe_stil.md): Geometrie des Kreises, Cursor,
+memory/hub/bausteine_farbe_stil.md): Geometrie des Kreises, Cursor,
 Zoom, Helligkeit, Hex hin und zurück, 256 Farben, Paar-Budget; die
 Stylebox zeigt nur, was angeboten ist, ändert jede Art richtig, öffnet für
 Farben den Farbwähler, lässt das gesperrte Icon zu, gibt gültiges CSS."""

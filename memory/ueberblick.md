@@ -3,7 +3,7 @@
 **Stand 2026-10-11:** ZENTRALE ist ein event-getriebener Assistent für
 Sashas Wohnung und wird zum **Hub**: eine anfangs leere Plattform, in die
 Module als Apps geladen werden (Fahrplan unten, Bauplan
-`memory/system/hub_bauplan.md`). Der **PC** ist der Kern (Flask + Event-Loop,
+`memory/hub/hub_bauplan.md`). Der **PC** ist der Kern (Flask + Event-Loop,
 Whisper, TTS, Ollama; schläft nach Plan, Wecken per Router/Pi —
 `memory/betrieb/wachplan.md`, Umbau zum Gehirn ohne Bildschirm:
 `memory/system/heimnetz.md`), der **Pi** an der Wand ist Aussenposten
@@ -19,10 +19,10 @@ Seit Oktober neu:
 - **Tutor** — seit 09.10. eigene App im Repo `language-tutor`, erste App nach
   dem Hub-Bauplan (`memory/tutor/INDEX.md`).
 - **Werkstatt** — drittes Rad „erschaffen", der Schmied baut eigene Apps aus
-  Vorlagen (`memory/system/werkstatt.md`).
-- **Shop** — Schaufenster, alles kostenlos (`memory/system/shop.md`).
+  Vorlagen (`memory/hub/werkstatt.md`).
+- **Shop** — Schaufenster, alles kostenlos (`memory/hub/shop.md`).
 - **Desk** — unendliche Fläche mit Zetteln und Schnüren, ein Baustein, keine
-  App (`memory/system/desk_view.md`).
+  App (`memory/hub/desk_view.md`).
 - **ZEN-MOBILE** — Handy-App (Flutter, `mobile/`), noch nicht auf dem Gerät
   gelaufen (`memory/system/zen_mobile.md`).
 
@@ -60,11 +60,11 @@ Gedächtnis (`memory/ki/gedaechtnis_dateien.md`).
 Kalender, Mail, Assistent, Tutor … sind Apps, die nur über die
 Hub-Schnittstelle reden. Reihenfolge laut 09.10.:
 
-1. Hub-Bauplan als Dokument — ✅ `memory/system/hub_bauplan.md`
+1. Hub-Bauplan als Dokument — ✅ `memory/hub/hub_bauplan.md`
 2. Tutor als erste App in eigenem Repo — ✅ 09.10., Repo `language-tutor`
 3. Übrige Module nacheinander (Kalender, Notizen/Listen, Mail, Karte,
    Morgenblick, Assistent zuletzt) — offen, Reihenfolge in
-   `hub_bauplan.md` → „Umzug der heutigen Module"
+   `memory/hub/hub_bauplan.md` → „Umzug der heutigen Module"
 
 **Reihenfolge der Arbeit (08.10.):**
 

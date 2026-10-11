@@ -5,7 +5,7 @@
 # Die TUI schickt nach jeder Änderung den ganzen Desk (Elemente in Zellen +
 # Verbindungen) mit dem `stand` vom Laden; hat sich die Datei inzwischen
 # woanders geändert, kommt 409 mit dem neuen Stand und es wird nichts
-# geschrieben. Doku: memory/system/desk_view.md.
+# geschrieben. Doku: memory/hub/desk_view.md.
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md).
 # 2026-10-09.

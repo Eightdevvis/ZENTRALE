@@ -2,7 +2,7 @@
 Der Canvas-Baustein (tui/bausteine/canvas.py, schnur.py, textfeld.py,
 canvas_arten.py) ohne Terminal: Zustände, Fokus-Sprung, Greifen, Schnüre,
 Shift+Pfeil-Erkennung, Zettel-Editor. Desk View, 2026-10-09
-(memory/system/desk_view.md).
+(memory/hub/desk_view.md).
 """
 import curses
 

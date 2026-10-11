@@ -3,7 +3,7 @@
 # Die Werkstatt (2026-10-10, Sasha): „so simpel wie's geht" — der Schmied
 # baut aus einer Vorlage eine eigene App. Heute gibt es genau eine Vorlage,
 # „Desk View": die App IST dann ein Desk mit Namen und Symbol, der als
-# eigene App im App-Rad steht. Doku: memory/system/werkstatt.md.
+# eigene App im App-Rad steht. Doku: memory/hub/werkstatt.md.
 #
 # Ablage — Standards, kein eigenes Format (hub_bauplan.md „Leitlinie"):
 #   <apps_ordner>/<slug>/app.toml   dasselbe Manifest wie bei Prozess-Apps
@@ -119,7 +119,7 @@ def _toml_text(wert) -> str:
 def manifest_text(m: dict) -> str:
     """dict → app.toml. Nur flache Text-Werte in fester Reihenfolge; mehr
     braucht eine Vorlagen-App nicht. Gelesen wird mit tomllib."""
-    zeilen = ["# Selbst gebaute App aus der Werkstatt (memory/system/werkstatt.md).",
+    zeilen = ["# Selbst gebaute App aus der Werkstatt (memory/hub/werkstatt.md).",
               "# Kein Prozess: vorlage sagt, was beim Öffnen aufgeht."]
     for k in ("name", "version", "vorlage", "icon", "icon_motiv", "desk", "erstellt"):
         if m.get(k) not in (None, ""):

@@ -1,5 +1,5 @@
 """
-Desk View mit Kacheln (2026-10-10, memory/system/desk_view.md): die
+Desk View mit Kacheln (2026-10-10, memory/hub/desk_view.md): die
 +-Auswahl (eigene Arten + Katalog des Hubs), der Dialog aus dem JSON Schema des
 Katalogs, Holen im Hintergrund aus dem Puffer, blättern, `o` →
 /api/kachel/aktion → Adresse → zeigen, enter greift auch Kacheln, und die

@@ -6,7 +6,7 @@
 # Bis 2026-10-10 stand hier eine selbst erfundene `felder`-Liste (typ
 # datum|zahl|wahl|…, vorgabe, grenzen, wenn, dynamisch); sie ist ganz weg.
 #
-# Jeder Katalog-Eintrag (`GET /api/kacheln`, memory/system/hub_bauplan.md
+# Jeder Katalog-Eintrag (`GET /api/kacheln`, memory/hub/hub_bauplan.md
 # „Katalog") trägt `parameter` = ein Schema `type: object`. Jede Oberfläche
 # baut daraus ihren Dialog SELBST (TUI: tui/bausteine/feld_dialog.py, nur
 # die Teilmenge unten), der Hub prüft hier, bevor eine Quelle gefragt wird.

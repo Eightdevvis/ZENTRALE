@@ -1,5 +1,5 @@
 """
-„Ein Objekt, eine Adresse" (Sasha, 2026-10-10; memory/system/hub_bauplan.md
+„Ein Objekt, eine Adresse" (Sasha, 2026-10-10; memory/hub/hub_bauplan.md
 „Adressen"): core/adressen.py baut und liest zentrale://<app>/<pfad>?…,
 die TUI baut dieselbe Schreibweise (desk_neu.adresse) und bildet Adressen
 über einen Router auf Ansichten ab (tui/ansichten/sprung.py).

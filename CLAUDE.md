@@ -84,7 +84,8 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 |---|---|---|
 | KI | denkt: lokal + Cloud, Datei-Gedächtnis (Graph seit 18.08. aus), Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
 | Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
-| System | gebaut: Architektur, Events, Topologie, API, Dashboard, Tastatur | `memory/system/INDEX.md` |
+| System | gebaut (Kern): Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | `memory/system/INDEX.md` |
+| Hub | Plattform: Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt | `memory/hub/INDEX.md` |
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
 | Maps | die Karte: Layer, Quellen-Charta, Design-Brief | `memory/maps/INDEX.md` |
 | Tutor | seit 2026-10-09 eigene App (Repo `language-tutor`), hier nur Zeiger | `memory/tutor/INDEX.md` |

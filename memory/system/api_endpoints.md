@@ -447,7 +447,7 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 `core/desk.py` über `ui/routen/desk.py`. Ein Desk = eine Datei
 `<desk_ordner>/<name>.canvas` (JSON Canvas 1.0). Die TUI rechnet in Zellen
 (1 Spalte = 10 px, 1 Zeile = 20 px); Format, Arten und Tasten:
-[desk_view.md](desk_view.md). Auch diese Routen beschreibt `openapi.yaml`
+[desk_view.md](../hub/desk_view.md). Auch diese Routen beschreibt `openapi.yaml`
 (seit 2026-10-10; bei Abweichung gilt die Datei).
 
 | Endpoint | Methode | Beschreibung |
@@ -468,7 +468,7 @@ Details: `memory/werkzeuge/mail_system.md` (Panel/Drill-down/Hybrid, Passphrase-
 
 `core/shop.py` über `ui/routen/shop.py`. Katalog und Besitz sind schema.org
 in JSON-LD (`application/ld+json`); **Autorität ist `openapi.yaml`**
-(Schemas `Shop*`, Drift-Test `tests/test_openapi.py`). Doku: [shop.md](shop.md).
+(Schemas `Shop*`, Drift-Test `tests/test_openapi.py`). Doku: [shop.md](../hub/shop.md).
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
@@ -481,7 +481,7 @@ in JSON-LD (`application/ld+json`); **Autorität ist `openapi.yaml`**
 ## Werkstatt (seit 2026-10-10)
 
 `core/werkstatt.py` über `ui/routen/werkstatt.py`: selbst gebaute Apps aus
-Vorlagen ([werkstatt.md](werkstatt.md)). Genau in `openapi.yaml`.
+Vorlagen ([werkstatt.md](../hub/werkstatt.md)). Genau in `openapi.yaml`.
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
@@ -501,9 +501,9 @@ bei der App). Verweis = Adresse `zentrale://<app>/<art>?<parameter>`
 (`core/adressen.py`). **Autorität für Anfragen, Antworten und Fehler dieser
 Routen ist `openapi.yaml`** im Repo-Wurzelordner (OpenAPI 3.1, seit
 2026-10-10; `tests/test_openapi.py` hält Routen und Datei gleich) — die
-Tabelle hier ist nur der Überblick. Form und Regeln: [hub_bauplan.md](hub_bauplan.md)
+Tabelle hier ist nur der Überblick. Form und Regeln: [hub_bauplan.md](../hub/hub_bauplan.md)
 „Kacheln", „Adressen", „Katalog", „Farbrollen"; Desk:
-[desk_view.md](desk_view.md).
+[desk_view.md](../hub/desk_view.md).
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|

@@ -4,7 +4,7 @@
 # Der Hub startet die App „tutor": Stimm-Dienste, Tutor-Server, Zimmer.
 #
 # Seit 2026-10-09 ist der Sprach-Tutor eine eigene App (Repo language-tutor,
-# memory/system/hub_bauplan.md). Dieser Starter ist das „App starten" des Hubs:
+# memory/hub/hub_bauplan.md). Dieser Starter ist das „App starten" des Hubs:
 #
 #   1. App finden (siehe app_ordner) und ihr Manifest app.toml lesen.
 #   2. Läuft der Tutor-Server auf DIESEM Rechner: Stimm-Dienste (Whisper :5050,

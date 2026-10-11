@@ -42,7 +42,7 @@
 #                              GROESSE_MIN / GROESSE_MAX (2026-10-10)
 #
 # Bedienung (Zustände, Sasha 2026-10-09, Belegung siehe
-# memory/system/desk_view.md):
+# memory/hub/desk_view.md):
 #   ruhe       ↑↓←→ Fokus springt zum nächsten Kasten in der Richtung,
 #              enter greift, + legt einen neuen an (gleich gegriffen),
 #              e bearbeiten, v verbinden, d löschen (Rückfrage), o öffnen

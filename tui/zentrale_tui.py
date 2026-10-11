@@ -1189,7 +1189,7 @@ def run_ui(stdscr, store):
     desk.zeigen = router.zeigen
     shop = ansichten.shop.Shop(z)          # Schaufenster (2026-10-10): u.shop.oeffnen()
     SHOP = shop.SHOP
-    # Werkstatt + selbst gebaute Apps im Rad (2026-10-10, memory/system/werkstatt.md)
+    # Werkstatt + selbst gebaute Apps im Rad (2026-10-10, memory/hub/werkstatt.md)
     eigene = ansichten.eigene_apps.EigeneApps(z, router, desk)
     eigene.laden()
     werkstatt = ansichten.werkstatt.Werkstatt(z, eigene, desk, router)

@@ -1,6 +1,6 @@
 """Leerer Erststart: der Prompt nennt den Nutzer aus den Einstellungen.
 
-2026-10-09 (memory/system/produkt_inventur.md, Punkt 1). Persona, Meta-Regeln
+2026-10-09 (memory/hub/produkt_inventur.md, Punkt 1). Persona, Meta-Regeln
 und die Prompt-Bausteine nannten Sasha fest beim Namen. Jetzt stehen dort
 Platzhalter, gefüllt aus `nutzer_name` und `nutzer_pronomen`
 (core/nutzer_angaben.py). Festgehalten wird:

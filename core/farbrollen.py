@@ -10,7 +10,7 @@
 # Neue Rolle: hier eintragen (Name + eine Zeile Bedeutung) UND in jeder
 # Oberfläche abbilden — sonst wird der Test rot. Lieber wenige Rollen mit
 # klarer Bedeutung als eine Farbe je Wunsch.
-# Doku: memory/system/hub_bauplan.md „Farbrollen".
+# Doku: memory/hub/hub_bauplan.md „Farbrollen".
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md).
 

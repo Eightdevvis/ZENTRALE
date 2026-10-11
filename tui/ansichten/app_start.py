@@ -3,7 +3,7 @@
 # Eine App aus der TUI starten — heute nur den Sprach-Tutor (Taste 'u').
 #
 # Seit 2026-10-09 ist der Tutor eine eigene App (Repo language-tutor, siehe
-# memory/system/hub_bauplan.md). Die TUI kennt seinen Code nicht und redet
+# memory/hub/hub_bauplan.md). Die TUI kennt seinen Code nicht und redet
 # nicht mit ihm: sie ruft nur den Starter scripts/open_tutor_room.py auf.
 # Der findet die App, fährt Stimm-Dienste und Tutor-Server bei Bedarf hoch
 # und öffnet das Zimmer. Bis hierher stand an dieser Stelle das Text-Panel

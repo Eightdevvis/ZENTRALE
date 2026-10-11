@@ -5,7 +5,7 @@
 # und die Bausteine in core/ki_prompt.py.
 #
 # 2026-10-09, Produkt-Inventur Punkt 1 („leerer Erststart",
-# memory/system/produkt_inventur.md): Persona und Meta-Regeln nannten Sasha
+# memory/hub/produkt_inventur.md): Persona und Meta-Regeln nannten Sasha
 # fest beim Namen. Eine andere Installation hätte ihren Nutzer „Sasha"
 # genannt. Jetzt stehen Platzhalter im Text; die Standardwerte sind genau,
 # was vorher dastand — für Sasha ist der Prompt byte-gleich

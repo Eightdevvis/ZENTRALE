@@ -5,7 +5,7 @@
 # Themen-Filter (tab), links die Stücke (↑↓), rechts das Stück im Einzelnen;
 # bei Icons das Pixel-Motiv selbst aus tui/pixel.py. Enter holt, Esc zurück.
 # Alles kommt per HTTP (/api/shop*, core/shop.py); die Ansicht kennt nur
-# Adressen `zentrale://shop/<kategorie>/<id>`. Doku: memory/system/shop.md.
+# Adressen `zentrale://shop/<kategorie>/<id>`. Doku: memory/hub/shop.md.
 #
 # Geöffnet wird sie von außen über `oeffnen()` (der Rad-Platz `shop` kommt
 # mit der Werkstatt, 2026-10-10) — hier steht kein Rad-Wissen.

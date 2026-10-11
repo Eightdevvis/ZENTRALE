@@ -1,4 +1,9 @@
-# Produkt-Inventur — was ist fertig, was Baustelle (Stand 2026-10-09)
+# Produkt-Inventur — was ist fertig, was Baustelle
+
+**Stand 2026-10-09:** Einschätzung je App und je Hub-Teil (fertig, beta,
+Umbau, nur Dev) mit Lizenz-Vorschlag; vor dem Verkauf fehlen vor allem
+Installation, eigener Modell-Server, Trennung Code ↔ Nutzerdaten und die
+Rechtsfragen (Liste unten). Seither nicht neu erhoben.
 
 Wozu: ZENTRALE soll vom Dev-Haufen zum installierbaren Produkt werden
 (Hub + Apps, siehe [hub_bauplan.md](hub_bauplan.md)). Diese Liste zieht die

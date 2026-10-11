@@ -91,7 +91,7 @@ erstellt = "2026-10-10T17:34:30"
   ihre Adresse an den Router. Der Shop-Platz ruft `u.shop.oeffnen()` — die
   Ansicht gibt es seit 10.10. (`tui/ansichten/shop.py`, [shop.md](shop.md));
   „shop kommt gleich" ist nur noch der Rückfall, falls sie fehlt.
-- Routen: [api_endpoints.md](api_endpoints.md), genau in `openapi.yaml`.
+- Routen: [api_endpoints.md](../system/api_endpoints.md), genau in `openapi.yaml`.
 
 ## Später (nicht gebaut)
 

@@ -156,7 +156,7 @@ behandeln.
 den Rechner. Nie dabei: `ai_config.json` (Keys), `mail_secrets*`,
 Zwischenspeicher (Mail-Zähler, News), Sandbox, `_beiseite/`. Seit 2026-10-10
 dabei: `data/apps/**` — die selbst gebauten Apps der Werkstatt
-(`app.toml` + `icon.png`, [../system/werkstatt.md](../system/werkstatt.md));
+(`app.toml` + `icon.png`, [../hub/werkstatt.md](../hub/werkstatt.md));
 ihr Desk liegt ohnehin in `data/desk/`.
 
 **Kalender: bleibt bei seinem eigenen Weg.** Jeder Rechner gleicht seinen

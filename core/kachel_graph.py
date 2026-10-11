@@ -4,7 +4,7 @@
 # letzten N Tage eines Graphen als Balken aus Blockzeichen ▁▂▃▄▅▆▇█, oben
 # Name, Einheit und letzter Wert, unten Kleinst- und Höchstwert. Der Hub
 # (core/kacheln.py) fragt hier an — dieselbe Schnittstelle, die später eine
-# ausgezogene Graph-App über HTTP bedient (memory/system/hub_bauplan.md
+# ausgezogene Graph-App über HTTP bedient (memory/hub/hub_bauplan.md
 # „Kacheln"). 2026-10-10.
 #
 # Bezug als Adresse, z. B. zentrale://graph/verlauf?graph=g_schlaf&tage=14

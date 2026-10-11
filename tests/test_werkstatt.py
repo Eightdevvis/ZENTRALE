@@ -1,5 +1,5 @@
 """
-Werkstatt, Backend (2026-10-10, memory/system/werkstatt.md): selbst gebaute
+Werkstatt, Backend (2026-10-10, memory/hub/werkstatt.md): selbst gebaute
 Apps als Ordner mit app.toml (dasselbe Hub-Manifest, gelesen mit tomllib)
 + icon.png aus einem Bild in ~/Zentrale/Input; Fund über core/apps.py;
 Kurznamen (reserviert, vergeben); Desks umbenennen/löschen; Routen; Abgleich.

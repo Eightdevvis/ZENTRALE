@@ -2,7 +2,7 @@
 #
 # Das Schaufenster (Sasha, 2026-10-10): ein kleiner Laden in ZENTRALE. Heute
 # ist alles kostenlos und wird nur „geholt"; bezahlen kommt später über
-# Sashas eigenen Server. Doku: memory/system/shop.md.
+# Sashas eigenen Server. Doku: memory/hub/shop.md.
 #
 # ── Katalog: schema.org als JSON-LD, kein eigenes Format ──────────────
 # Eine `ItemList`, jedes Stück ein `ListItem` mit `item` vom passenden Typ

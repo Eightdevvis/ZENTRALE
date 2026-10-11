@@ -1,5 +1,5 @@
 """
-Bilder auf dem Desk (2026-10-10, memory/system/desk_view.md „Bild"):
+Bilder auf dem Desk (2026-10-10, memory/hub/desk_view.md „Bild"):
 Sashas ASCII-Filter als Python (core/bild_vorschau.py), Bilder in den
 Desk-Ordner übernehmen (core/desk_bild.py), der file-Knoten in der
 .canvas-Datei (core/desk.py), die Routen, die Art „bild" im Canvas und das

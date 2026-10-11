@@ -20,7 +20,7 @@
 #
 # Nur Standardbibliothek, keine Kern-Imports: die TUI darf es durch ihre
 # Tür (memory/system/bauplan_kern.md), auch auf dem Pi.
-# Doku: memory/system/bausteine_farbe_stil.md.
+# Doku: memory/hub/bausteine_farbe_stil.md.
 #
 # Fundament (Schicht 1).
 

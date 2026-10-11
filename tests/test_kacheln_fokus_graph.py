@@ -1,5 +1,5 @@
 """
-Listen- und Graph-Kacheln (2026-10-10, memory/system/hub_bauplan.md
+Listen- und Graph-Kacheln (2026-10-10, memory/hub/hub_bauplan.md
 „Kacheln"): die Quellen core/kachel_fokus.py (`fokus`/`liste`) und
 core/kachel_graph.py (`graph`/`verlauf`) hinter dem Hub core/kacheln.py —
 Katalog mit Werten, die erst beim Fragen feststehen (JSON Schema, oneOf

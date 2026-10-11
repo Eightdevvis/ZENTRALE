@@ -9,7 +9,7 @@ allein in curses, mit demselben Kontext (Farbpaare, Theme) wie die TUI:
     venv/bin/python scripts/stil_probe.py --tag      # Tag-Theme
 
 Tasten: f = Farbwähler, s = Stylebox, q = Ende. Was ein Modal zurückgibt,
-steht danach oben. Doku: memory/system/bausteine_farbe_stil.md.
+steht danach oben. Doku: memory/hub/bausteine_farbe_stil.md.
 """
 import argparse
 import curses

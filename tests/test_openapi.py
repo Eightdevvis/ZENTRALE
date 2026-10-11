@@ -1,6 +1,6 @@
 """
 Die HTTP-Schnittstelle des Hubs als OpenAPI 3.1 (openapi.yaml, 2026-10-10,
-memory/system/hub_bauplan.md „Standards statt Eigenformat"):
+memory/hub/hub_bauplan.md „Standards statt Eigenformat"):
 (a) jede Flask-Route unter /api/kachel*, /api/kacheln, /api/desk*, /api/shop* steht in
 der Datei und umgekehrt (kein Auseinanderlaufen); (b) die Datei selbst
 taugt: Aufbau, jeder $ref löst sich auf, jedes Schema ist gültiges JSON

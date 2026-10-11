@@ -2,7 +2,7 @@
 #
 # Was Enter auf der Startseite öffnet (2026-10-10). Bis dahin stand in
 # zentrale_tui.taste_verteilen eine if-Kette je Buchstabe. Seit die Räder
-# selbst gebaute Apps tragen (Werkstatt, memory/system/werkstatt.md), ist
+# selbst gebaute Apps tragen (Werkstatt, memory/hub/werkstatt.md), ist
 # es eine Tabelle: fester Schlüssel → Öffner; eine eigene App ("app:<slug>")
 # geht über ihre Adresse zentrale://<slug>/ an den Router (sprung.py) — so
 # braucht keine neue App eine neue Zeile hier.

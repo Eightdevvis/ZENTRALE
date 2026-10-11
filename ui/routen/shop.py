@@ -3,7 +3,7 @@
 # Das Schaufenster (core/shop.py): Katalog (schema.org ItemList als JSON-LD),
 # ein Stück, Kategorien/Themen, holen, Besitz. Die Werkstatt liest geholte
 # Icons über GET /api/shop/besitz?kategorie=icons. Genaue Form: openapi.yaml.
-# Doku: memory/system/shop.md.
+# Doku: memory/hub/shop.md.
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md).
 # 2026-10-10.

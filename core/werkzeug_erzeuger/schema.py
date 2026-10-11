@@ -8,7 +8,7 @@
 # `description`, `inputSchema` (JSON Schema 2020-12), `annotations`
 # (readOnlyHint, destructiveHint) — plus der Erweiterung `x-zentrale`
 # (wie die x-…-Erweiterungen in OpenAPI). Standard statt Eigenformat
-# (memory/system/hub_bauplan.md): ein fremder MCP-Server liefert genau diese
+# (memory/hub/hub_bauplan.md): ein fremder MCP-Server liefert genau diese
 # Form, nur ohne x-zentrale.
 #
 #   x-zentrale (Aktion)   art: lesen|anlegen|aendern|loeschen, alltag, worte,

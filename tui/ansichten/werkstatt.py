@@ -13,7 +13,7 @@
 # Bedienung nur mit ↑↓ Enter Esc und Tippen (Sasha: Mainstream, nichts, was
 # ein Terminal abfängt). Esc geht einen Schritt zurück, am Anfang zu.
 # Alles über HTTP (core/werkstatt.py, ui/routen/werkstatt.py); was im Rad
-# steht, pflegt ansichten/eigene_apps.py. Doku: memory/system/werkstatt.md.
+# steht, pflegt ansichten/eigene_apps.py. Doku: memory/hub/werkstatt.md.
 
 import curses
 import json

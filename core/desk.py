@@ -4,7 +4,7 @@
 # der Notizen liegen und mit Schnüren verbunden sind. Hier wohnt nur die
 # Datei: lesen, prüfen, schreiben. Was man auf der Fläche tut, macht die TUI
 # (tui/ansichten/desk.py mit dem Baustein tui/bausteine/canvas.py) und
-# schickt den ganzen Desk per PUT zurück. Doku: memory/system/desk_view.md.
+# schickt den ganzen Desk per PUT zurück. Doku: memory/hub/desk_view.md.
 #
 # ── Format: JSON Canvas 1.0 (https://jsoncanvas.org/spec/1.0/) ─────────
 # Eine Datei pro Desk, `<desk_ordner>/<name>.canvas`, so wie Obsidian sie

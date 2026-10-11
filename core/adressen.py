@@ -1,6 +1,6 @@
 # core/adressen.py
 #
-# „Ein Objekt, eine Adresse" (Sasha, 2026-10-10; memory/system/hub_bauplan.md
+# „Ein Objekt, eine Adresse" (Sasha, 2026-10-10; memory/hub/hub_bauplan.md
 # „Adressen"): jedes Objekt in ZENTRALE hat genau EINE neutrale Adresse
 #
 #     zentrale://<app>/<pfad>[?<abfrage>]

@@ -1,6 +1,6 @@
 """
 Das Schaufenster (core/shop.py, ui/routen/shop.py, tui/ansichten/shop.py,
-2026-10-10, memory/system/shop.md): der Katalog ist eine schema.org-ItemList
+2026-10-10, memory/hub/shop.md): der Katalog ist eine schema.org-ItemList
 mit echten Stücken (Preis 0), jede Adresse ist gültig, Filter greifen, holen
 ist idempotent, der Besitz kommt zurück (auch von einem anderen Rechner),
 Antworten passen zu openapi.yaml, und die Ansicht geht Kategorien, Themen und

@@ -114,7 +114,7 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   (`id, von, nach, label?`), verarbeitet Ereignisse und meldet ein
   `Ergebnis` (`geaendert` mit Grund, `bearbeiten`, `zu`). Zeichnet als
   Zeilen aus (spalte, text, rolle). Regeln für Bausteine:
-  [tui_bauplan.md](tui_bauplan.md) „Bausteine".
+  [tui_bauplan.md](../system/tui_bauplan.md) „Bausteine".
 - **Arten** über eine Registrierung (`canvas.Arten`): `zeichne`, `modal`,
   `neu`, optional `rolle` (Rahmenfarbe), `oeffnen` (Taste `o`, meldet eine
   Aktion an die Ansicht), `taste(element, zeichen)` (eigene Tasten wie `f`),
@@ -163,7 +163,7 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   (Esc), kommt der Desk wieder, mit derselben Fläche und Lage. Allgemein im
   Router, nicht je Ansicht.
 - **Backend** `core/desk.py` (Schicht 2) + `ui/routen/desk.py`, Endpunkte in
-  [api_endpoints.md](api_endpoints.md).
+  [api_endpoints.md](../system/api_endpoints.md).
 
 ## Format: JSON Canvas 1.0
 

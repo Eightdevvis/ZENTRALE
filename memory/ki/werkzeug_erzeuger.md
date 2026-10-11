@@ -6,7 +6,7 @@ strukturiert damit ki keine scheiße macht — auch schwächere ki kann mit
 fremden kalender/anderem programm arbeiten, weil unser programm die
 schnittstelle zum fremden programm so ergänzt, dass die ki damit arbeiten
 MUSS." Und: „so können wir dann ja alles mögliche anbinden und wir müssen
-nur das MCP pflegen". Plan: [hub_bauplan.md](../system/hub_bauplan.md)
+nur das MCP pflegen". Plan: [hub_bauplan.md](../hub/hub_bauplan.md)
 „KI-Werkzeuge aus dem Schema erzeugen".
 
 Erste Quelle: der eigene Kalender (inkl. Tagesphasen, Gruppen, Ebene

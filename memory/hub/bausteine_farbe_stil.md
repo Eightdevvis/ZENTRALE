@@ -4,7 +4,7 @@ Stand 2026-10-11 (Farbkreis repariert: Cursor, Zoom, 24 Bit, rund). Sasha wollte
 einem kleinen Kreis darin, den man mit den Pfeilen verschiebt und mit + / −
 heranzoomt, und eine „Stylebox", in der man das Aussehen eines Objekts
 einstellt — für alle Apps, nicht nur den Kalender. Beide sind Bausteine
-(`tui/bausteine/`, Regeln in [tui_bauplan.md](tui_bauplan.md) „Bausteine"):
+(`tui/bausteine/`, Regeln in [tui_bauplan.md](../system/tui_bauplan.md) „Bausteine"):
 sie kennen keinen Aufrufer, speichern nichts und fragen kein Backend.
 Eingehängt seit 10.10.2026 im Kalender, seit 11.10. im Fenster „advanced" des Terminformulars
 ([kalender_ansichten_vorschau.md](../werkzeuge/kalender_ansichten_vorschau.md)); das
@@ -17,7 +17,7 @@ Angebot für einen Kasten steht als `stil.KASTEN` in `core/stil.py` (dort auch
 | 24-Bit-Flächen nach curses' refresh (Farbwähler) | `tui/echtfarbe.py`, eingehängt über `Kontext.echt_malen`/`nachmalen` |
 | Zellform (Höhe/Breite) aus dem Terminal | `pixel.zell_seiten()`, `pixel.zell_ay()` |
 | Stylebox | `tui/bausteine/stylebox.py` |
-| CSS-Wörter, Schema, Prüfung, Hex | `core/stil.py` (Schicht 1, Tür `tui/` in [bauplan_kern.md](bauplan_kern.md)) |
+| CSS-Wörter, Schema, Prüfung, Hex | `core/stil.py` (Schicht 1, Tür `tui/` in [bauplan_kern.md](../system/bauplan_kern.md)) |
 | Ausprobieren ohne Backend | `venv/bin/python scripts/stil_probe.py` (`--tag` für Tag-Theme): f = Farbwähler, s = Stylebox, q = Ende |
 | Tests | `tests/test_farbe_stil.py` |
 

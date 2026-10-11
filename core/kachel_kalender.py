@@ -3,7 +3,7 @@
 # Quelle für Kacheln der App `kalender`, Art `ausschnitt`: ein Stück des
 # Kalenders von einem Tag bis zu einem Tag. Der Hub (core/kacheln.py) fragt
 # hier an — dieselbe Schnittstelle, die später eine ausgezogene
-# Kalender-App über HTTP bedient (memory/system/hub_bauplan.md „Kacheln").
+# Kalender-App über HTTP bedient (memory/hub/hub_bauplan.md „Kacheln").
 # Welche Oberfläche die Kachel zeigt (Desk in der TUI, später Fenster oder
 # Handy), weiß dieses Modul nicht. 2026-10-10.
 #

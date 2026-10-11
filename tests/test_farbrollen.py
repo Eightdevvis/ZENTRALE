@@ -1,5 +1,5 @@
 """
-Farbrollen (2026-10-10, memory/system/hub_bauplan.md „Farbrollen"): die App
+Farbrollen (2026-10-10, memory/hub/hub_bauplan.md „Farbrollen"): die App
 sagt die Bedeutung (core/farbrollen.py), jede Oberfläche die Farbe. Die TUI
 muss JEDE Rolle abbilden — auf eine Rolle ihrer eigenen Palette.
 """

@@ -163,7 +163,7 @@ CTX_KEYS = {
         ("f", "done"), ("a", "reply"), ("s", "sort in"),
         ("v", "list"), ("x", "reconcile"), ("z", "recount"), ("esc", "back"),
     ],
-    # Desk View (2026-10-09, memory/system/desk_view.md). Ausschnitt schieben:
+    # Desk View (2026-10-09, memory/hub/desk_view.md). Ausschnitt schieben:
     # W/A/S/D (Großbuchstaben, seit 2026-10-10 die Hauptbelegung — in jedem
     # Terminal gleich); shift+/alt+↑↓←→ stehen nur in der Hinweiszeile im
     # Kasten (fussleiste.codes() kennt „shift+" nicht, und Platz ist knapp).
@@ -205,7 +205,7 @@ CTX_KEYS = {
         ("←→", "width"), ("↑↓", "height"), ("W/A/S/D", "move view"), ("enter", "keep"),
         ("esc", "undo"),
     ],
-    # Schaufenster (2026-10-10, memory/system/shop.md).
+    # Schaufenster (2026-10-10, memory/hub/shop.md).
     "shop": [
         ("←→", "category"), ("↑↓", "select"), ("tab", "theme"), ("enter", "get"),
         ("esc", "back"),

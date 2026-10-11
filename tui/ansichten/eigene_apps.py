@@ -1,7 +1,7 @@
 # tui/ansichten/eigene_apps.py
 #
 # Die selbst gebauten Apps in der TUI (2026-10-10, Werkstatt,
-# memory/system/werkstatt.md). Das Backend kennt sie (GET
+# memory/hub/werkstatt.md). Das Backend kennt sie (GET
 # /api/werkstatt/apps, core/werkstatt.py); hier wird daraus, was die TUI
 # braucht — ohne je Datei zu lesen (die TUI ist ein Thin Client):
 #   - ein Platz im App-Rad (startseite.EIGENE_APPS, hinter den festen),

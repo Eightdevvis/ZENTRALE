@@ -3,7 +3,7 @@
 # Die Form einer Kachel-Antwort und die Fehler, die eine Quelle melden kann
 # — ohne Fachwissen, damit Hub (core/kacheln.py) und jede Quelle
 # (core/kachel_kalender.py …) dasselbe meinen, ohne sich gegenseitig zu
-# importieren. Was eine Kachel ist: memory/system/hub_bauplan.md „Kacheln".
+# importieren. Was eine Kachel ist: memory/hub/hub_bauplan.md „Kacheln".
 #
 # Eine Zeile ist eine Liste von Stücken [text, rolle]; die Rolle sagt, was
 # das Stück BEDEUTET, nie welche Farbe es hat — das Wörterbuch steht in

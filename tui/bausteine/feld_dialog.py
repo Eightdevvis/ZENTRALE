@@ -2,7 +2,7 @@
 #
 # Ein kleiner Dialog, gebaut aus einem JSON Schema (2026-10-10). Das Schema
 # kommt aus dem Katalog des Hubs (`GET /api/kacheln`, je Eintrag
-# `parameter`; memory/system/hub_bauplan.md „Katalog", core/
+# `parameter`; memory/hub/hub_bauplan.md „Katalog", core/
 # kachel_parameter.py) — der Dialog kennt keine App. So bringt eine neue App
 # ihren Anlege-Dialog mit, ohne dass die TUI etwas über sie weiß. Bis
 # 2026-10-10 war es eine selbst erfundene `felder`-Liste; Sasha: Standards

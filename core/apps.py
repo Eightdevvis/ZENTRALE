@@ -2,7 +2,7 @@
 #
 # Die installierten Apps des Hubs — wo sie liegen und was ihr Manifest sagt.
 #
-# Seit 2026-10-09 (memory/system/hub_bauplan.md, Schritt 1): der Sprach-Tutor
+# Seit 2026-10-09 (memory/hub/hub_bauplan.md, Schritt 1): der Sprach-Tutor
 # ist die erste App. Er wohnt in einem eigenen Repo neben ZENTRALE, läuft als
 # eigener Prozess und sagt in seiner app.toml, was er will (start, adresse,
 # ansichten, rechte). ZENTRALE importiert keinen Code einer App — es liest nur
@@ -13,7 +13,7 @@
 # ../language-tutor). Mehr Apps = eine Zeile in BEKANNT; eine echte
 # App-Verwaltung (installieren, Rechte fragen) kommt erst mit Schritt 2.
 #
-# Selbst gebaute Apps (2026-10-10, Werkstatt, memory/system/werkstatt.md):
+# Selbst gebaute Apps (2026-10-10, Werkstatt, memory/hub/werkstatt.md):
 # ein Ordner mit derselben app.toml unter `apps_ordner` (Standard data/apps/,
 # abgeglichen), aber ohne `start` — sie sind kein Prozess, sondern eine
 # Vorlage (`vorlage = "desk"`) mit Inhalt. Gefunden werden sie hier durch

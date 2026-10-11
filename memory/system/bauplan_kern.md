@@ -16,7 +16,7 @@ entsteht, jemand an einer Tür vorbeigeht oder ein Riese wächst.
 Verhalten steht woanders: Gesamtbild in [architektur.md](architektur.md).
 Der Tutor ist seit 2026-10-09 eine eigene App (Repo `language-tutor`, mit
 eigenem Bauplan); wie Hub und Apps zusammenhängen, steht in
-[hub_bauplan.md](hub_bauplan.md).
+[hub_bauplan.md](../hub/hub_bauplan.md).
 
 ## Die Schichten
 

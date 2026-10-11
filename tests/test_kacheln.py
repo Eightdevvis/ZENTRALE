@@ -1,5 +1,5 @@
 """
-Kacheln (2026-10-10, memory/system/hub_bauplan.md „Kacheln"): der Hub
+Kacheln (2026-10-10, memory/hub/hub_bauplan.md „Kacheln"): der Hub
 core/kacheln.py mit Katalog und Adressen, die Quelle core/kachel_kalender.py
 (Woche/Monat, fest und mitlaufend, +N, blättern) und die Routen
 /api/kacheln, /api/kachel, /api/kachel/aktion. Der Kalender liegt im

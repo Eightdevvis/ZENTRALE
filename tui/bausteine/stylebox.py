@@ -32,7 +32,7 @@
 # steht dasselbe in `ergebnis` (None bei Abbruch). Rein gerechnet:
 # `zeilen()` (die Liste), `vorschau(b, h)` (das gestylte Kästchen als
 # Zellen); gezeichnet über den Kontext: `zeichne(z, y, x, h, w)`.
-# Doku: memory/system/bausteine_farbe_stil.md.
+# Doku: memory/hub/bausteine_farbe_stil.md.
 
 import curses
 

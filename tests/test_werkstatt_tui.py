@@ -1,5 +1,5 @@
 """
-Werkstatt in der TUI (2026-10-10, memory/system/werkstatt.md): drei Räder
+Werkstatt in der TUI (2026-10-10, memory/hub/werkstatt.md): drei Räder
 auf der Startseite (Apps, Technik, Erschaffen) samt Hot-Reload-Stellung, die
 Plätze im Rad, Elektronik als fester Desk, der Schmied Schritt für Schritt
 (bauen, abbrechen, Namensprüfung), die eigene App im Rad mit Symbol und

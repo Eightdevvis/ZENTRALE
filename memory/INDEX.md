@@ -15,7 +15,8 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 |---|---|---|
 | **KI** | Wie ZENTRALE denkt: lokal + Cloud, Datei-Gedächtnis (Konzept-Graph seit 2026-08-18 aus), Tools, Erlaubnis-Gate, Sprache, Pläne, Benchmarks | [ki/INDEX.md](ki/INDEX.md) |
 | **Werkzeuge** | Was ZENTRALE tut: Kalender, Mail, News, Notizen, Zyklus | [werkzeuge/INDEX.md](werkzeuge/INDEX.md) |
-| **System** | Wie es gebaut ist: Architektur, Events, Topologie, API, Dashboard, Tastatur | [system/INDEX.md](system/INDEX.md) |
+| **System** | Wie der Kern gebaut ist: Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | [system/INDEX.md](system/INDEX.md) |
+| **Hub** | ZENTRALE als Plattform: Hub-Schnittstelle, App-Modell, Werkstatt, Shop, Desk, Bausteine für Apps, Produkt | [hub/INDEX.md](hub/INDEX.md) |
 | **Betrieb** | Wie es läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Dateizugriffe | [betrieb/INDEX.md](betrieb/INDEX.md) |
 | **Maps** | Die interaktive Karte: Layer, Quellen-Charta, Design-Brief | [maps/INDEX.md](maps/INDEX.md) |
 | **Tutor** | Der Sprach-Tutor — seit 2026-10-09 eigene App (Repo `language-tutor`); hier nur Zeiger und Hub-Seite | [tutor/INDEX.md](tutor/INDEX.md) |

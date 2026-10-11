@@ -1,7 +1,7 @@
 # tui/ansichten/desk_kacheln.py
 #
 # Kacheln im Desk holen und puffern (2026-10-10). Eine Kachel ist ein
-# Verweis auf ein Objekt einer anderen App (memory/system/hub_bauplan.md
+# Verweis auf ein Objekt einer anderen App (memory/hub/hub_bauplan.md
 # „Kacheln"); ihren Inhalt fragt die Ansicht über den Hub an
 # (`POST /api/kachel`), nie direkt bei der App.
 #

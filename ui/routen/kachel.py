@@ -4,7 +4,7 @@
 # App liefern kann), den Inhalt einer Kachel (Verweis = Adresse
 # zentrale://<app>/<art>?…, in w×h Zellen) und reicht Aktionen weiter
 # („oeffnen" → eine Adresse). Immer über den Hub, nie direkt an die App
-# (memory/system/hub_bauplan.md „Kacheln"). Die Schnittstelle beschreibt
+# (memory/hub/hub_bauplan.md „Kacheln"). Die Schnittstelle beschreibt
 # openapi.yaml (OpenAPI 3.1, im Repo-Wurzelordner) — ein Test hält Routen
 # und Beschreibung gleich. Doku: api_endpoints.md.
 #

@@ -31,7 +31,7 @@ def process_event(event, data=None):
         # der Sprach-Tutor; ob und wie er reagiert, entscheidet ER (seine
         # Einstellung presence_react). Bis 2026-10-09 rief brain.py hier den
         # Tutor-Code direkt auf (tutor_port.presence_ping) — der Hub kennt
-        # keinen App-Code mehr (memory/system/hub_bauplan.md).
+        # keinen App-Code mehr (memory/hub/hub_bauplan.md).
         try:
             import hub_ereignisse
             n = hub_ereignisse.senden("anwesenheit")

@@ -1,7 +1,7 @@
 # tui/ansichten/sprung.py
 #
 # Der Adress-Router der TUI (2026-10-10, „ein Objekt, eine Adresse",
-# memory/system/hub_bauplan.md „Adressen"). Eine App sagt nur, WAS aufgehen
+# memory/hub/hub_bauplan.md „Adressen"). Eine App sagt nur, WAS aufgehen
 # soll — eine Adresse zentrale://<app>/<pfad>?… (z. B. als Antwort auf `o`
 # einer Kachel, POST /api/kachel/aktion). Welche Ansicht das in der TUI
 # wird, steht hier: je App ein Handler (pfad, abfrage) -> bool, eingetragen

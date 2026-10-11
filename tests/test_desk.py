@@ -2,7 +2,7 @@
 Desk View: die Datei (core/desk.py, JSON Canvas 1.0), die Routen
 (/api/desk), der Abgleich (data/desk/** auf der Positivliste, .canvas als
 JSON zusammengeführt) und die Ansicht tui/ansichten/desk.py gegen ein
-gefälschtes Backend. 2026-10-09, memory/system/desk_view.md.
+gefälschtes Backend. 2026-10-09, memory/hub/desk_view.md.
 """
 import copy
 import io

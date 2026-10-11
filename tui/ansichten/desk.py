@@ -8,7 +8,7 @@
 # /api/desk, core/desk.py), das Bearbeiten-Modal mittig zeigen, Tasten und
 # Hinweise. So kann Desk View später als eigene Hub-App ausziehen, ohne den
 # Canvas mitzunehmen, und andere Apps nehmen den Canvas ohne den Desk.
-# Doku: memory/system/desk_view.md.
+# Doku: memory/hub/desk_view.md.
 #
 # Kacheln (2026-10-10): ihr Inhalt kommt im Hintergrund über den Hub
 # (desk_kacheln.py, `POST /api/kachel`), gezeichnet wird aus dem Puffer.
