@@ -1,7 +1,7 @@
 # core/werkzeug_erzeuger/anbindung.py
 #
 # Die Anbindungs-Beschreibung: laden, STRENG prüfen, Stufe je Aktion ermitteln,
-# Dateien finden (2026-10-11, Plan: memory/system/hub_bauplan.md „Anbindungs-
+# Dateien finden (2026-10-11, Plan: memory/hub/hub_bauplan.md „Anbindungs-
 # Pipe der Werkstatt"). Neue Programme werden nicht per Python-Adapter
 # angebunden, sondern mit einer Datei, die der allgemeine Adapter
 # (allgemein.py) ausführt. Später füllt die Werkstatt (eine KI) solche Dateien
