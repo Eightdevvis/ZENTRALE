@@ -12,8 +12,9 @@
 # bleibt bei der Standardbibliothek: properties mit type string|integer|
 # number|boolean, title, description, default, minimum/maximum,
 # minLength/maxLength, format date, oneOf [{const, title}] oder enum;
-# required; allOf [{if: {properties: {x: {const}}}, then: {required,
-# properties: {y: false}}}] (y gilt dann nicht). Der Dialog prüft nur leicht
+# deprecated (Feld wird nicht angeboten); required; allOf [{if:
+# {properties: {x: {const}}}, then: {required, properties: {y: false}}}]
+# (y gilt dann nicht). Der Dialog prüft nur leicht
 # (Typ, Grenzen, Pflicht); Herr über die Regeln ist der Hub — was er
 # ablehnt (z. B. „höchstens 31 tage" zwischen zwei Daten, was JSON Schema
 # nicht sagen kann), zeigt der Dialog als `fehler`.
@@ -110,7 +111,8 @@ class FeldDialog:
         schema = schema if isinstance(schema, dict) else {}
         self.schema = schema
         props = schema.get("properties") or {}
-        self.felder = [feld_aus(n, s) for n, s in props.items() if isinstance(s, dict)]
+        self.felder = [feld_aus(n, s) for n, s in props.items()   # deprecated: nur für alte Werte
+                       if isinstance(s, dict) and not s.get("deprecated")]
         self.pflicht = set(schema.get("required") or [])
         self.regeln = regeln(schema)
         self.titel = titel

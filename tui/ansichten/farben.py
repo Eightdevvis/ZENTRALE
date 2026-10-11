@@ -16,7 +16,7 @@ import curses
 # gedämpftes Salbeigrün (108) statt grellem Standard-Grün.
 ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
          "num", "amber", "amberhi", "amberdk", "cyc", "dim", "faint", "bright", "ink", "band",
-         "kal"]
+         "kal", "sel"]
 
 # Farbrollen der Apps (core/farbrollen.py ROLLEN, 2026-10-10): eine App sagt
 # nur, was ein Stück BEDEUTET; hier entscheidet die TUI, welche ihrer Rollen
@@ -25,7 +25,7 @@ ROLES = ["acc", "warn", "net", "graph", "event", "audio", "hook", "span",
 # heute = Kalender-Akzent, wie der heutige Tag im Kalender selbst.
 FARBROLLEN = {"text": "ink", "leise": "faint", "kopf": "dim", "betont": "bright",
               "heute": "kal", "spanne": "span", "mehr": "acc", "warnung": "warn",
-              "erledigt": "faint"}
+              "erledigt": "faint", "auswahl": "sel"}
 
 
 THEMES = {
@@ -54,6 +54,8 @@ THEMES = {
         "dim":   (curses.COLOR_WHITE,   231, 0),    # normaler Text: reinweiß = max Kontrast
         "faint": (curses.COLOR_WHITE,   245, 0),    # Rahmen: sichtbares Grau (nicht gedimmt)
         "bright":(curses.COLOR_WHITE,   231, curses.A_BOLD),
+        # Farbrolle „auswahl" (Cursor, z. B. gewählter Listen-Kasten): bright invers
+        "sel":   (curses.COLOR_WHITE,   231, curses.A_BOLD | curses.A_REVERSE),
         "ink":   (curses.COLOR_WHITE,   231, 0),
         # Schlaf-Bande: gedämpftes Dunkelmagenta als ZELLEN-HINTERGRUND
         "band_fg": 245, "band_bg": 53,
@@ -94,6 +96,7 @@ THEMES = {
         "dim":   (curses.COLOR_BLACK,   16,  0),    # schwarzer Text auf weiß
         "faint": (curses.COLOR_BLUE,    67,  0),    # Rahmen blau-grau (auf weiß sichtbar)
         "bright":(curses.COLOR_BLACK,   16,  curses.A_BOLD),
+        "sel":   (curses.COLOR_BLACK,   16,  curses.A_BOLD | curses.A_REVERSE),
         "ink":   (curses.COLOR_BLACK,   16,  0),
         # Schlaf-Bande: hell-magenta angehauchtes Grau als ZELLEN-HINTERGRUND
         "band_fg": 240, "band_bg": 225,

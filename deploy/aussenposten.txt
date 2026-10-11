@@ -31,6 +31,8 @@ tui/bausteine/
 # Reine Helfer, die Ansichten und Kacheln teilen (2026-10-10): stdlib-only,
 # ohne Kern-Imports. Ohne sie starten Listen- und Graph-Werkzeug nicht.
 core/listen_baum.py
+# Das eine Bild einer Liste (2026-10-11): die Listen-Ansicht malt nur das.
+core/listen_bild.py
 core/graph_reihen.py
 # Farbwähler und Stylebox (tui/bausteine/) prüfen CSS mit core/stil.py
 # (2026-10-10, stdlib-only).

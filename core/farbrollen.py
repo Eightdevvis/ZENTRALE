@@ -24,6 +24,7 @@ ROLLEN = {
     "mehr":     "Hinweis, dass nicht alles Platz hat („+3“)",
     "warnung":  "Achtung: Fehler, Überfälliges, Konflikt",
     "erledigt": "abgehakt oder vorbei",
+    "auswahl":  "das Gewählte, auf dem der Cursor steht (z. B. invers)",
 }
 RUECKFALL = "text"
 

@@ -4,6 +4,14 @@
 # /api/projects; die Logik liegt in core/lists.py). Bis 06.10.2026 Closures in
 # run_ui (tui/zentrale_tui.py), die Zähl-/Ordnungs-Helfer auf Modulebene dort;
 # siehe memory/system/tui_bauplan.md.
+#
+# Seit 2026-10-11 zeichnet diese Ansicht die Liste NICHT selbst: was wo
+# steht (Kopf, Bernstein, Kästen mit Titel und Markern, Auswahl), kommt aus
+# core/listen_bild.py — derselben Quelle, aus der die Listen-Kachel
+# (core/kachel_fokus.py) ihr Bild nimmt. Hier werden nur Rollen auf
+# curses-Farben abgebildet (FARBROLLEN) und die Stücke gemalt; der
+# Pixel-Bernstein ist eine reine TUI-Veredelung an der Stelle, die die Quelle
+# angibt. Regel: memory/hub/listen_app.md.
 
 import curses
 import time
@@ -14,7 +22,9 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
 
 from .basis import BEENDEN, api_call
+from .desk_kacheln import farbe as rolle_farbe
 import listen_baum  # noqa: E402  – core/, eingehängt von basis.kern_pfad
+import listen_bild  # noqa: E402  – das EINE Bild einer Liste (auch die Kachel)
 
 
 def bar(pct, length=10):
@@ -146,8 +156,8 @@ class Fokus:
 
     def l_desc_view(self, desc):
         """Flacher Anzeige-Knoten {name,done,total,branch,focus,project,whole,
-        lid,iid} für kasten_render (KEINE children → ein Kasten mit nur dem
-        Titel, ▸ wenn er Unterpunkte hat; done/total zeichnet dort keiner)."""
+        lid,iid,eintrag} der Wurzel; `eintrag` ist, was sein Kasten zeigt
+        (listen_bild.eintrag, ohne ★ — die Zone „projekte" sagt es schon)."""
         l_realnode = self.l_realnode
         node = l_realnode(desc)
         if node is None:
@@ -163,7 +173,8 @@ class Fokus:
                 "name": str(name or ""), "done": d, "total": t,
                 "branch": bool(isinstance(kids, list) and kids),
                 "focus": bool(node.get("focus")),
-                "project": bool(node.get("project")), "whole": whole}
+                "project": bool(node.get("project")), "whole": whole,
+                "eintrag": listen_bild.eintrag(node, projekt_marke=False)}
 
     def l_forest_rows(self):
         """Zwei-Zonen-Wurzel als (rows, ndiv): oben die Projekt-Roots
@@ -758,77 +769,41 @@ class Fokus:
 
     def draw_list_tool(self, by, bx, bh, bw):
         """Inhalt der MITTE-Box, wenn das Listen-/Fokus-Werkzeug Fokus hat.
-        Jeder Knoten ist ein Kasten (kasten_render, 3 Zeilen) mit nur dem
-        Titel drin, ▸ = reindivebar, ◆ = Fokus. Status zeigt allein die
-        Bernsteinleiste oben in der Ebenen-Sicht."""
+        Jeder Knoten ist ein Kasten mit nur dem Titel (▸ reindivebar, ★ Projekt,
+        ◆ Fokus), Status allein im Bernstein oben — Aussehen und Aufbau der
+        Ebenen-Sicht kommen aus core/listen_bild.py (dasselbe Bild wie die
+        Kachel), die Wurzel setzt deren Kästen in ihre zwei Zonen."""
         C, L, addclip, draw_box = self.z.C, self.L, self.z.addclip, self.z.draw_box
         l_container, l_forest_rows = self.l_container, self.l_forest_rows
         l_forest_targets, l_move_targets = self.l_forest_targets, self.l_move_targets
-        l_vitems, kasten_render = self.l_vitems, self.kasten_render
+        kasten_render = self.kasten_render
         safe_addstr = self.z.safe_addstr
         ix, iw = bx + 2, bw - 4
         bottom = by + bh - 2          # Hinweiszeile unten in der Box
         if iw < 8:
             return
 
-        def rows_render(nodes, sel_idx, y0, y_max, mark_focus=True):
-            """Flache Knoten als Kästen (3 Zeilen je Eintrag) mit Cursor-Fenster
-            zeichnen. Liefert (nächste_y, wieviele_unten_abgeschnitten)."""
-            if not nodes:
-                return y0, 0
-            per = 3
-            avail = max(1, (y_max - y0 + 1) // per)
-            start = (max(0, min(sel_idx - avail + 1, len(nodes) - avail))
-                     if len(nodes) > avail else 0)
-            sel_node = nodes[sel_idx] if 0 <= sel_idx < len(nodes) else None
-            y = y0
-            for n in nodes[start:start + avail]:
-                if y > y_max:
-                    break
-                y = kasten_render(n, ix, y, iw, y_max, sel=(n is sel_node),
-                                  mark_focus=mark_focus)
-            rest = len(nodes) - (start + avail)
-            return y, max(0, rest)
-
         if L["view"] == "view" and L["def"]:
+            # Das Bild der Ebene kommt ganz aus listen_bild (wie die Kachel);
+            # hier nur malen, dazu Tasten-Hinweise und der Pixel-Bernstein.
             items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
-            done, total = l_count(items)
-            head = " / ".join(crumbs)             # Breadcrumb: liste / ordner / …
-            if L["showdone"]:
-                head += " · abgeschlossen"
-            addclip(by + 1, ix, head, iw - 8, C["bright"])
-            safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
-            y0 = by + 3
-            if total:
-                self._bernstein(by + 2, bx, ix, iw, done, total)
-                y0 = by + 5
-            safe_addstr(y0 - 1, ix, "─" * iw, C["faint"])
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
-            vis = l_vitems()
-            if not vis:
-                if L["showdone"]:
-                    leer = "noch nichts abgeschlossen — esc zurück"
-                elif total:
-                    leer = "alles erledigt ◆ — enter auf den bernstein zeigt's"
-                else:
-                    leer = "noch leer — 'a' hängt was an"
-                addclip(y0, ix, leer, iw, C["faint"])
-            else:
-                # Jeder Eintrag ein Kasten mit nur dem Titel (kasten_render);
-                # Fortschritt steht allein im Bernstein oben, nicht je Eintrag.
-                nodes = []
-                for it in vis:
-                    kids = it.get("items")
-                    nm = str(it.get("text") or "")
-                    if it.get("project"):             # als Projekt markiert → ★
-                        nm += " ★"
-                    nodes.append({"name": nm,
-                                  "branch": isinstance(kids, list) and bool(kids),
-                                  "focus": bool(it.get("focus"))})
-                _, rest = rows_render(nodes, L["isel"], y0, list_bottom)
-                if rest:
-                    safe_addstr(list_bottom, ix + iw - 5, "+%d" % rest, C["faint"])
+            bild = listen_bild.ebene(items, iw, list_bottom - by, pfad=crumbs,
+                                     nur_erledigte=L["showdone"], auswahl=L["isel"],
+                                     kopf_frei=8)
+            self._malen(by + 1, ix, bild["zeilen"])
+            safe_addstr(by + 1, bx + bw - 9, "[a neu]", C["acc"])
+            if bild["bernstein"]:
+                self._bernstein(by + 1 + bild["bernstein"]["zeile"], bx, ix, bild["bernstein"])
+            total = bild["bernstein"]["total"] if bild["bernstein"] else 0
+            leer = bild["leer"]
+            if leer:                                # Tasten-Hinweis hinter den Text der Quelle
+                tipp = {"abgeschlossen": " — esc zurück",
+                        "erledigt": " — enter auf den bernstein zeigt's",
+                        "leer": " — 'a' hängt was an"}[leer["art"]]
+                n = len(listen_bild.LEER_TEXT[leer["art"]])
+                addclip(by + 1 + leer["zeile"], ix + n, tipp, iw - n, C["faint"])
             if L["adding"]:
                 lbl = {"sub": "unterpunkt", "rename": "umbenennen"}.get(L["imode"], "neu")
                 tip = "enter umbenennen" if L["imode"] == "rename" else "enter anhängen"
@@ -947,8 +922,8 @@ class Fokus:
                         if t[1]:
                             addclip(yy, ix, t[1], iw, C["faint"])
                     else:
-                        kasten_render(t[1], ix, yy, iw, grid_bottom,
-                                      sel=(t[1] is sel_node), mark_focus=True)
+                        kasten_render(t[1]["eintrag"], ix, yy, iw, grid_bottom,
+                                      sel=(t[1] is sel_node))
                 if total_lines > top_line + Hh:
                     safe_addstr(grid_bottom, ix + iw - 5, "+", C["faint"])
             if L["adding"]:                        # neue Liste / umbenennen tippen
@@ -972,79 +947,69 @@ class Fokus:
                 addclip(dy + 1, dx + 2, q, dw - 4, C["bright"])
                 addclip(dy + 2, dx + 2, "j/enter = ja · sonst abbrechen", dw - 4, C["faint"])
 
-    def _bernstein(self, y, bx, x, w, done, total):
-        """Bernsteinleiste (2 Zeilen): ein Stein je Punkt der Ebene, jeder
-        abgehakte leuchtet. Rechts der Zähler; ausgewählt (isel -1) zeigt
-        ein › links und der Zähler steht invers."""
+    def _malen(self, y, x, zeilen, y_max=None):
+        """Neutrale Zeilen (Stücke [text, rolle], core/listen_bild.py) ab
+        (y, x) malen: Rolle → TUI-Farbe (FARBROLLEN), sonst nichts."""
+        C, safe_addstr = self.z.C, self.z.safe_addstr
+        for r, zeile in enumerate(zeilen):
+            if y_max is not None and y + r > y_max:
+                break
+            xx = x
+            for text, rolle in zeile:
+                safe_addstr(y + r, xx, text, C.get(rolle_farbe(rolle), 0))
+                xx += len(text)
+
+    def _bernstein(self, y, bx, x, info):
+        """TUI-Veredelung der Bernsteinleiste, die listen_bild an Zeile y
+        gesetzt hat (info: breite, done, total): dieselbe Stelle, dieselbe
+        Breite, nur schöner — Pixel-Steine (Sashas Treppenschliff, der zuletzt
+        abgehakte glimmt) oder schattierte Bernstein-Spalten; der Zähler in
+        Bernstein. Gewählt (isel -1): › links, Zähler invers."""
         C, L, PIX, PIX_MODUS = self.z.C, self.L, self.z.PIX, self.z.PIX_MODUS
         pix_attr, safe_addstr = self.z.pix_attr, self.z.safe_addstr
+        done, total, breite = info["done"], info["total"], info["breite"]
         sel = (L["isel"] == -1)
         cnt = " %d/%d" % (done, total)
+        sw = breite - 2                           # Steine zwischen ▐ und ▌
+        zattr = (C["amber"] | curses.A_REVERSE) if sel else C["amber"]
         if C.get("pix_bg") is not None and PIX_MODUS != "off":
-            # Pixel-Baustein: Sashas Treppenschliff-Stein, Mix aus Halb-
-            # block/Viertel/Sextant; der zuletzt abgehakte glimmt im Takt.
-            sw = max(1, w - len(cnt) - 1)
             if PIX["voll"]:
                 PIX["pairs"].clear(); PIX["voll"] = False
             glimm = int(time.time() * 4) % 8
-            rows = pixel.bernstein_zellen(done, total, sw, C["pix_bg"], glimm,
+            rows = pixel.bernstein_zellen(done, total, breite, C["pix_bg"], glimm,
                                           "half" if PIX_MODUS == "half" else "mix")
             for r, line in enumerate(rows):
                 for i, (ch, fg, bgc) in enumerate(line):
                     safe_addstr(y + r, x + i, ch, pix_attr(fg, bgc))
-            safe_addstr(y, x + sw + 1, cnt,
-                        (C["amber"] | curses.A_REVERSE) if sel else C["amber"])
-            if sel:
-                safe_addstr(y, bx + 1, "›", C["bright"])
-            return
-        # Rückfall ohne 256 Farben: schlichte Stein-Spalten
-        sw = max(1, w - 2 - len(cnt))             # Platz für die Steine
-        cols = bernstein_steine(done, total, sw)
-        safe_addstr(y, x, "▐", C["amberdk"])
-        safe_addstr(y + 1, x, "▐", C["amberdk"])
-        for i, c in enumerate(cols):
-            if c == "L":                          # leuchtender Stein, pixelig schattiert:
-                anf = i == 0 or cols[i - 1] != "L"            # Glanz oben links,
-                end = i == len(cols) - 1 or cols[i + 1] != "L"  # Schatten unten rechts
-                breit = not (anf and end)
-                safe_addstr(y, x + 1 + i, "█",
-                            C["amberhi"] if (anf and breit) else C["amber"])
-                safe_addstr(y + 1, x + 1 + i, "█",
-                            C["amberdk"] if (end and breit) else C["amber"])
-            elif c == "U":                        # leere Fassung
-                safe_addstr(y, x + 1 + i, "░", C["amberdk"])
-                safe_addstr(y + 1, x + 1 + i, "░", C["amberdk"])
-        safe_addstr(y, x + 1 + sw, "▌", C["amberdk"])
-        safe_addstr(y + 1, x + 1 + sw, "▌", C["amberdk"])
-        safe_addstr(y, x + 2 + sw, cnt,
-                    (C["amber"] | curses.A_REVERSE) if sel else C["amber"])
+        else:                                     # ohne 256 Farben: Spalten schattieren
+            cols = bernstein_steine(done, total, sw)
+            for r in (0, 1):
+                safe_addstr(y + r, x, "▐", C["amberdk"])
+                safe_addstr(y + r, x + 1 + sw, "▌", C["amberdk"])
+            for i, c in enumerate(cols):
+                if c == "L":                      # Glanz oben links, Schatten unten rechts
+                    anf = i == 0 or cols[i - 1] != "L"
+                    end = i == len(cols) - 1 or cols[i + 1] != "L"
+                    breit = not (anf and end)
+                    safe_addstr(y, x + 1 + i, "█",
+                                C["amberhi"] if (anf and breit) else C["amber"])
+                    safe_addstr(y + 1, x + 1 + i, "█",
+                                C["amberdk"] if (end and breit) else C["amber"])
+                elif c == "U":
+                    safe_addstr(y, x + 1 + i, "░", C["amberdk"])
+                    safe_addstr(y + 1, x + 1 + i, "░", C["amberdk"])
+        safe_addstr(y, x + breite, cnt, zattr)
         if sel:
             safe_addstr(y, bx + 1, "›", C["bright"])
 
-    def kasten_render(self, node, x, y, w, y_max, sel=False, mark_focus=False):
-        """EIN Knoten des Fokus-Werkzeugs als Kasten (3 Zeilen, Breite w):
-        Rahmen ┌─┐│└─┘, innen nur der Titel — kein Zähler, keine Leiste.
-        ▸ = reindivebar, ◆ = Fokus (mark_focus). Gewählt (sel): Rahmen hell,
-        Titel invers; sonst Rahmen dezent. Was unter y_max fiele, entfällt.
-        Liefert die nächste freie y-Zeile."""
-        C, addclip, safe_addstr = self.z.C, self.z.addclip, self.z.safe_addstr
-        if y > y_max or w < 5:
+    def kasten_render(self, e, x, y, w, y_max, sel=False):
+        """EIN Knoten als Kasten an (y, x): Aussehen aus listen_bild.kasten
+        (e = listen_bild.eintrag), hier nur gemalt. Was unter y_max fiele,
+        entfällt. Liefert die nächste freie y-Zeile."""
+        if y > y_max:
             return y_max + 1
-        name = str(node.get("name") or "")
-        if node.get("branch"):                  # hat Unterpunkte → reindivebar
-            name = "▸ " + name
-        if mark_focus and node.get("focus"):
-            name += " ◆"
-        rand = C["bright"] if sel else C["faint"]
-        tattr = (C["bright"] | curses.A_REVERSE) if sel else C["bright"]
-        inner = w - 2
-        safe_addstr(y, x, "┌" + "─" * inner + "┐", rand)
-        if y + 1 <= y_max:                      # Titelzeile: │ titel │
-            safe_addstr(y + 1, x, "│" + " " * inner + "│", rand)
-            addclip(y + 1, x + 2, name, inner - 2, tattr)
-        if y + 2 <= y_max:
-            safe_addstr(y + 2, x, "└" + "─" * inner + "┘", rand)
-        return y + 3
+        self._malen(y, x, listen_bild.kasten(e, w, gewaehlt=sel), y_max)
+        return y + listen_bild.KASTEN_HOEHE
 
     def proj_render(self, node, x, y, w, y_max, sel_node=None, mark_focus=False):
         """Render-Routine für die verschachtelte Projekt-Anzeige der Fokus-Box —

@@ -83,6 +83,7 @@ class Kontext:
             for r in ROLES:
                 C[r] = 0
             C["bright"] = curses.A_BOLD
+            C["sel"] = curses.A_BOLD | curses.A_REVERSE   # Farbrolle „auswahl"
             C["dim"] = curses.A_BOLD       # heller Text im Mono-Fallback
             C["faint"] = curses.A_DIM
             C["acc"] = curses.A_BOLD

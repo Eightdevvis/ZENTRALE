@@ -16,6 +16,8 @@
 #                vor dem Feld), description (Hilfe), default, minimum/
 #                maximum, minLength/maxLength, format: date, Auswahl als
 #                oneOf [{const, title}] (oder enum ohne eigene Titel)
+#                deprecated: true — gilt nur noch für alte Adressen, Dialoge
+#                bieten das Feld nicht mehr an (Listen-`tiefe`, 2026-10-11)
 #   required     was gesetzt sein muss
 #   allOf [{if: {properties: {x: {const: w}}}, then: {required, properties:
 #                {y: false}}}]  — Felder, die nur bei einem Wert gelten

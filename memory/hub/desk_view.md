@@ -232,12 +232,15 @@ Daten prüft der Hub selbst). Standard beim Anlegen: mitlaufend 7 Tage.
   dieselbe Stelle (seit 2026-10-10, für jede mit `o` geöffnete Ansicht).
 
 **Liste** (App `fokus`, Art `liste`, `core/kachel_fokus.py`, seit
-2026-10-10): Dialog „liste" (←→ durch die Listen von jetzt), „erledigte"
-(ja/nein), „ebenen" (1–9). Kopf = Name, Steine, „1/5"; darunter `○`
-offen, `✓` erledigt (nur mit „erledigte"), Ordner `▾`/`▸` mit „d/t",
-eingerückt; Reihenfolge wie in der Listen-Ansicht. Bild↓/↑ blättert, „+N
-weitere" zeigt Verstecktes. `o` öffnet die Listen-Ansicht in genau der
-Liste. Abhaken geht nur dort, nie auf der Kachel.
+2026-10-10): Dialog „liste" (←→ durch die Listen von jetzt) und
+„erledigte" (ja/nein: die abgeschlossenen statt der offenen). Seit
+2026-10-11 zeigt die Kachel **dasselbe Bild wie die Listen-Ansicht**
+(`core/listen_bild.py`, [listen_app.md](listen_app.md)): Kopf = Name,
+Bernstein mit „1/5", darunter die Einträge der obersten Ebene als Kästen
+mit Titel (▸ Ordner, ★ Projekt, ◆ Fokus). „ebenen" ist weg (alte Kacheln mit
+`tiefe` gehen weiter, ohne Wirkung). Mindestens 12×7. Bild↓/↑ blättert,
+„+N" im letzten Kasten zeigt Verstecktes. `o` öffnet die Listen-Ansicht in
+genau der Liste. Abhaken geht nur dort, nie auf der Kachel.
 
 **Graph** (App `graph`, Art `verlauf`, `core/kachel_graph.py`, seit
 2026-10-10): Dialog „graph" (←→) und „tage" (Standard 14). Kopf = Name +

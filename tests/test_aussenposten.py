@@ -59,7 +59,7 @@ def test_paket_bleibt_klein_und_ohne_backend():
     # und Kacheln teilen (stdlib-only, ohne Kern-Imports)
     assert sorted(r for r in drin if r.startswith("core/")) == [
         "core/graph_reihen.py", "core/host_metrics.py", "core/listen_baum.py",
-        "core/stil.py"]
+        "core/listen_bild.py", "core/stil.py"]
     assert aussenposten.manifest()["bytes"] < 5 * 1024 * 1024
 
 

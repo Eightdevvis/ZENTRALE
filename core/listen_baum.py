@@ -13,6 +13,8 @@
 # sie von hier (Tür `tui/` → Kern, bauplan_kern.md). Weil die TUI auch auf
 # einem Aussenposten ohne Backend läuft, steht die Datei in
 # deploy/aussenposten.txt — sie darf darum nichts aus dem Kern importieren.
+# Das BILD einer Liste (Kästen, Bernstein) steht nicht hier, sondern in
+# core/listen_bild.py (seit 2026-10-11, memory/hub/listen_app.md).
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md).
 

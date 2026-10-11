@@ -308,7 +308,8 @@ die Datei gültig ist und echte Antworten zu ihren Schemas passen.
 
 Das Wörterbuch steht neutral in `core/farbrollen.py` (Name + eine Zeile
 Bedeutung): `text`, `leise`, `kopf`, `betont`, `heute`, `spanne`, `mehr`,
-`warnung`, `erledigt`. Kachel-Antworten tragen nur diese Namen (der Hub
+`warnung`, `erledigt`, `auswahl` (seit 2026-10-11: das Gewählte, auf dem
+der Cursor steht — Listen-Bild). Kachel-Antworten tragen nur diese Namen (der Hub
 macht aus Unbekanntem `text`). Jede Oberfläche bildet jede Rolle auf ihre
 Farben ab — die TUI in `tui/ansichten/farben.py` `FARBROLLEN` (ein Test
 verlangt, dass jede Rolle abgedeckt ist); Unbekanntes zeichnet sie neutral
@@ -320,17 +321,19 @@ Wie der Kalender ein Modul je Quelle im Prozess, eingetragen in `QUELLEN`;
 beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
 
 - **`fokus`/`liste`** (`core/kachel_fokus.py`): Parameter `liste` (Text,
-  Auswahl zur Fragezeit), `erledigte` (boolean, Standard nein), `tiefe` (integer 1–9,
-  Standard 3, „ebenen"). Adresse z. B.
-  `zentrale://fokus/liste?erledigte=false&liste=l_einkauf&tiefe=3`. Kopf =
-  Name, Bernstein-Steine, „erledigt/alle" (Blätter); darunter die Punkte
-  wie in der Listen-Ansicht geordnet (offen, Fokus oben, wenig Offenes
-  zuerst; Erledigtes dahinter, wenn gewünscht), `○`/`✓`, Ordner `▾`/`▸`
-  mit „d/t", 2 Zellen Einrückung je Ebene; blättern mit `oben`, „+N
-  weitere". `oeffnen` → `zentrale://fokus/<liste>`; der Router der TUI
-  versteht auch `zentrale://fokus/<liste>/<eintrag>`. Gelesen über
-  `lists.read_lists()` (neu: schreibt garantiert nie, auch nicht die
-  einmalige »week«-Migration).
+  Auswahl zur Fragezeit), `erledigte` (boolean, Standard nein: die
+  abgeschlossenen statt der offenen zeigen), `tiefe` seit 2026-10-11
+  veraltet (`deprecated`, ohne Wirkung, nur für alte Adressen). Adresse z. B.
+  `zentrale://fokus/liste?erledigte=false&liste=l_einkauf`. **Das Bild
+  zeichnet die Kachel nicht selbst** (Regel seit 2026-10-11: *Programm und
+  Kachel teilen EIN Bild*): es kommt aus `core/listen_bild.py`, derselben
+  Quelle, die die Listen-Ansicht der TUI malt — oberste Ebene, Kopf,
+  Bernstein als Status, Einträge als Kästen mit Titel und Markern, „+N" im
+  letzten Kasten; blättern mit `oben`. Einzelheiten, Wächter und der
+  spätere Auszug: [listen_app.md](listen_app.md). `oeffnen` →
+  `zentrale://fokus/<liste>`; der Router der TUI versteht auch
+  `zentrale://fokus/<liste>/<eintrag>`. Gelesen über `lists.read_lists()`
+  (schreibt garantiert nie, auch nicht die einmalige »week«-Migration).
 - **`graph`/`verlauf`** (`core/kachel_graph.py`): Parameter `graph` (Text,
   Auswahl zur Fragezeit), `tage` (integer 2–365, Standard 14). Kopf = Name (+ Einheit),
   rechts der letzte Wert; darunter Balken aus `▁▂▃▄▅▆▇█`, je Tag eine
@@ -349,6 +352,10 @@ beide **lesen nur** (Sasha: `o` = nur öffnen, kein Abhaken auf der Kachel).
   denselben reinen Funktionen (`core/listen_baum.py`,
   `core/graph_reihen.py`, umgezogen aus `tui/ansichten/fokus.py`,
   `graphen.py`, `basis.py`) — Leitlinie „dasselbe Objekt, nicht kopiert".
+  Bei Listen seit 2026-10-11 auch das Bild selbst (`core/listen_bild.py`).
+  **Regel für jede App mit Kachel:** Programm und Kachel teilen EIN Bild —
+  die Kachel ruft dieselbe Bild-Quelle wie die Vollansicht, nie einen
+  eigenen Zeichner ([listen_app.md](listen_app.md)).
 
 **Offen:** Behält Obsidian beim Speichern unbekannte Knotenfelder? Noch
 nicht geprüft (Kacheln sind trotzdem gebaut — verliert Obsidian das Feld,

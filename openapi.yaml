@@ -672,7 +672,7 @@ components:
       description: >
         Was ein Stück BEDEUTET, nie welche Farbe (core/farbrollen.py); jede
         Oberfläche wählt die Farbe selbst.
-      enum: [text, leise, kopf, betont, heute, spanne, mehr, warnung, erledigt]
+      enum: [text, leise, kopf, betont, heute, spanne, mehr, warnung, erledigt, auswahl]
 
     Stueck:
       type: array

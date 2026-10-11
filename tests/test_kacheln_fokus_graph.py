@@ -100,12 +100,14 @@ def test_katalog_traegt_die_listen_und_graphen_von_jetzt(einkauf, gewicht):
     (lf,) = [e for e in k if e["app"] == "fokus"]
     (gr,) = [e for e in k if e["app"] == "graph"]
     assert lf["art"] == "liste" and gr["art"] == "verlauf"
-    assert lf["aktionen"] == ["oeffnen"] and lf["min"] == {"w": 12, "h": 2}
+    assert lf["aktionen"] == ["oeffnen"] and lf["min"] == {"w": 12, "h": 7}
     p = lf["parameter"]["properties"]
     assert p["liste"]["oneOf"] == [{"const": einkauf, "title": "Einkauf"}]
     assert p["erledigte"]["type"] == "boolean" and p["erledigte"]["default"] is False
     assert (p["tiefe"]["minimum"], p["tiefe"]["maximum"]) == (1, 9)
+    assert p["tiefe"]["deprecated"] is True             # nur noch für alte Adressen
     assert list(p) == ["liste", "erledigte", "tiefe"]
+    assert lf["parameter"]["required"] == ["liste", "erledigte"]
     g = gr["parameter"]["properties"]
     assert g["graph"]["oneOf"] == [{"const": gewicht, "title": "Gewicht"}]
     assert g["tage"]["default"] == 14 and (g["tage"]["minimum"], g["tage"]["maximum"]) == (2, 365)
@@ -138,18 +140,27 @@ def test_wahl_von_jetzt_prueft_der_hub_nur_als_text(einkauf):
         kachel_parameter.schema_pruefen({"type": "object", "properties": {"x": {"type": "kaputt"}}})
 
 
-# ── Liste: Bild ──────────────────────────────────────────────────────
+# ── Liste: Bild (seit 2026-10-11 aus core/listen_bild.py) ────────────
+# Wie die Vollansicht: oberste Ebene, Kopf, Bernstein, Einträge als Kästen.
+# Dass Kachel und Ansicht DASSELBE zeigen, bewacht tests/test_listen_bild.py.
 
-def test_liste_kopf_fortschritt_einrueckung_und_rollen(einkauf):
-    status, a = holen(listen_adresse(einkauf), w=36, h=12)
+def _titel(zeilen):
+    """Die Titel der Kästen (mittlere Zeile „│ titel │")."""
+    return [z[1:-1].strip() for z in zeilen if z.startswith("│")]
+
+
+def test_liste_kopf_bernstein_kaesten_und_rollen(einkauf):
+    status, a = holen(listen_adresse(einkauf), w=36, h=16)
     assert status == 200 and json.loads(json.dumps(a)) == a
     zeilen = bildtext(a)
-    assert zeilen[0].startswith("Einkauf") and zeilen[0].endswith(" 1/6")
-    assert "█" in zeilen[0] and "░" in zeilen[0]                # Steine wie in der Ansicht
-    rumpf = "\n".join(zeilen[1:])
-    assert "Brot" not in rumpf                                   # erledigt: versteckt
-    assert "○ Milch" in rumpf and "▾ Baumarkt 0/3" in rumpf
-    assert "  ○ Schrauben" in rumpf and "    ○ weiß" in rumpf      # Ebenen eingerückt
+    assert zeilen[0] == "Einkauf"
+    assert zeilen[1].startswith("▐") and zeilen[1].endswith(" 1/6")   # Bernstein = Status
+    assert "█" in zeilen[1] and "░" in zeilen[1] and zeilen[3] == "─" * 36
+    assert zeilen[4].startswith("┌") and zeilen[4].endswith("┐")
+    rumpf = "\n".join(zeilen[4:])
+    assert "Brot" not in rumpf                                   # erledigt: im Bernstein
+    assert "/" not in rumpf and "Schrauben" not in rumpf         # kein Zähler, eine Ebene
+    assert _titel(zeilen) == ["Milch", "Eier", "▸ Baumarkt"]     # wie die Ansicht geordnet
     for zeile in a["zeilen"]:
         assert all(r in farbrollen.ROLLEN for _t, r in zeile)
     assert "- [ ] Milch" in a["text"] and "Einkauf (1/6)" in a["text"]
@@ -160,55 +171,60 @@ def test_liste_wie_die_ansicht_geordnet(einkauf):
     was weniger offen hat, steht weiter oben."""
     from tui.ansichten.fokus import liste_ordnen
     lst = next(l for l in lists.read_lists() if l["id"] == einkauf)
-    oben = [it["text"] for it, ebene, _a in kf.zeilen_baum(lst["items"]) if ebene == 0]
-    assert oben == [it["text"] for it in liste_ordnen(lst["items"])]
+    zeilen = bildtext(holen(listen_adresse(einkauf), w=36, h=30)[1])
+    erwartet = [("▸ " if it.get("items") else "") + it["text"]
+                for it in liste_ordnen(lst["items"])]
+    assert _titel(zeilen) == erwartet
 
 
-def test_erledigte_zeigen_und_tiefe_klappt_zu(einkauf):
-    zeilen = bildtext(holen(listen_adresse(einkauf, erledigte=True, tiefe=1), h=12)[1])
-    assert any(z.startswith("✓ Brot") for z in zeilen)
-    assert any(z.startswith("▸ Baumarkt 0/3") for z in zeilen)  # zu, nur Zahl
-    assert not any("Schrauben" in z for z in zeilen)
-    zwei = bildtext(holen(listen_adresse(einkauf, tiefe=2), h=12)[1])
-    assert any("▸ Farbe 0/1" in z for z in zwei) and not any("weiß" in z for z in zwei)
+def test_erledigte_zeigt_die_abgeschlossenen_tiefe_ist_ohne_wirkung(einkauf):
+    zeilen = bildtext(holen(listen_adresse(einkauf, erledigte=True), h=12)[1])
+    assert zeilen[0] == "Einkauf · abgeschlossen" and _titel(zeilen) == ["Brot"]
+    eins = holen(listen_adresse(einkauf, tiefe=1), h=16)[1]["zeilen"]
+    assert holen(listen_adresse(einkauf, tiefe=9), h=16)[1]["zeilen"] == eins
+    assert holen("zentrale://fokus/liste?erledigte=false&liste=%s" % einkauf,
+                 h=16)[1]["zeilen"] == eins
 
 
-@pytest.mark.parametrize("w,h", [(12, 2), (12, 5), (20, 3), (36, 4), (80, 30), (400, 400)])
+@pytest.mark.parametrize("w,h", [(12, 7), (12, 9), (20, 8), (36, 10), (80, 30), (400, 400)])
 def test_liste_kuerzt_auf_w_mal_h(einkauf, w, h):
     lists.add_item(einkauf, "ein sehr langer punkt, der in keine schmale kachel passt " * 3)
-    a = holen(listen_adresse(einkauf, erledigte=True), w=w, h=h)[1]
+    a = holen(listen_adresse(einkauf), w=w, h=h)[1]
     assert len(a["zeilen"]) <= h and all(len(z) <= w for z in bildtext(a))
 
 
+def test_liste_unter_mindestgroesse_ist_zu_klein(einkauf):
+    assert holen(listen_adresse(einkauf), w=30, h=6)[1]["zu_klein"] == {"w": 12, "h": 7}
+
+
 def test_liste_blaettert_mit_plus_n(einkauf):
-    a = holen(listen_adresse(einkauf), w=30, h=4)[1]           # Kopf + 3 Zeilen
+    a = holen(listen_adresse(einkauf), w=30, h=10)[1]          # Kopf, Leiste, Strich + 2 Kästen
     zeilen = bildtext(a)
-    gesamt = 7                                                  # Milch, Eier, Baumarkt, 3 drunter, weiß
-    assert a["oben"] == 0 and a["oben_max"] == gesamt - 3
-    assert zeilen[-1] == "+%d weitere" % (gesamt - 2)
-    unten = holen(listen_adresse(einkauf), w=30, h=4, oben=99)[1]
-    assert unten["oben"] == unten["oben_max"] and "+" not in bildtext(unten)[-1]
-    assert bildtext(unten)[-1].strip().endswith("weiß")
+    assert a["oben"] == 0 and a["oben_max"] == 1
+    assert _titel(zeilen) == ["Milch", "Eier"] and zeilen[-1].endswith(" +1 ─┘")
+    unten = holen(listen_adresse(einkauf), w=30, h=10, oben=99)[1]
+    assert unten["oben"] == unten["oben_max"] == 1
+    assert _titel(bildtext(unten)) == ["Eier", "▸ Baumarkt"] and "+" not in bildtext(unten)[-1]
 
 
 def test_leere_und_fertige_liste_sagen_es_leise():
     lid = lists.create_list("Leer")["id"]
-    assert bildtext(holen(listen_adresse(lid), h=3)[1])[1] == "noch leer"
+    assert bildtext(holen(listen_adresse(lid), h=7)[1])[2] == "noch leer"
     lists.add_item(lid, "x")
     lists.toggle_item(lid, 1)
-    assert bildtext(holen(listen_adresse(lid), h=3)[1])[1] == "alles erledigt"
+    assert bildtext(holen(listen_adresse(lid), h=7)[1])[4] == "alles erledigt ◆"
 
 
 def test_bevorzugt_passt_zur_liste(einkauf):
     a = holen(listen_adresse(einkauf), w=0, h=0)[1]
-    assert a["bevorzugt"]["h"] == 1 + 7 and 24 <= a["bevorzugt"]["w"] <= 48
+    assert a["bevorzugt"]["h"] == 1 + 2 + 1 + 3 * 3 and 24 <= a["bevorzugt"]["w"] <= 48
 
 
 def test_liste_weg_und_falsche_felder(einkauf):
     assert holen(listen_adresse("l_gibtsnicht")) == (404, {"fehler": "weg"})
     assert kacheln.aktion({"adresse": listen_adresse("l_gibtsnicht"),
                            "aktion": "oeffnen"}) == (404, {"fehler": "weg"})
-    status, a = holen(listen_adresse(einkauf, tiefe=12))
+    status, a = holen(listen_adresse(einkauf, tiefe=12))          # alte Adresse, kaputt
     assert status == 400 and "9" in a["text"]
     status, a = holen("zentrale://fokus/liste?liste=%s" % einkauf)
     assert status == 400 and "fehlt" in a["text"]
@@ -294,7 +310,7 @@ def test_kacheln_schreiben_nie(einkauf, gewicht):
     assert {"lists.json", "graphs.json", gewicht + ".json"} <= set(vorher)
     kacheln.katalog()
     for adr in (listen_adresse(einkauf, True), graph_adresse(gewicht)):
-        for w, h in ((0, 0), (36, 12), (12, 2)):
+        for w, h in ((0, 0), (36, 12), (12, 7)):
             holen(adr, w=w, h=h, oben=3)
         kacheln.aktion({"adresse": adr, "aktion": "oeffnen"})
     assert _dateien() == vorher
@@ -310,8 +326,8 @@ def test_alte_wochenliste_wird_gelesen_aber_nicht_umgeschrieben(monkeypatch):
         json.dump(alt, f)
     monkeypatch.setattr(lists, "_week_migrated", False)
     vorher = _dateien()
-    zeilen = bildtext(holen(listen_adresse("l_week"), h=6)[1])
-    assert any("○ Joggen" in z for z in zeilen) and not any("mon" in z for z in zeilen)
+    zeilen = bildtext(holen(listen_adresse("l_week"), h=12)[1])
+    assert "Joggen" in _titel(zeilen) and not any("mon" in z for z in zeilen)
     kacheln.katalog()
     assert _dateien() == vorher and lists._week_migrated is False
 

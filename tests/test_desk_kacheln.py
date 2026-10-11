@@ -514,14 +514,15 @@ def test_liste_und_graph_aus_dem_katalog_anlegen_und_oeffnen(ansicht):
     gid = graphs.create_graph("Gewicht", "number", unit="kg")["id"]
     graphs.log_value(gid, date.today().isoformat(), 80)
     m = _aus_dem_katalog(d, "lg", "liste")
-    assert [f["name"] for f in m.sichtbar()] == ["liste", "erledigte", "tiefe"]
+    # „tiefe" ist veraltet (deprecated) — der Dialog bietet sie nicht mehr an
+    assert [f["name"] for f in m.sichtbar()] == ["liste", "erledigte"]
     m.taste(curses.KEY_RIGHT)                     # liste: → Ideen (Werte von jetzt)
-    d.taste(10)                                   # erledigte nein, 3 Ebenen
+    d.taste(10)                                   # erledigte nein
     d.taste(10)                                   # ablegen
     zeichne(d)
     (el,) = lies("lg")["nodes"]
     assert el["zentrale_kachel"]["adresse"] == \
-        "zentrale://fokus/liste?erledigte=false&liste=%s&tiefe=3" % zweite
+        "zentrale://fokus/liste?erledigte=false&liste=%s" % zweite
     assert "Kacheln bauen" in sichtbar(d)
     d.taste(ord("o"))
     assert d.gesprungen == ["zentrale://fokus/" + zweite]

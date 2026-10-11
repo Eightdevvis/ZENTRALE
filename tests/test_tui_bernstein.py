@@ -124,3 +124,23 @@ def test_eintrag_ist_kasten_mit_titel_ohne_leiste():
     unter_bernstein = zeilen[titel[0] - 1:]
     assert not any("█" in z or "░" in z for z in unter_bernstein)  # keine Leiste
     assert "1/4" in "".join(zeilen[:titel[0]])      # Status nur im Bernstein oben
+
+
+def test_pixel_bernstein_sitzt_wo_die_quelle_ihn_hinlegt():
+    """Der Pixel-Bernstein ist nur Veredelung: gleiche Zeilen, gleiche Breite,
+    der Zähler an derselben Stelle wie im Bild aus core/listen_bild.py."""
+    import listen_bild
+    items = [_blatt(1), _blatt(2, done=True), _blatt(3)]
+    erwartet = listen_bild.ebene(items, 36, 20, ["einkauf"])
+    leiste = "".join(t for t, _r in erwartet["zeilen"][erwartet["bernstein"]["zeile"]])
+    f, gitter = _schirm()
+    f.z.C["pix_bg"] = (0, 0, 0)
+    f.z.PIX_MODUS = "mix"
+    f.L = {"view": "view", "path": [], "showdone": False, "isel": 0,
+           "adding": False, "msg": "", "imode": "add", "input": "",
+           "def": {"id": "l1", "name": "einkauf", "items": items}}
+    f.draw_list_tool(0, 0, 24, 40)
+    zeile = "".join(gitter[1 + erwartet["bernstein"]["zeile"]])
+    assert leiste.endswith(" 1/3") and zeile.rstrip().endswith(" 1/3")
+    assert zeile.rstrip().index(" 1/3") == 2 + leiste.index(" 1/3")
+    assert "▐" not in zeile                         # Pixel statt Rückfall-Fassung

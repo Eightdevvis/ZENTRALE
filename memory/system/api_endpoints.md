@@ -516,7 +516,7 @@ Quellen heute: `kalender`/`ausschnitt` (`core/kachel_kalender.py`, Adresse
 `zentrale://kalender/ausschnitt?modus=mitlaufend&tage=N` oder
 `…?bis=JJJJ-MM-TT&modus=fest&von=JJJJ-MM-TT`, höchstens 31 Tage).
 Seit 2026-10-10 dazu `fokus`/`liste` (`core/kachel_fokus.py`,
-`zentrale://fokus/liste?erledigte=false&liste=<lid>&tiefe=3`, `oeffnen` →
+`zentrale://fokus/liste?erledigte=false&liste=<lid>` (`tiefe` veraltet, nur alte Adressen; Bild aus `core/listen_bild.py`), `oeffnen` →
 `zentrale://fokus/<lid>`) und `graph`/`verlauf` (`core/kachel_graph.py`,
 `zentrale://graph/verlauf?graph=<gid>&tage=14`, 2–365 Tage, `oeffnen` →
 `zentrale://graph/<gid>`). Welche Liste/welcher Graph: im Katalog als

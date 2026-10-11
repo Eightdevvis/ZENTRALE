@@ -770,8 +770,11 @@ einheitlich **„Fokus"** genannt, Taste `f`). `l` öffnet dasselbe noch als
 **stiller Alt-Alias** (Muskelgedächtnis), taucht aber in KEINER Legende/Einladung
 mehr auf — überall steht nur noch `f · fokus`. Geteilte Logik (`core/lists.py` + `/api/lists`),
 hier in curses verbaut. Seit 2026-10-11 ist **jeder Knoten ein Kasten**
-(`Fokus.kasten_render`, Rahmen `┌─┐│└┘`, 3 Zeilen, volle Breite) mit **nur dem
-Titel** drin — kein Zähler, keine Erfüllungsleiste mehr je Eintrag. `▸` =
+(Rahmen `┌─┐│└┘`, 3 Zeilen, volle Breite) mit **nur dem
+Titel** drin. Das Aussehen steht NICHT hier, sondern in `core/listen_bild.py` —
+dasselbe Bild zeigt die Listen-Kachel (Regel *Programm und Kachel teilen EIN
+Bild*, [listen_app.md](../hub/listen_app.md)); `Fokus._malen` bildet nur Rollen
+auf Farben ab, `kasten_render` malt `listen_bild.kasten` — kein Zähler, keine Erfüllungsleiste mehr je Eintrag. `▸` =
 reindivebar, `◆` = Fokus, `★` = Projekt-Eintrag. Gewählt: Rahmen hell, Titel
 invers; sonst Rahmen dezent. **Status** zeigt allein die Bernsteinleiste oben in
 der Ebenen-Sicht. (`proj_render` mit Leisten zeichnet nur noch die Fokus-Box
@@ -798,8 +801,8 @@ und zwar in der **Anzeige-Reihenfolge** `l_vitems()` = `liste_ordnen(…)`:
 **Abgeschlossenes ist ausgeblendet**, der **Fokus** (oder ein Ordner, in dem er
 steckt) **klebt oben**, der Rest sortiert sich nach **Erfülltheit absteigend**
 (was kaum noch Saft braucht, steht oben; Gleichstand = gespeicherte Reihenfolge).
-Ganz oben über der Ebene steht die **Bernsteinleiste** (`Fokus._bernstein` in
-`tui/ansichten/fokus.py`, 2 Zeilen):
+Ganz oben über der Ebene steht die **Bernsteinleiste** (Stelle und Breite aus
+`listen_bild.ebene`, veredelt von `Fokus._bernstein` in `tui/ansichten/fokus.py`, 2 Zeilen):
 ein Stein je Blatt der Ebene, jeder abgehakte leuchtet, die offenen sind derselbe
 Stein fast durchsichtig, der zuletzt abgehakte glimmt im Takt nach; rechts
 `erledigt/gesamt`. Gemalt wird sie vom **Pixel-Baustein `tui/pixel.py`** (curses-frei,
