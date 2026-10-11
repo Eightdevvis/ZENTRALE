@@ -279,15 +279,16 @@ def test_auswahl_folgt_der_reihenfolge_der_ansicht():
 def test_ansehen_bleibt_offen_bis_zur_taste():
     """Der Takt der Hauptschleife (ch == -1) darf das Ansehen-Fenster nicht
     schließen (10.10.2026: es war nur einen Sekundenbruchteil sichtbar)."""
-    from tui.ansichten.kalender_bedienung import Bedienung
-
-    class _Kal:
-        z = None
-        K = {"ref": "2026-10-06", "stil": "A", "showhidden": False}
-    b = Bedienung(_Kal())
+    import types
+    from tui.ansichten.kalender import Kalender
+    k = Kalender(types.SimpleNamespace())
+    b = k.bedienung
     b.W["popup"] = ["etwas"]
-    assert b.taste(-1) is True and b.W["popup"] is not None
-    assert b.taste(ord("x")) is True and b.W["popup"] is None
+    assert k.ansicht() == "ansehen"
+    k.taste(-1)
+    assert b.W["popup"] is not None
+    k.taste(ord("x"))
+    assert b.W["popup"] is None
 
 
 def test_monat_enter_leiht_die_tagesliste(tmp_path, monkeypatch):
@@ -304,11 +305,11 @@ def test_monat_enter_leiht_die_tagesliste(tmp_path, monkeypatch):
     k.k_stil_weiter()                              # → B (übernimmt den 7.)
     assert k.K["stil"] == "B"
     b.setze_tag(date(2026, 10, 20))
-    b.taste(10)                                    # Enter: Tag in A bearbeiten
+    k.taste(10)                                    # Enter: Tag in A bearbeiten
     assert k.K["stil"] == "A" and b.tag() == date(2026, 10, 20) and k.K["sprung"]
-    b.taste(27)                                    # Esc: zurück in den Monat
+    k.taste(27)                                    # Esc: zurück in den Monat
     assert k.K["stil"] == "B" and b.tag() == date(2026, 10, 20) and not k.K["sprung"]
-    b.taste(ord("e"))                              # im Monat wird nichts bearbeitet
+    k.taste(ord("e"))                              # im Monat wird nichts bearbeitet
     assert b.W["dialog"] is None
     k.k_stil_weiter(); k.k_stil_weiter()           # B → C → A
     assert k.K["stil"] == "A" and b.tag() == date(2026, 10, 7)

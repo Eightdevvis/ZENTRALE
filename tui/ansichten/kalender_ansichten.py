@@ -190,39 +190,6 @@ def naechste_ansicht(aktuell: str | None) -> str:
     return ANSICHTEN[(ANSICHTEN.index(aktuell) + 1) % len(ANSICHTEN)]
 
 
-def tasten_hinweis(ansicht: str, breite: int | None = None) -> str:
-    """Fußzeile je Ansicht — die längste Fassung, die in `breite` passt.
-
-    10.10.2026: in B/C wurde die Zeile bei 150 Spalten abgeschnitten (und
-    mit ! abhaken käme mehr dazu). Darum drei Stufen: voll,
-    ohne Bewegen und Seltenes (Pfeile, r, c/p, g), nur das Nötigste. Was hier wegfällt, steht
-    vollständig in der Fußleiste unten (befehle.py, cal:…)."""
-    ziel = "v " + ANSICHT_NAMEN[naechste_ansicht(ansicht)]
-    if ansicht == "B":
-        stufen = ("←→ tag · ↑↓ woche · enter tag bearbeiten · m/M monat · g gehe zu · "
-                  "R rhythmus · " + ziel,
-                  "←→ tag · ↑↓ woche · enter tag bearbeiten · " + ziel)
-    elif ansicht in ("A", "C"):
-        # Alle drei bedienbar wie calcurse (kalender_bedienung.py); gleich sind
-        # a/e/d/r/!/u/c/p/g/enter, nur das Bewegen unterscheidet sich. Einen
-        # Listen-Termin gibt es seit 11.10.2026 über a → Advanced → Typ liste
-        # (vorher eigene Taste A — Sasha: „den kannst dann rausnehmen").
-        gehen = "↑↓ termin · ←→ tag" + (" · w/W woche" if ansicht == "C" else "")
-        ende = (" · tab kasten · " if ansicht == "A" else " · ") + ziel
-        stufen = (
-            gehen + " · a neu · e ändern · d löschen · r wiederholen · "
-            "! abhaken · u (un)committed · enter ansehen · c/p kopieren · g gehe zu · "
-            "R rhythmus" + ende,
-            "a neu · e ändern · d löschen · ! abhaken · u (un)commit · "
-            "enter ansehen · R rhythmus" + ende,
-            "a neu · e ändern · d löschen · ! abhaken · enter ansehen" + ende)
-    else:
-        stufen = (ziel,)
-    if breite is None:
-        return stufen[0]
-    return next((s for s in stufen if text_breite(s) <= breite), stufen[-1])
-
-
 def zeichne(ansicht: str, daten, breite: int, hoehe: int,
             erledigte: bool = False, auswahl: dict | None = None) -> list:
     """Einstieg für die TUI: zeichnet die gewählte Ansicht in breite×hoehe.

@@ -61,7 +61,6 @@ def main(argv=None) -> int:
               + "─" * max(0, a.breite - 32))
         for z in ka.zeichne(an, daten, a.breite, a.hoehe):
             print(ansi(z) if farbig else text(z).rstrip())
-        print(" " + ka.tasten_hinweis(an))
         print()
     return 0
 

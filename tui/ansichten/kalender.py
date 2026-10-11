@@ -23,15 +23,60 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
     import pixel
 
 from . import kalender_ansichten, kalender_stil
+from . import kalender_werkzeuge as kw
 from .basis import BEENDEN
 from .farben import DECKKRAFT
+from .kalender_advanced import Advanced
 from .kalender_ansichten import (ANSICHT_NAMEN, GLAS, INV, LEISE, glas_teile,
-                                 naechste_ansicht, tasten_hinweis, text_breite)
+                                 naechste_ansicht, text_breite)
 from .kalender_ansichten import zeichne as stil_zeichnen
 from .kalender_bedienung import Bedienung
+from .kalender_phasen import PhasenListe
+from .kalender_quellen import QuellenWahl
+from .tasten import Tasten
+
+try:
+    from tui.bausteine.stylebox import Stylebox
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    from bausteine.stylebox import Stylebox
+
+# Die Kästen, die über dem Kalender aufgehen, mit ihrer eigenen Tabelle;
+# ihre Ansichten heißen in der Tabelle des Kalenders „name:ansicht". Die
+# Stylebox ist ein Baustein: ihre Tabelle (dict) trägt den offenen
+# Farbwähler schon als „farbe:…" mit — dieselbe, aus der sie verteilt.
+KAESTEN = (("frage", kw.Dialog), ("formular", kw.Formular), ("advanced", Advanced),
+           ("quellen", QuellenWahl), ("rhythmus", PhasenListe), ("stylebox", Stylebox))
+
+
+def _tabelle(klasse):
+    t = klasse.TASTEN
+    return Tasten(t) if isinstance(t, dict) else t
+
+
+def _offen(klasse):
+    """Weg zum offenen Kasten dieser Art (ohne offenen: die Klasse — die
+    Tabelle fragt dann nur, ob es die aktion_-Methoden gibt)."""
+    def weg(kal):
+        return next((o for o in kal.bedienung.kette() if isinstance(o, klasse)), klasse)
+    return weg
+
+
+def _bedienung(kal):
+    return kal.bedienung
 
 
 class Kalender:
+    # ── Tasten: EINE Tabelle (tasten.py, 2026-10-11) ───────────────────
+    # Die Ansichten A/B/C (kalender_bedienung: a:…, b:monat, c:…), das
+    # Ansehen-Fenster und jeder Kasten mit seiner Tabelle. Aus ihr verteilt
+    # taste(), und die Leiste ganz unten zeigt die offene Ansicht — im
+    # Kasten steht keine Tastenzeile mehr.
+    TASTEN = Tasten.zusammen(
+        {"ansehen": [("any key", "ansehen_zu", "close")]},     # jede Taste schließt
+        dict({"a": (Bedienung.TASTEN_A, _bedienung), "b": (Bedienung.TASTEN_B, _bedienung),
+              "c": (Bedienung.TASTEN_C, _bedienung)},
+             **{name: (_tabelle(klasse), _offen(klasse)) for name, klasse in KAESTEN}))
+
     def __init__(self, z):
         self.z = z
         # active    : der Kalender hat den Fokus
@@ -131,7 +176,7 @@ class Kalender:
         W["fokus"] = "termine"
         self.bedienung.setze_tag(d, 0)
         K["ref"] = d.isoformat()
-        K["msg"] = "tag aus dem monat — esc zurück"
+        K["msg"] = "tag aus dem monat"
 
     def sprung_zurueck(self):
         K = self.K
@@ -140,14 +185,32 @@ class Kalender:
         self._stand_holen(von, self.bedienung.tag())
         K["msg"] = "ansicht: " + ANSICHT_NAMEN[K["stil"]]
 
+    def ansicht(self) -> str:
+        """Welche Ansicht der Tabelle offen ist: der innerste Kasten, sonst
+        das Ansehen-Fenster, sonst die Ansicht A/B/C."""
+        kette = self.bedienung.kette()
+        if kette:
+            o = kette[-1]
+            name = next(n for n, k in KAESTEN if isinstance(o, k))
+            return name + ":" + o.ansicht()
+        if self.bedienung.W["popup"]:
+            return "ansehen"
+        return self.bedienung.ansicht()
+
     def taste(self, ch):
-        """Eine Taste, während der Kalender den Fokus hat. → BEENDEN (q)."""
-        if ch in (ord("v"), ord("V")) and self.bedienung.W["dialog"] is None:
-            self.k_stil_weiter()
+        """Eine Taste, während der Kalender den Fokus hat. → BEENDEN (q).
+        Ein offener Kasten verteilt selbst (seine Tabelle ist ein Teil von
+        TASTEN) und sagt der Bedienung, was daraus folgt."""
+        bed = self.bedienung
+        if ch != -1:
+            bed.W["msg"] = ""
+        if bed.W["dialog"] is not None:
+            bed.dialog_taste(ch)
             return None
-        if self.bedienung.taste(ch) is BEENDEN:
-            return BEENDEN
-        return None
+        return BEENDEN if self.TASTEN.verteilen(self, self.ansicht(), ch) is BEENDEN else None
+
+    def aktion_ansehen_zu(self, _t):
+        self.bedienung.W["popup"] = None
 
     def draw_calendar(self, by, bx, bh, bw):
         """Die gewählte Ansicht in die MITTE-Box: Zeilen aus
@@ -178,12 +241,10 @@ class Kalender:
                 if text.strip() or rolle.endswith((INV, LEISE)) or GLAS in rolle or stil:
                     z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
                 x += text_breite(text)
-        unten = bed.zeile_unten()
+        unten = bed.zeile_unten()              # nur Meldungen; die Tasten: Leiste ganz unten
         if unten:
             txt, rolle = unten
             z.addclip(bottom, ix, txt, iw, C.get(rolle, C["faint"]))
-        else:
-            z.addclip(bottom, ix, tasten_hinweis(K["stil"], iw), iw, C["faint"])
         bed.zeichne_popup(by, bx, bh, bw)
         bed.zeichne_kasten(by, bx, bh, bw)
 

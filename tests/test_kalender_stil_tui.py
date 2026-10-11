@@ -286,7 +286,9 @@ def test_stylebox_entfernt_einzelne_eigenschaft():
     statt None in den Stil zu schreiben."""
     from tui.ansichten import kalender_advanced, kalender_stil
     adv = kalender_advanced.Advanced({"stil": {"border-style": "double", "color": "#ffffff"}})
-    adv.unter = type("B", (), {"taste": lambda self, ch: (
+    # Stand-in der Stylebox: was ihre Tastentabelle (kalender_kasten) liest
+    adv.unter = type("B", (), {"waehler": None, "aktuell": {"art": "wahl"},
+                               "taste": lambda self, ch: (
         "fertig", {"border-style": None, "color": "#ff8800"})})()
     adv.taste(10)
     assert adv.unter is None and adv.stil == {"color": "#ff8800"}

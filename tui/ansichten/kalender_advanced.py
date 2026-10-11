@@ -23,30 +23,28 @@ oder „Status" oder Strg-S = übernehmen und zurück ins Formular, Esc = alles 
 verwerfen. Liste und Stylebox liegen als eigene Kasten darüber (`unter`);
 ihr Esc führt nur hierher zurück. Gespeichert wird erst mit dem Formular.
 
-Reine Logik, kein curses, kein HTTP: die Listen holt die Bedienung über
+Tasten: Tastentabelle `Advanced.TASTEN`, eine Ansicht je Zeile (typ, liste,
+stil, status); die Leiste ganz unten zeigt sie (nicht mehr der Kasten).
+
+Reine Logik, kein Zeichnen, kein HTTP: die Listen holt die Bedienung über
 `quellen()` (→ Antwort von GET /api/calendar/quellen oder None).
 """
 from __future__ import annotations
 
-from . import kalender_quellen, kalender_stil
+from . import kalender_kasten, kalender_quellen, kalender_stil
+from .tasten import Tasten
 
 NORMAL, LISTE = "normal", "liste"
 TYPEN = (NORMAL, LISTE)
 COMMITTED, UNCOMMITTED = "committed", "uncommitted"
 STATUS = (COMMITTED, UNCOMMITTED)
 
-ENTER = (10, 13, 343)
-STRG_S = 19
-WEG = (8, 127, 263, 330)            # ⌫ / Entf
-KEINE_TASTE = (-1, 410)             # Takt der Hauptschleife / KEY_RESIZE
-
 HILFE = {
     "typ": "normal = eigener Titel · liste = Titel ist der oberste offene Punkt",
-    "liste": "enter wählt die liste oder das projekt",
-    "stil": "enter öffnet die Stylebox · ⌫ kein stil",
-    "status": "uncommitted = blass, nicht fest · umschalten auch mit u",
+    "liste": "die liste oder das projekt, aus dem der titel kommt",
+    "stil": "rahmen, farben und muster des kastens",
+    "status": "uncommitted = blass, nicht fest",
 }
-FUSS = "↑↓ zeile · ←→ typ/status · enter öffnen/übernehmen · strg-s übernehmen · esc verwerfen"
 
 
 def wert_von(roh=None) -> dict:
@@ -134,39 +132,66 @@ class Advanced:
             aus.append((b, w, k == self.i, HILFE[r]))
         return aus
 
-    # ── Tasten ─────────────────────────────────────────────────────────
+    # ── Tasten (Tabelle: Ansicht = die Zeile, auf der man steht) ────────
+    # Liegt ein Kasten darüber (`unter`: QuellenWahl oder die Stylebox), bekommt
+    # der die Taste — er verteilt aus seiner eigenen Tabelle.
+    _ZEILE = [("↑↓", "zeile", "row"), ("tab/shift+tab", "zeile")]
+    _ENDE = [("ctrl+s", "uebernehmen", "apply"), ("esc", "verwerfen", "discard")]
+    TASTEN = Tasten({
+        "typ": [("←→", "typ", "type"), ("space", "typ"), ("enter", "uebernehmen", "apply")]
+        + _ZEILE + _ENDE,
+        "liste": [("enter", "liste", "choose list"), ("space/→", "liste")] + _ZEILE + _ENDE,
+        "stil": [("enter", "stylebox", "stylebox"), ("space/→", "stylebox"),
+                 ("⌫/del", "kein_stil", "no style")] + _ZEILE + _ENDE,
+        "status": [("←→", "status", "commit"), ("space", "status"),
+                   ("enter", "uebernehmen", "apply")] + _ZEILE + _ENDE,
+    })
+
+    def __repr__(self):
+        return kalender_kasten.zustand(self)
+
+    def ansicht(self) -> str:
+        return self.reihe
+
     def taste(self, ch: int) -> str:
-        if ch in KEINE_TASTE:
-            return "weiter"
         if self.unter is not None:
             return self._unter_taste(ch)
-        if ch == 27:
-            return "abbruch"
-        r = self.reihe
-        n = len(self.reihen())
-        if ch == STRG_S or (ch in ENTER and r in ("typ", "status")):
-            return "fertig" if self._pruefen() else "weiter"
+        return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
+
+    def aktion_verwerfen(self, _t):
+        return "abbruch"
+
+    def aktion_uebernehmen(self, _t):
+        return "fertig" if self._pruefen() else "weiter"
+
+    def aktion_zeile(self, taste):
         self.fehler = ""
-        if ch in (9, 258):                    # Tab, ↓
-            self.i = (self.i + 1) % n
-        elif ch in (353, 259):                # Shift-Tab, ↑
-            self.i = (self.i - 1) % n
-        elif r == "typ" and ch in (260, 261, 32):
-            k = TYPEN.index(self.typ) + (-1 if ch == 260 else 1)
-            self.typ = TYPEN[k % len(TYPEN)]
-        elif r == "status" and ch in (260, 261, 32):
-            self.status = STATUS[(STATUS.index(self.status) + 1) % len(STATUS)]
-        elif r == "liste" and ch in ENTER + (32, 261):
-            self._liste_oeffnen()
-        elif r == "stil" and ch in ENTER + (32, 261):
-            self._box_oeffnen()
-        elif r == "stil" and ch in WEG:
-            self.stil = {}
-        return "weiter"
+        self.i = (self.i + (1 if taste in ("tab", "down") else -1)) % len(self.reihen())
+
+    def aktion_typ(self, taste):
+        self.fehler = ""
+        k = TYPEN.index(self.typ) + (-1 if taste == "left" else 1)
+        self.typ = TYPEN[k % len(TYPEN)]
+
+    def aktion_status(self, _t):
+        self.fehler = ""
+        self.status = STATUS[(STATUS.index(self.status) + 1) % len(STATUS)]
+
+    def aktion_liste(self, _t):
+        self.fehler = ""
+        self._liste_oeffnen()
+
+    def aktion_stylebox(self, _t):
+        self.fehler = ""
+        self._box_oeffnen()
+
+    def aktion_kein_stil(self, _t):
+        self.fehler = ""
+        self.stil = {}
 
     def _pruefen(self) -> bool:
         if self.typ == LISTE and not self.quelle:
-            self.fehler = "erst eine liste wählen (enter) — oder typ normal"
+            self.fehler = "erst eine liste wählen — oder typ normal"
             self.i = self.reihen().index("liste")
             return False
         return True
@@ -203,7 +228,7 @@ class Advanced:
             if u.taste(ch) in ("fertig", "abbruch"):     # waehlen() hat schon gesetzt
                 self.unter = None
             return "weiter"
-        erg = u.taste(ch)                                # Stylebox
+        erg = u.taste(ch)                    # die Stylebox verteilt aus ihrer Tabelle
         if erg and erg[0] == "fertig":
             # Wert None = Eigenschaft entfernt (Stylebox seit af5915e); anwenden
             # lässt sie weg, statt None hineinzuschreiben.

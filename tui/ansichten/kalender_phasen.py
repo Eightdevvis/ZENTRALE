@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from . import kalender_motive
+from . import kalender_kasten, kalender_motive
+from .tasten import Tasten
 from .kalender_werkzeuge import (WT_CODE, WT_KURZ, Dialog, Feld, Formular, Schritt,
                                  _l_datum, _l_titel, _l_wtage, _l_zahl, _l_zeit, _plan,
                                  datum_text, regel_text)
@@ -137,11 +138,12 @@ class PhasenListe:
         return self.phasen[self.i] if self.phasen else None
 
     def hilfe(self) -> str:
-        tag = "%s %s" % (WT_KURZ[self.tag.weekday()], self.tag.strftime("%d.%m."))
+        """Die Zeile unter der Liste: für welchen Tag „nur am Tag" gilt (die
+        Tasten stehen in der Leiste ganz unten)."""
         if not self.phasen:
-            return "n neue phase · esc schließen"
-        return ("↑↓ wählen · n neu · e ändern · d löschen · t nur %s · z zeitraum · esc"
-                % tag)
+            return ""
+        return "gewählter tag: %s %s" % (WT_KURZ[self.tag.weekday()],
+                                         self.tag.strftime("%d.%m."))
 
     def liste_zeilen(self) -> list:
         """[(zeichen, rolle, text, aktiv)] für den Kasten."""
@@ -155,30 +157,53 @@ class PhasenListe:
         self._ergebnis = _plan(weiter=dialog)
         return "fertig"
 
+    # ── Tasten (Tabelle; „leer" = noch keine Phase) ─────────────────────
+    _ENDE = [("esc", "schliessen", "close"), ("q", "schliessen")]
+    TASTEN = Tasten({
+        "liste": [("↑↓", "waehlen", "select"), ("k/j/tab", "waehlen"),
+                  ("n", "neu", "new"), ("a", "neu"), ("e/enter", "aendern", "edit"),
+                  ("d", "loeschen", "delete"), ("t", "nur_tag", "this day only"),
+                  ("z", "zeitraum", "period")] + _ENDE,
+        # e/d/t/z sagen nur „noch keine phase"
+        "leer": [("n", "neu", "new"), ("a", "neu"), ("e/enter/d/t/z", "keine")] + _ENDE,
+    })
+
+    def __repr__(self):
+        return kalender_kasten.zustand(self)
+
+    def ansicht(self) -> str:
+        return "liste" if self.phasen else "leer"
+
     def taste(self, ch: int) -> str:
-        self.fehler = ""
-        n = len(self.phasen)
-        if ch == 27 or ch in (ord("q"),):
-            return "abbruch"
-        if ch in (259, ord("k")) and n:
-            self.i = (self.i - 1) % n
-        elif ch in (258, ord("j"), 9) and n:
-            self.i = (self.i + 1) % n
-        elif ch in (ord("n"), ord("a")):
-            return self._weiter(formular_phase(None, self.motive, self.heute, self.zurueck))
-        elif not n and ch in (ord("e"), 10, 13, ord("d"), ord("t"), ord("z")):
-            self.fehler = "noch keine phase — n legt eine an"
-        elif ch in (ord("e"), 10, 13, 343):
-            return self._weiter(formular_phase(self.gewaehlt, self.motive, self.heute,
-                                               self.zurueck))
-        elif ch == ord("d"):
-            return self._weiter(dialog_loeschen(self.gewaehlt, self.zurueck))
-        elif ch == ord("t"):
-            return self._weiter(formular_tag(self.gewaehlt, self.tag, self.zurueck))
-        elif ch == ord("z"):
-            return self._weiter(formular_zeitraum(self.gewaehlt, self.tag, self.heute,
-                                                  self.zurueck))
-        return "weiter"
+        if ch >= 0:                         # nicht beim Takt der Schleife (-1)
+            self.fehler = ""
+        return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
+
+    def aktion_schliessen(self, _t):
+        return "abbruch"
+
+    def aktion_waehlen(self, taste):
+        self.i = (self.i + (-1 if taste in ("up", "k") else 1)) % len(self.phasen)
+
+    def aktion_neu(self, _t):
+        return self._weiter(formular_phase(None, self.motive, self.heute, self.zurueck))
+
+    def aktion_keine(self, _t):
+        self.fehler = "noch keine phase"
+
+    def aktion_aendern(self, _t):
+        return self._weiter(formular_phase(self.gewaehlt, self.motive, self.heute,
+                                           self.zurueck))
+
+    def aktion_loeschen(self, _t):
+        return self._weiter(dialog_loeschen(self.gewaehlt, self.zurueck))
+
+    def aktion_nur_tag(self, _t):
+        return self._weiter(formular_tag(self.gewaehlt, self.tag, self.zurueck))
+
+    def aktion_zeitraum(self, _t):
+        return self._weiter(formular_zeitraum(self.gewaehlt, self.tag, self.heute,
+                                              self.zurueck))
 
     def plan(self) -> dict:
         return self._ergebnis or _plan()
@@ -320,7 +345,7 @@ def formular_zeitraum(p: dict, tag: date, heute: date, zurueck=None) -> Formular
 
 def dialog_loeschen(p: dict, zurueck=None) -> Dialog:
     return Dialog("phase löschen", [Schritt(
-        "ok", "Phase „%s“ ganz löschen? (j/n)" % p.get("label", ""),
+        "ok", "Phase „%s“ ganz löschen?" % p.get("label", ""),
         art="wahl", wahl={"j": True, "n": False})],
         lambda a: _plan([("DELETE", "/api/calendar/phase", {"kennung": p.get("kennung")})]
                         if a["ok"] else [], ("gelöscht: " + p.get("label", "")) if a["ok"] else "",

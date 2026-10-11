@@ -15,7 +15,7 @@ eines Tages kommt aus derselben Funktion, mit der die Ansicht zeichnet
 (kalender_ansichten._tag_eintraege). „Der dritte Termin" ist also immer
 der, den man sieht.
 
-Reine Logik, kein curses, kein HTTP: ein Dialog sammelt Antworten, `plan()`
+Reine Logik, kein Zeichnen, kein HTTP: ein Dialog sammelt Antworten, `plan()`
 macht daraus Aufrufe [(methode, pfad, body)], die die Ansicht ausführt.
 """
 from __future__ import annotations
@@ -23,8 +23,9 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from . import kalender_advanced, kalender_gruppen, kalender_quellen, kalender_stil
+from . import kalender_advanced, kalender_gruppen, kalender_kasten, kalender_quellen, kalender_stil
 from .kalender_ansichten import _tag_eintraege, monat_eintraege
+from .tasten import Tasten
 
 WT_KURZ = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 WT_CODE = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
@@ -187,9 +188,29 @@ class Schritt:
 
 
 class Dialog:
-    """Kurze Rückfragen (löschen? j/n, nur dieser Tag?, gehe zu …) als
+    """Kurze Rückfragen (löschen?, nur dieser Tag?, gehe zu …) als
     kleiner Kasten. Schritte nacheinander abfragen. `plan` (antworten → Plan) wird erst
-    gerufen, wenn alle beantwortet sind. Esc bricht ab."""
+    gerufen, wenn alle beantwortet sind. Esc bricht ab.
+
+    Tasten aus der Tabelle (kalender_kasten.py): ein Text-Schritt nimmt
+    Freitext, eine Wahl die Buchstaben ihrer Antworten — je Satz von
+    Antworten eine Ansicht, damit die Leiste sagt, was j, t oder a heißt."""
+
+    _ESC = ("esc", "abbrechen", "cancel")
+    TASTEN = Tasten({
+        "text": [("type", "tippen", "type"), ("enter", "ok", "ok"),
+                 ("⌫", "zeichen_weg", "delete"), ("ctrl+u", "leeren", "clear"), _ESC],
+        "jn": [("j", "waehlen", "yes"), ("n", "waehlen", "no"), ("J/N", "waehlen"),
+               _ESC, ("any key", "falsch")],
+        "at": [("t", "waehlen", "this day"), ("a", "waehlen", "all"), ("T/A", "waehlen"),
+               _ESC, ("any key", "falsch")],
+        "ant": [("a", "waehlen", "all"), ("t", "waehlen", "this day"),
+                ("n", "waehlen", "nothing"), ("A/T/N", "waehlen"), _ESC,
+                ("any key", "falsch")],
+        # Rückfall für einen Satz Antworten, den es oben (noch) nicht gibt
+        "wahl": [("type", "waehlen", "answer"), ("enter", "waehlen"), _ESC,
+                 ("any key", "falsch")],
+    })
 
     def __init__(self, titel, schritte, plan):
         self.titel, self.schritte, self._plan = titel, schritte, plan
@@ -199,6 +220,9 @@ class Dialog:
         self.fehler = ""
         self._u8 = b""          # angefangenes UTF-8-Zeichen (curses liefert Bytes)
         self._weiter()
+
+    def __repr__(self):
+        return kalender_kasten.zustand(self)
 
     def _weiter(self):
         self.i += 1
@@ -216,51 +240,63 @@ class Dialog:
     def schritt(self):
         return None if self.fertig else self.schritte[self.i]
 
+    def ansicht(self) -> str:
+        s = self.schritt
+        if s is None or s.art != "wahl":
+            return "text"
+        satz = "".join(sorted(k for k in s.wahl if k))
+        return satz if satz in self.TASTEN.ansichten() and "" not in s.wahl else "wahl"
+
     def taste(self, ch: int) -> str:
         """→ 'weiter' | 'fertig' | 'abbruch'."""
-        s = self.schritt
-        if s is None:
+        if self.schritt is None:
             return "fertig"
-        if ch == 27:
-            return "abbruch"
-        if s.art == "wahl":
-            k = chr(ch).lower() if 0 <= ch < 0x110000 else ""
-            if k in s.wahl:
-                self.antworten[s.name] = s.wahl[k]
-                self._weiter()
-            elif ch in (10, 13) and "" in s.wahl:
-                self.antworten[s.name] = s.wahl[""]
-                self._weiter()
-            else:
-                self.fehler = "bitte " + "/".join(x for x in s.wahl if x)
-            return "fertig" if self.fertig else "weiter"
-        if ch in (10, 13):
-            ok, wert = s.lesen(self.eingabe)
-            if not ok:
-                self.fehler = wert
-                return "weiter"
-            self.antworten[s.name] = wert
-            self._weiter()
-            return "fertig" if self.fertig else "weiter"
-        if ch in (8, 127, 263):           # Backspace (263 = curses.KEY_BACKSPACE)
-            self.eingabe = self.eingabe[:-1]
-            self._u8 = b""
-        elif ch == 21:                    # Strg-U: Zeile leeren
-            self.eingabe = ""
-        elif 0x80 <= ch <= 0xFF:          # Umlaute: getch liefert UTF-8 Byte für Byte
-            self._u8 += bytes([ch])
-            try:
-                zeichen = self._u8.decode("utf-8")
-            except UnicodeDecodeError:
-                if len(self._u8) >= 4:
-                    self._u8 = b""
-                return "weiter"
-            self._u8 = b""
-            if len(self.eingabe) < 200:
-                self.eingabe += zeichen
-        elif 32 <= ch < 0x80:
-            if len(self.eingabe) < 200:
-                self.eingabe += chr(ch)
+        if 0x80 <= ch <= 0xFF and self.schritt.art == "text":     # Umlaute
+            z = kalender_kasten.tippen_byte(self, ch)
+            return self.aktion_tippen(z) if z else "weiter"
+        return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
+
+    def _stand(self) -> str:
+        return "fertig" if self.fertig else "weiter"
+
+    def aktion_abbrechen(self, _t):
+        return "abbruch"
+
+    def aktion_waehlen(self, taste):
+        s = self.schritt
+        k = "" if taste == "enter" else taste.lower()
+        if k not in s.wahl:
+            return self.aktion_falsch(taste)
+        self.antworten[s.name] = s.wahl[k]
+        self._weiter()
+        return self._stand()
+
+    def aktion_falsch(self, _t):
+        self.fehler = "bitte " + "/".join(x for x in self.schritt.wahl if x)
+        return "weiter"
+
+    def aktion_ok(self, _t):
+        s = self.schritt
+        ok, wert = s.lesen(self.eingabe)
+        if not ok:
+            self.fehler = wert
+            return "weiter"
+        self.antworten[s.name] = wert
+        self._weiter()
+        return self._stand()
+
+    def aktion_tippen(self, zeichen):
+        if len(self.eingabe) < 200:
+            self.eingabe += zeichen
+        return "weiter"
+
+    def aktion_zeichen_weg(self, _t):
+        self.eingabe = self.eingabe[:-1]
+        self._u8 = b""
+        return "weiter"
+
+    def aktion_leeren(self, _t):          # Strg-U wie in der Shell
+        self.eingabe = ""
         return "weiter"
 
     def zeile(self) -> str:
@@ -418,45 +454,77 @@ class Formular:
         self.fertig = True
         return True
 
+    # ── Tasten (Tabelle: Ansicht = Art des Feldes, das gerade dran ist) ──
+    _FELD = [("↑↓", "feld", "field"), ("tab/shift+tab", "feld")]
+    _ESC = ("esc", "abbrechen", "cancel")
+    TASTEN = Tasten({
+        "text": [("type", "tippen", "type")] + _FELD + [
+            ("enter", "speichern", "save"), ("ctrl+s", "speichern"),
+            ("⌫", "zeichen_weg", "delete"), ("ctrl+u", "leeren", "clear"), _ESC],
+        "wahl": [("←→", "waehlen", "choose"), ("space", "waehlen")] + _FELD + [
+            ("enter", "speichern", "save"), ("ctrl+s", "speichern"), _ESC],
+        # Enter/Leertaste/→ öffnen das Fenster „advanced", speichern mit Strg-S
+        "advanced": [("enter", "advanced", "open")] + _FELD + [
+            ("space/→", "advanced"), ("ctrl+s", "speichern", "save"), _ESC],
+    })
+
+    def __repr__(self):
+        return kalender_kasten.zustand(self)
+
+    def ansicht(self) -> str:
+        return self.feld.art if self.feld.art in ("wahl", "advanced") else "text"
+
     def taste(self, ch: int) -> str:
         """→ 'weiter' | 'fertig' | 'abbruch'."""
         if self.box is not None:
             return self._box_taste(ch)
-        if ch == 27:
-            return "abbruch"
-        f = self.feld
-        n = len(self.sichtbar())
-        if f.art == "advanced" and ch in (10, 13, 343, 32, 261):  # Enter/Leertaste/→: Fenster
-            self._box_oeffnen(f)
-            return "weiter"
-        if ch in (10, 13, 343, 19):              # Enter / KEY_ENTER / Strg-S
-            return "fertig" if self._speichern() else "weiter"
-        if ch in (9, 258):                       # Tab, ↓
-            self.i = (self.i + 1) % n
-        elif ch in (353, 259):                   # Shift-Tab, ↑
-            self.i = (self.i - 1) % n
-        elif f.art == "wahl" and ch in (260, 261, 32):     # ←, →, Leertaste
-            f.wahl = (f.wahl + (-1 if ch == 260 else 1)) % len(f.optionen)
-        elif f.art == "text":
-            if ch in (8, 127, 263):
-                f.text = f.text[:-1]
-                self._u8 = b""
-            elif ch == 21:
-                f.text = ""
-            elif 0x80 <= ch <= 0xFF:             # Umlaute: UTF-8 Byte für Byte
-                self._u8 += bytes([ch])
-                try:
-                    z = self._u8.decode("utf-8")
-                except UnicodeDecodeError:
-                    if len(self._u8) >= 4:
-                        self._u8 = b""
-                    return "weiter"
-                self._u8 = b""
-                f.text = (f.text + z)[:200]
-            elif 32 <= ch < 0x80:
-                f.text = (f.text + chr(ch))[:200]
-        if self.fehler_feld == f.name and ch not in (9, 258, 353, 259):
+        if 0x80 <= ch <= 0xFF and self.feld.art == "text":        # Umlaute
+            z = kalender_kasten.tippen_byte(self, ch)
+            return self.aktion_tippen(z) if z else "weiter"
+        return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
+
+    def _fehler_weg(self):
+        """Wer das Feld mit dem Fehler ändert, sieht den Fehler nicht mehr."""
+        if self.fehler_feld == self.feld.name:
             self.fehler, self.fehler_feld = "", None
+
+    def aktion_abbrechen(self, _t):
+        return "abbruch"
+
+    def aktion_advanced(self, _t):
+        self._box_oeffnen(self.feld)
+        return "weiter"
+
+    def aktion_speichern(self, _t):
+        return "fertig" if self._speichern() else "weiter"
+
+    def aktion_feld(self, taste):
+        n = len(self.sichtbar())
+        self.i = (self.i + (1 if taste in ("tab", "down") else -1)) % n
+        return "weiter"
+
+    def aktion_waehlen(self, taste):
+        f = self.feld
+        f.wahl = (f.wahl + (-1 if taste == "left" else 1)) % len(f.optionen)
+        self._fehler_weg()
+        return "weiter"
+
+    def aktion_tippen(self, zeichen):
+        f = self.feld
+        f.text = (f.text + zeichen)[:200]
+        self._fehler_weg()
+        return "weiter"
+
+    def aktion_zeichen_weg(self, _t):
+        f = self.feld
+        f.text = f.text[:-1]
+        self._u8 = b""
+        self._fehler_weg()
+        return "weiter"
+
+    def aktion_leeren(self, _t):
+        self.feld.text = ""
+        self._fehler_weg()
         return "weiter"
 
     # ── Fenster „advanced" über dem Formular (11.10.2026) ──────────────
@@ -595,7 +663,7 @@ def _gruppe_aufruf(roh, w) -> list:
 # Serie — darum nicht im Kasten „nur dieser Tag". Beim Speichern breitet es
 # sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil,
 # status (committed/uncommitted — seit 11.10.2026 hier statt „Verbindlich").
-ADVANCED_HILFE = "enter öffnet: typ (normal/liste), stylebox, status"
+ADVANCED_HILFE = "typ (normal/liste), stylebox, status"
 _QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
 
 
@@ -798,7 +866,7 @@ def _quelle_folge(roh, w):
         return None
     live = roh.get("titel_live") or roh.get("label") or ""
     return lambda: Dialog("liste lösen", [Schritt(
-        "ok", "aktuellen Titel „%s“ übernehmen? (j/n)" % live, art="wahl",
+        "ok", "aktuellen Titel „%s“ übernehmen?" % live, art="wahl",
         wahl={"j": True, "n": False})],
         lambda a: kalender_quellen.plan_loesen(roh, a["ok"]))
 
@@ -869,7 +937,7 @@ def _regel_felder(rrule):
 #   z          ein Zeitraum       (Rhythmus-Kasten)
 #   Auswahl    Anfangsbuchstabe (u Uni, k keine, e eigene …), nie Ziffern
 def _wahl_umfang(roh):
-    return Schritt("umfang", "„%s“ ändern: (t) nur dieser Tag  (a) alle" % roh.get("label", ""),
+    return Schritt("umfang", "„%s“ ändern: nur dieser Tag oder alle?" % roh.get("label", ""),
                    art="wahl", wahl={"t": "dieser", "a": "alle"})
 
 
@@ -1042,7 +1110,7 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
     if a_ == "routine":
         if roh.get("deaktiviert"):
             return Dialog("wieder an", [Schritt(
-                "ok", "„%s“ am %s wieder aktivieren? (j/n)" % (label, datum_text(tag)),
+                "ok", "„%s“ am %s wieder aktivieren?" % (label, datum_text(tag)),
                 art="wahl", wahl={"j": True, "n": False})],
                 lambda a: _plan([("POST", "/api/calendar/routine/skip",
                                   {"layer": layer, "label": label, "day": iso,
@@ -1061,11 +1129,11 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
                              "nur %s gelöscht: %s" % (datum_text(tag), label))
             return _plan()
         return Dialog("löschen", [Schritt(
-            "wie", "„%s“ löschen: (a) alle  (t) nur dieser Tag  (n) nichts" % label,
+            "wie", "„%s“ löschen: alle oder nur dieser Tag?" % label,
             art="wahl", wahl={"a": "alle", "t": "dieses", "n": None})], plan)
     day = roh.get("von") or iso if a_ == "spanne" else iso
-    frage = ("Ganze Spanne „%s“ löschen? (j/n)" if a_ == "spanne"
-             else "„%s“ löschen? (j/n)") % label
+    frage = ("Ganze Spanne „%s“ löschen?" if a_ == "spanne"
+             else "„%s“ löschen?") % label
     return Dialog("löschen", [Schritt("ok", frage, art="wahl", wahl={"j": True, "n": False})],
                   lambda a: _plan([("DELETE", "/api/calendar/eintrag",
                                     {"layer": layer, "day": day, "label": label,
@@ -1118,7 +1186,7 @@ def dialog_todo_bearbeiten(lid, item) -> Dialog:
 
 
 def dialog_todo_loeschen(lid, item) -> Dialog:
-    return Dialog("löschen", [Schritt("ok", "„%s“ löschen? (j/n)" % item.get("text", ""),
+    return Dialog("löschen", [Schritt("ok", "„%s“ löschen?" % item.get("text", ""),
                                       art="wahl", wahl={"j": True, "n": False})],
                   lambda a: _plan([("DELETE", "/api/lists/%s/items/%s" % (lid, item["id"]), None)]
                                   if a["ok"] else [], "gelöscht" if a["ok"] else ""))

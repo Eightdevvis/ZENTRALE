@@ -1,9 +1,10 @@
 # tui/ansichten/kalender_bedienung.py
 #
-# Die Tasten der Kalender-Ansichten (A, später B/C) — wie calcurse. Hält die
-# EINE Auswahl (Tag, Termin, Kasten), führt die Dialoge aus
-# kalender_werkzeuge.py, schickt ihre Aufrufe ans Backend und zeichnet
-# Frage-Zeile und Ansehen-Fenster. Die Ansicht selbst zeichnet nur.
+# Die Tasten der Kalender-Ansichten A/B/C — wie calcurse. Hält die EINE
+# Auswahl (Tag, Termin, Kasten), führt die Dialoge aus kalender_werkzeuge.py,
+# schickt ihre Aufrufe ans Backend und zeichnet Kästen und Ansehen-Fenster.
+# Die Ansicht selbst zeichnet nur. Die Tasten stehen in Tastentabellen
+# (TASTEN_A/B/C unten, tasten.py); kalender.py verteilt aus ihnen.
 #
 # Eigene Datei, weil kalender.py sonst über die Riesen-Grenze wüchse
 # (memory/system/tui_bauplan.md); der alte Kalender fliegt in Etappe 2 raus.
@@ -18,23 +19,90 @@ from datetime import date, timedelta
 from .basis import BEENDEN, api_call
 from . import kalender_advanced, kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_quellen as kq
-from . import kalender_stil
+from . import kalender_kasten, kalender_stil
 from . import kalender_werkzeuge as kw
+from .tasten import Tasten
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
 FOKUS = ("termine", "kalender", "todo")
-# Taste für Rhythmus (10.10.2026). Groß, damit sie keine der
-# calcurse-Tasten (r wiederholen) überschreibt; in A, B und C
-# gleich. Andere Belegung → hier, Fußzeilen in kalender_ansichten.tasten_hinweis
-# und befehle.py mitziehen.
-TASTE_RHYTHMUS = ord("R")   # Kasten „Rhythmus": Phasen einstellen
-# Neuer Termin für eine Liste/ein Projekt: seit 11.10.2026 keine eigene
-# Taste mehr (vorher Shift+A, d75f21a). Sasha: „dann wird der listentermin zu
-# nem termintypen und nicht zu so nem extra shortcut den kannst dann
-# rausnehmen" — a → Formular → Advanced → Typ liste. A ist wieder, was es vor
-# d75f21a war: ein zweites a (wie im TODO-Kasten). Abhaken des angezeigten
-# Punkts: „!" wie im TODO-Kasten (dort ist es calcurses „erledigt").
-TASTE_ABHAKEN = ord("!")
+
+
+# ── Tastentabellen der Ansichten (tasten.py, 2026-10-11) ───────────────
+# EINE Belegung für Verteilen und Leiste. Andere Belegung → nur hier.
+# R = Rhythmus (10.10.2026): groß, damit es r (wiederholen) nicht
+# überschreibt; in A, B und C gleich. Neuer Termin für eine Liste/ein
+# Projekt: seit 11.10.2026 keine eigene Taste mehr (vorher Shift+A, d75f21a;
+# Sasha: „den kannst dann rausnehmen") — a → Formular → Advanced → Typ liste,
+# A ist wieder ein zweites a. Abhaken des angezeigten Punkts: „!" wie im
+# TODO-Kasten (dort calcurses „erledigt").
+_SPRUENGE = [("t/w/m/y", "springen", "day/week/month/year (caps: back)"),
+             ("T/W/M/Y", "springen"), ("ctrl+g", "springen")]
+
+
+def _rest(esc="close", kasten=False, spruenge=True):
+    """Was jede Ansicht hat: springen, gehe zu, erledigte, Rhythmus, (Tab),
+    v, Esc, q. Ohne Text = geht, steht aber nicht in der Leiste."""
+    t = list(_SPRUENGE) if spruenge else [(k, a) for k, a, *_x in _SPRUENGE]
+    t += [("g", "gehe_zu", "go to"), ("x", "erledigte", "show done"), ("X", "erledigte"),
+          ("R", "rhythmus", "rhythm")]
+    if kasten:
+        t += [("tab", "kasten", "box"), ("shift+tab", "kasten")]
+    return t + [("v", "ansicht", "view"), ("V", "ansicht"), ("esc", "schliessen", esc),
+                ("q/Q", "beenden")]
+
+
+def _termine(leer, **rest):
+    """Die Termine eines Tages (A „termine", C). leer = am Tag steht keiner:
+    e/d/r/c/u/! sagen dann nur „kein termin gewählt", Enter tut nichts."""
+    def zeigen(text):
+        return None if leer else text
+    t = [("↑↓", "eintrag", "entry"), ("k/j", "eintrag"), ("←→", "tag", "day"),
+         ("h/l", "tag"), ("a", "neu", "new"), ("A/ctrl+a", "neu"),
+         ("e", "aendern", zeigen("edit")), ("E", "aendern"),
+         ("d", "loeschen", zeigen("delete")), ("D", "loeschen"),
+         ("r", "wiederholen", zeigen("repeat")), ("!", "abhaken", zeigen("tick off"))]
+    if not leer:
+        t.append(("enter", "ansehen", "view"))
+    t += [("u", "ebene", zeigen("(un)commit")), ("U", "ebene"),
+          ("c", "kopieren", zeigen("copy")), ("p", "einfuegen", "paste"),
+          ("ctrl+v", "einfuegen")]
+    return t + _rest(**rest)
+
+
+def _kalender(**rest):
+    """A, Kasten „kalender" (calcurse): Pfeile wählen den Tag."""
+    return [("←→", "kal_tag", "day"), ("↑↓", "kal_tag", "week"), ("h/j/k/l", "kal_tag"),
+            ("0/$", "kal_tag", "week start/end"), ("a", "neu", "new"),
+            ("A/ctrl+a", "neu"), ("enter", "zu_terminen", "to entries")] + _rest(**rest)
+
+
+def _todo(art, **rest):
+    """A, Kasten „todo" (die Wochenliste). art: „voll", „leer" (Liste ohne
+    Aufgaben) oder „ohne" (keine Wochenliste: alles sagt nur das)."""
+    if art == "ohne":
+        t = [("a/A/ctrl+t/e/E/d/D/!/+/-", "keine_liste")]
+    else:
+        t = [("a", "todo_neu", "new"), ("A/ctrl+t", "todo_neu")]
+        if art == "leer":
+            t += [("e/E/d/D/!/+/-", "keine_aufgabe")]
+        else:
+            t = [("↑↓", "todo_waehlen", "select"), ("k/j", "todo_waehlen")] + t + [
+                ("e", "todo_aendern", "edit"), ("E", "todo_aendern"),
+                ("d", "todo_loeschen", "delete"), ("D", "todo_loeschen"),
+                ("!", "todo_haken", "done"), ("+/-", "todo_schieben", "up/down"),
+                ("enter", "todo_ansehen", "view")]
+    return t + _rest(spruenge=False, **rest)
+
+
+def _a_tabelle():
+    tab = {}
+    for zusatz, esc in (("", "close"), ("_vom_monat", "back to month")):
+        tab["termine" + zusatz] = _termine(False, esc=esc, kasten=True)
+        tab["termine_leer" + zusatz] = _termine(True, esc=esc, kasten=True)
+        tab["kalender" + zusatz] = _kalender(esc=esc, kasten=True)
+        for art, name in (("voll", "todo"), ("leer", "todo_leer"), ("ohne", "todo_ohne")):
+            tab[name + zusatz] = _todo(art, esc=esc, kasten=True)
+    return tab
 
 
 def _monat(d: date, delta: int) -> date:
@@ -48,6 +116,15 @@ def _monat(d: date, delta: int) -> date:
 
 
 class Bedienung:
+    TASTEN_A = Tasten(_a_tabelle())
+    TASTEN_B = Tasten({"monat": [
+        ("←→", "monat_tag", "day"), ("↑↓", "monat_tag", "week"), ("h/j/k/l", "monat_tag"),
+        ("enter", "tag_oeffnen", "edit day"),
+        # bearbeiten geht in der Tagesliste — hier nur eine Meldung
+        ("a/A/ctrl+a/e/E/d/D/r/c/p/ctrl+v/u/U/tab/shift+tab", "nur_ansehen"),
+    ] + _rest()})
+    TASTEN_C = Tasten({"woche": _termine(False), "woche_leer": _termine(True)})
+
     def __init__(self, kal):
         self.kal, self.z, self.K = kal, kal.z, kal.K
         self.W = self.K.setdefault("w", {
@@ -178,229 +255,226 @@ class Bedienung:
                 "idx": W["idx"], "tidx": W["tidx"],
                 "roh": self.gewaehlt() if fokus == "termine" and not monat else None}
 
-    # ── Tasten ─────────────────────────────────────────────────────────
-    def taste(self, ch):
-        """→ BEENDEN, True (verbraucht) oder False (die Ansicht soll sie
-        nehmen: v, Theme, …)."""
-        W, K = self.W, self.K
-        W["msg"] = "" if ch != -1 else W["msg"]
-        if W["dialog"] is not None:
-            self._dialog_taste(ch)
-            return True
-        if W["popup"] is not None:
-            # Jede TASTE schließt, wie calcurse. -1 ist keine Taste, sondern der
-            # Takt der Hauptschleife (getch-Timeout, ~250 ms) — der schloss das
-            # Ansehen-Fenster sofort wieder (Sasha, 10.10.2026: „bleibt nur nen
-            # bruchteil der sekunde sichtbar").
-            if ch in (-1, curses.KEY_RESIZE):
-                return True
-            W["popup"] = None
-            return True
-        if ch == 27:
-            if K.get("sprung"):                # Tag aus dem Monat geöffnet → zurück in den Monat
-                self.kal.sprung_zurueck()
-                return True
-            K["active"] = False
-            return True
-        if ch in (ord("q"), ord("Q")):
-            return BEENDEN
+    # ── Tasten: die Tabellen der drei Ansichten (tasten.py, 2026-10-11) ──
+    # Der Kalender (kalender.py) setzt sie mit den Tabellen der Kästen zu
+    # EINER zusammen; aus ihr verteilt er die Tasten, und die Leiste ganz
+    # unten zeigt sie. Ansichten: a:termine / a:kalender / a:todo (die drei
+    # Kästen von A, je mit „_leer" bzw. „_ohne", wenn dort nichts zu wählen
+    # ist, und „_vom_monat", wenn der Tag aus dem Monat geliehen ist — dann
+    # führt Esc zurück), b:monat, c:woche (+ „_leer").
+    def ansicht(self) -> str:
+        K, W = self.K, self.W
         stil = K.get("stil") or "A"
-        if stil == "A" and ch == 9:
-            W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) + 1) % len(FOKUS)]
-            return True
-        if stil == "A" and ch == curses.KEY_BTAB:
-            W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) - 1) % len(FOKUS)]
-            return True
-        if self._springen(ch):
-            return True
-        if ch == TASTE_RHYTHMUS:
-            self._rhythmus()
-            return True
         if stil == "B":
-            return self._taste_monat(ch)
+            return "b:monat"
         if stil == "C":
-            return self._taste_termine(ch)
+            return "c:woche" if self.gewaehlt() else "c:woche_leer"
         if W["fokus"] == "todo":
-            return self._taste_todo(ch)
-        if W["fokus"] == "kalender":
-            return self._taste_kalender(ch)
-        return self._taste_termine(ch)
+            lid, items = kw.todo_punkte(self.daten())
+            name = "todo_ohne" if lid is None else ("todo" if items else "todo_leer")
+        elif W["fokus"] == "kalender":
+            name = "kalender"
+        else:
+            name = "termine" if self.gewaehlt() else "termine_leer"
+        return "a:" + name + ("_vom_monat" if K.get("sprung") else "")
 
-    def _springen(self, ch) -> bool:
-        """calcurse: t/T Tag, w/W Woche, m/M Monat, y/Y Jahr, g gehe zu,
-        Strg-G heute — gilt in jedem Kasten."""
+    # ── Bewegen und Springen (in jeder Ansicht) ────────────────────────
+    def aktion_springen(self, taste):
+        """calcurse: t/T Tag, w/W Woche, m/M Monat, y/Y Jahr, Strg-G heute."""
         d = self.tag()
-        sprung = {ord("t"): d + timedelta(days=1), ord("T"): d - timedelta(days=1),
-                  ord("w"): d + timedelta(days=7), ord("W"): d - timedelta(days=7),
-                  ord("m"): _monat(d, 1), ord("M"): _monat(d, -1),
-                  ord("y"): _monat(d, 12), ord("Y"): _monat(d, -12),
-                  7: date.today()}.get(ch)
-        if sprung:
-            self.setze_tag(sprung)
-            return True
-        if ch == ord("g"):
-            self._starte(kw.dialog_gehe_zu(date.today()))
-            return True
-        if ch in (ord("x"), ord("X")):
-            self.K["showhidden"] = not self.K["showhidden"]
-            self.W["msg"] = "erledigte: " + ("an" if self.K["showhidden"] else "aus")
-            return True
-        return False
+        self.setze_tag({"t": d + timedelta(days=1), "T": d - timedelta(days=1),
+                        "w": d + timedelta(days=7), "W": d - timedelta(days=7),
+                        "m": _monat(d, 1), "M": _monat(d, -1),
+                        "y": _monat(d, 12), "Y": _monat(d, -12),
+                        "ctrl+g": date.today()}[taste])
 
-    def _taste_termine(self, ch) -> bool:
+    def aktion_gehe_zu(self, _t):
+        self._starte(kw.dialog_gehe_zu(date.today()))
+
+    def aktion_erledigte(self, _t):
+        self.K["showhidden"] = not self.K["showhidden"]
+        self.W["msg"] = "erledigte: " + ("an" if self.K["showhidden"] else "aus")
+
+    def aktion_rhythmus(self, _t):
+        """R: der Kasten mit allen Phasen (kalender_phasen.PhasenListe)."""
+        kasten = self._rhythmus_kasten()
+        if kasten is not None:
+            self._starte(kasten)
+
+    def aktion_ansicht(self, _t):            # v: A → B → C
+        self.kal.k_stil_weiter()
+
+    def aktion_kasten(self, taste):          # A: Tab wechselt den Kasten
+        W = self.W
+        W["fokus"] = FOKUS[(FOKUS.index(W["fokus"]) + (-1 if taste == "shift+tab" else 1))
+                           % len(FOKUS)]
+
+    def aktion_schliessen(self, _t):
+        if self.K.get("sprung"):             # Tag aus dem Monat geöffnet → zurück in den Monat
+            self.kal.sprung_zurueck()
+        else:
+            self.K["active"] = False
+
+    def aktion_beenden(self, _t):
+        return BEENDEN
+
+    # ── Termine (A, Kasten „termine", und C) ───────────────────────────
+    def aktion_eintrag(self, taste):
+        """↑↓ über den Tagesrand hinaus: der Tag davor/danach."""
         W, d = self.W, self.tag()
-        ts = self.termine()
-        if ch in (curses.KEY_UP, ord("k")):
+        if taste in ("up", "k"):
             if W["idx"] > 0:
                 W["idx"] -= 1
-            else:                              # über den Tagesanfang: Tag davor
+            else:
                 vor = d - timedelta(days=1)
                 self.setze_tag(vor, max(0, len(self.termine(vor)) - 1))
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            if W["idx"] < len(ts) - 1:
-                W["idx"] += 1
-            else:
-                self.setze_tag(d + timedelta(days=1))
-        elif ch in (curses.KEY_LEFT, ord("h")):
-            self.setze_tag(d - timedelta(days=1))
-        elif ch in (curses.KEY_RIGHT, ord("l")):
+        elif W["idx"] < len(self.termine()) - 1:
+            W["idx"] += 1
+        else:
             self.setze_tag(d + timedelta(days=1))
-        else:
-            return self._aktion(ch)
-        return True
 
-    def _taste_monat(self, ch) -> bool:
-        """B: nur ansehen. Pfeile wie calcurses Kalenderkasten (←→ Tag, ↑↓
-        Woche), Enter öffnet den Tag in der Tagesliste (A) zum Bearbeiten.
-        Sasha, 10.10.2026: „besser wenn man auf einem datum im monat enter
-        macht, dass man auf die tagansicht kommt und dort richtig bearbeiten
-        kann, und in monat dann keine"."""
-        W, d = self.W, self.tag()
-        sprung = {curses.KEY_LEFT: -1, ord("h"): -1, curses.KEY_RIGHT: 1, ord("l"): 1,
-                  curses.KEY_UP: -7, ord("k"): -7, curses.KEY_DOWN: 7, ord("j"): 7}.get(ch)
-        if sprung is not None:
-            self.setze_tag(d + timedelta(days=sprung))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            self.kal.sprung_zum_tag(d)
-        elif ch in (ord("a"), ord("A"), 1, ord("e"), ord("E"), ord("d"), ord("D"), ord("r"),
-                    ord("c"), ord("p"), 22, ord("u"), ord("U"), 9,
-                    curses.KEY_BTAB):
-            W["msg"] = "im monat nur ansehen — enter öffnet den tag zum bearbeiten"
-        else:
-            return False
-        return True
+    def aktion_tag(self, taste):
+        self.setze_tag(self.tag() + timedelta(days=-1 if taste in ("left", "h") else 1))
 
-    def _aktion(self, ch) -> bool:
-        """a/e/d/r/c/p/Enter — in A, B und C genau gleich."""
-        W, d = self.W, self.tag()
+    def aktion_neu(self, _t):                # a, A, Strg-A wie calcurse
+        self._starte(kw.formular_neu(self.tag(), date.today(), quellen=self._quellen_holen))
+
+    def _termin(self):
+        """Der gewählte Termin, sonst None und eine Meldung."""
         roh = self.gewaehlt()
-        if roh and roh.get("gruppe") and ch in (10, 13, curses.KEY_ENTER, ord("e"), ord("E"),
-                                                 ord("d"), ord("D"), ord("r"), ord("c"),
-                                                 ord("u"), ord("U")):
-            # Eine Gruppe in B ist eine Zusammenfassung, kein Termin: Enter
-            # zeigt, was drinsteckt; ändern geht am einzelnen Fach (A/C).
-            if ch in (10, 13, curses.KEY_ENTER):
-                W["popup"] = kw.details_gruppe(roh, d)
-            else:
-                W["msg"] = ("„%s“ fasst %d Termine zusammen — enter zeigt sie, "
-                            "einzeln ändern in A oder C (v)" % (roh["label"],
-                                                                len(roh.get("glieder") or [])))
-            return True
-        if ch in (ord("a"), ord("A"), 1):      # Strg-A wie calcurse, A = a
-            self._starte(kw.formular_neu(d, date.today(), quellen=self._quellen_holen))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            roh = self.gewaehlt()
-            if roh:
-                W["popup"] = kw.details(roh, d, self._quelle_vorschau(roh))
-        elif ch in (ord("e"), ord("E"), ord("d"), ord("D"), ord("r"), ord("c")):
-            roh = self.gewaehlt()
-            if not roh:
-                W["msg"] = "kein termin gewählt"
-            elif ch in (ord("e"), ord("E")):
-                self._starte(kw.formular_bearbeiten(roh, d, date.today(),
-                                                    quellen=self._quellen_holen))
-            elif ch in (ord("d"), ord("D")):
-                self._starte(kw.dialog_loeschen(roh, d))
-            elif ch == ord("r"):
-                dl = kw.formular_wiederholen(roh, d, date.today(), self._quellen_holen)
-                if dl is None:
-                    W["msg"] = "eine spanne wiederholt sich nicht — e ändert sie"
-                else:
-                    self._starte(dl)
-            else:
-                W["clip"] = kw.kopie(roh)
-                W["msg"] = "kopiert: %s — p fügt am gewählten tag ein" % roh.get("label", "")
-        elif ch in (ord("p"), 22):             # p / Strg-V
-            if W["clip"]:
-                self._ausfuehren(kw.plan_einfuegen(W["clip"], d))
-            else:
-                W["msg"] = "nichts kopiert (c)"
-        elif ch in (ord("u"), ord("U")):       # committed ↔ uncommitted
-            roh = self.gewaehlt()
-            plan = kw.plan_ebene(roh) if roh else None
-            if plan is None:
-                W["msg"] = "kein termin gewählt"
-            else:
-                self._ausfuehren(plan, pruefen=False)
-        elif ch == TASTE_ABHAKEN:
-            roh = self.gewaehlt()
-            if roh and kq.quelle_von(roh):
-                self._quelle_abhaken(roh)
-            else:
-                W["msg"] = ("! hakt den obersten Punkt eines Listen-Termins ab "
-                            "(a → advanced → typ liste) · TODO: tab")
-        else:
-            return False
-        return True
+        if not roh:
+            self.W["msg"] = "kein termin gewählt"
+        return roh
 
-    def _taste_kalender(self, ch) -> bool:
-        """calcurse-Kalenderkasten: Pfeile wählen den Tag, 0/$ Wochenanfang/-ende."""
+    def aktion_ansehen(self, _t):
+        roh = self.gewaehlt()
+        if roh:
+            self.W["popup"] = kw.details(roh, self.tag(), self._quelle_vorschau(roh))
+
+    def aktion_aendern(self, _t):
+        roh = self._termin()
+        if roh:
+            self._starte(kw.formular_bearbeiten(roh, self.tag(), date.today(),
+                                                quellen=self._quellen_holen))
+
+    def aktion_loeschen(self, _t):
+        roh = self._termin()
+        if roh:
+            self._starte(kw.dialog_loeschen(roh, self.tag()))
+
+    def aktion_wiederholen(self, _t):
+        roh = self._termin()
+        if not roh:
+            return
+        dl = kw.formular_wiederholen(roh, self.tag(), date.today(), self._quellen_holen)
+        if dl is None:
+            self.W["msg"] = "eine spanne wiederholt sich nicht"
+        else:
+            self._starte(dl)
+
+    def aktion_kopieren(self, _t):
+        roh = self._termin()
+        if roh:
+            self.W["clip"] = kw.kopie(roh)
+            self.W["msg"] = "kopiert: %s" % roh.get("label", "")
+
+    def aktion_einfuegen(self, _t):          # p / Strg-V
+        if self.W["clip"]:
+            self._ausfuehren(kw.plan_einfuegen(self.W["clip"], self.tag()))
+        else:
+            self.W["msg"] = "nichts kopiert"
+
+    def aktion_ebene(self, _t):              # committed ↔ uncommitted
+        roh = self._termin()
+        plan = kw.plan_ebene(roh) if roh else None
+        if plan is not None:
+            self._ausfuehren(plan, pruefen=False)
+        elif roh:
+            self.W["msg"] = "kein termin gewählt"
+
+    def aktion_abhaken(self, _t):
+        roh = self.gewaehlt()
+        if roh and kq.quelle_von(roh):
+            self._quelle_abhaken(roh)
+        else:
+            self.W["msg"] = "abhaken geht bei Listen-Terminen (advanced → typ liste)"
+
+    # ── Monat (B): nur ansehen ─────────────────────────────────────────
+    # Sasha, 10.10.2026: „besser wenn man auf einem datum im monat enter
+    # macht, dass man auf die tagansicht kommt und dort richtig bearbeiten
+    # kann, und in monat dann keine".
+    def aktion_monat_tag(self, taste):
+        """←→ Tag, ↑↓ Woche — wie calcurses Kalenderkasten."""
+        schritt = {"left": -1, "h": -1, "right": 1, "l": 1,
+                   "up": -7, "k": -7, "down": 7, "j": 7}[taste]
+        self.setze_tag(self.tag() + timedelta(days=schritt))
+
+    def aktion_tag_oeffnen(self, _t):
+        self.kal.sprung_zum_tag(self.tag())
+
+    def aktion_nur_ansehen(self, _t):
+        self.W["msg"] = "im monat nur ansehen — bearbeiten in der tagesliste"
+
+    # ── Kalenderkasten (A) ─────────────────────────────────────────────
+    def aktion_kal_tag(self, taste):
+        """Pfeile wählen den Tag, 0/$ Wochenanfang/-ende."""
         d = self.tag()
-        sprung = {curses.KEY_LEFT: -1, ord("h"): -1, curses.KEY_RIGHT: 1, ord("l"): 1,
-                  curses.KEY_UP: -7, ord("k"): -7, curses.KEY_DOWN: 7, ord("j"): 7,
-                  ord("0"): -d.weekday(), ord("$"): 6 - d.weekday()}.get(ch)
-        if sprung is not None:
-            self.setze_tag(d + timedelta(days=sprung))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            self.W["fokus"] = "termine"
-        elif ch in (ord("a"), ord("A"), 1):
-            self._starte(kw.formular_neu(d, date.today(), quellen=self._quellen_holen))
-        else:
-            return False
-        return True
+        schritt = {"left": -1, "h": -1, "right": 1, "l": 1, "up": -7, "k": -7,
+                   "down": 7, "j": 7, "0": -d.weekday(), "$": 6 - d.weekday()}[taste]
+        self.setze_tag(d + timedelta(days=schritt))
 
-    def _taste_todo(self, ch) -> bool:
+    def aktion_zu_terminen(self, _t):
+        self.W["fokus"] = "termine"
+
+    # ── TODO-Kasten (A) ────────────────────────────────────────────────
+    def _aufgabe(self):
+        """(liste, gewählte Aufgabe)."""
         W = self.W
         lid, items = kw.todo_punkte(self.daten())
         it = items[W["tidx"]] if items and 0 <= W["tidx"] < len(items) else None
-        if ch in (curses.KEY_UP, ord("k")):
+        return lid, it, items
+
+    def aktion_todo_waehlen(self, taste):
+        W = self.W
+        _lid, _it, items = self._aufgabe()
+        if taste in ("up", "k"):
             W["tidx"] = max(0, W["tidx"] - 1)
-        elif ch in (curses.KEY_DOWN, ord("j")):
-            W["tidx"] = min(max(0, len(items) - 1), W["tidx"] + 1)
-        elif lid is None and ch in (ord("a"), ord("e"), ord("d"), ord("!"), ord("+"), ord("-")):
-            W["msg"] = "keine wochenliste gefunden"
-        elif ch in (ord("a"), ord("A"), 20):   # Strg-T wie calcurse
-            self._starte(kw.dialog_todo_neu(lid))
-        elif it is None and ch in (ord("e"), ord("d"), ord("!"), ord("+"), ord("-")):
-            W["msg"] = "keine aufgabe gewählt"
-        elif ch in (ord("e"), ord("E")):
-            self._starte(kw.dialog_todo_bearbeiten(lid, it))
-        elif ch in (ord("d"), ord("D")):
-            self._starte(kw.dialog_todo_loeschen(lid, it))
-        elif ch == ord("!"):                   # calcurse: erledigt an/aus
-            self._ausfuehren(kw._plan([("POST", "/api/lists/%s/items/%s/toggle" % (lid, it["id"]),
-                                        {})]))
-        elif ch in (ord("+"), ord("-")):       # Reihenfolge = Priorität
-            delta = -1 if ch == ord("+") else 1
-            self._ausfuehren(kw._plan([("POST", "/api/lists/%s/items/%s/reorder"
-                                        % (lid, it["id"]), {"delta": delta})]))
-            W["tidx"] = max(0, min(len(items) - 1, W["tidx"] + delta))
-        elif ch in (10, 13, curses.KEY_ENTER):
-            W["popup"] = ["Aufgabe", "", str(it.get("text", "")) if it else "",
-                          "", "erledigt" if it and it.get("done") else "offen"]
         else:
-            return False
-        return True
+            W["tidx"] = min(max(0, len(items) - 1), W["tidx"] + 1)
+
+    def aktion_todo_neu(self, _t):           # a, A, Strg-T wie calcurse
+        self._starte(kw.dialog_todo_neu(self._aufgabe()[0]))
+
+    def aktion_todo_aendern(self, _t):
+        lid, it, _items = self._aufgabe()
+        self._starte(kw.dialog_todo_bearbeiten(lid, it))
+
+    def aktion_todo_loeschen(self, _t):
+        lid, it, _items = self._aufgabe()
+        self._starte(kw.dialog_todo_loeschen(lid, it))
+
+    def aktion_todo_haken(self, _t):         # calcurse: erledigt an/aus
+        lid, it, _items = self._aufgabe()
+        self._ausfuehren(kw._plan([("POST", "/api/lists/%s/items/%s/toggle" % (lid, it["id"]),
+                                    {})]))
+
+    def aktion_todo_schieben(self, taste):   # Reihenfolge = Priorität
+        lid, it, items = self._aufgabe()
+        delta = -1 if taste == "+" else 1
+        self._ausfuehren(kw._plan([("POST", "/api/lists/%s/items/%s/reorder"
+                                    % (lid, it["id"]), {"delta": delta})]))
+        self.W["tidx"] = max(0, min(len(items) - 1, self.W["tidx"] + delta))
+
+    def aktion_todo_ansehen(self, _t):
+        _lid, it, _items = self._aufgabe()
+        self.W["popup"] = ["Aufgabe", "", str(it.get("text", "")),
+                           "", "erledigt" if it.get("done") else "offen"]
+
+    def aktion_keine_aufgabe(self, _t):
+        self.W["msg"] = "keine aufgabe gewählt"
+
+    def aktion_keine_liste(self, _t):
+        self.W["msg"] = "keine wochenliste gefunden"
 
     # ── Termine mit Titel aus Liste/Projekt (kalender_quellen.py) ─────
     def _quellen_holen(self):
@@ -436,12 +510,6 @@ class Bedienung:
         self.W["msg"] = kq.meldung_abgehakt(vorher, kq.finde(self.daten(), roh.get("kennung")))
 
     # ── Rhythmus (Tagesphasen) ─────────────────────────────────────────
-    def _rhythmus(self):
-        """R: der Kasten mit allen Phasen (kalender_phasen.PhasenListe)."""
-        kasten = self._rhythmus_kasten()
-        if kasten is not None:
-            self._starte(kasten)
-
     def _rhythmus_kasten(self):
         try:
             phasen = (api_call("/api/calendar/phasen", timeout=8.0) or {}).get("phasen")
@@ -460,7 +528,25 @@ class Bedienung:
         self.W["dialog"] = dialog
         self.W["nach_konflikt"] = None
 
-    def _dialog_taste(self, ch):
+    def kette(self) -> list:
+        """Die offenen Kästen von außen nach innen: Dialog/Formular →
+        advanced → „welche Liste?" bzw. Stylebox (mit ihrem Farbwähler).
+        Der innerste bekommt die Tasten; seine Tabelle zeigt die Leiste."""
+        raus, o = [], self.W["dialog"]
+        while o is not None:
+            raus.append(o)
+            unter = getattr(o, "box", None) if isinstance(o, kw.Formular) else None
+            if isinstance(o, kalender_advanced.Advanced) and o.unter is not None:
+                unter = o.unter
+                if not isinstance(unter, kq.QuellenWahl):            # die Stylebox
+                    raus.append(unter)
+                    unter = None
+            o = unter
+        return raus
+
+    def dialog_taste(self, ch):
+        """Eine Taste an den offenen Kasten (er verteilt sie aus seiner
+        Tabelle) und was sein Ergebnis heißt: abbrechen, ausführen …"""
         W = self.W
         dl = W["dialog"]
         r = dl.taste(ch)
@@ -495,7 +581,7 @@ class Bedienung:
             if k:
                 zeile = k[0].lstrip("⚠ ").strip()
                 W["dialog"] = kw.Dialog("kollision", [kw.Schritt(
-                    "ok", "⚠ %s%s · trotzdem speichern? (j/n)"
+                    "ok", "⚠ %s%s · trotzdem speichern?"
                     % (zeile, " (+%d)" % (len(k) - 1) if len(k) > 1 else ""),
                     art="wahl", wahl={"j": True, "n": False})], lambda a: kw._plan())
                 W["nach_konflikt"] = plan
@@ -576,7 +662,6 @@ class Bedienung:
             felder = dl.sichtbar()
             self._zeichne_felder(dl.zeilen(), [f.art for f in felder],
                                  [f.adv for f in felder], dl.titel, dl.fehler,
-                                 "↑↓/tab feld · ←→ auswahl · enter speichern · esc abbrechen",
                                  by, bx, bh, bw)
             if dl.box is not None:               # Fenster „advanced" über dem Formular
                 self._zeichne_advanced(dl.box, by, bx, bh, bw)
@@ -590,17 +675,17 @@ class Bedienung:
         y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
         z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
 
-    def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, fuss, by, bx, bh, bw):
+    def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, by, bx, bh, bw):
         """Ein Kasten mit Feldzeilen (Formular und Fenster „advanced"):
-        Beschriftung, Wert (aktiv in Akzentfläche), unten Hilfe/Fehler und
-        die Tastenzeile. `stile[i]`: dict mit „stil" → Rahmenzeichen farbig."""
+        Beschriftung, Wert (aktiv in Akzentfläche), unten Hilfe/Fehler. Die
+        Tasten stehen in der Leiste ganz unten (Tastentabelle, 11.10.2026).
+        `stile[i]`: dict mit „stil" → Rahmenzeichen farbig."""
         z, C = self.z, self.z.C
         kal = C.get("kal", C["acc"])
         bl = max(len(b) for b, *_ in zeilen) + 2
         # breit genug für die längste Zeile (Stil-Vorschau), höchstens der Platz
-        w = min(bw - 4, max(56, bl + 40, bl + 6 + max(len(wt) for _b, wt, *_r in zeilen),
-                            len(fuss) + 4))
-        h = len(zeilen) + 6
+        w = min(bw - 4, max(56, bl + 40, bl + 6 + max(len(wt) for _b, wt, *_r in zeilen)))
+        h = len(zeilen) + 5
         y, x, w, h = self._kasten(by, bx, bh, bw, w, h, titel)
         for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
             yy = y + 2 + i
@@ -613,14 +698,13 @@ class Bedienung:
             st = (stile[i] or {}).get("stil") if i < len(stile) else None
             if st:                               # Rahmenzeichen in Rahmen- und Flächenfarbe
                 self._stil_vorschau(yy, x + 2 + bl, st, wert)
-        unten = y + h - 3
+        unten = y + h - 2
         if fehler:
             z.addclip(unten, x + 2, "⚠ " + fehler, w - 4, C["warn"])
         else:
             hilfe = next((hf for _b, _w, a, hf in zeilen if a and hf), "")
             if hilfe:
                 z.addclip(unten, x + 2, hilfe, w - 4, C["faint"])
-        z.addclip(y + h - 2, x + 2, fuss, w - 4, C["faint"])
 
     def _zeichne_advanced(self, adv, by, bx, bh, bw):
         """Das Fenster „advanced" (kalender_advanced.Advanced) und darüber,
@@ -628,7 +712,7 @@ class Bedienung:
         zeilen = adv.zeilen()
         stile = [{"stil": adv.stil} if b == "Stylebox" else None for b, *_r in zeilen]
         self._zeichne_felder(zeilen, ["wahl"] * len(zeilen), stile, adv.titel, adv.fehler,
-                             kalender_advanced.FUSS, by, bx, bh, bw)
+                             by, bx, bh, bw)
         u = adv.unter
         if u is None:
             return
@@ -653,8 +737,9 @@ class Bedienung:
         self.z.addclip(y, x + ab, zeichen, 3, attr)
 
     def _zeichne_liste(self, dl, by, bx, bh, bw):
-        """Der Rhythmus-Kasten: eine Zeile je Phase, Zeichen in Motivfarbe,
-        die gewählte in Akzentfläche; unten Hilfe bzw. Fehler."""
+        """Ein Listen-Kasten (Rhythmus, „welche Liste?"): eine Zeile je
+        Eintrag, Zeichen in Motivfarbe, der gewählte in Akzentfläche; unten
+        Fehler und der Stand (hilfe(): Suche, gewählter Tag)."""
         z, C = self.z, self.z.C
         zeilen = dl.liste_zeilen()
         platz = max(1, min(len(zeilen) or 1, bh - 9))
@@ -663,7 +748,7 @@ class Bedienung:
         erst = max(0, dl.i - platz + 1)
         aktiv = C.get("k_akzent_inv", C["bright"] | curses.A_REVERSE)
         if not zeilen:
-            z.addclip(y + 2, x + 2, getattr(dl, "leer_text", "noch keine phase — n legt eine an"),
+            z.addclip(y + 2, x + 2, getattr(dl, "leer_text", "noch keine phase"),
                       w - 4, C["faint"])
         for k, (zeichen, rolle, text, an) in enumerate(zeilen[erst:erst + platz]):
             yy = y + 2 + k
@@ -680,7 +765,6 @@ class Bedienung:
             return
         zeilen = W["popup"]
         w = max(30, max(len(s) for s in zeilen) + 4)
-        y, x, w, h = self._kasten(by, bx, bh, bw, w, len(zeilen) + 3, "ansehen")
-        for i, s in enumerate(zeilen[:h - 3]):
+        y, x, w, h = self._kasten(by, bx, bh, bw, w, len(zeilen) + 2, "ansehen")
+        for i, s in enumerate(zeilen[:h - 2]):
             z.addclip(y + 1 + i, x + 2, s, w - 4, C["bright"] if i == 0 else C["dim"])
-        z.addclip(y + h - 2, x + 2, "eine taste schließt", w - 4, C["faint"])

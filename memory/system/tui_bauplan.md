@@ -64,7 +64,8 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/kalender_stil.py` | Aussehen eines Termins aus der Stylebox (Fenster „advanced", Wert `stil`): Rollen `$schrift$grund$rückfall`, Block in C (Rahmen abgestuft, Fläche, Muster), Titel in A, Zeile in B, Vorschau der Formularzeile | — |
 | `ansichten/kalender_advanced.py` | Fenster „advanced" über dem Termin-Formular (seit 2026-10-11): Typ normal/liste (Liste wählen über `kalender_quellen.QuellenWahl`) und die Stylebox; reine Logik, Zeichnen in `kalender_bedienung._zeichne_advanced` | — |
 | `ansichten/kalender_phasen.py` | Kasten „Rhythmus" (Taste R): Liste der Phasen, Formular anlegen/ab jetzt ändern, nur an einem Tag, Zeitraum, löschen → Backend-Aufrufe | — |
-| `ansichten/kalender_bedienung.py` | `Bedienung`: Tasten von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen) | `K["w"]` |
+| `ansichten/kalender_bedienung.py` | `Bedienung`: Tastentabellen und `aktion_`-Methoden von A/B/C (EINE Auswahl Tag/Termin/Kasten, Kästen ausführen, Kollisions-Rückfrage, Modal und Ansehen-Fenster zeichnen); `Kalender.TASTEN` setzt sie mit den Kästen zusammen | `K["w"]` |
+| `ansichten/kalender_kasten.py` | Gemeinsames der Kalender-Kästen für ihre Tastentabellen: Umlaut-Bytes, `zustand` (repr); Stylebox/Farbwähler bringen ihre Tabelle selbst mit | — |
 | `ansichten/graphen.py` | `Graphen`: Graph-Werkzeug, Überlagerung (auch lifestyle-Box) | `G` |
 | `ansichten/fokus.py` | `Fokus`: Listen-/Fokus-Werkzeug — malt das Bild aus `core/listen_bild.py` (dasselbe wie die Listen-Kachel, [listen_app.md](../hub/listen_app.md)), Pixel-Bernstein als Veredelung, `proj_render` (Fokus-Box, nur im Backup-Dashboard `/dashboard an`) | `L` |
 | `ansichten/notizen.py` | `Notizen`: Notiz-Werkzeug | `NOTE` |

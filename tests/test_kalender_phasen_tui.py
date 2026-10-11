@@ -85,7 +85,7 @@ def test_liste_tasten_oeffnen_formulare():
 
 def test_leere_liste():
     li = _liste(())
-    assert li.taste(ord("e")) == "weiter" and "n legt" in li.fehler
+    assert li.taste(ord("e")) == "weiter" and li.fehler == "noch keine phase"
     assert li.taste(ord("n")) == "fertig"
 
 

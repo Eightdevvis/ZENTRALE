@@ -17,10 +17,13 @@ Darum steht hier nur, was eine Liste MEHR braucht als ein normaler Termin:
 Kern: core/kalender_quelle.py (Auflösung live, nie geschrieben beim Abhaken),
 Routen /api/calendar/quellen, /api/calendar/quelle (GET/POST/DELETE).
 
-Reine Logik, kein curses, kein HTTP (wie kalender_werkzeuge.py): die
+Reine Logik, kein Zeichnen, kein HTTP (wie kalender_werkzeuge.py): die
 Bedienung holt die Daten und führt die Pläne aus.
 """
 from __future__ import annotations
+
+from . import kalender_kasten
+from .tasten import Tasten
 
 LISTE, PROJEKT = "liste", "projekt"
 ZEICHEN = {LISTE: "≡", PROJEKT: "◆"}
@@ -101,47 +104,65 @@ class QuellenWahl:
         return aus
 
     def hilfe(self) -> str:
-        suche = "suche: %s_ · " % self.suche if self.suche else "tippen filtert · "
-        return suche + "↑↓ wählen · enter nimmt · ≡ liste ◆ projekt · esc"
+        """Die Zeile unter der Liste: was gerade gesucht wird (die Tasten
+        stehen in der Leiste ganz unten)."""
+        suche = "suche: %s_" % self.suche if self.suche else "tippen filtert"
+        return suche + " · ≡ liste ◆ projekt"
+
+    # ── Tasten (Tabelle; „leer" = die Suche findet nichts) ──────────────
+    _TIPPEN = [("type", "tippen", "filter"), ("⌫", "zeichen_weg", "delete"),
+               ("ctrl+u", "leeren")]
+    TASTEN = Tasten({
+        "liste": [("↑↓", "waehlen", "select"), ("tab/shift+tab", "waehlen"),
+                  ("enter", "nehmen", "take")] + _TIPPEN + [("esc", "zurueck", "back")],
+        "leer": _TIPPEN + [("enter", "nehmen"), ("esc", "zurueck", "back")],
+    })
+
+    def __repr__(self):
+        return kalender_kasten.zustand(self)
+
+    def ansicht(self) -> str:
+        return "liste" if self.treffer() else "leer"
 
     def taste(self, ch: int) -> str:
-        self.fehler = ""
+        if ch >= 0:                                 # nicht beim Takt der Schleife (-1)
+            self.fehler = ""
+        if 0x80 <= ch <= 0xFF:                      # Umlaute: UTF-8 Byte für Byte
+            z = kalender_kasten.tippen_byte(self, ch)
+            if z:
+                self.aktion_tippen(z)
+            return "weiter"
+        return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
+
+    def aktion_zurueck(self, _t):
+        return "abbruch"
+
+    def aktion_waehlen(self, taste):
+        n = len(self.treffer())
+        self.i = (self.i + (1 if taste in ("down", "tab") else -1)) % n
+
+    def aktion_nehmen(self, _t):
         reihe = self.treffer()
         n = len(reihe)
-        if ch == 27:
-            return "abbruch"
-        if ch in (259, 353) and n:                  # ↑, Shift-Tab
-            self.i = (self.i - 1) % n
-        elif ch in (258, 9) and n:                  # ↓, Tab
-            self.i = (self.i + 1) % n
-        elif ch in (10, 13, 343):
-            if not n:
-                self.fehler = "nichts gefunden — suche ändern (backspace)"
-                return "weiter"
-            z = reihe[max(0, min(self.i, n - 1))]
-            self._ergebnis = self.waehlen({"art": z["art"], "id": z["id"],
-                                           "name": z.get("name") or z["id"]})
-            weiter = (self._ergebnis or {}).get("weiter")
-            if weiter is not None and getattr(weiter, "bei_abbruch", None) is None:
-                weiter.bei_abbruch = lambda: self     # Esc im Formular → zurück zur Wahl
-            return "fertig"
-        elif ch in (8, 127, 263):
-            self.suche, self._u8, self.i = self.suche[:-1], b"", 0
-        elif ch == 21:                              # Strg-U
-            self.suche, self.i = "", 0
-        elif 0x80 <= ch <= 0xFF:                    # Umlaute: UTF-8 Byte für Byte
-            self._u8 += bytes([ch])
-            try:
-                zeichen = self._u8.decode("utf-8")
-            except UnicodeDecodeError:
-                if len(self._u8) >= 4:
-                    self._u8 = b""
-                return "weiter"
-            self._u8 = b""
-            self.suche, self.i = (self.suche + zeichen)[:60], 0
-        elif 32 <= ch < 0x80:
-            self.suche, self.i = (self.suche + chr(ch))[:60], 0
-        return "weiter"
+        if not n:
+            self.fehler = "nichts gefunden"
+            return "weiter"
+        z = reihe[max(0, min(self.i, n - 1))]
+        self._ergebnis = self.waehlen({"art": z["art"], "id": z["id"],
+                                       "name": z.get("name") or z["id"]})
+        weiter = (self._ergebnis or {}).get("weiter")
+        if weiter is not None and getattr(weiter, "bei_abbruch", None) is None:
+            weiter.bei_abbruch = lambda: self     # Esc im Formular → zurück zur Wahl
+        return "fertig"
+
+    def aktion_tippen(self, zeichen):
+        self.suche, self.i = (self.suche + zeichen)[:60], 0
+
+    def aktion_zeichen_weg(self, _t):
+        self.suche, self._u8, self.i = self.suche[:-1], b"", 0
+
+    def aktion_leeren(self, _t):                    # Strg-U
+        self.suche, self.i = "", 0
 
     def plan(self) -> dict:
         return self._ergebnis or _plan()

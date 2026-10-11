@@ -568,6 +568,8 @@ class Farbwaehler:
             self.weg = None
             z.safe_addstr(iy + 1, ix, "dieses terminal zeigt", C.get("dim", 0))
             z.safe_addstr(iy + 2, ix, "keine farben — # tippt hex", C.get("dim", 0))
+        # Keine Tastenzeile im Modal: die Tasten zeigt die Leiste ganz unten
+        # (aus seiner Tastentabelle TASTEN).
         self._zeichne_seite(z, iy, ix + kb + 6, iw - kb - 6, farbig, echt)
 
     def _marke(self, kh, kb):

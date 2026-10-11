@@ -262,7 +262,7 @@ def test_bearbeiten_typ_normal_fragt_titel_uebernehmen():
     assert p["aufrufe"][0][0] == "PUT"
     assert all(pf != "/api/calendar/quelle" for _m, pf, _b in p["aufrufe"])
     frage = p["zurueck"]()
-    assert "Steuern planen" in frage.zeile() and "(j/n)" in frage.zeile()
+    assert "Steuern planen" in frage.zeile() and frage.ansicht() == "jn"   # j/n: die Leiste
     frage.taste(ord("j"))
     (meth, pfad, body), = frage.plan()["aufrufe"]
     assert (meth, pfad) == ("DELETE", "/api/calendar/quelle")
@@ -363,14 +363,15 @@ def test_ansehen_zeigt_liste_und_die_naechsten():
         dict(QUELL_TERMIN, quelle_zustand="fehlt"), TAG, {"zustand": "fehlt"}))
 
 
-def test_fusszeile_passt_sich_der_breite_an():
-    for an in ka.ANSICHTEN:
-        voll = ka.tasten_hinweis(an)
-        for b in (150, 120, 100):
-            s = ka.tasten_hinweis(an, b)
-            assert ka.text_breite(s) <= b or s == ka.tasten_hinweis(an, 1)
-        assert ka.tasten_hinweis(an, 10_000) == voll
-    for an in ("A", "C"):
-        for b in (150, 110, 80):
-            s = ka.tasten_hinweis(an, b)
-            assert "A für liste" not in s and "! abhaken" in s
+def test_tasten_stehen_in_der_leiste_nicht_im_kasten():
+    """Seit 11.10.2026 keine Fußzeile mehr im Kasten (vorher
+    kalender_ansichten.tasten_hinweis in drei Breitenstufen): die Leiste ganz
+    unten zeigt die Tastentabelle des Kalenders und kürzt selbst. ! abhaken
+    steht in A und C; eine eigene Taste für Listen-Termine gibt es nicht
+    (A ist ein zweites a und wird nicht angezeigt)."""
+    from tui.ansichten.kalender import Kalender
+    assert not hasattr(ka, "tasten_hinweis")
+    for ansicht in ("a:termine", "c:woche"):
+        e = dict(Kalender.TASTEN.eintraege(ansicht))
+        assert e["!"] == "tick off" and "A" not in e
+        assert Kalender.TASTEN.nimmt(ansicht, "A") == "neu"
