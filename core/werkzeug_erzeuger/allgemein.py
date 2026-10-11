@@ -78,6 +78,7 @@ class AllgemeinerAdapter:
         self.aktionen = {a["name"]: a for a in besch["aktionen"]}
         self.zone = besch.get("zeitzone")
         self._kontext = {}                     # kennung → {aktion, alt, args, nachlesen}
+        self._alias = {}                       # alte Kennung → neue (Wiederherstellen vergibt eine neue)
         self._lock = threading.Lock()
 
     # -- Stufen --
@@ -177,6 +178,8 @@ class AllgemeinerAdapter:
     def lesen_eintrag(self, nl: dict, kennung) -> dict | None:
         """Der Eintrag zu einer Kennung, wie das Programm ihn jetzt hat; None,
         wenn es ihn nicht gibt. Mehrere Treffer → Ablehnung MEHRDEUTIG."""
+        if not isinstance(kennung, Kennung):
+            kennung = self._echt(kennung)
         k = kennung if isinstance(kennung, Kennung) else self._kennung(kennung, nl.get("teile"))
         ctx = {"kennung": k}
         antwort = self._senden(nl["aufruf"], ctx, None, False, nach_regeln=False)
@@ -287,6 +290,7 @@ class AllgemeinerAdapter:
         """Schnittstelle des Erzeugers: der Eintrag zu einer Kennung."""
         with self._lock:
             k = self._kontext.get(str(kennung))
+        kennung = self._echt(kennung)
         specs = ([self.besch["nachlesen"][k["nachlesen"]]] if k else
                  list((self.besch.get("nachlesen") or {}).values()))
         for nl in specs:
@@ -303,8 +307,19 @@ class AllgemeinerAdapter:
         if kind in (None, "keins"):
             raise Ablehnung("KEIN-RUECKBAU", "Für diese Aktion gibt es keinen Rückbau.")
         nl = self._nl(a)
-        k = self._kennung(kennung, (nl or {}).get("teile"))
-        self._senden(aufruf, {**args, "kennung": k, "alt": alt or {}}, a, True, args)
+        k = self._kennung(self._echt(kennung), (nl or {}).get("teile"))
+        antwort = self._senden(aufruf, {**args, "kennung": k, "alt": alt or {}}, a, True, args)
+        if aufruf.get("kennung_neu"):
+            # 2026-10-11: legt das Programm beim Wiederherstellen unter NEUER Kennung an
+            # (Kalender: neue uid), führt die alte Kennung ab jetzt dorthin.
+            neu = vorlage.zeiger_eins(antwort.daten, aufruf["kennung_neu"])
+            if neu not in (None, ""):
+                with self._lock:
+                    self._alias[str(kennung)] = str(neu)
+
+    def _echt(self, kennung) -> str:
+        with self._lock:
+            return self._alias.get(str(kennung), str(kennung))
 
     def loeschen(self, kennung: str) -> None:
         k = self._kontext.get(str(kennung))
@@ -326,6 +341,7 @@ class AllgemeinerAdapter:
 
     def ziel(self, kennung: str) -> str:
         """Was eine Kennung meint (für die Ja/Nein-Frage)."""
+        kennung = self._echt(kennung)
         try:
             for nl in (self.besch.get("nachlesen") or {}).values():
                 if nl.get("teile") and len(str(kennung).split("|")) != len(nl["teile"]):

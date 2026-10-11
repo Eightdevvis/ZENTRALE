@@ -235,7 +235,7 @@ Je Aktion (Pflicht: `name`, `description`, `inputSchema`, `x-zentrale.art`, `auf
 | `kennung_aus` | woher die Kennung kommt: `{"antwort": "/id"}` (Zeiger in der Antwort) · `{"argument": "kennung"}` (ändern/löschen: das Argument) · `{"teile": ["day", "label"]}` (das Programm vergibt keine: Kennung = Angaben mit `\|` verbunden, „2026-11-03\|Zahnarzt“) |
 | `nachlesen` | Name eines Nachlese-Aufrufs aus dem Kopf: `aufruf`, `teile` (bei zusammengesetzter Kennung), `eintraege` (Zeiger auf Liste/Eintrag), `wo` (Feld → Vorlage; genau EIN Treffer, gleiche Serien-Vorkommen zählen einmal), `zeile` (Satzanfang aus dem Nachgelesenen), `nicht_da` (Bedingungen; Standard Status 404) |
 | `vergleich` | Argument → `{norm, feld?, muster?}`; verglichen wird nur, was angegeben wurde. `feld`: Zeiger in den Eintrag (Standard `/<argument>`), `muster`: Ausdruck mit einer Gruppe (Kalender: `UNTIL=(\d{8})` aus der Wiederholungsregel) |
-| `zurueck` | anlegen → `{"loeschen": <aufruf>}` · ändern → `{"schreiben": <aufruf>}` mit dem alten Stand `{alt.feld}` · löschen → `{"wiederherstellen": <aufruf>}` · oder `{"keins": true}` |
+| `zurueck` | anlegen → `{"loeschen": <aufruf>}` · ändern → `{"schreiben": <aufruf>}` mit dem alten Stand `{alt.feld}` · löschen → `{"wiederherstellen": <aufruf>}` · oder `{"keins": true}` · beim Wiederherstellen optional `kennung_neu` (Zeiger auf die neue Kennung in der Antwort, wenn das Programm eine neue vergibt) |
 | `fehler` | Regeln `{wenn, code, grund | grund_aus}`; `wenn`: `status`, `mcp_fehler`, `text_enthaelt`, `antwort` + `gleich` / `vorhanden`. Aktions-Regeln gelten vor denen des Kopfs; ohne Treffer: jeder Fehler des Programms → `<P>-ABGELEHNT` mit seiner Begründung |
 | `ausgabe` | nur lesen: `eintraege` (Zeiger), `kopf`, `zeile`, `leer`, `hoechstens` (Standard 50). Ohne `ausgabe` bekommt die KI die rohe Antwort (gekürzt auf 8000 Zeichen) |
 | `probe` | Beispiel-Argumente für die Probefahrt; `vorher`: Name einer anlegenden Aktion, die das Probe-Objekt anlegt (ändern/löschen/lesen); `kennung_in`, `erwartet` nur für lesen |
@@ -380,10 +380,7 @@ Gleich: Schutzschicht, Satzform, Rücknahme, `immer erlauben` nur beim Anlegen. 
 - **Weniger Werkzeuge**, kleinere Felder: Termin anlegen/ändern/löschen, Routine anlegen
   (wöchentlich, von/bis) / löschen, einen Tag lesen. Keine Pausen, Phasen, Gruppen, Ebene,
   Quellen, Serie-Ausschnitte — dafür bräuchte die HTTP-Schnittstelle erst Routen mit Kennung.
-- **Kennung = `Tag|Titel`** statt `#t…`/`#r…` (Stand 2026-10-11, nach 7f6bf4a): die POST-Routen liefern die echte `kennung` und `GET /api/calendar` gibt sie je Eintrag aus, aber Nachlesen/Ändern/Löschen von Termin und Routine nehmen sie noch nicht an (nur day+label; Ausnahmen wie `/phase`, `/routine/zeitraum` sind andere Aktionen) — Umstellen auf `kennung_aus: {"antwort": "/kennung"}` erst, wenn `PUT/DELETE /eintrag` + ein Lesen per Kennung da sind (Wächter: `test_kalender_routen_geben_echte_kennung…`). Zwei
-  gleichnamige Termine am selben Tag sind für die Anbindung nicht trennbar (Nachlesen
-  `MEHRDEUTIG`; Anlegen eines zweiten `GIBT-ES-SCHON`). Die handgeschriebenen Werkzeuge
-  haben echte, umbenennungsfeste Kennungen.
+- **Kennung = die echte des Kalenders** (seit 2026-10-11, Routen 8d96228): `kennung_aus: {"antwort": "/kennung"}`, Nachlesen `GET /api/calendar/eintrag?kennung=`, Ändern/Löschen per `kennung` (`PUT/DELETE /eintrag`, `/routine`); `kk_read_day` zeigt sie. Gleichnamige Termine sind trennbar. Wiederherstellen eines gelöschten Termins vergibt der Kalender eine neue Kennung: `zurueck/wiederherstellen` trägt `kennung_neu: "/kennung"`, der Adapter führt die alte dorthin.
 - **Routine löschen ist Stufe `einmalig`**: die HTTP-Route liefert nichts, woraus sich die
   Routine wiederherstellen ließe (Regel steht nur als `RRULE` mit UNTIL). Die
   Handwerkzeuge können es (`kalender_kennung`). Ein ehrliches Beispiel für die Stufen.

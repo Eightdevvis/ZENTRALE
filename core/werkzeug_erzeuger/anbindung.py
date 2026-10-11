@@ -317,6 +317,8 @@ def _arten(besch, a, art, props, ka, nl, kennung_form, stelle, p):
         p.fehler.append(f"{stelle}/zurueck: bei '{art}' ist {' oder '.join(erwartet)} möglich, nicht '{kind}'")
     elif kind != "keins":
         _aufruf(besch, aufruf, f"{stelle}/zurueck/{kind}", p)
+        if aufruf.get("kennung_neu") and kind != "wiederherstellen":
+            p.fehler.append(f"{stelle}/zurueck/{kind}: 'kennung_neu' gibt es nur beim Wiederherstellen")
         fest = {"kennung", "alt"} if kind != "loeschen" else {"kennung"}
         _platzhalter(aufruf, fest, props, f"{stelle}/zurueck/{kind}", p, kennung_form)
         if not ka:

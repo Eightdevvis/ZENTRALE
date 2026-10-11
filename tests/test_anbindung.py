@@ -12,6 +12,7 @@ HTTP (Flask-Test-Client).
 """
 import copy
 import json
+import re
 import os
 
 import pytest
@@ -131,6 +132,14 @@ def test_fehlerhafte_beschreibung_wird_mit_der_stelle_abgelehnt(notizen, beschre
     assert not p.ok
     assert any(fragment in m for m in p.fehler), (fragment, p.fehler)
     assert all(m.startswith("/") or "/" in m for m in p.fehler)      # jede Meldung nennt die Stelle
+
+
+def test_kennung_neu_nur_beim_wiederherstellen():
+    b = _laden(KALENDER)
+    assert anbindung.pruefen(b, vertrauen=True).ok
+    _aktion(b, "kk_add_entry")["zurueck"]["loeschen"]["kennung_neu"] = "/kennung"
+    p = anbindung.pruefen(b, vertrauen=True)
+    assert not p.ok and any("'kennung_neu' gibt es nur beim Wiederherstellen" in m for m in p.fehler), p.fehler
 
 
 def test_alle_meldungen_auf_einmal_nicht_nur_die_erste(notizen):
@@ -345,10 +354,23 @@ def test_verfaelschtes_nachlesen_wird_zurueckgenommen(notizen, monkeypatch):
         quelle.adapter.schliessen()
 
 
+def _kalender_mit_angaben_als_kennung():
+    """Die Kalender-Vorlage, wie sie vor den Kennung-Routen war (Tag|Titel): hält die
+    Pfade „Kennung aus Angaben“ (`teile`) unter Test, die sonst keine Vorlage mehr nutzt."""
+    b = _laden(KALENDER)
+    woche = {"methode": "GET", "pfad": "/api/calendar", "abfrage": {"view": "week", "ref": "{kennung.day}"}}
+    b["nachlesen"]["termin"] = {"aufruf": woche, "teile": ["day", "label"], "eintraege": "/days/{kennung.day}",
+                                "wo": {"label": "{kennung.label}"}, "zeile": "Termin „{e.label}“ am {kennung.day} {e.time}"}
+    _aktion(b, "kk_add_entry")["kennung_aus"] = {"teile": ["day", "label"]}
+    _aktion(b, "kk_add_entry")["zurueck"] = {"loeschen": {"methode": "DELETE", "pfad": "/api/calendar/eintrag",
+                                                          "body": {"day": "{kennung.day}", "label": "{kennung.label}"}}}
+    return b
+
+
 def test_doppelt_anlegen_mit_natuerlicher_kennung_wird_abgelehnt():
-    """Das Programm vergibt keine Kennung: die Kennung besteht aus Angaben.
+    """Hat das Programm keine Kennung, besteht sie aus Angaben.
     Gibt es sie schon, legt die Anbindung nichts doppelt an."""
-    besch = _laden(KALENDER)
+    besch = _kalender_mit_angaben_als_kennung()
     app = pytest.importorskip("ui.app").app
     quelle = allgemein.quelle_aus(besch, sender=probefahrt.wsgi_sender(app.test_client()))
     args = {"day": "2026-11-03", "label": "Zahnarzt", "time": "09:00"}
@@ -359,7 +381,9 @@ def test_doppelt_anlegen_mit_natuerlicher_kennung_wird_abgelehnt():
 
 
 def test_kennung_mit_falscher_form(mcp):
-    quelle = allgemein.quelle_aus(_laden(KALENDER), sender=lambda *a: (200, b"{}"))
+    b = _kalender_mit_angaben_als_kennung()
+    b["nachlesen"]["routine"]["teile"] = ["day", "label"]
+    quelle = allgemein.quelle_aus(b, sender=lambda *a: (200, b"{}"))
     r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": "nur-eine-angabe", "ort": "x"})
     assert r.code == "KK-KENNUNG-UNGUELTIG" and "2 Angaben" in r
 
@@ -434,11 +458,16 @@ def test_zeitueberschreitung_nach_dem_senden_ist_nie_nichts_geaendert():
 
 
 def test_fehlerregeln_vom_status_auf_codes():
-    fake = FakeHttp(lambda m, u, b: (400, json.dumps({"error": "termin nicht gefunden"}).encode()) if m == "DELETE"
-                    else (200, json.dumps({"days": {"2026-11-03": [{"label": "X", "time": "09:00"}]}}).encode()))
+    fake = FakeHttp(lambda m, u, b: (400, json.dumps({"error": "Kennung unbekannt", "code": "KENNUNG-UNBEKANNT"}).encode())
+                    if m == "DELETE" else (200, json.dumps({"label": "X", "time": "09:00"}).encode()))
     quelle = allgemein.quelle_aus(_http_besch(), sender=fake)
-    r = _ausfuehren(quelle, "kk_delete_entry", {"kennung": "2026-11-03|X"})
+    r = _ausfuehren(quelle, "kk_delete_entry", {"kennung": "abc123"})
     assert r.code == "KK-NICHT-GEFUNDEN" and "Dazu gibt es im Kalender nichts" in r
+    # Kern-Ablehnungen ohne eigene Regel kommen mit dem Grund des Kalenders durch
+    fake.antwort = lambda m, u, b: ((200, json.dumps({"label": "X", "time": "09:00", "kennung": "abc"}).encode())
+                                    if m == "GET" else (400, json.dumps({"error": "Das ist eine Routine", "code": "FALSCHE-ART"}).encode()))
+    r = _ausfuehren(quelle, "kk_delete_entry", {"kennung": "abc"})
+    assert r.code == "KK-ABGELEHNT" and "Das ist eine Routine" in r
     fake.antwort = (503, b"<html>Wartung</html>")
     r = _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
     assert r.code == "KK-ABGELEHNT" and "Wartung" in r
@@ -573,30 +602,74 @@ def test_kalender_kern_probefahrt_voll_gruen(_kalender_speicher_art):
     assert probefahrt.gruen(zeilen), probefahrt.bericht(zeilen, True)
 
 
+def _kennung_aus_satz(r) -> str:
+    return re.search(r"\(#([^)\s]+)\)", str(r)).group(1)
+
+
 @pytest.mark.kalender_beide
 def test_kalender_kern_werkzeuge_gegen_den_kalender(_kalender_speicher_art):
     app = pytest.importorskip("ui.app").app
     besch = anbindung.laden(KALENDER)
     quelle = allgemein.quelle_aus(besch, sender=probefahrt.wsgi_sender(app.test_client()))
     r = _ausfuehren(quelle, "kk_add_entry", {"day": "2026-11-03", "label": "Zahnarzt", "time": "09:00", "ort": "Praxis"})
-    assert r == "Termin „Zahnarzt“ am 2026-11-03 09:00 EINGETRAGEN (#2026-11-03|Zahnarzt)."
-    assert "09:00 Zahnarzt Praxis (Kennung: 2026-11-03|Zahnarzt)" in _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
-    r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": "2026-11-03|Zahnarzt", "ort": "Praxis Nord"})
+    k = _kennung_aus_satz(r)                                          # die echte Kennung des Kalenders
+    assert "|" not in k and r.startswith("Termin „Zahnarzt“ am 2026-11-03 09:00 EINGETRAGEN") and r.status == "ok"
+    assert f"09:00 Zahnarzt Praxis (Kennung: {k})" in _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
+    r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": k, "ort": "Praxis Nord"})
     assert r.startswith("Termin „Zahnarzt“ am 2026-11-03 09:00 GEÄNDERT") and r.status == "ok"
-    # Auflage aus dem Schema: die Uhrzeit ist zweistellig — der Kalender selbst rechnet mit "9:00" falsch
-    r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": "2026-11-03|Zahnarzt", "time": "9:00"})
+    assert "Praxis Nord" in _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
+    # Auflage aus dem Schema: die Uhrzeit ist zweistellig
+    r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": k, "time": "9:00"})
     assert r.code == "KK-WERT-UNGUELTIG" and "pattern" not in r and "time" in r
+    r = _ausfuehren(quelle, "kk_edit_entry", {"kennung": "gibtesnicht", "ort": "x"})
+    assert r.code == "KK-NICHT-GEFUNDEN"
     r = _ausfuehren(quelle, "kk_add_routine", {"label": "Yoga", "day": "2026-11-03", "bis": "2026-12-01",
                                                "wochentage": ["TU"], "time": "18:00"})
     assert r.status == "ok" and "Routine „Yoga“" in r
+    kr = _kennung_aus_satz(r)
     r = _ausfuehren(quelle, "kk_add_routine", {"label": "Yoga2", "day": "2026-11-03", "bis": "2026-12-01",
                                                "wochentage": ["XX"]})
     assert r.code == "KK-WERT-UNGUELTIG" and "XX" in r              # Auswahl in der Liste, vorher nie geprüft
-    r = _ausfuehren(quelle, "kk_delete_routine", {"kennung": "2026-11-03|Yoga"})
+    r = _ausfuehren(quelle, "kk_delete_routine", {"kennung": kr})
     assert r.status == "ok" and "NICHT belegt" in r                 # Stufe einmalig
     assert "Yoga" not in _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-10"})
-    r = _ausfuehren(quelle, "kk_delete_entry", {"kennung": "2026-11-03|Zahnarzt"})
+    r = _ausfuehren(quelle, "kk_delete_entry", {"kennung": k})
     assert r.status == "ok" and "GELÖSCHT" in r
+    assert "Zahnarzt" not in _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
+
+
+@pytest.mark.kalender_beide
+def test_kalender_kern_gleichnamige_termine_sind_trennbar(_kalender_speicher_art):
+    """Mit echter Kennung verwechselt die Anbindung zwei gleichnamige Termine eines Tages nicht."""
+    app = pytest.importorskip("ui.app").app
+    quelle = allgemein.quelle_aus(anbindung.laden(KALENDER), sender=probefahrt.wsgi_sender(app.test_client()))
+    k1 = _kennung_aus_satz(_ausfuehren(quelle, "kk_add_entry", {"day": "2026-11-03", "label": "Lauf", "time": "07:00"}))
+    k2 = _kennung_aus_satz(_ausfuehren(quelle, "kk_add_entry", {"day": "2026-11-03", "label": "Lauf", "time": "18:00"}))
+    assert k1 != k2
+    assert _ausfuehren(quelle, "kk_delete_entry", {"kennung": k1}).status == "ok"
+    tag = _ausfuehren(quelle, "kk_read_day", {"day": "2026-11-03"})
+    assert "18:00 Lauf" in tag and "07:00 Lauf" not in tag
+
+
+@pytest.mark.kalender_beide
+def test_kalender_routen_nehmen_die_kennung_aus_der_post_antwort(_kalender_speicher_art):
+    """Kennung aus POST -> Lesen, Ändern, Löschen per Kennung (Routen seit 8d96228);
+    Fehler kommen als 400 {error, code}."""
+    app = pytest.importorskip("ui.app").app
+    c = app.test_client()
+    r = c.post("/api/calendar/entry", json={"day": "2026-11-03", "label": "Kennungsprobe", "time": "9:00"}).get_json()
+    k = r["kennung"]
+    assert k
+    tag = c.get("/api/calendar?view=week&ref=2026-11-03").get_json()["days"]["2026-11-03"]
+    e = next(x for x in tag if x["label"] == "Kennungsprobe")
+    assert e["kennung"] == k and e["time"] == "09:00"
+    assert c.get("/api/calendar/eintrag", query_string={"kennung": k}).get_json()["label"] == "Kennungsprobe"
+    assert c.put("/api/calendar/eintrag", json={"kennung": k, "new": {"ort": "Hier"}}).get_json()["eintrag"]["ort"] == "Hier"
+    falsch = c.delete("/api/calendar/routine", json={"kennung": k})
+    assert falsch.status_code == 400 and falsch.get_json()["code"] == "FALSCHE-ART"
+    assert c.delete("/api/calendar/eintrag", json={"kennung": k}).get_json() == {"ok": True}
+    weg = c.get("/api/calendar/eintrag", query_string={"kennung": k})
+    assert weg.status_code == 400 and weg.get_json()["code"] == "KENNUNG-UNBEKANNT"
 
 
 def test_kalender_kern_loeschen_stellt_alle_felder_wieder_her(_kalender_speicher_art=None):
@@ -605,18 +678,18 @@ def test_kalender_kern_loeschen_stellt_alle_felder_wieder_her(_kalender_speicher
     app = pytest.importorskip("ui.app").app
     besch = anbindung.laden(KALENDER)
     quelle = allgemein.quelle_aus(besch, sender=probefahrt.wsgi_sender(app.test_client()))
-    _ausfuehren(quelle, "kk_add_entry", {"day": "2026-11-03", "label": "A", "time": "08:00", "ende": "08:30", "ort": "Hier"})
+    k = _kennung_aus_satz(_ausfuehren(quelle, "kk_add_entry", {"day": "2026-11-03", "label": "A", "time": "08:00",
+                                                                "ende": "08:30", "ort": "Hier"}))
     a = quelle.adapter
     nl = besch["nachlesen"]["termin"]
-    vorher = a.lesen_eintrag(nl, "2026-11-03|A")
-    _ausfuehren(quelle, "kk_delete_entry", {"kennung": "2026-11-03|A"})
-    assert a.lesen_eintrag(nl, "2026-11-03|A") is None
-    a.zurueckbauen(_aktion(besch, "kk_delete_entry"), "2026-11-03|A", {}, vorher)
-    # Seit 7f6bf4a vergibt der Kern beim Anlegen eine echte Kennung (uid) — ein
-    # über die HTTP-Route wiederhergestellter Termin bekommt eine neue. Alle
-    # Felder außer der Kennung müssen gleich sein.
+    vorher = a.lesen_eintrag(nl, k)
+    _ausfuehren(quelle, "kk_delete_entry", {"kennung": k})
+    assert a.lesen_eintrag(nl, k) is None
+    a.zurueckbauen(_aktion(besch, "kk_delete_entry"), k, {}, vorher)
+    # Der Kalender vergibt dem wiederhergestellten Termin eine NEUE Kennung; die Anbindung
+    # führt die alte dorthin (kennung_neu), alle Felder außer der Kennung sind gleich.
     ohne = lambda e: {k: v for k, v in (e or {}).items() if k not in ("uid", "kennung")}
-    assert ohne(a.lesen_eintrag(nl, "2026-11-03|A")) == ohne(vorher)
+    assert ohne(a.lesen_eintrag(nl, k)) == ohne(vorher)
 
 
 # ══ Dateien, Einschalten, Register ════════════════════════════════════
@@ -763,21 +836,3 @@ def test_das_beispiel_in_der_doku_ist_eine_gueltige_beschreibung():
     beispiel = re.search(r"```json\n(.*?)\n```", teil, re.S).group(1)
     p = anbindung.pruefen(json.loads(beispiel))
     assert p.ok and not p.warnungen, (p.fehler, p.warnungen)
-
-
-@pytest.mark.kalender_beide
-def test_kalender_routen_geben_echte_kennung_aber_nehmen_sie_bei_termin_nicht(_kalender_speicher_art):
-    """Grund, warum kalender_kern.json bei Tag+Titel bleibt (11.10.2026): die POST-Routen
-    liefern die echte Kennung und GET /api/calendar gibt sie je Eintrag aus - aber
-    Nachlesen, Ändern und Löschen von Termin/Routine laufen noch über day+label. Wird dieser
-    Test rot, weil eine Route die Kennung annimmt: Vorlage auf kennung_aus antwort umstellen."""
-    app = pytest.importorskip("ui.app").app
-    c = app.test_client()
-    r = c.post("/api/calendar/entry", json={"day": "2026-11-03", "label": "Kennungsprobe", "time": "9:00"}).get_json()
-    assert r["kennung"]
-    tag = c.get("/api/calendar?view=week&ref=2026-11-03").get_json()["days"]["2026-11-03"]
-    e = next(x for x in tag if x["label"] == "Kennungsprobe")
-    assert e["kennung"] == r["kennung"] and e["time"] == "09:00"
-    # Löschen per Kennung (so wie die Vorlage es bräuchte) kennt die Route nicht: Pflichtfelder day+label
-    assert c.delete("/api/calendar/eintrag", json={"kennung": r["kennung"]}).status_code == 400
-    assert c.delete("/api/calendar/eintrag", json={"day": "2026-11-03", "label": "Kennungsprobe"}).get_json()["ok"]
