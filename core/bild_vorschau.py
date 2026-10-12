@@ -2,8 +2,8 @@
 #
 # Ein Bild als Zeichen fürs Terminal: Sashas eigener ASCII-Filter aus dem
 # alten Browser-Frontend, nach Python übertragen (2026-10-10). Vorlage:
-# memory/archive/browser_front/static/ascii.js (ASCII.canvasToAscii) und der
-# Foto-Filter in memory/archive/browser_front/monolith.html (stretchCanvas,
+# ui/static/ascii.js (ASCII.canvasToAscii) und der
+# Foto-Filter in ui/templates/monolith.html (stretchCanvas,
 # asciiColorHTML; Historie: Commit ed3c82c). Sasha wollte ausdrücklich
 # diesen Filter wieder, keinen fremden (chafa o. ä.).
 #

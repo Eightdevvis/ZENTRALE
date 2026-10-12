@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ZENTRALE · MONOLITH</title>
 <!-- Fonts lokal vendored (offline-Pflicht): keine Google-Fonts-Anfrage übers Netz -->
-<link rel="stylesheet" href="/static/fonts/fonts.css" />
+<link rel="stylesheet" href="{{ url_for('browser.static', filename='fonts/fonts.css') }}" />
 <style>
   /* ── Theme: TAG (hell/papier) ── */
   [data-theme="day"] {
@@ -728,9 +728,9 @@
 
   <!-- viz.js + ascii.js: unveränderte Helfer (ascii.js trägt auch den Bild→ASCII-Filter).
        engine.js: ECHTER Daten-Adapter (ersetzt die frühere Simulation). -->
-  <script src="/static/engine.js"></script>
-  <script src="/static/viz.js"></script>
-  <script src="/static/ascii.js"></script>
+  <script src="{{ url_for('browser.static', filename='engine.js') }}"></script>
+  <script src="{{ url_for('browser.static', filename='viz.js') }}"></script>
+  <script src="{{ url_for('browser.static', filename='ascii.js') }}"></script>
   <script>
   (function () {
     var stage = document.getElementById('stage');
@@ -764,12 +764,9 @@
     // Eigener Puls (30 s) — dieselbe Rolle wie zentrale-theme.timer fürs
     // Terminal und der 60-s-Tick in nvim/lua/zentrale_theme. Hier schneller,
     // weil dem Dashboard sonst niemand nachhilft.
-    setInterval(applyTheme, 30000);
-    // Zwei Netze für den Fall, dass der Timer gar nicht lief: Browser drosseln
-    // setInterval in Hintergrund-Tabs stark, und über Suspend/Ruhezustand steht
-    // die Seite komplett. Beim Zurückkommen sofort nachziehen statt bis zu
-    // 30 s (oder beliebig lange) in der Nachtfarbe zu stehen.
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) applyTheme(); });
+    wiederholen(applyTheme, 30000);
+    // wiederholen() ruht im verdeckten Tab und zieht beim Sichtbarwerden sofort
+    // nach (engine.js). Fokus als zweites Netz, z. B. nach Suspend.
     window.addEventListener('focus', applyTheme);
 
     // ── Telemetrie: EIN rotierendes Meter ──
@@ -831,7 +828,7 @@
       tsgVal.textContent = val.text;
     }
     // Weiterrotieren (alle 2.6s); der angezeigte Wert selbst frischt im tick.
-    setInterval(function () { rotIdx = (rotIdx + 1) % ROT.length; renderRot(); }, 2600);
+    wiederholen(function () { rotIdx = (rotIdx + 1) % ROT.length; renderRot(); }, 2600);
 
     // ── Tracker (lifestyle) ──
     // Config-getrieben und leicht erweiterbar: NEUEN TRACKER HINZUFÜGEN =
@@ -879,7 +876,7 @@
       trkEl.innerHTML = rows.length ? rows.join('') : '<div class="nodata">— noch keine daten (Alt+K) —</div>';
     }
     fetchTrackers();
-    setInterval(fetchTrackers, 60000);                 // langsam (manuell geloggte Daten)
+    wiederholen(fetchTrackers, 60000);                 // langsam (manuell geloggte Daten)
     // Nach dem Erfassen (Alt+K → speichern) sofort neu laden:
     window.addEventListener('zentrale:logged', fetchTrackers);
 
@@ -928,7 +925,7 @@
       prjEl.innerHTML = foc ? renderNode(foc, 0) : '';  // nichts fokussiert → leer
     }
     fetchProjects();
-    setInterval(fetchProjects, 30000);
+    wiederholen(fetchProjects, 30000);
     // Abhaken/Anlegen passiert in der TUI, aber falls im selben Browser etwas
     // geloggt wird, frischen wir mit:
     window.addEventListener('zentrale:logged', fetchProjects);
@@ -2279,7 +2276,7 @@
       }, true);
       window.addEventListener('blur', allOff);
       // Panel zugemacht, während Tasten hängen (k/esc/Tab-Klick) → Ton aus.
-      setInterval(function () {
+      wiederholen(function () {
         if (panel.style.display === 'none' && Object.keys(PK.open).length) allOff();
       }, 400);
 
@@ -2596,13 +2593,13 @@
       else if (c === 'filter') filterFrame(fi);   // setzt #core selbst (mono/farbe)
       else { var b = books[c]; var spd = (ZS.aiState !== 'idle' ? 2 : 1); coreEl.textContent = b.frames[(fi * spd) % b.frames.length]; }
     }
-    setInterval(frameTick, 90); syncTabs(); frameTick();
+    wiederholen(frameTick, 90); syncTabs(); frameTick();
 
     function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
     function gestureLog(name) { var t = new Date(); var ts = [t.getHours(),t.getMinutes(),t.getSeconds()].map(function(n){return ('0'+n).slice(-2);}).join(':'); appendLog('term', { t: ts, text: 'GESTURE → zeigt ' + name }, 60); }
 
     // Auto-Direktor: im Leerlauf gelegentlich ein Objekt „zeigen", sonst Gesicht
-    setInterval(function () {
+    wiederholen(function () {
       if (EX.mode !== 'auto') return;
       if (gestureLeft > 0) { gestureLeft--; if (gestureLeft === 0) setCurrent('gesicht'); return; }
       if (ZS.aiState === 'idle') {
@@ -2700,7 +2697,7 @@
         .catch(function () { var A = document.getElementById('ext-any'); if (A) A.textContent = '–'; });
     }
     pollExternal();
-    setInterval(pollExternal, 8000);
+    wiederholen(pollExternal, 8000);
     // Für die Konsolen-Commands (/cloud) erreichbar machen – die Command-Logik
     // lebt in der Chat-IIFE (anderer Scope).
     window.__zenExternal = { render: renderExternal };
@@ -2763,7 +2760,7 @@
     }
     // Spinner
     var spF = ['|','/','-','\\'], spi = 0;
-    setInterval(function () { var s = document.querySelector('.ai-state .sp'); if (s) s.textContent = (ZS.aiState !== 'idle') ? spF[spi++ % 4] : '·'; }, 120);
+    wiederholen(function () { var s = document.querySelector('.ai-state .sp'); if (s) s.textContent = (ZS.aiState !== 'idle') ? spF[spi++ % 4] : '·'; }, 120);
 
     ZS.on('ai', function (e) {
       if (e.state === 'thinking') aiState.innerHTML = '<span class="sp">|</span> DENKT';
@@ -3722,7 +3719,7 @@
       overlay.classList.add('on');
     }
     poll();
-    setInterval(poll, 5 * 60 * 1000);   // alle 5 min nachsehen (fällig-werden mitnehmen)
+    wiederholen(poll, 5 * 60 * 1000);   // alle 5 min nachsehen (fällig-werden mitnehmen)
     window.addEventListener('zentrale:logged', poll);   // nach dem Eintragen sofort schließen
   })();
   </script>

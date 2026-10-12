@@ -45,6 +45,14 @@ Environment=ZENTRALE_LOKALE_KI=aus
 # frischen Stand hat.
 Environment=ZENTRALE_AUTOPUSH=1
 
+# Nur von diesem Rechner erreichbar: das Backend lauscht auf 127.0.0.1 statt
+# im ganzen Netz (Vorgabe in ui/app.py: 0.0.0.0). Am Laptop spricht niemand
+# von aussen :5000 an (der Pi fragt den PC; der Weg Laptop→PC ist der
+# SSH-Tunnel), und die Tuer steht auf „melden" bei unverschluesseltem HTTP.
+# Wieder oeffnen: Zeile auf 0.0.0.0 setzen, daemon-reload, Dienst neu.
+# Warum und was es heisst: memory/betrieb/zugang.md „Wer lauscht wo".
+Environment=ZENTRALE_HOST=127.0.0.1
+
 # ~/.local/bin steht NICHT im systemd-Default-PATH. Ohne diese Zeile findet
 # das Backend seine eigenen Helfer nicht (zentrale-push-data, find-pc) —
 # und notify-send liegt in /usr/bin.

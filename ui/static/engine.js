@@ -7,6 +7,7 @@
    aus den realen Flask-Endpoints statt aus Zufallszahlen:
 
      GET /api/state        (1 s)  → sensors, logs, internet_logs   (Haupt-State)
+     Alle Polls ruhen, solange der Tab verdeckt ist (wiederholen() unten).
      GET /api/ai/status    (30 s) → Ollama erreichbar? + Modell-Name   [nur KI-Front]
      GET /api/chat/history (2.5 s)→ Konversation (für Minilog)          [nur KI-Front]
 
@@ -147,18 +148,41 @@
     }).catch(function () { /* ignore */ });
   }
 
+  // ── Wiederholen, solange der Tab sichtbar ist ──────────────────────────────
+  // Ersatz für setInterval in der ganzen Browser-Front (2026-10-12): ist der
+  // Tab verdeckt (document.hidden), stehen alle Wiederholungen — kein Polling,
+  // keine Animation. Wird er wieder sichtbar, läuft jede sofort einmal und
+  // dann im alten Abstand weiter. Gibt {an, aus} zurück.
+  var wiederholungen = [];
+  function wiederholen(fn, ms) {
+    var w = { fn: fn, id: null };
+    w.an = function () { if (w.id === null) w.id = setInterval(fn, ms); };
+    w.aus = function () { if (w.id !== null) { clearInterval(w.id); w.id = null; } };
+    wiederholungen.push(w);
+    if (!document.hidden) w.an();
+    return w;
+  }
+  document.addEventListener('visibilitychange', function () {
+    wiederholungen.forEach(function (w) {
+      if (document.hidden) { w.aus(); return; }
+      try { w.fn(); } catch (e) { /* noop */ }
+      w.an();
+    });
+  });
+  global.wiederholen = wiederholen;
+
   // ── Loops ────────────────────────────────────────────────────────────────────
   var started = false;
   function start() {
     if (started) return; started = true;
-    pollState();  setInterval(pollState, 1000);
-    pollTelemetry(); setInterval(pollTelemetry, 2000);
+    pollState();  wiederholen(pollState, 1000);
+    pollTelemetry(); wiederholen(pollTelemetry, 2000);
     // KI-Polls nur in der KI-Front. In laptop/tui (window.KI_AUS) gibt es weder
     // Ollama-Status-Header noch Minilog → die Endpoints (503-gegatet) gar nicht
     // erst anfragen.
     if (!global.KI_AUS) {
-      pollStatus(); setInterval(pollStatus, 30000);
-      pollHistory(); setInterval(pollHistory, 2500);
+      pollStatus(); wiederholen(pollStatus, 30000);
+      pollHistory(); wiederholen(pollHistory, 2500);
     }
   }
 

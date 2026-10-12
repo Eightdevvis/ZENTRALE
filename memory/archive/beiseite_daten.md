@@ -23,7 +23,7 @@ Durchgehen also auf beiden Rechnern entscheiden.
 | `morgen_state.json` | 2 KB | Zustand des Morgen-Messengers | Messenger am 14.09.2026 entfernt |
 | `autosync_probe.json` | 14 B | Probe-Datei eines Sync-Tests | Test längst vorbei |
 | `None.json` | 57 B | ein Eintrag ohne Kategorie (Fehler vom 08.06.2026) | Artefakt, nur ein Zeitstempel |
-| `photos/` | 12 Bilder | Quelle des Bild→ASCII-Filters im Browser | Browser-Front archiviert ([browser_front.md](browser_front.md)) |
+| `photos/` | 12 Bilder | Quelle des Bild→ASCII-Filters im Browser | lag beiseite, solange die Browser-Front archiviert war; seit 2026-10-12 liest `/api/photos` wieder `data/photos/` — zurücklegen, wenn der Filter Fotos zeigen soll |
 | `ai_calendar.json.bak` | 4 KB | Kalender-Sicherung vom 15.06. | Handsicherung, kein Code liest sie |
 | `ai_calendar.json.bak-vor-zeitputz` | 9 KB | Kalender vor dem Zeit-Putz am 17.08. | dito |
 | `ai_graph.json.bak.20260531_135440` | 1,4 MB | Konzept-Graph vom 31.05. | dito; der Graph ist ohnehin aus |

@@ -8,11 +8,12 @@ from ui.routen import zugang, zustand, erfassung, klavier, listen, notizen, kart
 from ui.routen import shop  # Schaufenster (2026-10-10)
 from ui.routen import werkstatt  # Werkstatt (2026-10-10)
 from ui.routen import tasten  # Tastentabellen der Apps (2026-10-11)
+from ui.routen import browser  # Browser-Front unter /zentrale (2026-10-12)
 
 # zugang zuerst: seine Prüfung (before_app_request) muss vor allem anderen
 # laufen (memory/betrieb/zugang.md, 2026-10-08).
 BEREICHE = (zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel,
-            shop, werkstatt, tasten,)
+            shop, werkstatt, tasten, browser,)
 
 
 def einhaengen(app):

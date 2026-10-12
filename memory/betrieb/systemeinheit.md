@@ -43,6 +43,11 @@ aus `~/.config/zentrale/`, sie gehört also zur Sitzung. Eingehängt an
 erreicht wird — dieselbe Kombination, die bei `zentrale-themed.service` seit
 Wochen läuft.
 
+> **Nur localhost (seit 2026-10-12):** die Unit setzt `ZENTRALE_HOST=127.0.0.1`
+> — das Backend des Laptops ist aus dem LAN nicht erreichbar, die TUI und der
+> Browser auf `localhost` schon. Warum, und wie man es wieder öffnet:
+> [zugang.md](zugang.md) „Wer lauscht wo".
+
 > **Genau ein Backend pro Rechner.** `deploy/zentrale-pc.service` (System-Dienst)
 > macht dasselbe; beide zusammen streiten sich um `:5000`. Der Einrichter warnt,
 > wenn er den anderen aktiv findet.

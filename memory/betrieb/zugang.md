@@ -1,14 +1,42 @@
 # Zugang — der Schlüssel fürs Backend
 
-**Stand 2026-10-08.** Das Backend (Flask, Port 5000) lauscht im ganzen Netz.
-Bis heute konnte jeder im WLAN Chat, Kalender, Gedächtnis und Mail lesen und
-schreiben. Jetzt steht eine Tür davor:
+**Stand 2026-10-08.** Das Backend (Flask, Port 5000) lauschte im ganzen Netz
+— am PC tut es das weiter, am Laptop seit 2026-10-12 nur noch auf localhost
+(unten „Wer lauscht wo"). Bis 2026-10-08 konnte jeder im WLAN Chat, Kalender,
+Gedächtnis und Mail lesen und schreiben. Seitdem steht eine Tür davor:
 
 - **Von diesem Rechner aus** (die TUI am PC, die TUI am Laptop, der
   SSH-Tunnel vom Laptop zum PC) geht alles wie bisher — kein Schlüssel nötig.
 - **Von einem anderen Gerät** (heute: der Pi an der Wand) braucht es den
   **Zugangsschlüssel**. Die Programme schicken ihn von selbst mit, sobald er
   auf dem Gerät liegt.
+
+## Wer lauscht wo (Stand 2026-10-12)
+
+Die Adresse, auf der das Backend lauscht, kommt aus `ZENTRALE_HOST`
+(`ui/app.py`, `start_ui`); ohne die Variable `0.0.0.0` = ganzes Netz.
+
+| Rechner | Dienst | Lauscht auf | Warum |
+|---|---|---|---|
+| **Laptop** (`0RAMMachine`) | `zentrale-kern.service` (Benutzer) | `127.0.0.1` (`ZENTRALE_HOST` in der Unit) | niemand spricht ihn von außen an |
+| **PC** | `zentrale-pc.service` (System) | `0.0.0.0` (unverändert) | der Pi (TUI, Zimmer, Bridge) fragt `192.168.50.1:5000` |
+
+**Warum am Laptop zu:** die Tür steht auf „melden" (lässt alle durch, schreibt
+nur ins Log), und das LAN spricht unverschlüsseltes HTTP — jedes WLAN, in dem
+der Laptop hängt (Hotspot, fremdes Netz), hätte sonst Chat, Kalender und Mail
+offen vor sich bzw. könnte den Schlüssel mitlesen. Gebraucht wird der Weg nicht:
+der Pi spricht den PC an, der Laptop den PC über den SSH-Tunnel.
+
+**Was das heißt:** aus dem LAN ist das Laptop-Backend gar nicht erreichbar —
+die Verbindung scheitert, bevor die Tür und der Schlüssel überhaupt ins Spiel
+kommen. Auf dem Laptop selbst (TUI, Browser unter
+`http://localhost:5000/zentrale`) geht alles wie bisher; ein SSH-Tunnel
+*zum* Laptop zählt ebenfalls als lokal.
+
+**Wieder öffnen:** in `deploy/zentrale-kern.service` die Zeile
+`Environment=ZENTRALE_HOST=127.0.0.1` auf `0.0.0.0` setzen (oder streichen),
+systemd die Units neu lesen lassen, den Dienst neu starten. Dann gilt wieder
+die Tür (am besten auf „an").
 
 Code: `core/zugang.py` (Schlüssel), `ui/routen/zugang.py` (die Tür vor allen
 Routen), `scripts/zugang.py` (der Befehl), Klienten:
@@ -128,5 +156,10 @@ sofort auf die Adresse ohne Marke um).
   Notlösung an der Antwort von `/api/state`. Mit „an" bekommt es dort eine
   Abweisung und findet ihn auf diesem Weg nicht mehr (der normale Weg über
   die MAC-Adresse bleibt).
-- Der Weck-Test `scripts/wake_pc.sh` fragt `/` ab — das gibt es seit dem
-  Abschied von der Browser-Front nicht mehr; die Tür ändert daran nichts.
+- Der Weck-Test `scripts/wake_pc.sh` fragt `/` am **PC** ab — seit
+  2026-10-12 gibt es `/` wieder (Weiterleitung auf `/zentrale`, zählt als
+  Erfolg). Mit „an" bekommt er von außen 401 und wertet das als „PC aus".
+- **Laptop nur localhost:** `find-pc`, `wake_pc.sh` und der Pi fragen alle den
+  **PC**, nie den Laptop — von der Einschränkung merken sie nichts. Ein
+  Gerät, das künftig das Laptop-Backend direkt ansprechen soll, braucht
+  erst „Wieder öffnen" (oben).

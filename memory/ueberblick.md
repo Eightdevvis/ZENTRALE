@@ -10,7 +10,7 @@ Whisper, TTS, Ollama; schläft nach Plan, Wecken per Router/Pi —
 (Sensor-Bridge mit PIR, Kiosk mit dem Zimmer des Tutors als Wandbild, TUI
 dahinter), der **Laptop** hängt per SSH-Tunnel dran. Andere Geräte brauchen
 seit 08.10. einen Zugangsschlüssel (`memory/betrieb/zugang.md`). Die Front ist
-die **TUI**; die Browser-Fronten sind archiviert. Der Kern-Chat denkt **in
+die **TUI**; die Browser-Front liegt daneben unter `localhost:5000/zentrale`. Der Kern-Chat denkt **in
 der Cloud** (Opt-in, Tools lokal, hartes Erlaubnis-Gate für Schreibendes) und
 hat seit 07.10. die Claude-Web-Funktionen (`memory/ki/claude_web_plan.md`);
 das Gedächtnis sind Markdown-Dateien, erinnert wird über den Takt.

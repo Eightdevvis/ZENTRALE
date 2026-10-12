@@ -24,11 +24,11 @@ darüber (Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt):
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
 | **ZEN-MOBILE** — die Handy-App (`mobile/`): Auge, KI-Chat, Handy als eigener Knoten an der Mitte | [zen_mobile.md](zen_mobile.md) |
 
-## Stand der Fronten (2026-10-06)
+## Stand der Fronten (2026-10-12)
 
-Die **TUI** ist die einzige Front (`zentrale` / `zentrale-tui`). Das
-Browser-Dashboard (`monolith.html`) ist archiviert
-([../archive/browser_front.md](../archive/browser_front.md)). Die **Kassetten** (`core/kassette.py`) sind entfernt (Rückbau aus
+Die **TUI** ist die Haupt-Front (`zentrale` / `zentrale-tui`). Das
+Browser-Dashboard (`monolith.html`) liegt seit 2026-10-12 wieder unter
+`http://localhost:5000/zentrale` ([dashboard.md](dashboard.md)). Die **Kassetten** (`core/kassette.py`) sind entfernt (Rückbau aus
 dem `zentrale`-Tracker erledigt, 2026-10-04); übrig ist ein Schalter
 `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`, siehe
 [dashboard.md](dashboard.md)).

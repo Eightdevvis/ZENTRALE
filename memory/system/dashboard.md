@@ -4,8 +4,8 @@
 (`tui/zentrale_tui.py` + `tui/ansichten/`, stdlib-only, Thin Client gegen
 `/api/*`; wie die Teile geschnitten sind: [tui_bauplan.md](tui_bauplan.md)); die
 Browser-Front `monolith.html` (KI-Blöcke per `ki_aus` weggelassen) ist
-**geparkt** (seit 2026-10-04): bleibt im Code für eine spätere
-Wiedereinbindung, wird nicht benutzt. Das
+**seit 2026-10-12 wieder da**, als zweite Ansicht unter
+**`http://localhost:5000/zentrale`** (unten „Browser-Front unter /zentrale"). Das
 **Theme** (`/theme` in der TUI → `~/.config/zentrale/theme`, Wunsch) löst allein
 `zentrale-themed` nach 05/21 Uhr auf (`theme.now`, Ergebnis); Terminal,
 Browser, Desktop, bat, nvim, tmux und das Tutor-Zimmer lesen nur — und aus
@@ -156,14 +156,35 @@ diese Front (`../betrieb/deployment.md`). Der Rest dieser Datei ist die
 ausführliche Mechanik + das Warum; Datumsangaben im Text sind Marken, die
 Historie steht unten.
 
-> **Browser archiviert (seit 2026-10-06, vorher ab 2026-10-04 geparkt).** Die Front liegt in `memory/archive/browser_front.md`; was hier über sie steht, ist Geschichte. Damals galt: `ui/templates/monolith.html` ist
-> die einzige Browser-Front (seit 2026-06; `laptop.html` und das alte
-> `index.html` mit AI-Orb sind weg). `/` (+ `/monolith`-Alias) rendert sie
-> noch, benutzt wird sie nicht — die TUI ist die einzige Front. `app.py`
-> reicht `ki_aus = ai_backends.lokale_ki_aus()` ans Template; dann fallen die
-> KI-Blöcke per `{% if not ki_aus %}` / `if (!window.KI_AUS)` weg
-> (Chat/Audio/Tutor/News/OLLAMA-Status), unten steht statt der Chat-Zeile
-> die Tastenkürzel-Box. Was das Template zeigt: „## Monolith-Dashboard".
+### Browser-Front unter /zentrale (seit 2026-10-12)
+
+Zurück aus dem Archiv (2026-10-04 geparkt, 2026-10-06 archiviert). Die TUI
+bleibt die Haupt-Front; der Browser ist eine zweite Ansicht auf dieselben
+`/api/`-Routen.
+
+- **Route:** `ui/routen/browser.py` (Blueprint `browser`): `/zentrale` rendert
+  `ui/templates/monolith.html` (`no-store`), `/` leitet dorthin weiter,
+  `/api/photos[/<name>]` liefert Fotos für den Bild→ASCII-Filter (Ordner
+  `data/photos/`, Env `ZENTRALE_PHOTO_DIR`; fehlt er, nimmt der Filter sein
+  Test-Bild).
+- **Dateien:** `ui/static/` (`engine.js` = Daten-Adapter, `viz.js`,
+  `ascii.js`, `fonts/`) unter `/zentrale/static/…`, im Template per
+  `url_for('browser.static', …)`. Die App hat keinen eigenen `/static`-Weg
+  mehr (`static_folder=None` in `ui/app.py`). `fonts.css` verweist relativ.
+- **KI-Blöcke:** `ki_aus = ai_backends.lokale_ki_aus()` ans Template; dann
+  fallen sie per `{% if not ki_aus %}` / `if (!window.KI_AUS)` weg
+  (Chat/Audio/Tutor/News/OLLAMA-Status), unten steht die Tastenkürzel-Box.
+- **Verdeckter Tab ruht:** jede Wiederholung (Polling `/api/state` 1 s,
+  Telemetrie, Tracker, Animationen) läuft über `wiederholen(fn, ms)` aus
+  `engine.js` statt über `setInterval`. Bei `document.hidden` stehen alle;
+  bei `visibilitychange` zurück läuft jede sofort einmal und dann weiter.
+  Ausnahme: die Laufzeit-Anzeige während einer Aufnahme. Ein Test hält das
+  fest (`tests/test_browser_front.py`).
+- **Zugang:** die Tür (`ui/routen/zugang.py`) gilt wie überall; von diesem
+  Rechner aus frei. Am Laptop lauscht das Backend nur auf `127.0.0.1`
+  ([../betrieb/zugang.md](../betrieb/zugang.md) „Wer lauscht wo").
+- Design-Entwürfe (Bernstein, Kern, Orakel) bleiben im Archiv:
+  `memory/archive/browser_front/entwuerfe/`.
 
 ## Lokale KI an/aus (`ZENTRALE_LOKALE_KI`)
 
@@ -865,8 +886,8 @@ liegt dafür auf Tab; A/B/C nur zum Anschauen — siehe [kalender_ansichten_vors
 
 ## Polling-Modell
 
-Polling-Loops der **Browser-Front** (`ui/static/engine.js`, heute archiviert), jeder
-mit eigener Frequenz. Die TUI pollt `/api/state` (1 s) + `/api/telemetry`
+Polling-Loops der **Browser-Front** (`ui/static/engine.js`), jeder mit eigener
+Frequenz — und alle ruhen, solange der Tab verdeckt ist (`wiederholen()`, s.o.). Die TUI pollt `/api/state` (1 s) + `/api/telemetry`
 (2 s); `/api/ai/status` und `/api/chat/history` holt sie erst, wenn der
 KI-Chat geöffnet wird (`ai_load_history`).
 
@@ -889,11 +910,11 @@ Streaming wird **nur** dort benutzt, wo es wirklich nötig ist:
 - `POST /api/chat` – Server-Sent Events (SSE), damit Tokens live
   erscheinen. Event-Liste: `api_endpoints.md` → Chat.
 
-## Monolith-Dashboard (Route `/`, source of truth)
+## Monolith-Dashboard (Route `/zentrale`)
 
-Das gelebte Dashboard (`ui/templates/monolith.html`, ein einziges großes HTML mit
-mehreren IIFE-Script-Blöcken). Seit 2026-06-08 unter `/` (Alias `/monolith` bleibt
-für Kiosk/Bookmarks). Herzstück ist ein
+Das Browser-Dashboard (`ui/templates/monolith.html`, ein einziges großes HTML mit
+mehreren IIFE-Script-Blöcken). 2026-06-08 bis 2026-10-06 unter `/` (Alias
+`/monolith`), seit 2026-10-12 unter `/zentrale` (`/` leitet weiter). Herzstück ist ein
 animierter **ASCII-Kern** (`#core`), gesteuert vom *Exhibit-Direktor*
 (`frameTick`, 90 ms/Frame). Umschaltbare Exhibits über Tabs: `gesicht`
 (Avatar), `torus`, `würfel`, `globus`, `welt` (Weltkarte), `filter`
@@ -917,7 +938,7 @@ nicht zum Durchzappen).
 >
 > **Geteilte Logik, pro Front verbaut:** `core/graphs.py` + die
 > `/api/graphs`-Endpoints existieren für jede Front; nur die UI ist
-> front-spezifisch verkabelt — Monolith hier (Browser-Panel, geparkt), TUI
+> front-spezifisch verkabelt — Monolith hier (Browser-Panel), TUI
 > in der curses-Mitte (Taste `g`, siehe „TUI"). Das **Anlege-Formular im Monolith** bietet nur
 > `number`/`scale`; die Uhrzeit-Typen `time`/`period` (Y-Achse = Uhrzeit)
 > legt man in der TUI an (Backend kennt alle vier). Ein so angelegter
@@ -1306,3 +1327,6 @@ Daten landen automatisch in `data/<id>.json`.
   (`anwesenheit_und_ring.md`).
 - **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
   einzige Front, Browser geparkt.
+- **2026-10-06** — Browser-Front ins Archiv (`memory/archive/browser_front.md`).
+- **2026-10-12** — Browser-Front zurück unter `/zentrale` (`ui/routen/browser.py`);
+  verdeckter Tab pollt nicht mehr (`wiederholen()`).

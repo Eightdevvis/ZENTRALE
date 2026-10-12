@@ -1,4 +1,13 @@
-# Browser-Front (Monolith) — archiviert am 2026-10-06
+# Browser-Front (Monolith) — archiviert 2026-10-06, zurück seit 2026-10-12
+
+> **Nicht mehr geparkt (2026-10-12):** die Front läuft wieder, unter
+> `http://localhost:5000/zentrale`. `monolith.html` liegt wieder in
+> `ui/templates/`, `engine.js`/`viz.js`/`ascii.js`/`fonts/` in `ui/static/`
+> (per `git mv` aus diesem Ordner), die Routen in `ui/routen/browser.py`,
+> die Tests in `tests/test_browser_front.py`. Stand und Mechanik:
+> [../system/dashboard.md](../system/dashboard.md) „Browser-Front unter
+> /zentrale". Hier im Archiv bleiben nur die **Design-Entwürfe**
+> (`browser_front/entwuerfe/`). Was unten steht, ist der Stand vom Archivieren.
 
 **Was sie war:** das Web-Dashboard von ZENTRALE. Ein einziges großes HTML
 (`monolith.html`, ~220 KB mit mehreren Script-Blöcken) plus Helfer

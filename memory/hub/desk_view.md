@@ -294,7 +294,7 @@ geöffnet kriegen wenn man es selected."*
   die den Kasten füllt. Neue Bilder sind 34 Zellen breit, die Höhe folgt
   dem Seitenverhältnis (Zelle 2:1, 4–16 Zeilen Vorschau).
 - **Vorschau:** Sashas ASCII-Filter aus dem alten Browser-Frontend
-  (`memory/archive/browser_front/`, `canvasToAscii` + Foto-Filter), nach
+  (`ui/static/ascii.js` + `ui/templates/monolith.html`, `canvasToAscii` + Foto-Filter), nach
   Python übertragen in `core/bild_vorschau.py`: Bild formatfüllend
   beschnitten, Auto-Levels je Kanal (1 %/99 %), Blockmittel, Rampe
   ` .,:;-~=+ox*#%8B@`. **farbe:** jedes Zeichen in der Durchschnittsfarbe

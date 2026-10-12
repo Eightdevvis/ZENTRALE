@@ -28,8 +28,9 @@
 #        local → core/ai.py ──▶ Ollama                     ◀──┘
 #   (ai_backends.chat_available() sagt nur, WER denken darf; den Weg
 #   wählt und fährt kern.chat.)
-#   Die TUI (tui/zentrale_tui.py) ist die einzige Front; die Browser-Front
-#   ist archiviert (memory/archive/browser_front.md). Welcher Kern denkt,
+#   Die TUI (tui/zentrale_tui.py) ist die Haupt-Front; die Browser-Front
+#   liegt unter /zentrale (routen/browser.py, memory/system/dashboard.md,
+#   seit 2026-10-12 wieder da). Welcher Kern denkt,
 #   steht in data/ai_config.json ('chat_backend', Code-Default 'auto').
 # ──────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,9 @@ import ablage_wache  # type: ignore  – schaut in ~/Zentrale/Ablage (core/ablag
 
 from ui import routen
 
-app = Flask(__name__)
+# static_folder=None: die Browser-Front bringt ihre Dateien selbst mit
+# (routen/browser.py, unter /zentrale/static) — kein zweiter Weg über /static.
+app = Flask(__name__, static_folder=None)
 
 # Hot Reload: laufende Requests zählen, damit das Backend sich nie mitten in
 # einer Antwort neu startet (core/hot_reload.py).
@@ -63,11 +66,15 @@ routen.einhaengen(app)
 
 # ── Start ──────────────────────────────────────────────────────────────
 
-def start_ui(host='0.0.0.0', port=5000):
+def start_ui(host=None, port=5000):
     """
     Startet den Flask-Server. Wird von main.py als Background-Thread gestartet.
 
-    host='0.0.0.0' = auf allen Netzwerk-Interfaces lauschen (auch Pi → Browser im LAN)
+    host            = ZENTRALE_HOST aus der Umgebung, sonst '0.0.0.0' (alle
+                      Interfaces — der PC braucht das, der Pi spricht ihn an).
+                      Der Laptop setzt 127.0.0.1 in deploy/zentrale-kern.service:
+                      von außen dann gar nicht erreichbar. Wer bindet wo und
+                      warum: memory/betrieb/zugang.md „Wer lauscht wo".
     debug=False     = kein Debug-Modus (würde Threading-Probleme machen)
     use_reloader=False = kein Auto-Reload (läuft ja als Thread, kein eigener Prozess)
     threaded=True   = jeder Request einen eigenen Worker-Thread. Ist zwar Flasks
@@ -79,4 +86,5 @@ def start_ui(host='0.0.0.0', port=5000):
     """
     takt_treiber.starten()
     ablage_wache.starten()
+    host = host or os.environ.get('ZENTRALE_HOST') or '0.0.0.0'
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

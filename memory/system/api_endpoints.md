@@ -4,8 +4,8 @@
 hängt die Bereiche aus `ui/routen/` ein, je ein Modul pro Bereich (siehe
 `memory/system/bauplan_kern.md`, Abschnitt *Routen*) — reiner Adapter auf
 `core/`), Streaming per SSE. Die Front ist die TUI, ein reiner HTTP-Client
-(das Zimmer gehört seit 09.10. zum Repo `language-tutor`, die Browser-Front
-ist archiviert, `memory/archive/browser_front.md`). Direkte Nutzeraktionen
+(das Zimmer gehört seit 09.10. zum Repo `language-tutor`); die Browser-Front
+liegt seit 2026-10-12 wieder unter `/zentrale` (`ui/routen/browser.py`). Direkte Nutzeraktionen
 (Kalender schreiben, Listen, Graphen, Melodien, Karte, Notizen, Aussenposten-Paket) sind **nicht** KI-gegatet;
 Chat hängt an Kill-Switches (`/api/ai/backends`). Die `/api/tutor/*`-Routen
 gibt es hier seit 2026-10-09 nicht mehr — sie gehören dem Tutor-Server der
@@ -37,7 +37,9 @@ Jede Anfrage läuft zuerst durch die Tür (Details: `memory/betrieb/zugang.md`):
 
 | Endpoint              | Methode | Beschreibung                          |
 |-----------------------|---------|---------------------------------------|
-| `/`                   | —       | Entfernt 2026-10-06: die Browser-Front ist archiviert (`memory/archive/browser_front.md`). |
+| `/`                   | GET     | Weiterleitung auf `/zentrale` (seit 2026-10-12). |
+| `/zentrale`           | GET     | Browser-Front (`monolith.html`, `no-store`); Dateien unter `/zentrale/static/…` (`memory/system/dashboard.md`). |
+| `/api/photos`, `/api/photos/<name>` | GET | Bild-Liste bzw. Bild für den Bild→ASCII-Filter der Browser-Front (`data/photos/`, Env `ZENTRALE_PHOTO_DIR`). |
 | `/api/state`          | GET     | Aktueller State (Events, Sensoren, Logs, Alarme, Uptime) – wird vom Frontend jede Sekunde gepollt. (Ein Feld `vocab` gab es bis 2026-07-17 — toter Tutor-Tentakel, entfernt.) |
 
 ## Sensor-Webhook

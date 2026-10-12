@@ -22,7 +22,8 @@ Alternative als Benutzer-Dienst mit i3-Scratchpad: `systemeinheit.md`.
 `zentrale` startet die TUI direkt (kein Menü mehr), `zentrale-tui` ebenso —
 beide über den Wrapper `zentrale-launch`, der den Boot-Sync hinter dem
 Blumenwind-Loader (`tui/boot_loader.py`) einhängt. Die TUI ist die einzige
-Front; das Browser-Dashboard ist geparkt (`memory/system/dashboard.md`).
+Front; das Browser-Dashboard liegt seit 2026-10-12 wieder unter
+`http://localhost:5000/zentrale` (`memory/system/dashboard.md`).
 Details: Variante A-TUI.
 
 **`start_local.sh`** (Vollstart ohne Dienst) startet alle drei Services
@@ -170,8 +171,10 @@ venv/bin/python services/tts_service.py
 Browser dann auf:
 
 ```
-http://localhost:5000
+http://localhost:5000/zentrale
 ```
+
+(`/` leitet dorthin weiter.)
 
 ## Warum `sudo` für ZENTRALE?
 
@@ -200,6 +203,9 @@ ZENTRALE_THINK=1                    # default an: adaptives Thinking im Chat
 ZENTRALE_WHISPER_URL=http://localhost:5050   # default (gegen den Whisper-Service)
 ZENTRALE_TTS_URL=http://localhost:5051       # default (gegen den TTS-Service)
 ZENTRALE_DEFAULT_LANG=de                     # Sprache, wenn ein Aufrufer keine nennt
+ZENTRALE_HOST=0.0.0.0               # default: Backend lauscht im ganzen Netz (PC, der
+                                    # Pi spricht ihn an). Laptop-Dienst: 127.0.0.1 =
+                                    # nur von diesem Rechner (zugang.md „Wer lauscht wo“)
 # (seit 2026-10-08 über ai_config.setting, also auch in data/ai_config.json
 #  als whisper_url/tts_url/default_lang setzbar; die alten Namen WHISPER_URL,
 #  TTS_URL, DEFAULT_LANG gelten übergangsweise noch, mit Hinweis im Log)
@@ -238,6 +244,8 @@ Modi, Logs, IP-Wechsel — steht in `memory/betrieb/deployment.md` und
 - **2026-10-04** — Kassetten entfernt: ein Schalter ZENTRALE_LOKALE_KI, TUI
   einzige Front, Browser geparkt; `zentrale` startet die TUI direkt,
   `zentrale-laptop` weg.
+- **2026-10-12** — Browser-Front zurück unter `/zentrale`; Laptop-Dienst
+  lauscht nur noch auf `127.0.0.1` (`ZENTRALE_HOST`).
 - **2026-06** — Kassetten-Menü (`zentrale` → monolith/laptop/tui) statt
   eines festen Start-Skripts (bis 2026-10-04).
 - **2026-08-19/20** — Backend wurde Dienst (`systemeinheit.md`); seither

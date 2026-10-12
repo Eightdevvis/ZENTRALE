@@ -510,7 +510,7 @@ umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
     Karten-Pfad (Fehler-Marker statt Dauer-Refetch; `_for`-Tag gegen Refetch je
     Frame). Im Fuzz (`tests/_tui_fuzz.py`) mit eigenen `c/v`-Keys + Adversarial-
     `/api/calendar` abgedeckt.
-  - *Browser* (archiviert, `memory/archive/browser_front.md`): Exhibit-Tab
+  - *Browser* (`/zentrale`, `ui/templates/monolith.html`): Exhibit-Tab
     „Kalender" (eigenes `#calendar-panel` wie das Graph-Werkzeug, NICHT im
     Auto-Direktor). Ohne lokale KI identisch, nur ohne KI-Blöcke.
 

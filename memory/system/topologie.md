@@ -376,7 +376,9 @@ zu ihm); MAC-Randomisierung für `Bigme` aus
 
 Der „Frontend↔AI"-Weg läuft bewusst über den **SSH-Tunnel** statt direkt
 auf `:5000` (verschlüsselt; `:5000` am PC kann später auf `localhost`
-eingeschränkt werden, dann geht es nur noch via SSH).
+eingeschränkt werden, dann geht es nur noch via SSH). Am **Laptop** ist das
+seit 2026-10-12 so: `ZENTRALE_HOST=127.0.0.1` in `zentrale-kern.service`
+([../betrieb/zugang.md](../betrieb/zugang.md) „Wer lauscht wo“).
 
 **Zugangsschlüssel (seit 2026-10-08):** wer `:5000` nicht von localhost aus
 anspricht — heute nur der Pi (TUI, Zimmer, Sensor-Bridge) —, schickt den

@@ -5,8 +5,8 @@
 `state.py`. Dazu zwei Sidecars (Whisper 5050, TTS 5051) und Ollama. Fronten:
 die **TUI** (`tui/zentrale_tui.py` + Ansichten in `tui/ansichten/`, Bauplan
 [tui_bauplan.md](tui_bauplan.md); Thin Client per HTTP) ist die, an der
-gearbeitet wird und die einzige Front; die Browser-Front (`monolith.html`) ist
-seit 2026-10-06 archiviert (`memory/archive/browser_front.md`).
+gearbeitet wird und die Haupt-Front; die Browser-Front (`monolith.html`) liegt
+seit 2026-10-12 wieder unter `/zentrale` ([dashboard.md](dashboard.md)).
 Die Kassetten sind entfernt (2026-10-04, Tracker erledigt); lokale KI an/aus
 schaltet allein `ZENTRALE_LOKALE_KI` (`ai_backends.lokale_ki_aus()`). Der Tutor ist seit
 2026-10-09 eine eigene App im Repo `language-tutor` (erste App nach
