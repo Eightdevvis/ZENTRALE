@@ -1,14 +1,22 @@
-# Alle 3 Minuten den Kalender mit Google abgleichen (und 1 Minute nach dem
-# Anmelden). Ein oneshot-Dienst läuft nie doppelt: hängt ein Lauf, wartet
+# Alle 3 Minuten nach der Uhr (:00, :03, :06 …) den Kalender mit Google
+# abgleichen. Ein oneshot-Dienst läuft nie doppelt: hängt ein Lauf, wartet
 # der nächste.
+#
+# Seit 13.10.2026 per OnCalendar (Uhrzeit), nicht mehr OnBootSec +
+# OnUnitActiveSec: OnBootSec zählt ab Rechnerstart, der Benutzer-systemd
+# startet aber erst nach dem Anmelden — war die Minute schon vorbei, feuerte
+# der Timer nie, und OnUnitActiveSec braucht einen ersten Lauf. Folge: vom
+# 10.10. 17:32 bis 13.10. kein einziger Abgleich (gelöschtes „Coming Down"
+# blieb bei Google). OnCalendar hängt an nichts davon; Persistent holt einen
+# verpassten Lauf (z. B. nach Ruhezustand) sofort nach.
 
 [Unit]
 Description=ZENTRALE Kalender regelmäßig mit Google abgleichen
 
 [Timer]
-OnBootSec=1min
-OnUnitActiveSec=3min
+OnCalendar=*:0/3
 Persistent=true
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target

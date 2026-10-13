@@ -1,4 +1,4 @@
-# Alle 5 Minuten mit der Mitte abgleichen (und 1 Minute nach dem Anmelden).
+# Alle 5 Minuten nach der Uhr mit der Mitte abgleichen.
 # Dazu stößt jede Änderung in der App selbst einen Abgleich an
 # (core/datasync.py) — der Timer fängt ab, was dabei nicht ankam, und holt,
 # was der andere Rechner geändert hat. Ein oneshot-Dienst läuft nie doppelt.
@@ -6,10 +6,14 @@
 [Unit]
 Description=ZENTRALE regelmäßig mit der Mitte abgleichen
 
+# OnCalendar statt OnBootSec + OnUnitActiveSec (13.10.2026): OnBootSec zählt
+# ab Rechnerstart, der Benutzer-systemd startet erst nach dem Anmelden — ist
+# die Minute vorbei, feuert der Timer nie mehr (so stand der Kalender-Sync
+# 10.–13.10.). Siehe deploy/zentrale-kalender-sync.timer.
 [Timer]
-OnBootSec=1min
-OnUnitActiveSec=5min
+OnCalendar=*:0/5
 Persistent=true
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
