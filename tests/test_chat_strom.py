@@ -259,6 +259,23 @@ def _ziele(zeilen):
     return [z for zeile in zeilen for _t, _s, z in zeile if z]
 
 
+def test_korrekturrunde_verschwindet_wenn_die_antwort_steht(c, monkeypatch):
+    """„antwort wird überarbeitet (1/5)" klebte nach der Antwort unten rot,
+    bis zur nächsten Frage (14.10.2026)."""
+    gesehen = []
+    _laufen(c, monkeypatch, [{"pruefung_runde": {"runde": 1, "von": 5}},
+                             lambda: gesehen.append(c.AI["msg"]),
+                             {"token": "Neu geschrieben."}, {"done": True}])
+    assert gesehen == [chat.PRUEF_MELDUNG + " (1/5) …"]
+    assert c.AI["log"][-1] == ("ai", "Neu geschrieben.") and c.AI["msg"] == ""
+
+
+def test_fehler_nach_der_korrekturrunde_bleibt_stehen(c, monkeypatch):
+    _laufen(c, monkeypatch, [{"pruefung_runde": {"runde": 2, "von": 5}},
+                             {"fehler": "backend weg"}, {"done": True}])
+    assert c.AI["msg"] == "fehler: backend weg"
+
+
 def test_abbruch_live_wird_eintrag_mit_retry_daran(c, monkeypatch):
     _laufen(c, monkeypatch, [{"werkzeug": {"phase": "start", "name": "browser_open",
                                            "args": {"url": "x"}}},

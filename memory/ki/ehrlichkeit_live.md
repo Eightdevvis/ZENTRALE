@@ -121,7 +121,7 @@ was das zeug hält, bis die antwort die prüfung durchhält. wenn sie das nach
   das Werkzeug jetzt auf ODER schreib, dass nichts geändert wurde." In der
   letzten Runde: „…sieht Sasha sie mit einer Warnung davor."
 - Während der Runden geht `{"pruefung_runde": {runde, von}}` an die TUI
-  (Statuszeile „antwort wird geprüft (runde 2 von 5) …").
+  (Statuszeile „antwort wird überarbeitet (2/5) …", verschwindet, sobald die Antwort steht).
 - Besteht sie nach allen Runden nicht: sie geht raus, davor **Warnungen**,
   die Python schreibt (`ehrlichkeit.warnungen`, Feld `warnungen` an der
   Antwort, SSE `{"warnungen": […]}`, im Ablauf-Protokoll je ein Eintrag

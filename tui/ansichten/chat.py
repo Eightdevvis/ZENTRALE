@@ -57,6 +57,10 @@ STOSS_EINFUEGEN = 10
 VERMERK_ABGEBROCHEN = "(abgebrochen)"
 
 
+# Statuszeile während einer Korrekturrunde des Prüfers (pruefung_runde).
+PRUEF_MELDUNG = "antwort wird überarbeitet"
+
+
 def echte_nachrichten(log):
     """Wie viele Eintraege davon kennt auch das Backend?
 
@@ -645,7 +649,7 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
             AI["msg"] = str(w.get("satz") or "")
         elif "pruefung_runde" in evt:             # der Prüfer lässt neu schreiben
             r = evt["pruefung_runde"] if isinstance(evt["pruefung_runde"], dict) else {}
-            AI["msg"] = "antwort wird geprüft (runde %s von %s) …" % (r.get("runde"), r.get("von"))
+            AI["msg"] = PRUEF_MELDUNG + " (%s/%s) …" % (r.get("runde"), r.get("von"))
         elif "ehrlichkeit" in evt:                # Erledigt-Zeile, offene Zusagen
             Z["pruefung"] = evt["ehrlichkeit"] if isinstance(evt["ehrlichkeit"], dict) else None
         elif "quellen" in evt:                    # gelesene Seiten (2026-10-10)
@@ -711,6 +715,10 @@ class Chat(ChatZeichnen, ChatBedienung, GespraechsSteuerung, AblageSteuerung, Er
         Z["perm"] = None
         AI["strom"] = None
         if AI["msg"] == "stoppe …":   # war schon fertig, als Strg+C kam
+            AI["msg"] = ""
+        # Korrekturrunde vorbei, sobald die Antwort steht — sonst klebte die
+        # Meldung bis zum nächsten Senden (14.10.2026). Nur sie, Fehler bleiben.
+        if str(AI["msg"] or "").startswith(PRUEF_MELDUNG):
             AI["msg"] = ""
         # Fenster war zu (Esc lässt die Antwort weiterlaufen, Sasha
         # 07.10.2026): ● auf der Startseite, bis der Chat wieder offen
