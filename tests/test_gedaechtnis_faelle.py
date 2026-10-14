@@ -18,7 +18,8 @@ Jeder Test hier baut deshalb eine konkrete Falle und prüft ZWEI Dinge:
 
 Kein LLM beteiligt. Getestet wird, was rausgeht, nicht was zurückkommt;
 das ist der Teil, für den wir verantwortlich sind. Die Probe gegen das
-echte Modell steht in `scripts/gedaechtnis_probe.py`.
+echte Modell steht in `scripts/gedaechtnis_probe.py` (Kalender-Fallen; die
+Graph-Fallen liegen in `memory/archive/associative_graph/`).
 """
 import json
 import re

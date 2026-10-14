@@ -1,13 +1,15 @@
 # Konzept-Graph — Extraktor, Embeddings, Transkript (abgeschaltet)
 
-**Stand 2026-10-11:** Der Konzept-Graph (`core/graph.py`) ist seit 2026-08-18
-**abgeschaltet**: kein Kontext im Prompt (`ai.GRAPH_KONTEXT`, Env
+**Stand 2026-10-14:** Der Konzept-Graph (`core/graph.py`) ist seit 2026-08-18
+**abgeschaltet**: kein Kontext im Prompt (`ki_prompt.GRAPH_KONTEXT`, Env
 `ZENTRALE_GRAPH_KONTEXT`), keine neuen Extraktionen
 (`consolidation.GRAPH_EXTRAKTION`, Env `ZENTRALE_GRAPH_EXTRAKTION`); es läuft
 nur noch der Identity-Seed. Das Gedächtnis ist das Datei-Gedächtnis
 ([gedaechtnis_dateien.md](gedaechtnis_dateien.md)). Weiter in Gebrauch: die
 Transkript-Schicht (`core/transkript.py`), die `search_chats` mitliest. Diese
 Datei beschreibt, wie der Graph arbeitet, wenn man ihn wieder anschaltet.
+Die Graph-Testskripte (Phase-G-Harness, Graph-Fallen der Live-Probe) liegen
+seit 2026-10-14 im Archiv: [../archive/associative_graph/](../archive/associative_graph/README.md).
 
 **Warum sie bleibt:** Die Entscheidungen hier — Erzähltag ist nicht
 Ereignistag, verbinden statt verschmelzen, Vektorräume nie mischen, der lokale
@@ -40,7 +42,7 @@ KI bei jedem Turn „sah", kam komplett aus dem Graphen (plus
   `ensure_seed()`, `stats()`, `dump()`.
 
 > **⚠ Der Konzept-Graph ist seit 18.08.2026 abgeschaltet.** Er liefert weder
-> Kontext in den Prompt (`ai.GRAPH_KONTEXT`) noch nimmt er neue Extraktionen auf
+> Kontext in den Prompt (`ki_prompt.GRAPH_KONTEXT`) noch nimmt er neue Extraktionen auf
 > (`consolidation.GRAPH_EXTRAKTION`) — beides per Env wieder einschaltbar. An
 > seiner Stelle steht das Datei-Gedächtnis, siehe
 > [gedaechtnis_dateien.md](gedaechtnis_dateien.md). Der folgende Abschnitt
@@ -308,3 +310,4 @@ zurück und hat unterwegs eben kein Gedächtnis.
   zwei Embedder/Extraktoren für unterwegs.
 - **2026-08-18** — abgeschaltet zugunsten des Datei-Gedächtnisses.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
+- **2026-10-14** — Graph-Testskripte ins Archiv (`archive/associative_graph/`).

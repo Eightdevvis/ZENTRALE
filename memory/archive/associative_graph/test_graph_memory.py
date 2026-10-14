@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ARCHIV (2026-10-14, Branch graph-archiv): lag bis dahin als
+# scripts/test_graph_memory.py. Der Konzept-Graph ist seit 2026-08-18 aus,
+# 20 der 23 Tests schlagen deshalb fehl. Läuft von hier aus NICHT (ROOT zeigt
+# zwei Ebenen hoch). Vor einem Wiederbeleben lesen: README.md in diesem Ordner
+# — temp_graph() biegt nur graph._GRAPH_FILE um; mit eingeschalteter
+# Extraktion schreibt feed() Testsätze ins ECHTE Transkript.
+#
 # scripts/test_graph_memory.py
 #
 # Comprehensive Test-Harness für das Phase-G-Konzept-Graph-System.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Live-Probe gegen das ECHTE Cloud-Modell: redet sie noch Müll?
+Live-Probe gegen das ECHTE Cloud-Modell (Kalender + Werkzeuge): redet sie
+noch Müll?
 
 Die Fallen-Tests (`tests/test_gedaechtnis_faelle.py`) prüfen, was RAUSGEHT
 — ohne Modell, deterministisch, in jedem Testlauf. Diese Probe prüft, was
@@ -16,30 +17,43 @@ Kontext etwas, oder es steht etwas Irreführendes drin. Deshalb wird bei
 jedem Fehlschlag der Kontext mit ausgegeben, nicht nur das Urteil.
 
 ── Isolation (wichtig) ─────────────────────────────────────────────────
-Eigener Graph, eigener Kalender, eigenes Transkript in einem Wegwerf-Ordner.
-`data/` wird NICHT angefasst — weder gelesen noch geschrieben. Der Grund
-steht in der Projekt-Historie: eine frühere Probe hat ihre Testknoten in
-Sashas echtem Cloud-Graphen hinterlassen.
+Alles, was der Kopf und die Werkzeuge lesen oder schreiben, liegt in einem
+Wegwerf-Ordner: Kalender, Cloud-Graph, Transkript, Datei-Gedächtnis
+(Steckbrief, Ziele, Hausregeln), Ablage, Gespräche, Rückmeldungen,
+Klassifikator-Beispiele, Nutzerordner, Desk, Shop, Apps, Anbindungen,
+Sandbox (Liste: _UMLENKUNGEN unten, wie tests/conftest.py). Von `data/`
+wird nur angefasst, was keine Inhalte von Sasha trägt:
+`data/ai_config.json` wird GELESEN (Keys und Einstellungen, sonst ginge
+kein Aufruf raus), `data/ascii/` ebenso (mitgelieferte Bilder, im Repo),
+und die Kosten werden in `data/ai_usage.json` GEBUCHT (echtes Geld, gehört
+in die echte Buchhaltung und unter den Budget-Deckel).
+Der Grund für den Riegel steht in der Projekt-Historie: eine frühere Probe
+hat ihre Testknoten in Sashas echtem Cloud-Graphen hinterlassen, und bis
+2026-10-14 schickte die Probe Sashas echten Steckbrief-Kopf mit raus.
 
 ── Was rausgeht ────────────────────────────────────────────────────────
-Erfundene Testdaten (Fieber, Zahnarzt, Sport) plus der System-Prompt. Keine
-echten Termine, keine echten Konzepte.
+Erfundene Testdaten (Zahnarzt, Fahrschule, Geigenstunde) plus der
+System-Prompt. Keine echten Termine, kein echtes Gedächtnis.
+
+── Graph-Fallen: archiviert ────────────────────────────────────────────
+Falle 1 (Fieber/Monat) und die Extraktions-Fallen prüften den
+Konzept-Graphen, der seit 2026-08-18 aus ist. Sie liegen wörtlich in
+memory/archive/associative_graph/gedaechtnis_probe_graph.py, samt
+Anleitung zum Zurückholen.
 
 ── Kosten ──────────────────────────────────────────────────────────────
 Standard laeuft ALLES auf dem billigen Modell: rund 2 Cent fuer den ganzen
-Lauf, 1 Cent fuer die Extraktions-Haelfte allein. Das ist keine Sparversion
-mit Qualitaetsverlust — es ist die HAERTERE Probe. Getestet wird der Kaefig,
-nicht die Intelligenz: kommt ein kleines Modell mit unserem Kontext zurecht,
-kommt ein grosses erst recht zurecht. --voll faehrt das echte Chatmodell
-(rund 9 Cent) und beantwortet die andere Frage: reicht es auch im Alltag.
+Lauf. Das ist keine Sparversion mit Qualitaetsverlust — es ist die HAERTERE
+Probe. Getestet wird der Kaefig, nicht die Intelligenz: kommt ein kleines
+Modell mit unserem Kontext zurecht, kommt ein grosses erst recht zurecht.
+--voll faehrt das echte Chatmodell (teurer) und beantwortet die andere
+Frage: reicht es auch im Alltag.
 
     venv/bin/python scripts/gedaechtnis_probe.py
-    venv/bin/python scripts/gedaechtnis_probe.py --nur extraktion
     venv/bin/python scripts/gedaechtnis_probe.py --voll --zeige-kontext
 """
 import argparse
 import os
-import re
 import shutil
 import sys
 import tempfile
@@ -52,64 +66,66 @@ for p in (os.path.join(ROOT, "core"), ROOT):
 
 HEUTE  = date.today()
 MORGEN = HEUTE + timedelta(days=1)
-MONAT  = HEUTE.strftime("%Y-%m")
-# Der Krankheits-Zeitraum liegt bewusst UNSCHARF im Graphen: nur der Monat.
-# Genau daraus hat sie am 17.08.2026 ein "bis gestern" gemacht.
-
-_TAG_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 # ── Wegwerf-Umgebung ───────────────────────────────────────────────────
 
-def sandkasten():
-    """Graph, Kalender und Transkript in einen Temp-Ordner umbiegen.
+# Env-Riegel der Module, relativ zum Wegwerf-Ordner — dieselben wie in
+# tests/conftest.py. Bewusst NICHT dabei: ZENTRALE_AI_CONFIG_DIR (die Keys
+# werden gebraucht) und ZENTRALE_USAGE_FILE (echte Kosten, echte Buchung).
+_UMLENKUNGEN = {
+    "ZENTRALE_TRANSKRIPT_DIR":              "ai_transcripts",
+    "ZENTRALE_GEDAECHTNIS_DIR":             "gedaechtnis",
+    "ZENTRALE_GESPRAECHE_DIR":              "gespraeche",
+    "ZENTRALE_ABLAGE_DIR":                  "ablage",
+    "ZENTRALE_RUECKMELDUNGEN_DIR":          "rueckmeldungen",
+    "ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR": "klassifikator_beispiele",
+    "ZENTRALE_NUTZER_ORDNER":               "nutzer",
+    "ZENTRALE_SANDBOX_DIR":                 "sandbox",
+    "ZENTRALE_DESK_ORDNER":                 "desk",
+    "ZENTRALE_SHOP_ORDNER":                 "shop",
+    "ZENTRALE_APPS_ORDNER":                 "apps",
+    "ZENTRALE_ANBINDUNGEN_DIR":             "anbindungen",
+}
 
-    Muss VOR dem ersten Import von cloud/kalender passieren bzw. die
-    Modul-Globals direkt überschreiben — die Pfade werden beim Import
-    festgelegt.
+
+def sandkasten():
+    """Alles, was Kopf und Werkzeuge lesen oder schreiben, in einen
+    Temp-Ordner umbiegen.
+
+    Muss VOR dem ersten Import der core-Module laufen: die meisten Pfade
+    werden beim Import aus der Env festgelegt. Wo es keinen Env-Riegel gibt
+    (Kalender, Cloud-Graph), werden die Modul-Globals danach direkt gesetzt;
+    Gedächtnis und Transkript zusätzlich, falls sie doch schon geladen sind.
     """
     ordner = tempfile.mkdtemp(prefix="zentrale_probe_")
-    import kalender, cloud, transkript
+    for name, unter in _UMLENKUNGEN.items():
+        os.environ[name] = os.path.join(ordner, unter)
+
+    import kalender, cloud, graph, gedaechtnis, transkript
     from pathlib import Path
 
     kalender.CAL_PATH = Path(ordner) / "kalender.json"
+    kalender.ICS_DIR = None          # = kalender/ neben CAL_PATH
     cloud.CLOUD_GRAPH = os.path.join(ordner, "graph.json")
+    graph._GRAPH_FILE = os.path.join(ordner, "graph_lokal.json")
+    gedaechtnis._DIR = os.environ["ZENTRALE_GEDAECHTNIS_DIR"]
     for name in ("_DIR", "DIR", "TRANS_DIR", "_ORDNER"):
         if hasattr(transkript, name):
-            setattr(transkript, name, os.path.join(ordner, "transkripte"))
+            setattr(transkript, name, os.path.join(ordner, "ai_transcripts"))
     return ordner
 
 
 def szenario_bauen():
-    """Der Ausgangszustand, der den echten Fehler nachstellt.
-
-    Kalender: heute NICHTS, morgen drei Termine, in sechs Tagen einer.
-    Graph:    Krankheit nur auf den MONAT datiert, dazu ein Erzähltag-Anker.
-    """
-    import kalender, graph, cloud
-
-    # Store wie im Betrieb anmelden, BEVOR geseedet wird — sonst legt der
-    # Seed seine Knoten ohne Vektor an und wir würden nur den wörtlichen
-    # Einstieg testen, nicht den echten Doppelweg.
-    cloud.prepare_store()
+    """Der Ausgangszustand: heute NICHTS, morgen zwei Termine, in sechs
+    Tagen einer. (Der Graph-Teil — Krankheit nur auf den Monat datiert —
+    liegt im Archiv, siehe Kopf.)"""
+    import kalender
 
     kalender.add_entry("termine", MORGEN.isoformat(), "Zahnarzt", time="09:00")
     kalender.add_entry("termine", MORGEN.isoformat(), "Fahrschule", time="19:00")
     kalender.add_entry("termine", (HEUTE + timedelta(days=6)).isoformat(),
                        "Geigenstunde", time="17:45")
-
-    graph.add_turn_extraction(
-        [{"name": n, "type": t} for n, t in [
-            ("Sasha", "person"), ("Krankheit", "state"), ("Fieber", "state"),
-            ("Schüttelfrost", "state"), ("Sport", "concept"),
-            (MONAT, "time-month")]],
-        [{"from": "Sasha", "to": "Krankheit", "rel": "fühlt"},
-         {"from": "Krankheit", "to": "Fieber", "rel": "hat"},
-         {"from": "Krankheit", "to": "Schüttelfrost", "rel": "hat"},
-         # NUR der Monat — der Tag ist ehrlich unbekannt.
-         {"from": "Fieber", "to": MONAT, "rel": "geschah-am"},
-         {"from": "Sasha", "to": "Sport", "rel": "kann"}],
-        store=cloud.CLOUD_GRAPH)
 
 
 # ── Ein Turn fahren, mitschreiben was passiert ─────────────────────────
@@ -117,12 +133,11 @@ def szenario_bauen():
 def turn(frage, modell=None):
     """Eine Frage durchs echte Cloud-Backend. Gibt (text, tools) zurück.
 
-    Das Turn-Speichern wird stillgelegt. Zwei Gründe, beide wichtig:
-    es spart pro Frage einen Extraktor-Call (halbe Rechnung), und es hält
-    die Messung sauber — sonst schreibt die Konsolidierung der Chat-Phase
-    schon Kanten in den Graphen, die die Extraktions-Fallen danach als
-    "nichts Neues" sehen. Genau das hat am 17.08. einen Fehlschlag
-    vorgetäuscht, den es nicht gab.
+    Das Turn-Speichern wird stillgelegt: es spart pro Frage einen
+    Konsolidierungs-Call, und ein Probe-Zug gehört in kein Gedächtnis.
+    (Solange die Graph-Fallen dabei waren, hielt es zudem die Messung
+    sauber — am 17.08. hatte die Konsolidierung der Chat-Phase einen
+    Fehlschlag der Extraktions-Fallen vorgetäuscht.)
     """
     import cloud, consolidation, ki_werkzeuge, state
 
@@ -153,38 +168,6 @@ def turn(frage, modell=None):
 # ── Die Fallen ─────────────────────────────────────────────────────────
 #
 # Jede: (Titel, Frage, Prüfung(text, tools) -> None | Grund)
-
-def _sucht_zustaende_nicht_im_kalender(text, tools):
-    """Krankheiten stehen nicht im Kalender — dort danach zu suchen sind
-    zwei volle Tool-Runden mit komplettem Praefix fuer garantiert nichts."""
-    if tools:
-        return (f"durchsucht den Kalender nach einem Zustand ({tools}) — "
-                f"da steht garantiert nichts drin")
-    return None
-
-
-def _kein_erfundener_tag(text, tools):
-    """Sie darf den Krankheits-Tag nicht erfinden — er steht nirgends."""
-    tage = set(_TAG_RE.findall(text))
-    frei = {t for t in tage if not t.startswith(MONAT)}
-    if frei:
-        return f"nennt Tages-Daten, die nirgends stehen: {sorted(frei)}"
-    for wort in ("gestern", "vorgestern"):
-        if wort in text.lower():
-            return f"behauptet einen konkreten Tag ({wort!r}), der unbekannt ist"
-    return None
-
-
-def _weiss_dass_es_august_war(text, tools):
-    """Und sie muss trotzdem etwas sagen können — sonst ist der Kontext
-    ein Käfig statt einer Auskunft."""
-    monatsname = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
-                  "August", "September", "Oktober", "November",
-                  "Dezember"][HEUTE.month - 1]
-    if monatsname.lower() in text.lower() or MONAT in text:
-        return None
-    return "nennt den Monat nicht, obwohl er im Graphen steht"
-
 
 def _kein_sport_behauptet(text, tools):
     """Nach Sport zu FRAGEN heißt nicht, Sport gemacht zu haben."""
@@ -217,11 +200,6 @@ def _nennt_morgen_termine(text, tools):
 
 
 FAELLE = [
-    ("Krankheits-Tag wird nicht erfunden",
-     "wann hatte ich eigentlich fieber?",
-     lambda t, w: (_kein_erfundener_tag(t, w) or _weiss_dass_es_august_war(t, w)
-                   or _sucht_zustaende_nicht_im_kalender(t, w))),
-
     ("Frage nach Sport ist kein erledigter Sport",
      "kann ich heute wieder sport machen?",
      _kein_sport_behauptet),
@@ -240,147 +218,58 @@ FAELLE = [
 ]
 
 
-# ── Extraktions-Fallen (die andere Hälfte) ─────────────────────────────
-#
-# Was sie SAGT, ist das eine. Was der Extraktor daraus in den Graphen
-# schreibt, ist das andere — und genau das hat den Schaden angerichtet.
-
-def kanten_aus(user_text, ai_text):
-    """Einen Turn verdichten und die frisch entstandenen Kanten liefern."""
-    import json, consolidation, cloud
-
-    vorher = set()
-    if os.path.exists(cloud.CLOUD_GRAPH):
-        with open(cloud.CLOUD_GRAPH, encoding="utf-8") as f:
-            vorher = {(e["from"], e["rel"], e["to"])
-                      for e in json.load(f)["edges"]}
-    consolidation.extract_turn_into_graph(user_text, ai_text,
-                                          store=cloud.CLOUD_GRAPH)
-    with open(cloud.CLOUD_GRAPH, encoding="utf-8") as f:
-        nachher = {(e["from"], e["rel"], e["to"])
-                   for e in json.load(f)["edges"]}
-    return nachher - vorher
-
-
-_WOCHE_RE = re.compile(r"^\d{4}-W\d{2}$")
-
-
-def _wochengenau(kanten):
-    """Gröber als ein Tag — aber nicht gröber als nötig.
-
-    "vor ein paar Tagen" ist wochengenau bekannt. Auf den ganzen Monat zu
-    werfen verschenkt drei Wochen Genauigkeit, die man ehrlich hat.
-    """
-    schlimm = [k for k in kanten
-               if k[1] == "geschah-am" and _TAG_RE.fullmatch(k[2])]
-    if schlimm:
-        return f"datiert auf einen TAG statt gröber: {schlimm}"
-    zeit = [k for k in kanten if k[1] == "geschah-am"]
-    if not zeit:
-        return "datiert gar nicht — die Woche wäre bekannt gewesen"
-    if not any(_WOCHE_RE.fullmatch(k[2]) for k in zeit):
-        return f"gröber als nötig (Woche wäre bekannt): {zeit}"
-    return None
-
-
-def _heutiges_datum_da(kanten):
-    heute = HEUTE.isoformat()
-    if any(k[1] == "geschah-am" and k[2] == heute for k in kanten):
-        return None
-    return "datiert die Gegenwart NICHT auf heute — zu vorsichtig"
-
-
-def _kein_sport_ereignis(kanten):
-    schlimm = [k for k in kanten if k[0] == "Sport" and k[1] == "geschah-am"]
-    return f"macht aus der Frage ein Ereignis: {schlimm}" if schlimm else None
-
-
-EXTRAKTIONS_FAELLE = [
-    ("Unscharfe Vergangenheit landet wochengenau, nicht auf heute",
-     "ich hatte vor ein paar tagen ganz schlimmen schüttelfrost",
-     "Klingt unangenehm. Ist es jetzt weg?",
-     _wochengenau),
-
-    ("Gegenwart wird ganz normal auf heute datiert",
-     "ich hab grad fieber, mir ist total schlecht",
-     "Dann leg dich hin. Misst du mal nach?",
-     _heutiges_datum_da),
-
-    ("Aus einer Frage wird kein Ereignis",
-     "kann ich heute wieder sport machen?",
-     "Kalendarisch steht nichts im Weg.",
-     _kein_sport_ereignis),
-]
-
-
 # ── Ablauf ─────────────────────────────────────────────────────────────
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--nur", choices=["chat", "extraktion"])
     p.add_argument("--voll", action="store_true",
                    help="auf dem echten Chat-Modell statt dem billigen "
                         "(teurer; das billige ist die HÄRTERE Probe)")
     p.add_argument("--zeige-kontext", action="store_true",
-                   help="bei jedem Fehlschlag den Kontext mit ausgeben")
+                   help="bei jedem Fehlschlag den Kalender-Imprint mit ausgeben")
     a = p.parse_args()
 
-    import ai_config  # noqa: F401 — Import-Effekt: Keys aus data/ai_config.json
-    import providers
-    if not providers.configured():
-        sys.exit("Kein Cloud-Key in data/ai_config.json — nichts zu proben.")
-
+    # ZUERST umbiegen, dann importieren — siehe sandkasten().
     ordner = sandkasten()
-    # Standardmaessig das BILLIGE Modell. Das ist keine Sparmassnahme mit
-    # Qualitaetsverlust, sondern die haertere Probe: getestet wird der
-    # Kaefig, nicht die Intelligenz. Kommt ein kleines Modell mit unserem
-    # Kontext zurecht, kommt ein grosses erst recht zurecht — und wenn
-    # nicht, liegt es an uns. Ein voller Lauf kostet so rund 2 statt 9 Cent.
-    name = providers.configured()
-    modell = None if a.voll else providers.cheap_model(name)
-    print(f"Sandkasten: {ordner}")
-    print(f"Anbieter:   {name}")
-    print(f"Modell:     {modell or 'Standard-Chatmodell (--voll)'}\n")
     try:
+        import ai_config  # noqa: F401 — Import-Effekt: Keys aus data/ai_config.json
+        import providers
+        if not providers.configured():
+            sys.exit("Kein Cloud-Key in data/ai_config.json — nichts zu proben.")
+
+        # Standardmaessig das BILLIGE Modell. Das ist keine Sparmassnahme mit
+        # Qualitaetsverlust, sondern die haertere Probe: getestet wird der
+        # Kaefig, nicht die Intelligenz. Kommt ein kleines Modell mit unserem
+        # Kontext zurecht, kommt ein grosses erst recht zurecht — und wenn
+        # nicht, liegt es an uns.
+        name = providers.configured()
+        modell = None if a.voll else providers.cheap_model(name)
+        print(f"Sandkasten: {ordner}")
+        print(f"Anbieter:   {name}")
+        print(f"Modell:     {modell or 'Standard-Chatmodell (--voll)'}\n")
+
         szenario_bauen()
-        import cloud, usage
+        import usage
         vorher_kosten = usage.heute_euro()
 
         fehler = 0
-        if a.nur != "extraktion":
-            print("── Antworten " + "─" * 55)
-            for titel, frage, pruefung in FAELLE:
-                text, tools = turn(frage, modell)
-                grund = pruefung(text, tools)
-                fehler += bool(grund)
-                print(f"\n{'✗' if grund else '✓'} {titel}")
-                print(f"    frage:  {frage}")
-                print(f"    tools:  {tools or '—'}")
-                print(f"    sagt:   {text[:400]}")
-                if grund:
-                    print(f"    PROBLEM: {grund}")
-                    if a.zeige_kontext:
-                        import graph
-                        print("    kontext:\n" + graph.context_for_query(
-                            frage, store=cloud.CLOUD_GRAPH, max_chars=1500))
+        print("── Antworten " + "─" * 55)
+        for titel, frage, pruefung in FAELLE:
+            text, tools = turn(frage, modell)
+            grund = pruefung(text, tools)
+            fehler += bool(grund)
+            print(f"\n{'✗' if grund else '✓'} {titel}")
+            print(f"    frage:  {frage}")
+            print(f"    tools:  {tools or '—'}")
+            print(f"    sagt:   {text[:400]}")
+            if grund:
+                print(f"    PROBLEM: {grund}")
+                if a.zeige_kontext:
+                    import ki_prompt
+                    print("    kontext:\n" + (ki_prompt._imprint_prompt() or "—"))
 
-        if a.nur != "chat":
-            print("\n── Was in den Graphen geschrieben wird " + "─" * 29)
-            for titel, user_text, ai_text, pruefung in EXTRAKTIONS_FAELLE:
-                kanten = kanten_aus(user_text, ai_text)
-                grund = pruefung(kanten)
-                fehler += bool(grund)
-                print(f"\n{'✗' if grund else '✓'} {titel}")
-                print(f"    sasha:  {user_text}")
-                for k in sorted(kanten):
-                    print(f"            {k[0]} -[{k[1]}]-> {k[2]}")
-                if grund:
-                    print(f"    PROBLEM: {grund}")
-
-        gesamt = (len(FAELLE) if a.nur != "extraktion" else 0) + \
-                 (len(EXTRAKTIONS_FAELLE) if a.nur != "chat" else 0)
-        print(f"\n{'─' * 68}\n{gesamt - fehler}/{gesamt} Fallen bestanden.")
+        print(f"\n{'─' * 68}\n{len(FAELLE) - fehler}/{len(FAELLE)} Fallen bestanden.")
         print(f"Kosten dieses Laufs: {usage.heute_euro() - vorher_kosten:.4f} €")
         return 1 if fehler else 0
     finally:
