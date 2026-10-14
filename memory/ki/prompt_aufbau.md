@@ -36,7 +36,7 @@ siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
    steht, nie behaupten zu können); lateinische Schrift; reale Wörter.
    Bei jedem Turn injiziert.
 3. **`graph.context_for_query(user_query)`** – **per Default AUS seit
-   2026-08-18** (nur mit `ZENTRALE_GRAPH_KONTEXT=1`, `ai.GRAPH_KONTEXT`); der
+   2026-08-18** (nur mit `ZENTRALE_GRAPH_KONTEXT=1`, `ki_prompt.GRAPH_KONTEXT`); der
    Block fehlt dann ganz. Wenn an: aktiviertes Wissen aus
    dem Graphen (Spread-Aktivierung von Entry-Points aus). Kann leer
    sein → KI sagt dann "noch nichts gespeichert" statt zu raten
