@@ -113,3 +113,16 @@ eintragen ([werkzeuge.md](werkzeuge.md), „Ein neues Werkzeug anlegen").
   ([pruefstand.md](pruefstand.md)), zwei Durchgänge ≈ 3,50 €; mit
   Haiku-Richter ≈ 2,50 €. Die Suche kostet je Fund eine Runde mehr, spart
   dafür ~30.000 Zeichen gelesenes Schema je Runde.
+
+## Stellen, die zurückgestellte Werkzeuge beim Namen nennen (für Schritt 9)
+
+Stand 14.10.2026, nicht angefasst (Prompt-Text gehört Schritt 9):
+
+| Stelle | nennt |
+|---|---|
+| `core/profil/gross.py`, Meta-Regeln 1, 3, 4, 6, 7 (`_CAPABILITIES_VORLAGE`) | read_note, search_memory, write_note, rewrite_note, load_skill, propose_skill, search_chats |
+| `core/gedaechtnis.py`, Regeln im Gedächtnis-Kopf (`_REGELN`) | read_note, write_note, archive_note |
+| `core/ki_prompt.py`, Jetzt-Block | read_time |
+| `core/projekte.py`, Projekt-Block | read_project_file |
+| `core/skills.py`, `_KOPF` der Skill-Liste (nur mit Schalter aus; mit Schalter gilt `_KOPF_KURZ`, der search_tools nennt) | load_skill |
+| Beschreibung von `read_calendar` (Register) | read_calendar_warnings, ask_choice |
