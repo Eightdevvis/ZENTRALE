@@ -53,6 +53,7 @@ import dateien
 import gedaechtnis
 import skill_format
 import skill_umzug
+import werkzeug_gruppen
 
 STATUS = ("aktiv", "vorgeschlagen", "aus")
 # zentrale: mitgeliefert, von ZENTRALE selbst geschrieben (import-memory, 2026-10-08)
@@ -311,13 +312,50 @@ def _liste(liste: list) -> tuple:
                   "gekuerzt": sorted(gekuerzt), "nur_name": sorted(nur_name)}
 
 
+# ── Kurze Liste bei eingeschalteter Werkzeug-Suche (2026-10-14) ───────
+# Anthropic macht es bei Skills so (progressive disclosure): im Kopf steht
+# nur, WANN einer passt — knapp —, die ganze Beschreibung kommt mit dem
+# Inhalt (load_skill), und gefunden wird er auch über search_tools
+# (core/werkzeug_suche.py). Nur mit der Einstellung werkzeug_suche = an;
+# aus, bleibt die Liste byte-gleich wie vorher. Die Skills selbst ändert
+# das nicht.
+KURZ_ZEILE = 160
+_KOPF_KURZ = ("## Skills\n"
+              "Anleitungen für bestimmte Arten von Aufgaben. Hier steht je Skill "
+              "der erste Satz. Die volle Beschreibung und den Inhalt holst du mit "
+              "load_skill(name) — das Werkzeug lädt search_tools (z. B. „skill "
+              "laden“), passende Skills findet es auch.\n")
+
+
+def kurzzeile(text: str) -> str:
+    """Der erste Satz der Beschreibung, höchstens KURZ_ZEILE Zeichen."""
+    text = " ".join(str(text or "").split())
+    ende = min((i + 1 for i in (text.find(". "), text.find("! "), text.find("? "))
+                if i >= 0), default=len(text))
+    return _kuerzen(text[:ende], KURZ_ZEILE)
+
+
+def _suche_an() -> bool:
+    return werkzeug_gruppen.suche_an()
+
+
+def _liste_kurz(liste: list) -> str:
+    if not liste:
+        return ""
+    return _KOPF_KURZ + "\n".join(f"- {s['name']} — {kurzzeile(s['beschreibung'])}"
+                                   for s in liste)
+
+
 def prompt_block() -> str:
     """Die Skill-Liste für den FESTEN Teil des Cloud-Prompts.
 
     Byte-stabil, solange sich kein Skill ändert: nach Name sortiert, nur
     aktive, nur Name und Beschreibung (einzeilig). Kein Datum, kein Zähler —
     sonst bräche der Prompt-Cache bei jedem Zug. Höchstens LISTE_MAX
-    Zeichen; was darüber ginge, siehe LISTE_MAX oben."""
+    Zeichen; was darüber ginge, siehe LISTE_MAX oben. Mit Werkzeug-Suche
+    nur die Kurzfassung je Skill (_liste_kurz)."""
+    if _suche_an():
+        return _liste_kurz(aktive())
     return _liste(aktive())[0]
 
 
@@ -400,9 +438,15 @@ def laden(name: str, datei: str = "", ab=0) -> str:
         return pfad
     if (datei or "").strip():
         return datei_lesen(schluessel, pfad, datei.strip(), _ab(ab))
-    _, _, anleitung = skill_format.zerlegen(_skill_md(pfad))
+    _, felder, anleitung = skill_format.zerlegen(_skill_md(pfad))
     ab = _ab(ab)
     text = f"Skill {schluessel}:\n\n" if ab == 0 else ""
+    if ab == 0 and _suche_an():
+        # Die Liste im Kopf zeigt dann nur den ersten Satz (_liste_kurz) —
+        # die ganze Beschreibung kommt hier vorn mit (2026-10-14).
+        beschreibung = " ".join(skill_format.text_feld(felder, "description").split())
+        if beschreibung:
+            text += f"Wann er passt: {beschreibung}\n\n"
     if ab == 0 and os.path.isfile(os.path.join(pfad, ZENTRALE_HINWEIS)):
         text += (f"[Zuerst lesen: load_skill(name={schluessel!r}, datei="
                  f"{ZENTRALE_HINWEIS!r}) — was von dieser Anleitung in ZENTRALE "

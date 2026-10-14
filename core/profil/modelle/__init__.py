@@ -123,6 +123,17 @@ class ModellSchiene:
         f = getattr(self.profil, "auswahl", None)
         return f(self.TOOLS, verlauf or []) if f else self.TOOLS
 
+    def vorab(self, verlauf: list, index=None) -> set:
+        """Welche zurückgestellten Werkzeuge das Gespräch vorab bekommt
+        (Werkzeug-Suche, 2026-10-14; Schnittstelle für einen späteren
+        Klassifikator). Das Profil darf es sagen (vorab(verlauf, index)),
+        sonst die Schlagworte aus core/werkzeug_gruppen.py."""
+        f = getattr(self.profil, "vorab", None)
+        if f:
+            return set(f(verlauf or [], index))
+        import werkzeug_gruppen
+        return werkzeug_gruppen.vorab(verlauf or [], index)
+
     def wert(self, name: str, standard=None):
         """Ein Schleifen-/Aufruf-Wert des Profils (TEMPERATUR, MAX_TOKENS …)."""
         return getattr(self.profil, name, standard)
@@ -136,7 +147,12 @@ class ModellSchiene:
         f = getattr(self.profil, "pruefer", None)
         if not f:
             return basis_pruefer
-        lage.setdefault("werkzeuge", {t["function"]["name"] for t in self.TOOLS})
+        # Auch die zurückgestellten Namen (Werkzeug-Suche, 2026-10-14): ein
+        # Aufruf als Text erkennt der Prüfer, egal ob das Werkzeug in diesem
+        # Zug schon geladen war.
+        import werkzeug_suche
+        lage.setdefault("werkzeuge", {t["function"]["name"] for t in self.TOOLS}
+                        | werkzeug_suche.zurueckgestellt())
         return f(basis_pruefer, **lage)
 
 

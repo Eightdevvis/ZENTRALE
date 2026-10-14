@@ -444,9 +444,31 @@ def _knopf_werkzeug(args: dict, *, user_query, store=None):
     return ("result", werkzeug_befund.mit_kopf(befund), False)
 
 
+def _such_werkzeug(args: dict, *, user_query, store=None):
+    """search_tools (2026-10-14, core/werkzeug_suche.py): das Ergebnis ist
+    ein werkzeug_suche.Treffer — Text mit den gefundenen Namen daran. Es
+    geht OHNE Umweg über mit_kopf zurück, damit der Adapter die Namen sieht
+    (Anthropic: tool_reference-Blöcke, OpenAI: Schemas anhängen). Das
+    werkzeug-Ereignis trägt die Freischaltung mit; ui/routen/ki.py merkt
+    sie mit der Antwort, damit sie den Zug überlebt."""
+    import werkzeug_suche
+    anfrage = str(args.get("query", "") or "")
+    treffer = werkzeug_suche.suchen(anfrage)
+    ereignis = {"phase": "fertig", "name": werkzeug_suche.NAME,
+                "text": str(treffer), "status": werkzeug_befund.OK}
+    if treffer.werkzeuge:
+        ereignis["freigeschaltet"] = {"anfrage": treffer.anfrage,
+                                      "namen": list(treffer.werkzeuge)}
+    yield {"werkzeug": ereignis}
+    text = werkzeug_suche.Treffer(werkzeug_befund.mit_kopf(treffer), treffer.werkzeuge,
+                                  treffer.skills, treffer.anfrage)
+    return ("result", text, False)
+
+
 # Ein Eintrag je Register-Werkzeug mit in_der_schleife=True. Der Test
 # (tests/test_werkzeug_register.py) hält beide Seiten deckungsgleich.
-SELBST = {"antwort": _antwort_werkzeug, "ask_choice": _knopf_werkzeug}
+SELBST = {"antwort": _antwort_werkzeug, "ask_choice": _knopf_werkzeug,
+          "search_tools": _such_werkzeug}
 
 
 def _terminal_ausgeben(name: str, args: dict, active_exec):

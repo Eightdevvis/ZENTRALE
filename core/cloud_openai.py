@@ -258,6 +258,14 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     if tools is None and _profil_der(schiene_obj) is not None:
         # Ein Modell-Profil darf je Gespräch auswählen (2026-10-09, qwen).
         active_tools = schiene_obj.werkzeuge_fuer(messages)
+    # Werkzeug-Suche (2026-10-14, Einstellung werkzeug_suche): nur der feste
+    # Kern, was das Gespräch vorab braucht, und was früher freigeschaltet
+    # wurde; der Rest kommt über search_tools (der Adapter hängt die
+    # Schemas an). Aus: wie bisher.
+    alle_tools = None
+    if tools is None and cloud._suche_an(schiene_obj.TOOLS):
+        alle_tools = schiene_obj.TOOLS
+        active_tools = _anfangs_werkzeuge(schiene_obj, messages)
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
     store        = None if tutor_mode else cloud.CLOUD_GRAPH
@@ -285,7 +293,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
 
     adapter = _OpenAIAdapter(client, mdl, msgs, active_tools, abbruch=abbruch,
                              max_tokens=max_tokens, temperatur=temperatur,
-                             profil=_profil_der(schiene_obj), messages=messages)
+                             profil=_profil_der(schiene_obj), messages=messages,
+                             alle_tools=alle_tools)
     schiene = schiene_obj.NAME if tools is None else "klein"
     pruefer = ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
                                        tutor_mode=tutor_mode,
@@ -300,6 +309,23 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         schiene=schiene, pruefer=pruefer)
 
 
+def _anfangs_werkzeuge(schiene_obj, messages) -> list:
+    """Die Liste zu Beginn eines Zugs bei eingeschalteter Werkzeug-Suche:
+    immer geladene (Register-Reihenfolge), dann was das Gespräch vorab
+    braucht (werkzeug_suche.vorab — beim qwen-Profil dessen Schlagworte),
+    dann das früher im Gespräch Freigeschaltete in der Reihenfolge des
+    Freischaltens. Hinten wächst die Liste; vorn bleibt sie stehen."""
+    import werkzeug_suche
+    nach_name = {t["function"]["name"]: t for t in schiene_obj.TOOLS}
+    immer = set(werkzeug_suche.immer())
+    vorab = werkzeug_suche.vorab(schiene_obj, messages)
+    namen = [n for n in nach_name if n in immer]
+    namen += [n for n in nach_name if n in vorab and n not in namen]
+    namen += [n for n in werkzeug_suche.aus_verlauf(messages)
+              if n in nach_name and n not in namen]
+    return [nach_name[n] for n in namen]
+
+
 def _profil_der(schiene_obj):
     """Die Schiene, wenn sie ein Modell-Profil trägt — sonst None (dann fährt
     der Adapter genau wie vor 2026-10-09)."""
@@ -311,8 +337,14 @@ class _OpenAIAdapter:
     Tool-Calls kommen stückweise im Stream, Ergebnisse als role=tool."""
 
     def __init__(self, client, mdl, msgs, tools, abbruch=None,
-                 max_tokens=None, temperatur=None, profil=None, messages=None):
-        self.client, self.modell, self.msgs, self.tools = client, mdl, msgs, tools
+                 max_tokens=None, temperatur=None, profil=None, messages=None,
+                 alle_tools=None):
+        self.client, self.modell, self.msgs = client, mdl, msgs
+        # Werkzeug-Suche (2026-10-14): alle Schemas, aus denen ein
+        # search_tools-Ergebnis nachlädt — None = Suche aus. Dann eine eigene
+        # Liste, an die ergebnisse_anhaengen hängt.
+        self.alle_tools = alle_tools
+        self.tools = list(tools) if alle_tools is not None else tools
         self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
         # Modell-Profil (core/profil/modelle/, 2026-10-09): eigene Werte für
         # Ausgabe-Länge und Temperatur, und wann ein Werkzeug Pflicht ist.
@@ -351,7 +383,9 @@ class _OpenAIAdapter:
         stream = self.client.chat.completions.create(
             model=self.modell,
             messages=self.msgs,
-            tools=self.tools or None,   # ai.TOOLS ist schon OpenAI-Schema
+            # ai.TOOLS ist schon OpenAI-Schema. Wächst die Liste (Werkzeug-
+            # Suche), geht eine Kopie raus: was der Aufruf sah, bleibt so.
+            tools=(list(self.tools) if self.alle_tools is not None else self.tools) or None,
             stream=True,
             temperature=self.temperatur,
             max_tokens=self.max_tokens,
@@ -464,6 +498,20 @@ class _OpenAIAdapter:
         for cid, text, _ in ergebnisse:
             self.msgs.append({"role": "tool", "tool_call_id": cid,
                               "content": str(text)})
+            self._freischalten(getattr(text, "werkzeuge", None))
+
+    def _freischalten(self, namen):
+        """Werkzeug-Suche: gefundene Schemas ab der nächsten Runde dabei —
+        hinten an, die Liste wächst nur (der Anfang bleibt gleich, ein
+        Präfix-Cache des Anbieters trifft weiter)."""
+        if not namen or self.alle_tools is None:
+            return
+        da = {t["function"]["name"] for t in self.tools or ()}
+        for t in self.alle_tools:
+            n = t["function"]["name"]
+            if n in namen and n not in da:
+                self.tools.append(t)
+                da.add(n)
 
     def ergebnis_eindampfen(self, call_id, text):
         # Überholtes Browser-Ergebnis dieses Zugs → eine Zeile

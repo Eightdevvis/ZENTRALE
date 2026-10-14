@@ -87,7 +87,11 @@ ein Kreis wäre.
    mit `beleg` zurück (s. „Belegt oder gesagt"). `tests/test_werkzeug_belege.py`
    führt jedes schreibende Werkzeug einmal echt aus — ein neues muss dort in
    `AUFRUFE`.
-4. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
+4. Auf gross: in `core/werkzeug_gruppen.py` eintragen — in `IMMER` (immer
+   geladen) oder in eine Gruppe von `GRUPPEN` (erst nach `search_tools`,
+   wenn die Werkzeug-Suche an ist; [werkzeug_suche.md](werkzeug_suche.md)).
+   `tests/test_werkzeug_suche.py` meldet ein Werkzeug ohne beides.
+5. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
    und den Diff ansehen: nur das neue Werkzeug darf dazukommen.
    `tests/test_werkzeug_register.py` meldet Waisen in beide Richtungen.
 

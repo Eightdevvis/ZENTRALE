@@ -31,6 +31,7 @@ import ablage
 import ablage_text
 import context
 import werkzeug_befund
+import werkzeug_gruppen
 
 # Grenzen (2026-10-07).
 DATEI_MAX_BYTES = 10 * 1024 * 1024     # was die TUI überhaupt schicken darf
@@ -190,12 +191,20 @@ def verlauf_einsetzen(verlauf: list, cloud: bool) -> list:
     daten}); die Adapter machen daraus Blöcke. Lokal → als Text an den Inhalt.
     Antworten mit 'dokumente': ein Satz, welche Dokumente dabei entstanden
     (mit id — sonst kann die KI sie später nicht mehr ändern)."""
+    suche_an = cloud and werkzeug_gruppen.suche_an()
     raus = []
     for m in verlauf or []:
         m = dict(m)
         verw = m.pop("anhaenge", None)
         doks = m.pop("dokumente", None)
         spur = m.pop("werkzeuge", None)
+        if spur and cloud and m.get("role") == "assistant" and suche_an:
+            # Werkzeug-Suche über Züge hinweg (2026-10-14): was die KI in
+            # diesem Zug freigeschaltet hatte, setzen die Adapter wieder ein
+            # (core/werkzeug_suche.py, „Über Züge hinweg").
+            suche = werkzeug_gruppen.suche_aus_spur(spur)
+            if suche:
+                m["suche"] = suche
         if spur and cloud and m.get("role") == "assistant":
             # Die Werkzeug-Spur (2026-10-09, Prüfstand f01): die KI sah im
             # nächsten Zug nur ihren eigenen Text. Hatte der das Löschen von

@@ -246,6 +246,10 @@ def _werkzeug_merken(werkzeuge, w):
             # Status aus der Kopfzeile: liest auch der Ehrlichkeits-Prüfer
             # (core/ehrlichkeit.py) im nächsten Zug.
             werkzeuge[-1]["status"] = str(w["status"])
+        if isinstance(w.get("freigeschaltet"), dict):
+            # Werkzeug-Suche (2026-10-14): was search_tools freigeschaltet
+            # hat, überlebt so den Zug (anhang.verlauf_einsetzen).
+            werkzeuge[-1]["freigeschaltet"] = dict(w["freigeschaltet"])
         text = " ".join(str(w.get("text") or "").split())
         if text:
             werkzeuge[-1]["ergebnis"] = (text[:ERGEBNIS_MAX - 1] + "…"

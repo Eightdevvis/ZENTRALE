@@ -235,7 +235,7 @@ def is_available() -> bool:
 
 # ── Tool-Schema-Übersetzung ────────────────────────────────────────────
 
-def _to_anthropic_tools(openai_tools: list) -> list:
+def _to_anthropic_tools(openai_tools: list, zurueckstellen=frozenset()) -> list:
     """
     Übersetzt das OpenAI/Ollama-Schema (ai.TOOLS) ins Anthropic-Format.
 
@@ -245,15 +245,23 @@ def _to_anthropic_tools(openai_tools: list) -> list:
     Reihenfolge bleibt wie in ai.TOOLS — Tools werden VOR dem System-Prompt
     gerendert und sind damit Teil des Cache-Präfixes. Umsortieren würde den
     Cache jedes Mal wegwerfen (siehe _system_blocks).
+
+    zurueckstellen (2026-10-14, Werkzeug-Suche): diese Namen bekommen
+    defer_loading — das Modell sieht sie erst, wenn ein search_tools-
+    Ergebnis sie per tool_reference nennt (core/werkzeug_suche.py). Die
+    Liste selbst bleibt dieselbe, also auch der Cache-Präfix.
     """
     out = []
     for t in openai_tools or []:
         fn = t.get("function", t)          # toleriert beide Formen
-        out.append({
+        eintrag = {
             "name":         fn["name"],
             "description":  fn.get("description", ""),
             "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
-        })
+        }
+        if fn["name"] in zurueckstellen:
+            eintrag["defer_loading"] = True
+        out.append(eintrag)
     return out
 
 
@@ -482,6 +490,12 @@ def _prepare_messages(messages: list) -> list:
             continue
         content = m.get("content")
         anhaenge = m.get("anhaenge") if role == "user" else None
+        if role == "assistant" and m.get("suche"):
+            # Werkzeug-Suche über Züge hinweg (2026-10-14): das Paar
+            # Suchaufruf + Ergebnis wieder einsetzen, byte-gleich — so bleibt
+            # freigeschaltet, was die KI in diesem Zug gefunden hatte.
+            import werkzeug_suche
+            msgs.extend(werkzeug_suche.paare_anthropic(m))
         if not content and not anhaenge:
             continue          # leere Turns lehnt die API ab
         if isinstance(content, str):
@@ -619,13 +633,21 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     anthro_msgs = _prepare_messages(messages)
     volatile = _volatile_text(mem_ctx, via_mic, tutor_mode)
     _append_volatile(anthro_msgs, volatile)
-    anthro_tools = _to_anthropic_tools(active_tools)
+    # Werkzeug-Suche (2026-10-14, Einstellung werkzeug_suche): die Werkzeuge
+    # mit laden=bedarf gehen mit defer_loading raus, search_tools schaltet
+    # sie frei. Aus: dieselbe Liste wie immer.
+    suche = (not tutor_mode and _suche_an(active_tools))
+    zurueck = _zurueckgestellt() if suche else frozenset()
+    anthro_tools = _to_anthropic_tools(active_tools, zurueck)
     ablauf_melden(sys_blocks[0]["text"], volatile, messages, tutor_mode)
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
                                 sys_blocks, anthro_msgs, anthro_tools,
                                 abbruch=abbruch, max_tokens=max_tokens,
-                                effort=effort)
+                                effort=effort, suche=suche)
+    if suche:
+        import werkzeug_suche
+        adapter.freigeschaltet.dazu(werkzeug_suche.aus_verlauf(messages))
     schiene = _profil().NAME if tools is None else "klein"
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
@@ -638,12 +660,25 @@ def chat_stream(messages: list, model: str = None, system: str = None,
                                          kontext=sys_blocks[0]["text"] + "\n" + volatile))
 
 
+def _suche_an(tools) -> bool:
+    """Werkzeug-Suche an UND search_tools in der Liste (die Liste entsteht
+    beim Import der Schiene — wer danach umschaltet, hat sie noch nicht)."""
+    import werkzeug_suche
+    return werkzeug_suche.an() and any(
+        t.get("function", t).get("name") == werkzeug_suche.NAME for t in tools or ())
+
+
+def _zurueckgestellt() -> frozenset:
+    import werkzeug_suche
+    return frozenset(werkzeug_suche.zurueckgestellt())
+
+
 class _AnthropicAdapter:
     """Anthropic-Dialekt für die gemeinsame Werkzeug-Schleife: tool_use-
     Blöcke, alle tool_results in EINER user-Message, wandernder Breakpoint."""
 
     def __init__(self, client, mdl, sys_blocks, msgs, tools, abbruch=None,
-                 max_tokens=None, effort=None):
+                 max_tokens=None, effort=None, suche=False):
         self.client, self.modell = client, mdl
         self.abbruch = abbruch      # threading.Event: Sasha hat gestoppt
         self.max_tokens = int(max_tokens or _MAX_TOKENS)
@@ -653,6 +688,13 @@ class _AnthropicAdapter:
         # zahlt Runde 3 die Ergebnisse von Runde 2 noch einmal voll. Der alte
         # wird vor dem Setzen des neuen entfernt — es sind maximal 4 erlaubt.
         self.runden_bp = None
+        # Werkzeug-Suche (2026-10-14): an → ein search_tools-Ergebnis geht
+        # als tool_reference-Blöcke zurück; freigeschaltet merkt, was in
+        # diesem Gespräch schon gefunden wurde (die Liste wächst nur).
+        import werkzeug_suche
+        self.suche = suche
+        self.freigeschaltet = werkzeug_suche.Freischaltung()
+        self._namen = {t.get("name") for t in tools or ()}
 
     def runde(self):
         round_text = []
@@ -768,15 +810,36 @@ class _AnthropicAdapter:
         # ALLE tool_results in EINER user-Message zurück. Auf mehrere
         # Nachrichten aufzuteilen bringt dem Modell bei, keine parallelen
         # Tool-Calls mehr zu machen.
-        results = [_tool_result(cid, text, is_error=f)
-                   for cid, text, f in ergebnisse]
-        self.msgs.append({"role": "user", "content": results})
+        results, dazu = [], []
+        for cid, text, f in ergebnisse:
+            inhalt, zusatz = self._such_inhalt(text, f)
+            results.append(_tool_result(cid, inhalt, is_error=f))
+            dazu += zusatz
+        self.msgs.append({"role": "user", "content": results + dazu})
         # Breakpoint ans Ende der Runde nachziehen (alten abräumen).
         if self.runden_bp is not None:
             self.runden_bp.pop("cache_control", None)
         if results:
             results[-1]["cache_control"] = _cc()
             self.runden_bp = results[-1]
+
+    def _such_inhalt(self, text, fehler):
+        """Ein search_tools-Ergebnis → NUR tool_reference-Blöcke (Text
+        daneben lehnt die API ab, Probelauf 14.10.2026); gefundene Skills
+        als eigener Text-Block hinter den Ergebnissen. Alles andere: Text."""
+        namen = getattr(text, "werkzeuge", None)
+        if not self.suche or fehler or not namen:
+            return text, []
+        import werkzeug_suche
+        namen = [n for n in namen if n in self._namen]
+        if not namen:
+            return text, []
+        self.freigeschaltet.dazu(namen)
+        zusatz = []
+        if getattr(text, "skills", None):
+            zusatz.append({"type": "text", "text": "[search_tools] "
+                           + werkzeug_suche.skill_zeile(text.skills)})
+        return werkzeug_suche.referenzen(namen), zusatz
 
     def ergebnis_eindampfen(self, call_id, text):
         # Ein überholtes Browser-Ergebnis dieses Zugs auf eine Zeile kürzen
@@ -798,8 +861,10 @@ class _AnthropicAdapter:
 # ── Helfer ─────────────────────────────────────────────────────────────
 
 def _tool_result(tool_use_id: str, content, is_error: bool = False) -> dict:
+    """content: Text, oder seit 2026-10-14 eine fertige Block-Liste
+    (tool_reference-Blöcke der Werkzeug-Suche) — die bleibt, wie sie ist."""
     r = {"type": "tool_result", "tool_use_id": tool_use_id,
-         "content": str(content)}
+         "content": list(content) if isinstance(content, list) else str(content)}
     if is_error:
         r["is_error"] = True
     return r

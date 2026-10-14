@@ -87,7 +87,11 @@ der Schiene.
    Messreihen, Skills), die erst bei passenden Wörtern in Sashas Nachrichten
    dazukommen: Kalender-Zug 21 statt 54 Werkzeuge, ~16.600 statt ~32.000
    Zeichen. Die Liste wächst im Gespräch nur (Präfix-Cache). Ein Werkzeug
-   ohne Gruppe ist immer dabei.
+   ohne Gruppe ist immer dabei. Die Gruppen-Tabelle steht seit 2026-10-14 in
+   `core/werkzeug_gruppen.py` (`VORAUSWAHL`, wörtlich umgezogen) — die
+   Werkzeug-Suche liest dieselbe ([werkzeug_suche.md](werkzeug_suche.md));
+   `qwen.vorab(verlauf, index)` ist die Schnittstelle für einen späteren
+   Klassifikator.
 
 ## Gemessen (Nacht 09./10.10.2026, qwen-plus, Prüfstand)
 

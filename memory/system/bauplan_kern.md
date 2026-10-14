@@ -72,6 +72,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `graph_reihen` | 1 | Reine Helfer über die Messwerte eines Graphen (Zahl prüfen, Uhrzeit, Dauer, Reihe je Typ, letzter Wert, Sparkline) — geteilt von Graph-Werkzeug der TUI und Graph-Kachel, ohne Imports (seit 2026-10-10) |
 | `tastentabelle` | 1 | Format der Tastentabelle (welche Tasten eine App je Ansicht nimmt): Beschriftung → neutrale Tastennamen, prüfen, aus dem app.toml; geteilt von TUI (`tasten.py`, Bausteine) und `GET /api/tasten`, ohne Imports (seit 2026-10-11) |
 | `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
+| `werkzeug_gruppen` | 1 | Welche KI-Werkzeuge immer geladen sind, Gruppen und Schlagworte für die Werkzeug-Suche, die Vorauswahl des qwen-Profils, der Schalter `werkzeug_suche` (seit 2026-10-14) |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |
@@ -192,6 +193,8 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `ki_einstellungen` | 3 | Chat-Einstellungen (Anbieter, Modell, Effort, Budget, Weg) lesen und mit Klartext-Prüfung setzen — für `/api/ai/einstellungen` |
 | `ki_werkzeuge` | 3 | Was ein KI-Werkzeug tut: ausfuehren(name, args) → Kalender, Notizen, Netz, Mail, Messreihen |
 | `werkzeug_register` | 3 | Ein Eintrag pro KI-Werkzeug: Schema, Beschreibung je Schiene, Erlaubnis-Regel + Frage; die Ausführer melden sich aus `ki_werkzeuge` an |
+| `werkzeug_suche` | 3 | Werkzeug-Suche (`search_tools`): Index aus dem Register + Skills, BM25, Treffer mit Gruppe, Freischaltung im Zug und über Züge hinweg, Index als MCP-Liste (seit 2026-10-14) |
+| `werkzeug_nachschlagen` | 3 | Register-Einträge der Nachschlage-Werkzeuge (explain_error, read_series, search_tools); hinten ans Register gehängt |
 | `werkzeug_eintrag` | 3 | Wie ein Werkzeug-Eintrag aussieht (die Klasse `Werkzeug`), damit Einträge auch außerhalb des Registers stehen können |
 | `werkzeug_pdf_word` | 3 | Einträge und Fragen der PDF-/Word-Werkzeuge (Skills pdf, word); hinten ans Register gehängt |
 | `werkzeug_gedaechtnis` | 3 | Register-Einträge der Gedächtnis-Werkzeuge seit dem Umbau nach Themen (`archive_note`); hinten ans Register gehängt |

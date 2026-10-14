@@ -51,6 +51,8 @@ import werkzeug_gedaechtnis
 import werkzeug_erzeuger.aktive  # noqa: F401 — Anbindungen (Pipe)
 import werkzeug_kalender
 import werkzeug_ablage
+import werkzeug_gruppen
+import werkzeug_nachschlagen
 import werkzeug_tabelle
 
 
@@ -1243,18 +1245,10 @@ WERKZEUGE = [
 # Reihenfolge = Prompt-Reihenfolge, nichts davor verschiebt sich.
 WERKZEUGE += werkzeug_pdf_word.EINTRAEGE
 
-# Fehlercodes nachschlagen (2026-10-09, core/fehlercodes.py): jeder Abbruch
-# trägt einen Code; hier stehen Ursache und was zu tun ist. Hinten an, damit
-# sich davor nichts verschiebt; nur gross, frei (liest nur eine Tabelle).
-WERKZEUGE.append(Werkzeug(
-    name="explain_error",
-    gross=("Erklärt einen Fehlercode aus einem Werkzeug-Ergebnis („Fehler K-…: …“): "
-           "Ursache und was zu tun ist."),
-    parameter={"type": "object",
-               "properties": {"code": {"type": "string",
-                                       "description": "Der Code, z. B. K-ENDE-VOR-BEGINN."}},
-               "required": ["code"]},
-))
+
+
+# Fehlercodes nachschlagen (2026-10-09, core/werkzeug_nachschlagen.py).
+WERKZEUGE.append(werkzeug_nachschlagen.FEHLERCODE)
 
 
 # Browser (2026-10-09, core/werkzeug_browser.py): eine Seite wie Sasha sie
@@ -1265,21 +1259,10 @@ WERKZEUGE += werkzeug_browser.EINTRAEGE
 # der Ablage, core/werkzeug_dateien.py): hinten an, nur gross.
 WERKZEUGE += werkzeug_dateien.EINTRAEGE
 
-# Messreihen lesen (2026-10-09): bis dahin las die KI Schlaf, Stimmung & Co.
-# per read_file aus data/<reihe>.json. Seit read_file auf gross nur noch
-# Input/ und Output/ sieht (core/context.py), ist das der Weg. Nur lesen,
-# frei; hinten an, nur gross.
-WERKZEUGE.append(Werkzeug(
-    name="read_series",
-    gross=("Liest Messreihen (Schlaf, Stimmung, Training …): ohne series die "
-           "Liste mit letztem Wert, mit series die Werte (Standard: letzte 30 Tage)."),
-    parameter={"type": "object",
-               "properties": {
-                   "series": {"type": "string", "description": "Name der Reihe."},
-                   "von": {"type": "string", "description": "YYYY-MM-DD."},
-                   "bis": {"type": "string", "description": "YYYY-MM-DD, sonst heute."},
-               }},
-))
+
+
+# Messreihen lesen (2026-10-09, core/werkzeug_nachschlagen.py).
+WERKZEUGE.append(werkzeug_nachschlagen.MESSREIHEN)
 
 
 # Gedächtnis nach Themen (2026-10-11): archive_note. Hinten an, nur gross.
@@ -1371,6 +1354,7 @@ def erzeugte_einsetzen(an: bool) -> None:
     werkzeug_erzeuger.einsetzen(WERKZEUGE, _NACH_NAME, ERZEUGT, an, _VON_HAND)
     for w in globals().get("_HINTEN", ()):    # bleiben hinter den erzeugten (wie beim Import)
         WERKZEUGE.append(WERKZEUGE.pop(WERKZEUGE.index(w)))
+    werkzeug_gruppen.laden_setzen(WERKZEUGE)
 
 
 erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
@@ -1378,9 +1362,13 @@ erzeugte_einsetzen(werkzeug_erzeuger.eingeschaltet())
 # Ablage ersetzen/Papierkorb + Tabellen (2026-10-11, core/werkzeug_ablage.py,
 # core/werkzeug_tabelle.py): immer da, hinten an.
 ERZEUGT_FEST = list(werkzeug_ablage.EINTRAEGE)
-_HINTEN = ERZEUGT_FEST + list(werkzeug_tabelle.EINTRAEGE)
+# Werkzeug-Suche (2026-10-14, core/werkzeug_nachschlagen.py): ganz hinten.
+_HINTEN = ERZEUGT_FEST + list(werkzeug_tabelle.EINTRAEGE) + [werkzeug_nachschlagen.SUCHE]
 WERKZEUGE += _HINTEN
 _NACH_NAME.update({w.name: w for w in _HINTEN})
+# Felder laden/gruppe aus core/werkzeug_gruppen.py; schalter_an für schema().
+schalter_an = werkzeug_gruppen.schalter_an
+werkzeug_gruppen.laden_setzen(WERKZEUGE)
 
 
 # Deutsche Alt-Namen der klein-Schiene → kanonische. Abgeleitet, nicht
@@ -1414,7 +1402,9 @@ def schema(schiene: str) -> list:
     """Die Werkzeug-Liste dieser Schiene im OpenAI/Ollama-Schema — genau so,
     wie sie ans Modell geht (cloud._to_anthropic_tools übersetzt sie für
     Anthropic). Jede Liste bekommt eigene Kopien der Parameter, damit ein
-    Weg, der darin herumschreibt, nicht die andere Schiene verändert."""
+    Weg, der darin herumschreibt, nicht die andere Schiene verändert.
+    Ein Eintrag mit `schalter` (search_tools) nur, wenn dessen Einstellung
+    an ist."""
     return [{
         "type": "function",
         "function": {
@@ -1422,7 +1412,7 @@ def schema(schiene: str) -> list:
             "description": w.beschreibung(schiene),
             "parameters":  copy.deepcopy(w.parameter_auf(schiene)),
         },
-    } for w in auf_schiene(schiene)]
+    } for w in auf_schiene(schiene) if schalter_an(w.schalter)]
 
 
 def terminal(schiene: str) -> set:

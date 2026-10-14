@@ -69,6 +69,18 @@ class Werkzeug:
     zuschnitt       Je Modellprofil-Art (z. B. "schwach"): {"weg": [Felder],
                     "beschreibung": einfacherer Text} — angewandt von
                     werkzeug_erzeuger.zuschneiden (Profil qwen).
+
+    Seit 2026-10-14 (Werkzeug-Suche, memory/ki/werkzeug_suche.md):
+    laden           "immer" = auf gross immer geladen; "bedarf" = erst nach
+                    search_tools (bei eingeschalteter Einstellung
+                    werkzeug_suche). Gesetzt vom Register aus
+                    core/werkzeug_gruppen.py (IMMER), nicht je Eintrag.
+    gruppe          Die Gruppe eines zurückgestellten Werkzeugs: ein
+                    Treffer der Suche bringt die ganze Gruppe
+                    (werkzeug_gruppen.GRUPPE_VON; ohne Eintrag dort der
+                    eigene Name).
+    schalter        Name einer Einstellung (an|aus): nur wenn sie an ist,
+                    steht das Werkzeug in schema() (search_tools).
     """
     name: str
     parameter: dict
@@ -91,6 +103,9 @@ class Werkzeug:
     bereich: str | None = None
     worte: tuple | None = None
     zuschnitt: dict | None = None
+    laden: str = "bedarf"
+    gruppe: str | None = None
+    schalter: str | None = None
 
     def beschreibung(self, schiene: str) -> str | None:
         return getattr(self, schiene)
