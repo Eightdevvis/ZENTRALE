@@ -333,16 +333,17 @@ class ChatZeichnen:
 
     def _stile(self):
         C = self.z.C
-        user = C["bright"]
+        # Fließtext in „ink" (Farbe wie bright, aber nicht fett) — fett war
+        # im Chat auf Dauer zu dick; fett bleiben nur Überschriften.
         if C.get("pix_bg") is not None:
             bg = C["pix_bg"]
             hell = sum(bg) >= 384
             fl = pixel.mix(bg, (0, 0, 0) if hell else (255, 255, 255), .1)
             user = self.z.pix_attr((0, 0, 0) if hell else (255, 255, 255), fl)
         else:
-            user = C["bright"] | curses.A_REVERSE
-        return {"user": user, "ai": C["bright"], "ai_kopf": C["acc"] | curses.A_BOLD,
-                "ai_code": C["dim"], "ai_liste": C["bright"], "schritt": C["faint"],
+            user = C["ink"] | curses.A_REVERSE
+        return {"user": user, "ai": C["ink"], "ai_kopf": C["acc"] | curses.A_BOLD,
+                "ai_code": C["dim"], "ai_liste": C["ink"], "schritt": C["faint"],
                 "schritt_fehler": C["warn"], "denken": C["faint"], "dok": C["acc"],
                 "anhang": C["acc"], "aktion": C["faint"], "leise": C["faint"],
                 "aktion_an": C["acc"] | curses.A_BOLD,
