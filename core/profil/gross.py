@@ -72,6 +72,16 @@ def _ohne(text: str, ueberschrift: str) -> str:
     return "\n\n".join(behalten)
 
 
+def _ohne_satz(text: str, satz: str) -> str:
+    """Einen Satz aus der Persona herausnehmen — wirft wie _ohne, wenn er
+    nicht genau einmal da ist."""
+    if text.count(satz) != 1:
+        raise RuntimeError(
+            f"profil/gross: Satz {satz[:40]!r}… {text.count(satz)}x gefunden, "
+            f"erwartet genau 1 — wurde klein._SYSTEM_PROMPT umgebaut?")
+    return text.replace(satz, "")
+
+
 # Was diese Schiene aus der geteilten Persona HERAUSSCHNEIDET.
 #
 # Text-Effekte und das Turn-Ende-Beispiel waren immer nur fuer das 9B
@@ -82,10 +92,19 @@ def _ohne(text: str, ueberschrift: str) -> str:
 # Was NICHT herausgeschnitten wird, obwohl es verlockend waere: "## Stimme"
 # (der trockene Grundton ist eine WAHL, kein Default), "## Substanz statt
 # Pflichtprogramm" und "## Kein Dienstbotentum" — ein unangewiesenes Modell
-# bietet sehr wohl seine Hilfe an.
-_SYSTEM_VORLAGE = _ohne(_ohne(_ohne(_ohne(
+# bietet sehr wohl seine Hilfe an. (Seit 2026-10-14 steht die Regel nur
+# noch hier; die Kopie im Steckbrief ist gestrichen.)
+#
+# Seit 2026-10-14 fällt auch der Satz über Linux-PC und Wand-Monitor (Pi 3):
+# die große Schiene fährt in der Cloud und spricht meist über die TUI am
+# Laptop — für sie war das eine Hardware-Beschreibung ohne Nutzen, und
+# Sashas Geräte gehören nicht in den Produkt-Prompt. klein behält ihn (dort
+# hängt das Turn-Beispiel „Läuft das Backend auf dem Pi?“ daran).
+_SYSTEM_VORLAGE = _ohne_satz(_ohne(_ohne(_ohne(_ohne(
     klein._SYSTEM_VORLAGE, "## Text-Effekte"), "## So endet ein Turn"),
-    "## Länge"), "## Floskel-Stopliste")
+    "## Länge"), "## Floskel-Stopliste"),
+    "Das Backend läuft auf einem Linux-PC, der Wand-Monitor (Pi 3) zeigt nur "
+    "das Dashboard und reicht Sensor-Trigger an dich weiter. ")
 
 
 # ── Meta-Regeln: 2.945 → ~1.100 Zeichen ────────────────────────────────
@@ -133,7 +152,7 @@ _SYSTEM_VORLAGE = _ohne(_ohne(_ohne(_ohne(
 # sinngemaess ins Deutsche gebracht, weil der Rest des Prompts deutsch ist.
 # Zwei Stellen loesen Probleme, die hier gemessen wurden:
 #
-#   * "hoechstens EINE Frage" ist die Antwort auf "wann ist wieder Zeit
+#   * "hoechstens eine Frage" ist die Antwort auf "wann ist wieder Zeit
 #     fuer Training?" -> "sag mir den Begriff, dann such ich gezielter".
 #     Erst antworten, dann fragen.
 #     Seit 2026-10-10 gilt dasselbe fuer Auftraege (Pruefstand f01: „Pause
@@ -161,7 +180,7 @@ Halte Antworten fokussiert und knapp, damit sie niemanden erschlagen. Vorbehalte
 
 Listen und Aufzählungen nur, wenn danach gefragt wird oder der Inhalt wirklich mehrteilig ist und dadurch klarer wird.
 
-Du fragst nicht ständig nach, höchstens EINE Frage pro Antwort. Unklare Fragen beantwortest du so weit du kannst, Aufträge setzt du sofort um, soweit sie sicher sind — nachgefragt wird nur das Fehlende.
+Du fragst nicht ständig nach, höchstens eine Frage pro Antwort. Unklare Fragen beantwortest du so weit du kannst, Aufträge setzt du sofort um, soweit sie sicher sind — nachgefragt wird nur das Fehlende.
 
 Verstärker wie "ehrlich gesagt", "wirklich" oder "ganz einfach" lässt du weg. Du bist ohnehin ehrlich; solche Wörter sollen überzeugen und wirken genau dadurch unaufrichtig. Sag es direkt.
 
@@ -174,6 +193,16 @@ Machst du einen Fehler, stehst du dazu und behebst ihn — ohne Selbstgeißelung
 Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas liege vor, heißt nicht, dass es da ist — sieh selbst nach."""
 
 
+# Aufgeräumt 2026-10-14 (Ballast raus, memory/ki/prompt_aufbau.md):
+#   - Regel 2 sagte „Jede Antwort gibst du über antwort ab, jeden Teil eines
+#     Auftrags dort in auftrag abgerechnet" — dasselbe steht in der
+#     Beschreibung von antwort und im Feld auftrag (core/selbstauskunft.py),
+#     also da, wo das Modell es beim Aufruf liest. Hier gestrichen.
+#   - „mit Titel, Tag und Uhrzeit" war kalenderspezifisch; jetzt allgemein
+#     „woran er es wiedererkennt".
+#   - Großbuchstaben-Befehle (EINE, WO) in normale Schreibung: Anthropic rät
+#     davon ab, aktuelle Modelle befolgen sie überzogen.
+#
 # Regel 2, Kennung (2026-10-09, core/ehrlichkeit.py): eine Kennung in der
 # Antwort prüft Python gegen die Werkzeug-Ergebnisse — eine erfundene fällt
 # auf, bevor Sasha die Antwort sieht. Am Abend desselben Tages umgedreht:
@@ -217,8 +246,8 @@ Was du nachsehen kannst, nimmst du nicht als gegeben an. Dass jemand sagt, etwas
 _CAPABILITIES_VORLAGE = """## Meta-Regeln
 
 1. Über {nutzer} nichts erfinden. Was du über {ihn} weißt, steht in {seinen} Notizen — Steckbrief, Ziele, Dossiers, Kataloge, Tagebuch. Fehlt dir etwas: nachlesen (read_note) oder suchen (search_memory). Findest du nichts, sag das, statt zu raten.
-2. Belegt oder gesagt: Als Tatsache sagst du nur, was ein Werkzeug in diesem Gespräch belegt oder {nutzer} gesagt hat; alles andere kennzeichnest du als Vermutung oder sagst „weiß ich nicht". Deine frühere Antwort ist kein Beleg — hakt {er} nach, ruf das Werkzeug erneut. Erfolg meldest du erst nach dem Beleg im Werkzeug-Ergebnis ([ergebnis: ok]), mit Titel, Tag und Uhrzeit — Kennungen (#r3f9c) nie im Text an {nutzer}; ging etwas schief, sag es. Jede Antwort gibst du über antwort ab, jeden Teil eines Auftrags dort in auftrag abgerechnet — keinen weglassen.
-3. Was du festhältst, hältst du mit write_note fest und sagst, WO es steht ("als Katalog-Eintrag in ideen") — {er} sieht die Datei nicht. Nichts zweimal wegschreiben: sonst weiß niemand, welche Fassung gilt.
+2. Belegt oder gesagt: Als Tatsache sagst du nur, was ein Werkzeug in diesem Gespräch belegt oder {nutzer} gesagt hat; alles andere kennzeichnest du als Vermutung oder sagst „weiß ich nicht". Deine frühere Antwort ist kein Beleg — hakt {er} nach, ruf das Werkzeug erneut. Erfolg meldest du erst nach dem Beleg im Werkzeug-Ergebnis ([ergebnis: ok]) und nennst dabei, woran {er} es wiedererkennt (Name, Datum o. Ä.) — Kennungen (#r3f9c) gehören nicht in den Text an {nutzer}; ging etwas schief, sag es.
+3. Was du festhältst, hältst du mit write_note fest und sagst, wo es steht ("als Katalog-Eintrag in ideen") — {er} sieht die Datei nicht. Nichts zweimal wegschreiben: sonst weiß niemand, welche Fassung gilt.
 4. Sagt {nutzer} dir, wie du dich verhalten sollst ("lass das", "kürzer", "frag nicht so viel"), dann halt es mit write_note unter "hausregeln" fest — sonst ist die Korrektur nach diesem Turn wieder weg. Sag kurz, dass du es notiert hast. Nimmt {er} sie zurück, streichst du sie mit rewrite_note.
 5. Notiere nichts als erledigt, was noch aussteht: {nutzer} kann ablehnen. Schreib die Notiz nach dem Werkzeug-Ergebnis, oder halt fest, was {er} gesagt hat.
 6. Skills (Liste im Kopf) sind Anleitungen für eine Art Aufgabe. Passt eine Aufgabe zu einer Beschreibung: erst load_skill. Hat sich mit {nutzer} eine Arbeitsweise bewährt oder korrigiert {er} dasselbe wiederholt: propose_skill. Was immer gilt, gehört in die Hausregeln; ein Skill gilt nur für seine Art Aufgabe.

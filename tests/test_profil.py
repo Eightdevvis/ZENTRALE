@@ -531,7 +531,7 @@ def test_uebernommene_kalibrierung_ist_da():
     """
     t = gross.system()
     assert "## Antwortverhalten" in t
-    assert "höchstens EINE Frage" in t
+    assert "höchstens eine Frage" in t
     # 2026-10-10 (Prüfstand f01): Sicheres sofort, nur das Fehlende fragen.
     assert "Aufträge setzt du sofort um, soweit sie sicher sind" in t
     assert "nachgefragt wird nur das Fehlende" in t

@@ -305,7 +305,7 @@ def test_imprint_steht_im_gecachten_kopf(monkeypatch):
     Cache-Schreibvorgänge am Tag.
     """
     import cloud
-    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "## Was ansteht\nZahnarzt")
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "## Was ansteht\nZahnarzt")
     statisch  = cloud._static_system(None, tutor_mode=False)
     fluechtig = cloud._volatile_text("", via_mic=False, tutor_mode=False)
     assert "Zahnarzt" in statisch
@@ -316,7 +316,7 @@ def test_gecachter_kopf_bleibt_ueber_turns_gleich(monkeypatch):
     """Byte-identisch, solange sich am Kalender nichts ändert — sonst wäre
     der Cache-Treffer weg und der Imprint teurer als die Tool-Runde."""
     import cloud
-    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "## Was ansteht\nZahnarzt")
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "## Was ansteht\nZahnarzt")
     assert (cloud._static_system(None, tutor_mode=False)
             == cloud._static_system(None, tutor_mode=False))
 

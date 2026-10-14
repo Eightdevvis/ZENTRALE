@@ -338,7 +338,7 @@ def test_eindampfen_zeile():
 def anthropic(monkeypatch):
     monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
     monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
-    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
     seiten = iter(range(1, 100))
     monkeypatch.setattr(ki_werkzeuge, "mit_projekt",

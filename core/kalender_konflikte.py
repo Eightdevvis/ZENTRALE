@@ -17,6 +17,7 @@ from datetime import date, timedelta
 import kalender_kategorie
 import kalender_quelle
 import kalender_rhythmus
+import nutzer_angaben
 
 # Kein `import kalender` (das wäre ein Import-Kreis, kalender reicht dieses
 # Modul ja weiter): die zwei Lesewege, die hier gebraucht werden, schließt
@@ -545,7 +546,40 @@ def render_range_for_tool(start: date, end: date,
 IMPRINT_TAGE = int(os.environ.get("ZENTRALE_IMPRINT_TAGE", "1"))
 
 
-def imprint_for_prompt(tage: int | None = None) -> str:
+# Der Grenz-Text unter dem Imprint (Begründung: imprint_for_prompt).
+# {nur}/{einmal}/{kein} sind die Hervorhebungen — betont (klein) in
+# Großbuchstaben, sonst klein geschrieben; {nutzer}, {er} … füllt
+# nutzer_angaben.
+_IMPRINT_BETONT = {"{nur}": "NUR", "{einmal}": "EINMAL", "{kein}": "KEIN"}
+_IMPRINT_GRENZE = (
+    "Das ist {nur} der nahe Horizont. Für jeden anderen Zeitraum "
+    "(nächste Woche, ein bestimmtes Datum, 'wann war X') "
+    "read_calendar rufen — aus diesem Block lässt sich das "
+    "nicht beantworten.\n\n"
+    "Und: das hier ist stehender Hintergrund, keine Meldung. {nutzer} "
+    "sieht denselben Kalender vor sich. Einen Termin sagst du "
+    "{einmal} an; hat {er} ihn zur Kenntnis genommen, ist das Thema "
+    "durch — auch wenn die Uhrzeit näher rückt. Kein zweiter "
+    "Hinweis, kein Countdown. Nur wenn {er} selbst etwas sagt, das "
+    "damit kollidiert, sagst du es nochmal.\n\n"
+    "[uncommitted · vielleicht] heißt: unverbindlich, noch nicht "
+    "zugesagt. Erwähne es höchstens als Möglichkeit, plane nicht "
+    "fest damit und warne nicht, wenn es mit etwas kollidiert.\n\n"
+    "[rhythmus · <motiv>] ist {nutzers} Tagesrhythmus (wann {er} meist "
+    "schläft, isst, runterkommt …) — {kein} Termin. Stiller "
+    "Hintergrund: nicht ansagen, nicht warnen, nie als belegt "
+    "zählen; nur nutzen, um besser einzuschätzen (z. B. nichts "
+    "ungefragt in die Schlafzeit legen). Er ist variabel und darf "
+    "geändert werden, wenn {nutzer} es sagt.")
+_IMPRINT_LISTE = (
+    "\n\n„… (aus Liste: X)“ bzw. „(aus Projekt: X)“: ein "
+    "Zeitfenster, das {nutzer} für diese Liste reserviert hat. Der "
+    "Titel davor ist der Punkt, der dort gerade oben steht — er "
+    "wechselt von selbst, wenn {nutzer} umsortiert oder abhakt. Es "
+    "ist ein normaler Termin (belegt).")
+
+
+def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
     """Der nahe Horizont, fest im Prompt: heute und morgen.
 
     Das ersetzt den gelöschten Kalender-Spiegel — und zwar in der richtigen
@@ -587,6 +621,13 @@ def imprint_for_prompt(tage: int | None = None) -> str:
     NICHT hierher, sondern in die Schemen-Mechanik: die kennt die Vorhaben
     und kann entscheiden, was wie früh sichtbar werden muss. `tage` ist der
     Hebel, an dem sie das später dreht.
+
+    `betont` (2026-10-14): die Schiene klein bekommt die Hervorhebungen in
+    Großbuchstaben (NUR, EINMAL, KEIN) — so ist das qwen gemessen. Die
+    Schiene gross bekommt dieselben Wörter klein geschrieben: Anthropic
+    rät von Großbuchstaben-Befehlen ab, aktuelle Modelle befolgen sie zu
+    eifrig. Der Nutzer steht als Platzhalter drin (core/nutzer_angaben.py);
+    mit den Standardwerten ist der Text byte-gleich wie vorher.
     """
     tage = IMPRINT_TAGE if tage is None else tage
     if tage < 0:
@@ -600,31 +641,12 @@ def imprint_for_prompt(tage: int | None = None) -> str:
               if lyr.get("default_visible", True)]
     liste = render_range_for_tool(heute, heute + timedelta(days=tage),
                                   layers=layers)
-    grenze = ("Das ist NUR der nahe Horizont. Für jeden anderen Zeitraum "
-              "(nächste Woche, ein bestimmtes Datum, 'wann war X') "
-              "read_calendar rufen — aus diesem Block lässt sich das "
-              "nicht beantworten.\n\n"
-              "Und: das hier ist stehender Hintergrund, keine Meldung. Sasha "
-              "sieht denselben Kalender vor sich. Einen Termin sagst du "
-              "EINMAL an; hat er ihn zur Kenntnis genommen, ist das Thema "
-              "durch — auch wenn die Uhrzeit näher rückt. Kein zweiter "
-              "Hinweis, kein Countdown. Nur wenn er selbst etwas sagt, das "
-              "damit kollidiert, sagst du es nochmal.\n\n"
-              "[uncommitted · vielleicht] heißt: unverbindlich, noch nicht "
-              "zugesagt. Erwähne es höchstens als Möglichkeit, plane nicht "
-              "fest damit und warne nicht, wenn es mit etwas kollidiert.\n\n"
-              "[rhythmus · <motiv>] ist Sashas Tagesrhythmus (wann er meist "
-              "schläft, isst, runterkommt …) — KEIN Termin. Stiller "
-              "Hintergrund: nicht ansagen, nicht warnen, nie als belegt "
-              "zählen; nur nutzen, um besser einzuschätzen (z. B. nichts "
-              "ungefragt in die Schlafzeit legen). Er ist variabel und darf "
-              "geändert werden, wenn Sasha es sagt.")
+    grenze = _IMPRINT_GRENZE
     if "(aus Liste: " in liste or "(aus Projekt: " in liste:
-        grenze += ("\n\n„… (aus Liste: X)“ bzw. „(aus Projekt: X)“: ein "
-                   "Zeitfenster, das Sasha für diese Liste reserviert hat. Der "
-                   "Titel davor ist der Punkt, der dort gerade oben steht — er "
-                   "wechselt von selbst, wenn Sasha umsortiert oder abhakt. Es "
-                   "ist ein normaler Termin (belegt).")
+        grenze += _IMPRINT_LISTE
+    for platzhalter, wort in _IMPRINT_BETONT.items():
+        grenze = grenze.replace(platzhalter, wort if betont else wort.lower())
+    grenze = nutzer_angaben.einsetzen(grenze)
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 

@@ -229,6 +229,60 @@ Unterschied zu `scripts/ai_devtools.py`: das Devtools-Terminal zeigt einen
 ein laufendes Gespräch. `prompt_zeigen.py` zeigt den **statischen Teil** allein,
 jederzeit und ohne Backend.
 
+## Prompt-Budget und Werkzeug-Beschreibungen (seit 2026-10-14)
+
+**Budget:** der feste System-Prompt der großen Schiene (`cloud._static_system`:
+Schiene `gross` + Gedächtnis-Kopf + Skill-Liste + Imprint) darf höchstens
+**21.000 Zeichen** lang sein (`PROMPT_BUDGET_ZEICHEN` in
+`tests/test_prompt_budget.py`). Maßstab ist Anthropics eigener
+claude.ai-Prompt für Sonnet 5.5: ~20.300 Zeichen ohne Werkzeuge (Stand
+28.09.2026). Ein Assistent für einen Menschen braucht keinen längeren Prompt
+als eine Chat-App für alle. Die Werkzeuge zählen nicht mit — der Test gibt
+ihren Umfang nur aus (`pytest -s tests/test_prompt_budget.py`), denn sie
+sollen später über einen Index kommen (nur die passenden im Kopf).
+
+Gemessen am 14.10.2026 (mit Sashas echtem Gedächtnis, Imprint 1.110 Zeichen):
+
+| | vorher | nachher |
+|---|---|---|
+| Schiene `gross.system()` | 4.966 | 4.775 |
+| Gedächtnis-Kopf (Steckbrief, Ziele, Index, Regeln) | 7.645 | 7.353 |
+| Skill-Liste | 5.773 | 5.773 |
+| **fester Prompt gesamt** | **19.500** | **19.017** |
+| Werkzeug-Schema (71 Werkzeuge, JSON) | 47.180 | 47.180 |
+
+In der Test-Umgebung (leeres Gedächtnis, leerer Kalender) sind es ~11.700
+Zeichen — der Test greift also erst, wenn der Code-Anteil um ~9.000 Zeichen
+wächst; Sashas Notizen kommen im Betrieb obendrauf.
+
+**Werkzeug-Beschreibungen sind laut Anthropic der wichtigste Hebel** für gutes
+Werkzeug-Verhalten — wichtiger als Regeln im Prompt. Jede Beschreibung hat
+3–4 Sätze: was das Werkzeug tut, wann man es benutzt und wann nicht, und was
+es *nicht* liefert. Eine Regel, die nur ein Werkzeug betrifft, gehört in
+dessen Beschreibung, nicht in den Prompt (Beispiel: „Jede Antwort über
+`antwort`" stand bis 14.10. doppelt — in Meta-Regel 2 und in der
+Beschreibung; jetzt nur noch dort).
+
+**Aufgeräumt am 14.10.2026** (Ballast raus):
+- doppelt: „Kein Dienstbotentum" stand in der Persona und im Steckbrief →
+  nur noch in der Persona (vollständiger, für beide Schienen, getestet);
+  „Jede Antwort über antwort … in auftrag abgerechnet" → nur im Werkzeug.
+- veraltet: Satz über Linux-PC und Wand-Monitor (Pi 3) → aus `gross`
+  geschnitten (`_ohne_satz`), `klein` behält ihn (Turn-Beispiel hängt
+  daran); „Morgens: Schlafdaten" im Steckbrief (Morgen-Messenger seit 14.09.
+  weg); Meta-Regel 2 „mit Titel, Tag und Uhrzeit" → allgemein „woran er es
+  wiedererkennt"; Imprint-Text mit Platzhaltern statt „Sasha".
+- Großbuchstaben-Befehle auf `gross` in normale Schreibung (EINE, WO, im
+  Imprint NUR/EINMAL/KEIN über `imprint_for_prompt(betont=False)`, im
+  Umschlag `<kontext_automatisch>` NICHT) — Anthropic rät davon ab, aktuelle
+  Modelle befolgen sie überzogen. `klein` bleibt in Großbuchstaben (so ist
+  das qwen gemessen). Noch offen: Großbuchstaben in einigen gross-
+  Werkzeug-Beschreibungen (antwort, run_code, save_from_sandbox, Kalender-
+  Phasen/Routinen) und im Alarm-Block (`ki_prompt._alarm_prompt`, geteilt
+  mit klein, verweist dazu noch aufs Dashboard und `[[bild: alarm]]`).
+- Steckbrief: der Satz „…der Grund, warum eine Antwort manchmal gegen den
+  spontanen Wunsch geht" ist raus (Idee dahinter: [zukunftsvisionen.md](zukunftsvisionen.md)).
+
 ## Der Nutzer im Prompt — `core/nutzer_angaben.py` (seit 2026-10-09)
 
 Leerer Erststart (Produkt-Inventur Punkt 1): Persona, Antwortverhalten,
@@ -251,8 +305,8 @@ neu — pro Installation stabil, der Cache bleibt warm. Bewusst unverändert:
 (`core/werkzeug_*.py`), Fehlercode-Texte (`core/fehlercodes.py`),
 Werkzeug-Ergebnisse (z. B. `input_aufraeumen`, `ehrlichkeit`), der
 Gedächtnis-Kopf. Persönliche Fakten im Prompt: „Linux-PC, Wand-Monitor
-(Pi 3)" und das Turn-Beispiel (klein) beschreiben Sashas Geräte — gehört in
-eine Einstellung oder ins Gedächtnis.
+(Pi 3)" und das Turn-Beispiel beschreiben Sashas Geräte — seit 2026-10-14
+nur noch auf `klein` (dort gemessen, unverändert).
 
 ## Historie
 
@@ -264,3 +318,5 @@ eine Einstellung oder ins Gedächtnis.
 - **2026-10-08** — Umschlag `<kontext_automatisch>`.
 - **2026-10-09** — Werkzeug-Spur im Verlauf; Nutzer als Platzhalter.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
+- **2026-10-14** — Ballast raus (Doppeltes, Veraltetes, Großbuchstaben auf
+  gross), Prompt-Budget 21.000 Zeichen mit Wächter-Test.

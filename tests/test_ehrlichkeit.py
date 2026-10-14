@@ -329,7 +329,7 @@ def test_read_file_nicht_gefunden_belegt():
 def test_anthropic_adapter_haengt_hinweis_als_user_nachricht_an(monkeypatch):
     monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
     monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
-    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
     c = FakeClient([
         {"text": ["Hab den Termin eingetragen."],

@@ -57,7 +57,7 @@ def ruhig(monkeypatch):
     """Alles abklemmen, was beim Prompt-Bau oder Speichern echte Daten anfasst."""
     gespeichert = []
     monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
-    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
     monkeypatch.setattr(ki_prompt, "_should_think", lambda m: False)
     monkeypatch.setattr(consolidation, "zug_vormerken",

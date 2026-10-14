@@ -8,7 +8,7 @@ Messungen dazu existiert.
 |---|---|
 | **Einstieg.** Überblick: wie der Chat läuft (lokal und Cloud), Architektur-Bild, wo welches Thema steht | [ki_system.md](ki_system.md) |
 | Anbieter und Modelle: Cloud-Kern, zweiter Dialekt, Backend-Wahl, Lokal-Regel, Isolations-Invariante, Modell-Parameter, **Fallen der API**, gestoppt = geschätzt gebucht, lokales Modell, Warmup | [anbieter_modelle.md](anbieter_modelle.md) |
-| System-Prompt-Reihenfolge, zwei Schienen `klein`/`gross`, Prompt-Cache (statisch vorn, Wechselndes hinten), Nutzer im Prompt | [prompt_aufbau.md](prompt_aufbau.md) |
+| System-Prompt-Reihenfolge, zwei Schienen `klein`/`gross`, Prompt-Cache (statisch vorn, Wechselndes hinten), **Prompt-Budget** (21.000 Zeichen, Wächter-Test), Werkzeug-Beschreibungen als wichtigster Hebel, Nutzer im Prompt | [prompt_aufbau.md](prompt_aufbau.md) |
 | Werkzeuge: Liste, Werkzeug-Register (neues Werkzeug anlegen), Status und Belege („Belegt oder gesagt"), Gespräche/Projekte/Ablage/PDF-Werkzeuge | [werkzeuge.md](werkzeuge.md) |
 | Die eine Werkzeug-Schleife: Adapter, Fehler sind keine Antwort, Stoppen, Rundengrenze | [werkzeug_schleife.md](werkzeug_schleife.md) |
 | Erlaubnis-Gate und Knopf-Dialog, Geltungsbereiche einmal / Gespräch / immer | [erlaubnis_gate.md](erlaubnis_gate.md) |
@@ -43,7 +43,7 @@ Messungen dazu existiert.
 | **Prüfstand** — arbeitet die Cloud-KI ehrlich und richtig? Fälle aus Sashas Alltag (YAML) über den echten Weg gegen Wegwerf-Daten: Endzustand, Belegpflicht (jede Behauptung mit Zitat), Metriken, verdeckte Fälle, Ist-Stand vom 08.10.; Kosten im eigenen Topf, sparen (früh abbrechen, Richter im Batch, abspielen) | [pruefstand.md](pruefstand.md) |
 | **Werkzeug-Erzeuger** — KI-Werkzeuge aus dem Schema einer Quelle (MCP-Form + `x-zentrale`) mit einer Schutzschicht für alle; Kalender als erste Quelle (Phasen, Gruppe, Ebene); wie man eine Quelle oder einen MCP-Server anbindet, was ein sauberer Adapter ist; Einstellung `werkzeuge_erzeugt`; **Anbindungs-Beschreibung** (ein Programm per JSON statt Python anbinden: Format, Stufen, Probefahrt `scripts/anbindung_probe.py`, Beispiel, Kalender über HTTP) | [werkzeug_erzeuger.md](werkzeug_erzeuger.md) |
 | **Modell-Profile** — eine eigene Umgebung je Modell (Prompt, Werkzeuge, Pflicht-Werkzeug, Zusatz-Prüfer) über der Schiene; das qwen-Profil für den Budget-Rückfall, was half, was nicht, Zahlen, Quellen | [modell_profile.md](modell_profile.md) |
-| **Zukunftsvisionen** — Sashas Ideen für später, nicht gebaut: Klassifikator „was mache ich gerade / wie viel freie Zeit“, Gesundheits-/Aktivitäts-/Krankheits-Logbuch | [zukunftsvisionen.md](zukunftsvisionen.md) |
+| **Zukunftsvisionen** — Sashas Ideen für später, nicht gebaut: Klassifikator „was mache ich gerade / wie viel freie Zeit“, Gesundheits-/Aktivitäts-/Krankheits-Logbuch, Prüfkette „stört es den Fokus?“ | [zukunftsvisionen.md](zukunftsvisionen.md) |
 
 ## Wo sonst noch KI drinsteckt
 

@@ -265,8 +265,11 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None,
     Der statische Kopf: über alle Turns einer Sitzung BYTE-IDENTISCH.
 
     Gerendert wird tools → system → messages. Ein Breakpoint hinter diesem
-    Block cacht also Tool-Schema UND Prompt zusammen — die ~4.700 Token, die
-    sonst bei jedem Turn und jeder Tool-Runde voll bezahlt würden.
+    Block cacht also Tool-Schema UND Prompt zusammen — Stand 14.10.2026 rund
+    47.000 Zeichen Werkzeug-Schema plus ~19.500 Zeichen Prompt (mit Sashas
+    Gedächtnis-Kopf und Skill-Liste), grob 20.000 Token, die sonst bei jedem
+    Turn und jeder Tool-Runde voll bezahlt würden. Messen:
+    tests/test_prompt_budget.py (Prompt-Budget, Werkzeuge als Info).
 
     Hier darf nichts hinein, was sich PRO TURN ändert. Eine Uhrzeit an dieser
     Stelle macht den Cache zu einer reinen Kostensteigerung: jeder Turn
@@ -328,7 +331,9 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None,
             block = ""
         if block:
             teile.append(block)
-    imprint = ki_prompt._imprint_prompt()
+    # Großbuchstaben-Hervorhebungen (NUR, EINMAL …) nur für klein — dort ist
+    # das qwen darauf gemessen; gross bekommt normale Schreibung (2026-10-14).
+    imprint = ki_prompt._imprint_prompt(betont=schiene.NAME == "klein")
     if imprint:
         teile.append(imprint)
     return "\n\n".join(teile)
@@ -399,7 +404,7 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
 # Der Wortlaut ist fest (gleiche Bytes jeden Zug), und er steht hinter dem
 # Cache-Breakpoint — kostet also nur die paar Zeichen selbst.
 _UMSCHLAG_AUF = ("<kontext_automatisch>\n(Diesen Block hängt ZENTRALE automatisch an "
-                 "jede neue Nachricht an. Sasha hat ihn NICHT geschrieben und sieht ihn "
+                 "jede neue Nachricht an. Sasha hat ihn nicht geschrieben und sieht ihn "
                  "nicht im Chat — sprich ihn nicht darauf an, als hätte er ihn geschickt.)")
 _UMSCHLAG_ZU = "</kontext_automatisch>"
 

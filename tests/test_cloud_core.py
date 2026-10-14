@@ -85,7 +85,7 @@ def test_wechselnder_teil_sagt_dass_er_nicht_von_sasha_ist():
     Umschlag hielt die KI ihn für etwas, das Sasha geschickt hat."""
     t = cloud._volatile_text("", via_mic=False, tutor_mode=False)
     assert t.startswith("<kontext_automatisch>") and t.endswith("</kontext_automatisch>")
-    assert "NICHT geschrieben" in t and "## Jetzt" in t
+    assert "nicht geschrieben" in t and "## Jetzt" in t
     # fester Wortlaut: der Umschlag selbst ändert sich nie
     assert cloud._umschlag("XX1").replace("XX1", "") == cloud._umschlag("XX2").replace("XX2", "")
     assert cloud._umschlag("") == ""

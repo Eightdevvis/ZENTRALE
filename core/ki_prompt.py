@@ -134,16 +134,17 @@ def _now_prompt() -> str:
     return head
 
 
-def _imprint_prompt() -> str:
+def _imprint_prompt(betont: bool = True) -> str:
     """Der nahe Horizont (heute/morgen) als Prompt-Block.
 
     Dünner Wrapper um kalender.imprint_for_prompt — die Begründung steht
     dort. Hier nur die Kapselung: fällt der Kalender aus, darf der Chat
     nicht mitfallen, also Fehler schlucken und lieber ohne Block antworten.
+    `betont=False` für die Schiene gross: Hervorhebungen ohne Großbuchstaben.
     """
     try:
         import kalender
-        return kalender.imprint_for_prompt()
+        return kalender.imprint_for_prompt(betont=betont)
     except Exception:
         return ""
 

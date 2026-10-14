@@ -30,3 +30,12 @@ Anfang ([gedaechtnis.md](gedaechtnis.md)).
 Gibt es das Logbuch, wandert der Punkt „Aktuell gedrosselt: er war krank“ aus
 den Zielen dorthin. Die Ziele sagen dann nur noch, wohin es geht, und das
 Logbuch sagt, wie es gerade steht.
+
+## Prüfkette „stört es den Fokus?“ (14.10.2026)
+
+Im Steckbrief stand, die stabilen Regeln seien „der Grund, warum eine Antwort
+manchmal gegen den spontanen Wunsch geht“. Als Satz im Prompt bewirkt das
+nichts Prüfbares, deshalb ist er gestrichen. Stattdessen später eine harte
+Prüfkette (oder ein Klassifikator): erst den aktuellen Fokus prüfen, dann
+Sashas Nachricht abwägen, dann entscheiden, ob das Gewünschte den Fokus
+stört. Gehört zum Schema, das nach der Grund-KI kommt.
