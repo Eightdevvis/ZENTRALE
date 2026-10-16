@@ -95,6 +95,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
+| `kalender_sync_zustand` | 1 | Stand des Google-Kalender-Syncs (letzter Versuch/Erfolg, Fehler im Klartext), Urteil „alt/Problem" und Alarm dazu (seit 2026-10-16) |
 | `zug` | 1 | Der laufende Chat-Zug: Gesprächs-id und Stopp-Signal für die Werkzeuge, Ereignisse von Werkzeugen an die TUI (z. B. `ablage`) |
 | `zug_ablauf` | 1 | Ablauf-Protokoll des laufenden Chat-Zugs (nur Cloud, gross): Kontext, Text zwischen Werkzeugen, Werkzeuge mit vollem Ergebnis, Fragen, Prüfung, Antwort, Kosten — nur mitschreiben; als Text für /trace |
 | `werkzeug_befund` | 1 | Was ein Werkzeug zurückgibt: Status (`[ergebnis: ok/fehlgeschlagen/…]`), Beleg und Fehlercode; feste Formen ERLEDIGT/ABGEBROCHEN; die Schiene des laufenden Werkzeug-Aufrufs |
@@ -257,7 +258,7 @@ egal woran, ging durch dieselbe Datei.
 | `listen` | Listen, Einträge, Projekte |
 | `notizen` | Block-Notizen |
 | `karte` | Weltkarte |
-| `kalender` | Kalender |
+| `kalender` | Kalender; Stand des Google-Syncs (`/api/calendar/sync`) |
 | `ki` | Chat-Stream, Wiederholen, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
 | `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren; Bewertungen der Antworten |
 | `stimme` | Sprechen und Zuhören |

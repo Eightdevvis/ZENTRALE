@@ -8,6 +8,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 |---|---|---|
 | **Kalender** | Layer-Modell (termine / uncommitted / rhythmus / pausen; routinen → termine), Konflikte, Alarme, Kennungen | [kalender_system.md](kalender_system.md) |
 | **Kalender → iCalendar** | .ics (vdir, live seit Oktober), Google-Sync; Ebene uncommitted, Tagesrhythmus/Phasen, Gruppen, Quellen (Titel aus Listen/Projekten), Stil | [kalender_ics_bauplan.md](kalender_ics_bauplan.md) |
+| **Kalender: Google-Sync-Stand** | Zustand nach jedem Sync-Lauf (Zugang abgelaufen, kein Netz, Löschsperre …), Route `/api/calendar/sync`, Warnung in TUI und Alarm-Kanal | [kalender_sync_zustand.md](kalender_sync_zustand.md) |
 | **Kalender-Ansichten** | TUI-Entwürfe A/B/C (Tagesliste, Monatsraster, Zeitachse), Taste v dreht jetziger → A → B → C, Tab Woche/Monat; Tagesrhythmus als Hintergrund + Kasten R, Gruppen im Monat + Taste G | [kalender_ansichten_vorschau.md](kalender_ansichten_vorschau.md) |
 | **Mail** | IMAP-Triage per Sender-Keymap; der Ordner IST der Status, kein Flag | [mail_system.md](mail_system.md) |
 | Mail neu: Übergabe an eine eigene Sitzung (Wünsche, Vorbild Kalender, Bestand, erste Fragen) | [mail_neu_uebergabe.md](mail_neu_uebergabe.md) |

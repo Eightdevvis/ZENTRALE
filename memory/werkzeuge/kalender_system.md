@@ -261,7 +261,7 @@ erinnern „keine Geige". Modelliert als top-level `pausen`-Liste
 (`[{label, von, bis, grund?}]`). Eine Routine, deren Vorkommen in eine Pause für
 ihr Label fällt, bekommt in `entries_in_range` ein `ausfall`-Feld und wird im
 Render als `ℹ <label> fällt aus (<grund>)` gezeigt statt als Termin - plus der
-`⚠ ABSAGEN`-Alarm verstummt (Anbieter hat ja schon abgesagt). Eingetragen wird
+`⚠ ABSAGEN`-Alarm und (seit 16.10.) Kollisionen verstummen (`_verbindlich`). Eingetragen wird
 manuell, am einfachsten über das KI-Tool `add_calendar_pause` (Sasha sagt's,
 die KI trägt's ein). `_pause_grund(label, day, pausen)` ist die **Nahtstelle**:
 heute manuelle Liste, später (KI mit Internet) erweiterbar um automatische

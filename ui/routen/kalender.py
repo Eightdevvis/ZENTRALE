@@ -17,6 +17,7 @@ import kalender_kategorie  # type: ignore  – Gruppen-Katalog (CATEGORIES)
 import kalender_quelle  # type: ignore  – Titel live aus Liste/Projekt
 import kalender_rhythmus  # type: ignore  – Motive der Phasen (Tagesrhythmus)
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
+import kalender_sync_zustand  # type: ignore  – Stand des Google-Syncs
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
 
@@ -98,12 +99,28 @@ def api_calendar():
         out['alarms'] = state.get_alarms() or []
     except Exception:
         out['alarms'] = []
+    # Stand des Google-Syncs (16.10.2026): die Ansichten zeigen bei einem
+    # Problem eine Warnzeile, ohne Problem höchstens leise „google ✓ 16:31".
+    try:
+        out['sync'] = kalender_sync_zustand.bewerten()
+    except Exception:
+        out['sync'] = {"bekannt": False, "problem": False}
     # Jede Zeile nennt Ebene (`layer`) und Gruppe (`kategorie`, „keine" wenn
     # leer); Phasen des Tagesrhythmus dazu `motiv` (aus dem Kern).
     for liste in (out.get('days') or {}).values():
         for e in liste:
             e.setdefault('kategorie', 'keine')
     return jsonify(out)
+
+
+@bp.route('/api/calendar/sync')
+def api_calendar_sync():
+    """Stand des Google-Abgleichs (scripts/kalender_sync.py schreibt ihn nach
+    jedem Lauf): {bekannt, letzter_versuch, letzter_erfolg, ok, art, fehler,
+    seit, exit, alt, problem, hinweis, kurz}. `bekannt` false: auf diesem
+    Rechner lief nie ein Sync. `alt`: seit > ALT_MIN Minuten kein Erfolg
+    oder kein Versuch. Doku: memory/werkzeuge/kalender_sync_zustand.md."""
+    return jsonify(kalender_sync_zustand.bewerten())
 
 
 def _alle_kennungen() -> set:

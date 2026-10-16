@@ -423,6 +423,16 @@ def test_tui_logs_sind_im_testlauf_umgelenkt():
         assert ".local/state" not in p, var
 
 
+def test_kalender_sync_merkzettel_und_zustand_sind_umgelenkt():
+    """Der Sync-Wächter (scripts/kalender_sync.py) und sein Zustand (core/
+    kalender_sync_zustand.py) schreiben im Test nie in ~/.local/share."""
+    import kalender_sync_zustand
+    for var in ("ZENTRALE_KALENDER_SYNC_STAND", "ZENTRALE_KALENDER_SYNC_ZUSTAND"):
+        p = os.environ.get(var, "")
+        assert p and ".local/share" not in p, var
+    assert ".local/share" not in kalender_sync_zustand.pfad()
+
+
 def test_transkript_und_gedaechtnis_zeigen_nie_ins_echte_data():
     """Der Riegel gegen das Leck vom 2026-10-06: die Konsolidierungs-Tests
     schrieben ins echte Transkript, weil der Pfad fest verdrahtet war. Zeigt

@@ -294,6 +294,9 @@ den Termin (seinen Container/Kasten im Kalender) angewendet."
   (14 Tage); fehlen lokal seit dem letzten Sync mehr Termine als die
   Löschsperre, läuft vdirsyncer nicht (`ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1`
   für Gewolltes).
+- **Sichtbar** (seit 16.10.): jeder Lauf schreibt seinen Stand (Zugang
+  abgelaufen, kein Netz, …), TUI und Alarm-Kanal zeigen Probleme —
+  [kalender_sync_zustand.md](kalender_sync_zustand.md).
 - **Automatisch:** `deploy/zentrale-kalender-sync.{service,timer}` (alle
   3 min, 1 min nach Anmeldung), in `~/.config/systemd/user/` verlinkt.
 - **Erster Sync:** ZENTRALE 48 → 518 Dateien, Google 470 → 518, von den 470

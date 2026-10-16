@@ -18,8 +18,13 @@ Warum nicht vdirsyncer direkt (memory/werkzeuge/kalender_ics_bauplan.md):
      seit dem letzten Sync mehr Termine als die Löschsperre erlaubt, wird
      NICHT gesynct — sonst trüge vdirsyncer die Lücke als Löschung zu Google.
      Gewollt? Dann einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.
+  5. (16.10.2026) Nach JEDEM Lauf den Zustand festhalten (core/
+     kalender_sync_zustand.py): letzter Versuch, letzter Erfolg, Fehler im
+     Klartext („Google-Zugang abgelaufen — neu anmelden"). ZENTRALE zeigt ihn
+     an — ein abgelaufener Zugang blieb vorher tagelang unbemerkt.
 Alle Argumente werden an `vdirsyncer sync` durchgereicht (z. B. ein Paar).
-Exit-Code = der von vdirsyncer (1, wenn ZENTRALE nicht auf ics steht).
+Exit-Code = der von vdirsyncer (1, wenn ZENTRALE nicht auf ics steht;
+2 Löschsperre; 3 Google-Sicherung fehlgeschlagen).
 """
 
 import json
@@ -37,6 +42,7 @@ for _p in (_CORE, _ROOT):
 import kalender            # noqa: E402
 import kalender_ics        # noqa: E402
 import kalender_speicher   # noqa: E402
+import kalender_sync_zustand  # noqa: E402
 
 
 def _anzahl(vdir) -> int:
@@ -83,12 +89,28 @@ def _stand_merken(vdir) -> None:
     os.replace(tmp, STAND)
 
 
+# Was vdirsyncer in diesem Lauf ausgab — daraus liest der Zustand den Grund
+# („invalid_grant" → Zugang abgelaufen). Wird trotzdem durchgereicht, damit
+# das Journal des Timers alles behält.
+_AUSGABE: list = []
+
+
+def _vdirsyncer(exe, *args) -> int:
+    r = subprocess.run([exe, "sync", *args], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, text=True, errors="replace")
+    text = r.stdout or ""
+    if text:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    _AUSGABE.append(text[-20000:])
+    return r.returncode
+
+
 def _google_sichern(exe) -> bool:
     """Nur-Lese-Kopie von Google holen; einmal am Tag als Archiv (14 Tage)."""
     import datetime
     import tarfile
-    r = subprocess.run([exe, "sync", "google_probe"])
-    if r.returncode != 0:
+    if _vdirsyncer(exe, "google_probe") != 0:
         return False
     os.makedirs(SICHERUNG, exist_ok=True)
     heute = datetime.date.today().isoformat()
@@ -104,14 +126,45 @@ def _google_sichern(exe) -> bool:
 
 
 def main(argv=None) -> int:
+    """Ein Lauf; danach steht sein Ergebnis im Sync-Zustand — auch bei einer
+    Ausnahme (die danach weiterfliegt, damit das Journal sie zeigt)."""
+    _AUSGABE.clear()
+    stufe = [""]
+    try:
+        code = _lauf(argv, stufe)
+    except BaseException as e:
+        if isinstance(e, SystemExit) and not e.code:
+            _zustand(0, "")
+        else:
+            _zustand(1, "sonstig", "Absturz: %s: %s" % (type(e).__name__, str(e)[:80]))
+        raise
+    _zustand(code, stufe[0])
+    return code
+
+
+def _zustand(code, stufe, fehler=None) -> None:
+    """Den Zustand schreiben; ein Fehler dabei darf den Sync nicht kippen."""
+    try:
+        if fehler:
+            kalender_sync_zustand.schreiben(code, stufe, fehler)
+            return
+        art, text = kalender_sync_zustand.erkennen(code, "\n".join(_AUSGABE), stufe)
+        kalender_sync_zustand.schreiben(code, art, text)
+    except Exception as e:
+        print("Sync-Zustand ließ sich nicht schreiben:", e)
+
+
+def _lauf(argv, stufe) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if kalender_speicher.modus() != "ics":
         print("Kalender steht nicht auf 'ics' (Einstellung kalender_speicher) — "
               "kein Sync. Erst umziehen: scripts/kalender_migrieren.py.")
+        stufe[0] = "einrichtung"
         return 1
     exe = shutil.which("vdirsyncer")
     if not exe:
         print("vdirsyncer nicht gefunden.")
+        stufe[0] = "einrichtung"
         return 1
     sp = kalender_speicher.ics_speicher(kalender.CAL_PATH, kalender.ICS_DIR,
                                         mit_spiegel=False)
@@ -131,15 +184,17 @@ def main(argv=None) -> int:
               f"Einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.")
         for n in fehlen[:10]:
             print("   fehlt:", n)
+        stufe[0] = "loeschsperre"
         return 2
     # Die Google-Sicherung gehört zum echten Paar „zentrale" (so ruft es der
     # Timer). Andere Aufrufe (ein Paar von Hand, Tests) lassen sie aus.
     if "zentrale" in argv and not _google_sichern(exe):
         print("ABBRUCH: die Sicherungskopie von Google ließ sich nicht holen — "
               "ohne frische Sicherung wird nicht gesynct.")
+        stufe[0] = "sicherung"
         return 3
 
-    code = subprocess.run([exe, "sync", *argv]).returncode
+    code = _vdirsyncer(exe, *argv)
     if code == 0:
         _stand_merken(sp.vdir)
 

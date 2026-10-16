@@ -170,7 +170,7 @@ def _save_raw(data: dict) -> None:
     # Schreibvorgang kippen. Kein Deadlock-Risiko - die open_alarms-Kette nimmt
     # _lock nicht (nur die Setter tun das, in denen _save_raw gerade schon läuft).
     try:
-        state.set_alarms(open_alarms())
+        state.set_alarms(alarme())
     except Exception as e:
         state.push_log(f"[calendar] Alarm-Recompute fehlgeschlagen: {e}")
 
@@ -1041,3 +1041,16 @@ from kalender_konflikte import (  # noqa: E402,F401
     travel_minutes, _WEEKDAYS_FULL_DE)
 import kalender_konflikte as _konflikte  # noqa: E402
 _konflikte.anschliessen(_load_raw, entries_in_range)
+
+
+def alarme() -> list:
+    """Das komplette Set für den Alarm-Kanal (state.set_alarms): der Zustand
+    des Google-Syncs (core/kalender_sync_zustand.py, seit 16.10.2026 — ein
+    abgelaufener Zugang war vorher unsichtbar) und die Kalender-Alarme.
+    open_alarms bleibt reiner Kalender-Inhalt (Werkzeuge, Messläufe)."""
+    import kalender_sync_zustand
+    try:
+        sync = kalender_sync_zustand.alarme()
+    except Exception:
+        sync = []
+    return sync + open_alarms()

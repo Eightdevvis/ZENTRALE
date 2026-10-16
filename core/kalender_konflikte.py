@@ -37,7 +37,10 @@ NUR_HINWEIS = (UNVERBINDLICH, RHYTHMUS)
 
 
 def _verbindlich(e: dict) -> bool:
-    return e.get("layer") not in NUR_HINWEIS and not e.get("deaktiviert")
+    # Ausfall (16.10.2026): ein Vorkommen, das eine Pause wegnimmt
+    # („Herbstferien"), findet nicht statt — es kann mit nichts kollidieren.
+    return (e.get("layer") not in NUR_HINWEIS and not e.get("deaktiviert")
+            and not e.get("ausfall"))
 
 
 def anschliessen(laden, im_zeitraum) -> None:
@@ -681,7 +684,7 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
     if layer in NUR_HINWEIS:
         return []                         # Unverbindliches/Phasen fragen nie nach
     existing = [e for e in entries_in_range(d, d).get(d.isoformat(), [])
-                if _verbindlich(e)]   # deaktivierte und uncommitted zählen nicht mit
+                if _verbindlich(e)]   # deaktiviert, uncommitted, Ausfall zählen nicht mit
     phantom: dict = {"layer": (layer or "termine"),
                      "label": (label or "(neuer Termin)")}
     t = (time or "").strip()
@@ -725,7 +728,7 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
         raw.append(("ABSAGEN", line, None))
     for day_iso, entries in entries_in_range(today, end).items():
         d = date.fromisoformat(day_iso)
-        entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted: kein Alarm
+        entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted/Ausfall: kein Alarm
         for line in _conflict_lines(d, entries, away_blocks):
             raw.append(("KONFLIKT", line, day_iso))
         for line in day_warnings(entries):

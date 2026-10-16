@@ -189,6 +189,8 @@ os.environ.setdefault("ZENTRALE_TUI_CRASH_LOG",
 os.environ.setdefault("ZENTRALE_PEER_STATUS", os.path.join(_THEME_TMP, "peer.json"))
 # Merkzettel des Kalender-Sync-Wächters (scripts/kalender_sync.py) nie echt.
 os.environ.setdefault("ZENTRALE_KALENDER_SYNC_STAND", os.path.join(_THEME_TMP, "sync_stand.json"))
+# Zustand des Google-Syncs (core/kalender_sync_zustand.py) nie der echte.
+os.environ.setdefault("ZENTRALE_KALENDER_SYNC_ZUSTAND", os.path.join(_THEME_TMP, "sync_zustand.json"))
 # Dashboard-Wunsch (/dashboard an|aus): Tests sehen immer das Meta-Rad,
 # egal was Sasha gerade eingestellt hat, und schreiben nie seine Datei.
 os.environ.setdefault("ZENTRALE_DASHBOARD_FILE", os.path.join(_THEME_TMP, "dashboard"))

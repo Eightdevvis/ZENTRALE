@@ -11,6 +11,7 @@
 
 import curses
 import json
+import textwrap
 import time
 import urllib.error
 import urllib.parse
@@ -113,6 +114,17 @@ def _monat(d: date, delta: int) -> date:
             return date(j, m, t)
         except ValueError:
             continue
+
+
+def rueckfrage_zeilen(text: str, breite: int) -> list[str]:
+    """Text einer Rückfrage in Zeilen von höchstens `breite` Zeichen —
+    an Wortgrenzen, überlange Wörter werden geteilt, nichts fällt weg."""
+    breite = max(1, breite)
+    aus = []
+    for absatz in (text or "").split("\n"):
+        aus += textwrap.wrap(absatz, breite, drop_whitespace=True,
+                             break_long_words=True, break_on_hyphens=False) or [""]
+    return aus or [""]
 
 
 class Bedienung:
@@ -669,11 +681,14 @@ class Bedienung:
         if getattr(dl, "liste", False):
             self._zeichne_liste(dl, by, bx, bh, bw)
             return
-        # kurze Rückfrage
+        # Rückfrage: lange Fragen (Kollisions-Warnung ~120 Zeichen) brechen
+        # um, der Kasten wächst in der Höhe statt abzuschneiden (16.10.2026).
         frage = dl.zeile()
         w = max(44, min(bw - 4, len(frage) + 6))
-        y, x, w, h = self._kasten(by, bx, bh, bw, w, 5, dl.titel)
-        z.addclip(y + 2, x + 2, frage, w - 4, C["bright"])
+        zeilen = rueckfrage_zeilen(frage, w - 4)
+        y, x, w, h = self._kasten(by, bx, bh, bw, w, len(zeilen) + 4, dl.titel)
+        for i, zeile in enumerate(zeilen[:max(1, h - 4)]):
+            z.addclip(y + 2 + i, x + 2, zeile, w - 4, C["bright"])
 
     def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, by, bx, bh, bw):
         """Ein Kasten mit Feldzeilen (Formular und Fenster „advanced"):

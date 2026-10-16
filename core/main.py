@@ -84,7 +84,7 @@ def main():
     # kalender._save_raw das Set nach jeder Änderung frisch; der periodische
     # Recompute unten fängt zeitrelative Alarme ab (Reise rückt näher).
     try:
-        state.set_alarms(kalender.open_alarms())
+        state.set_alarms(kalender.alarme())
     except Exception as e:
         log(f"Alarm-Init fehlgeschlagen: {e}")
 
@@ -145,11 +145,12 @@ def main():
         # Fängt zeitrelative Alarme ab, die OHNE Kalender-Edit relevant werden
         # (eine Reise rückt in den Horizont). Kalender-Edits selbst aktualisieren
         # das Set schon sofort über kalender._save_raw - das hier ist nur der
-        # langsame Heartbeat gegen Zeit-Drift.
+        # langsame Heartbeat gegen Zeit-Drift — und bringt den Zustand des
+        # Google-Syncs (kalender.alarme) in den Kanal.
         _alarm_tick += 1
         if _alarm_tick % 300 == 0:
             try:
-                state.set_alarms(kalender.open_alarms())
+                state.set_alarms(kalender.alarme())
             except Exception as e:
                 log(f"Alarm-Recompute fehlgeschlagen: {e}")
 

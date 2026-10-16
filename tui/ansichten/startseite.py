@@ -46,6 +46,16 @@ RAD_SYMBOLE = tuple(a[1] for a in RAD_APPS)
 EIGENE_APPS = []
 
 
+def sync_warnung(state) -> str | None:
+    """Die Warnung des Google-Kalender-Syncs aus dem Alarm-Kanal
+    (/api/state → alarms, kind „Google-Sync", core/kalender_sync_zustand.py)
+    für die Startseite — ohne den Klartext in Klammern. None ohne Problem."""
+    for a in (state or {}).get("alarms") or []:
+        if isinstance(a, dict) and a.get("kind") == "Google-Sync" and a.get("text"):
+            return "⚠ " + a["text"].split(" (", 1)[0]
+    return None
+
+
 def rad_apps():
     """Was im App-Rad steht: die festen Apps, dann die eigenen."""
     return RAD_APPS + EIGENE_APPS
@@ -539,6 +549,10 @@ class Startseite:
         lz = "up %s · net %s" % (up, "traffic !" if nets else "offline ✓")
         addclip(top + 1, max(2, W - len(lz) - 3), lz, W - 4,
                 C["warn"] if nets else C["faint"])
+        sw = sync_warnung(state)                  # Google-Sync gestört? (16.10.2026)
+        if sw:
+            sw = sw[:max(0, W - 6)]
+            addclip(top + 2, max(2, W - len(sw) - 3), sw, W - 4, C["warn"])
         if body_h >= 24:                          # unten die letzten Log-Zeilen
             return draw_stdout(top + body_h - 5, 0, 5, W,
                                state.get("logs", []) or [], None)

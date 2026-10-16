@@ -68,7 +68,13 @@ ROLLE = {
     "a_akzent": "k_akzent",     # Titel, Datum, KW, Auswahl, Statuszeile — alle Ansichten
     "a_aktiv": "k_akzent",      # Rahmen des aktiven Kastens
     "zyklus": "cyc",            # Zyklus-Tönung (aus dem »periode«-Graphen)
+    "sync_warn": "warn",        # „⚠ google-sync: Zugang abgelaufen — seit …"
 }
+# Stand des Google-Syncs (16.10.2026, daten["sync"] aus /api/calendar):
+# mit Problem eine Warnung in der Statuszeile von A und im Kopf von B/C;
+# ohne Problem höchstens leise „google ✓ 16:31" in der Statuszeile von A.
+# Sasha entscheidet: False → ohne Problem steht gar nichts da.
+SYNC_OK_ZEIGEN = True
 # Nebeneinanderliegende Spannen müssen unterscheidbar sein → reihum vergeben.
 SPANNEN_FARBEN = ("k_sp1", "k_sp2", "k_sp3", "k_sp4")
 TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))
@@ -341,6 +347,27 @@ def _kasten(lw: Leinwand, y: int, x: int, w: int, h: int, titel: str = ""):
     if titel and w > 6:
         lw.setze(y, x + 2, kuerzen(" " + titel.upper() + " ", w - 4),
                  ROLLE["titel"])
+
+
+def sync_hinweis(daten) -> tuple:
+    """(warnung, leise) aus daten["sync"] — je ein Text oder None."""
+    s = daten.get("sync") if isinstance(daten, dict) else None
+    if not isinstance(s, dict):
+        return None, None
+    if s.get("problem") and s.get("hinweis"):
+        return s["hinweis"], None
+    return None, (s.get("kurz") if SYNC_OK_ZEIGEN else None)
+
+
+def _sync_kopf(lw, y, links: int, rechts: int, daten) -> None:
+    """Die Sync-Warnung rechtsbündig in eine Kopfzeile (B, C), endet vor
+    Spalte `rechts`, beginnt nie vor `links`."""
+    warnung, _leise = sync_hinweis(daten)
+    if not warnung:
+        return
+    text = kuerzen(" %s " % warnung, rechts - links)
+    if text_breite(text) >= 8:
+        lw.setze(y, rechts - text_breite(text), text, ROLLE["sync_warn"])
 
 
 def _zu_klein(breite: int, hoehe: int) -> list:
@@ -688,6 +715,16 @@ def _a_status(lw, y, breite, daten, ab, ende, jetzt, erledigte):
         text += " ──> %s :: %s <" % (wann, t["label"])
     text = kuerzen(" " + text, breite)
     lw.setze(y, 0, text + " " * (breite - text_breite(text)), r)
+    # rechts im Balken: Stand des Google-Syncs (Warnung in Warnfarbe, sonst leise)
+    warnung, leise = sync_hinweis(daten)
+    zusatz = warnung or leise
+    if zusatz:
+        # die Warnung geht vor: sie darf den „nächsten Termin“ bis auf ein Drittel kürzen
+        platz = breite - min(text_breite(text), breite // (3 if warnung else 2)) - 2
+        zusatz = kuerzen(" " + zusatz + " ", platz)
+        if text_breite(zusatz) >= 6:
+            lw.setze(y, breite - text_breite(zusatz), zusatz,
+                     ROLLE["sync_warn"] + INV if warnung else r)
 
 
 def _a_zyklus(daten, d) -> bool:
@@ -902,6 +939,8 @@ def ansicht_b(daten, breite: int, hoehe: int, erledigte: bool = False,
     lw.setze(0, 1, kuerzen("KALENDER · %s %d" % (MONATE[erster.month - 1].upper(),
                                                    erster.year), breite - 1),
              ROLLE["titel"])
+    _sync_kopf(lw, 0, 2 + text_breite("KALENDER · %s %d" % (
+        MONATE[erster.month - 1].upper(), erster.year)) + 2, breite - 1, daten)
     for c, wt in enumerate(WT):
         lw.setze(1, 2 + c * (cw + 1), wt[:cw],
                  ROLLE["wochenende"] if c >= 5 else ROLLE["werktag"])
@@ -1161,6 +1200,7 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
     else:
         span = "%s–%s" % (mo.strftime("%d.%m."), so.strftime("%d.%m."))
     _kasten(lw, 0, 0, breite, hoehe, "woche %d · %s" % (kw, span))
+    _sync_kopf(lw, 0, 4 + text_breite("woche %d · %s" % (kw, span)) + 2, breite - 2, daten)
 
     tage = [_c_bloecke(daten, d, erledigte) for d in woche]
     x0 = 1 + g
