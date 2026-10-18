@@ -10,7 +10,9 @@ mit einer Zusammenfassung („typ normal · stil keine"). Enter darauf öffnet
 dieses Fenster mit diesen Zeilen:
 
   Typ       ‹ normal › | ‹ liste ›   (←→/Leertaste)
-  Liste     nur bei Typ liste: Enter öffnet den Kasten „welche Liste?"
+  Liste     gilt nur bei Typ liste: Enter öffnet den Kasten „welche Liste?"
+            (bei Typ normal steht die Zeile gedämpft mit „—" und wird
+            übersprungen — feste Plätze wie im Formular, 18.10.2026)
             (kalender_quellen.QuellenWahl — Listen ≡ und Projekte ◆)
   Stylebox  Vorschau; Enter öffnet die Stylebox (tui/bausteine/stylebox.py),
             ⌫/Entf = kein Stil
@@ -108,20 +110,35 @@ class Advanced:
         return w
 
     def reihen(self) -> list:
-        return (["typ"] + (["liste"] if self.typ == LISTE else []) + ["stil"]
-                + (["status"] if self.status else []))
+        """Alle Zeilen, feste Plätze (die Zeile „Liste" steht immer da)."""
+        return ["typ", "liste", "stil"] + (["status"] if self.status else [])
+
+    def gilt(self) -> list:
+        """Je Zeile: gilt sie gerade? („Liste" nur bei Typ liste)"""
+        return [r != "liste" or self.typ == LISTE for r in self.reihen()]
+
+    def _auf_aktive(self, schritt):
+        g = self.gilt()
+        self.i = max(0, min(self.i, len(g) - 1))
+        for _ in range(len(g)):
+            if g[self.i]:
+                return
+            self.i = (self.i + schritt) % len(g)
 
     @property
     def reihe(self) -> str:
-        r = self.reihen()
-        self.i = max(0, min(self.i, len(r) - 1))
-        return r[self.i]
+        self._auf_aktive(1)
+        return self.reihen()[self.i]
 
     def zeilen(self) -> list:
-        """[(beschriftung, wert, aktiv, hilfe)] — wie Formular.zeilen."""
+        """[(beschriftung, wert, aktiv, hilfe)] — wie Formular.zeilen;
+        eine Zeile, die nicht gilt, hat den Wert „—"."""
         aus = []
-        for k, r in enumerate(self.reihen()):
-            if r == "typ":
+        jetzt = self.reihen().index(self.reihe)
+        for k, (r, g) in enumerate(zip(self.reihen(), self.gilt())):
+            if not g:
+                b, w = "Liste", "—"
+            elif r == "typ":
                 b, w = "Typ", "‹ %s ›" % self.typ
             elif r == "liste":
                 b, w = "Liste", _quelle_text(self.quelle)
@@ -129,7 +146,7 @@ class Advanced:
                 b, w = "Status", "‹ %s ›" % self.status
             else:
                 b, w = "Stylebox", _stil_text(self.stil)
-            aus.append((b, w, k == self.i, HILFE[r]))
+            aus.append((b, w, k == jetzt, HILFE[r]))
         return aus
 
     # ── Tasten (Tabelle: Ansicht = die Zeile, auf der man steht) ────────
@@ -166,7 +183,9 @@ class Advanced:
 
     def aktion_zeile(self, taste):
         self.fehler = ""
-        self.i = (self.i + (1 if taste in ("tab", "down") else -1)) % len(self.reihen())
+        schritt = 1 if taste in ("tab", "down") else -1
+        self.i = (self.i + schritt) % len(self.reihen())
+        self._auf_aktive(schritt)             # „Liste" bei Typ normal: übersprungen
 
     def aktion_typ(self, taste):
         self.fehler = ""

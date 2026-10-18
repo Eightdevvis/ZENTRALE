@@ -244,10 +244,10 @@ def formular_phase(p: dict | None, motive: list, heute: date, zurueck=None) -> F
         Feld("bis", "Bis", wert=p.get("ende") or "", lesen=_l_ende,
              hilfe="hh:mm · vor Von = endet am Folgetag (23:00–07:00)"),
         Feld("wied", "Wiederholung", art="wahl", wert=r["wied"], optionen=optionen),
-        Feld("alle", "Abstand", wert=r["alle"], lesen=_l_zahl(), zeigen=mit_abstand,
+        Feld("alle", "Abstand", wert=r["alle"], lesen=_l_zahl(), aktiv=mit_abstand,
              hilfe="1 = jedes Mal, 2 = jeden zweiten Tag / jede zweite Woche"),
         Feld("wtage", "An Tagen", wert=r["wtage"], lesen=_l_wtage,
-             zeigen=lambda w: w.get("wied") == AN_TAGEN, hilfe="z.B. mo mi fr, sa-so"),
+             aktiv=lambda w: w.get("wied") == AN_TAGEN, hilfe="z.B. mo mi fr, sa-so"),
         Feld("ab", "Gültig ab", wert=ab, lesen=_l_datum(heute), hilfe="TT.MM.JJJJ"),
         Feld("bis_tag", "Gültig bis", wert=r["bis"], lesen=_l_datum(heute),
              hilfe="leer = bis auf Weiteres"),
@@ -293,9 +293,9 @@ def _zeit_felder(von, bis) -> list:
     return [
         Feld("regel", "Wie die Regel", art="wahl", wert="nein", optionen=("nein", "ja"),
              hilfe="ja = an diesen Tagen wieder wie sonst"),
-        Feld("von", "Von", wert=von, lesen=_l_zeit(leer_ok=False), zeigen=anders,
+        Feld("von", "Von", wert=von, lesen=_l_zeit(leer_ok=False), aktiv=anders,
              hilfe="hh:mm am Tag des Beginns — 02:00 heißt früh an DIESEM Tag"),
-        Feld("bis", "Bis", wert=bis, lesen=_l_ende, zeigen=anders,
+        Feld("bis", "Bis", wert=bis, lesen=_l_ende, aktiv=anders,
              hilfe="hh:mm · vor Von = endet am Folgetag"),
     ]
 

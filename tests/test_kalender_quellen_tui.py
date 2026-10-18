@@ -149,12 +149,12 @@ def test_wahl_jk_sind_text_pfeile_waehlen():
 # extra shortcut". Kein eigener Weg mehr (Taste A), sondern a → Formular →
 # Advanced → Typ liste.
 def _feld(f, name):
-    return next(x for x in f.sichtbar() if x.name == name)
+    return next(x for x in f.felder if x.name == name)
 
 
 def _liste_waehlen(f, suche=""):
     """Im Formular: Advanced öffnen, Typ liste, Liste wählen, übernehmen."""
-    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.i = [x.name for x in f.felder].index("advanced")
     assert f.taste(10) == "weiter" and f.box is not None
     f.taste(261)                               # Typ: normal → liste
     f.taste(258)                               # Zeile „Liste"
@@ -205,7 +205,7 @@ def test_neu_typ_liste_als_routine_und_spanne():
 
 def test_advanced_liste_ohne_wahl_laesst_nicht_zu():
     f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
-    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.i = [x.name for x in f.felder].index("advanced")
     f.taste(10)
     f.taste(32)                                # Leertaste: Typ liste
     assert f.taste(10) == "weiter" and f.box is not None   # Enter auf Typ: übernehmen?
@@ -216,7 +216,7 @@ def test_advanced_liste_ohne_wahl_laesst_nicht_zu():
 
 def test_advanced_esc_verwirft_auch_die_gewaehlte_liste():
     f = kw.formular_neu(TAG, TAG, quellen=lambda: AUSWAHL)
-    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.i = [x.name for x in f.felder].index("advanced")
     f.taste(10)
     f.taste(261)
     f.taste(258)
@@ -234,7 +234,7 @@ def test_advanced_esc_verwirft_auch_die_gewaehlte_liste():
 
 def test_advanced_ohne_backend_sagt_es():
     f = kw.formular_neu(TAG, TAG, quellen=lambda: None)
-    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.i = [x.name for x in f.felder].index("advanced")
     f.taste(10)
     f.taste(261)
     f.taste(258)
@@ -244,7 +244,7 @@ def test_advanced_ohne_backend_sagt_es():
 
 # ── Bearbeiten: Typ liste ↔ normal ─────────────────────────────────────
 def _typ_normal(f):
-    f.i = [x.name for x in f.sichtbar()].index("advanced")
+    f.i = [x.name for x in f.felder].index("advanced")
     f.taste(10)
     assert f.box.typ == "liste"
     f.taste(260)                               # ← : liste → normal
@@ -295,7 +295,7 @@ def test_bearbeiten_andere_liste_und_serie_und_spanne():
     frage = kw.formular_bearbeiten(roh, TAG, TAG, quellen=lambda: AUSWAHL)
     frage.taste(ord("a"))
     alle = frage.plan()["weiter"]
-    alle.i = [x.name for x in alle.sichtbar()].index("advanced")
+    alle.i = [x.name for x in alle.felder].index("advanced")
     alle.taste(10)
     alle.taste(258)                            # Zeile „Liste"
     alle.taste(10)

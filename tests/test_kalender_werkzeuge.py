@@ -88,7 +88,7 @@ def test_formular_tippen_tab_und_umlaute():
     f.taste(9)
     f.taste(261)                                   # → in der Auswahl
     assert f.feld.roh() == "ja"
-    assert "von" not in [x.name for x in f.sichtbar()]   # ganztägig: keine Uhrzeit
+    assert "von" not in [x.name for x in f.aktive()]   # ganztägig: Uhrzeit gilt nicht
     assert f.taste(27) == "abbruch"
 
 
@@ -330,7 +330,7 @@ def test_advanced_ist_letzte_zeile_nur_mit_hinweis():
 # lass den shortcut dazu aber drin." — kein Feld „Verbindlich" mehr; u bleibt.
 def _status_waehlen(f, status):
     """Über das Fenster: Advanced öffnen, bis „Status", ←→, Enter."""
-    f.i = len(f.sichtbar()) - 1
+    f.i = len(f.felder) - 1
     f.taste(10)                                    # Fenster auf
     box = f.box
     box.i = box.reihen().index("status")

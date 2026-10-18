@@ -367,8 +367,13 @@ def _l_zahl(mini=1, leer=1):
 # Sasha, 07.10.2026: „eigentlich sollte es ja ein modal geben wo man nen
 # termin einträgt". Alle Felder auf einmal wie „Termin erstellen" im
 # Google-Kalender; ↑↓/Tab wechselt das Feld, ←→ blättert in Auswahlfeldern,
-# Enter speichert, Esc bricht ab. Felder, die gerade keinen Sinn ergeben
-# (Uhrzeit bei ganztägig, Wochentage ohne wöchentlich), sind ausgeblendet.
+# Enter speichert, Esc bricht ab.
+# Feste Plätze (Sasha, 18.10.2026: „plötzlich wechseln die optionen den
+# platz … das sollte eigentlich nie passieren"): ALLE Felder stehen immer
+# da, der Kasten ändert seine Höhe nie. Was gerade nicht gilt (Uhrzeit bei
+# ganztägig, Wochentage ohne wöchentlich — `Feld.aktiv`), steht gedämpft
+# mit „—", wird beim Durchgehen übersprungen und beim Speichern ignoriert.
+NICHT_AKTIV = "—"                       # Wert eines Feldes, das gerade nicht gilt
 WIEDERHOLUNG = ("keine", "täglich", "wöchentlich", "monatlich", "jährlich")
 _FREQ_KURZ = {"täglich": "t", "wöchentlich": "w", "monatlich": "m", "jährlich": "j"}
 _KURZ_FREQ = {"DAILY": "täglich", "WEEKLY": "wöchentlich", "MONTHLY": "monatlich",
@@ -379,10 +384,12 @@ class Feld:
     """art: 'text' (tippen), 'wahl' (←→ zwischen `optionen`) oder 'advanced'
     (Enter öffnet das Fenster „advanced", Wert = {typ, quelle, stil} —
     kalender_advanced.py). `lesen(text)` → (ok, wert|fehlertext);
-    `zeigen(werte)` → sichtbar?; `hilfe` Text oder (werte) → Text."""
+    `aktiv(werte)` → gilt gerade? (sonst gedämpft, übersprungen, beim
+    Speichern ignoriert — das Feld bleibt aber stehen); `hilfe` Text oder
+    (werte) → Text."""
 
     def __init__(self, name, beschriftung, art="text", wert="", optionen=(),
-                 lesen=None, zeigen=None, hilfe=""):
+                 lesen=None, aktiv=None, hilfe=""):
         self.name, self.beschriftung, self.art = name, beschriftung, art
         self.text = str(wert or "") if art == "text" else ""
         self.adv = dict(wert or {}) if art == "advanced" else None
@@ -390,7 +397,7 @@ class Feld:
         self.optionen = tuple(optionen)
         self.wahl = self.optionen.index(wert) if wert in self.optionen else 0
         self.lesen = lesen or (lambda s: (True, s.strip()))
-        self.zeigen = zeigen or (lambda w: True)
+        self.aktiv = aktiv or (lambda w: True)
         self.hilfe = hilfe
 
     def roh(self):
@@ -414,29 +421,44 @@ class Formular:
         self.fertig = False
         self.antworten: dict = {}
         self.box = None                 # offenes Fenster „advanced" (Feld art 'advanced')
-        sicht = self.sichtbar()
-        self.i = next((k for k, f in enumerate(sicht) if f.name == fokus), 0)
+        # self.i zeigt in self.felder (alle, feste Plätze), steht nie auf
+        # einem Feld, das gerade nicht gilt.
+        self.i = next((k for k, f in enumerate(felder) if f.name == fokus), 0)
+        self._auf_aktives(1)
 
     def roh_werte(self) -> dict:
         return {f.name: f.roh() for f in self.felder}
 
-    def sichtbar(self) -> list:
+    def gilt(self) -> list:
+        """Je Feld (in self.felder): gilt es gerade?"""
         w = self.roh_werte()
-        return [f for f in self.felder if f.zeigen(w)]
+        return [bool(f.aktiv(w)) for f in self.felder]
+
+    def aktive(self) -> list:
+        return [f for f, g in zip(self.felder, self.gilt()) if g]
+
+    def _auf_aktives(self, schritt):
+        """Steht i auf einem Feld, das nicht gilt: in Richtung `schritt`
+        zum nächsten, das gilt (das erste Feld, der Titel, gilt immer)."""
+        g, n = self.gilt(), len(self.felder)
+        self.i = max(0, min(self.i, n - 1))
+        for _ in range(n):
+            if g[self.i]:
+                return
+            self.i = (self.i + schritt) % n
 
     @property
     def feld(self):
-        s = self.sichtbar()
-        self.i = max(0, min(self.i, len(s) - 1))
-        return s[self.i]
+        self._auf_aktives(1)
+        return self.felder[self.i]
 
     def _speichern(self) -> bool:
         werte = {}
-        for f in self.sichtbar():
+        for f in self.aktive():
             ok, wert = f.lesen(f.roh())
             if not ok:
                 self.fehler, self.fehler_feld = wert, f.name
-                self.i = self.sichtbar().index(f)
+                self.i = self.felder.index(f)
                 return False
             if f.art == "advanced":
                 werte.update(wert)
@@ -446,9 +468,9 @@ class Formular:
         if p:
             name, self.fehler = p
             self.fehler_feld = name
-            namen = [f.name for f in self.sichtbar()]
+            namen = [f.name for f in self.aktive()]
             if name in namen:
-                self.i = namen.index(name)
+                self.i = [f.name for f in self.felder].index(name)
             return False
         self.antworten = werte
         self.fertig = True
@@ -499,8 +521,9 @@ class Formular:
         return "fertig" if self._speichern() else "weiter"
 
     def aktion_feld(self, taste):
-        n = len(self.sichtbar())
-        self.i = (self.i + (1 if taste in ("tab", "down") else -1)) % n
+        schritt = 1 if taste in ("tab", "down") else -1
+        self.i = (self.i + schritt) % len(self.felder)
+        self._auf_aktives(schritt)             # was nicht gilt, wird übersprungen
         return "weiter"
 
     def aktion_waehlen(self, taste):
@@ -556,11 +579,15 @@ class Formular:
         return "weiter"
 
     def zeilen(self) -> list:
-        """[(beschriftung, wert, aktiv, hilfe)] für den Kasten."""
+        """[(beschriftung, wert, aktiv, hilfe)] für den Kasten — für ALLE
+        Felder; was nicht gilt (gilt()), hat den Wert „—" (gedämpft gezeichnet)."""
         aus = []
         w = self.roh_werte()
-        for k, f in enumerate(self.sichtbar()):
-            if f.art == "advanced":
+        k_jetzt = self.felder.index(self.feld)
+        for k, (f, g) in enumerate(zip(self.felder, self.gilt())):
+            if not g:
+                wert = NICHT_AKTIV
+            elif f.art == "advanced":
                 # Keine Vorschau mehr in der Zeile, nur der Hinweis (Sasha,
                 # 11.10.2026: „ohne vorschau … einfach nur mini erklärung").
                 wert = ADVANCED_HINWEIS
@@ -569,7 +596,7 @@ class Formular:
             else:
                 wert = f.text
             hilfe = f.hilfe(w) if callable(f.hilfe) else f.hilfe
-            aus.append((f.beschriftung, wert, k == self.i, hilfe))
+            aus.append((f.beschriftung, wert, k == k_jetzt, hilfe))
         return aus
 
     def plan(self) -> dict:
@@ -614,7 +641,7 @@ def _gruppe_felder(roh=None) -> list:
     ist_eigene = lambda w: w.get("gruppe") == GRUPPE_EIGENE
     return [Feld("gruppe", "Gruppe", art="wahl", wert=wert, optionen=_gruppe_optionen(),
                  hilfe="der Monat zeigt eine Gruppe je Tag als eine Zeile"),
-            Feld("gruppe_name", "Name der Gruppe", wert=name, zeigen=ist_eigene,
+            Feld("gruppe_name", "Name der Gruppe", wert=name, aktiv=ist_eigene,
                  lesen=lambda s: (True, s.strip()) if s.strip() else (False, "name fehlt"))]
 
 
@@ -705,8 +732,11 @@ def _stil_aufruf(roh, w) -> list:
 
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
-                   mit_regel=True, mit_ganz=True, mit_datum=True, datum_name="Tag",
-                   mit_gruppe=True, roh=None, quellen=None):
+                   mit_regel=True, mit_ganz=True, mit_tage=None, mit_datum=True,
+                   datum_name="Tag", mit_gruppe=True, roh=None, quellen=None):
+    """Die Felder des Termin-Kastens. `mit_tage` (Vorgabe: wie `mit_ganz`):
+    das Feld „Tage" (ganztägig über mehrere Tage) — nicht bei Serien."""
+    mit_tage = mit_ganz if mit_tage is None else mit_tage
     ganz_an = lambda w: w.get("ganz") == "ja"
     regel_an = lambda w: w.get("wied", "keine") != "keine"
     felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
@@ -718,23 +748,23 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                            optionen=("nein", "ja")))
     felder += [
         Feld("von", "Von", wert=von, lesen=_l_zeit(leer_ok=False),
-             zeigen=lambda w: not ganz_an(w), hilfe="hh:mm"),
-        Feld("bis", "Bis", wert=bis, lesen=_l_ende, zeigen=lambda w: not ganz_an(w),
+             aktiv=lambda w: not ganz_an(w), hilfe="hh:mm"),
+        Feld("bis", "Bis", wert=bis, lesen=_l_ende, aktiv=lambda w: not ganz_an(w),
              hilfe="hh:mm oder +1h, +2d20h"),
     ]
-    if mit_ganz:
+    if mit_tage:
         felder.append(Feld("tage", "Tage", wert="1", lesen=_l_zahl(),
-                           zeigen=lambda w: ganz_an(w) and not regel_an(w)))
+                           aktiv=lambda w: ganz_an(w) and not regel_an(w)))
     if mit_regel:
         felder += [
             Feld("wied", "Wiederholung", art="wahl", wert=wiederholung, optionen=WIEDERHOLUNG),
-            Feld("alle", "Abstand", wert=alle, lesen=_l_zahl(), zeigen=regel_an,
+            Feld("alle", "Abstand", wert=alle, lesen=_l_zahl(), aktiv=regel_an,
                  hilfe="1 = jedes Mal, 2 = jedes zweite Mal (z.B. jede 2. Woche)"),
             Feld("wtage", "An Tagen", wert=wtage, lesen=_l_wtage,
-                 zeigen=lambda w: w.get("wied") == "wöchentlich",
+                 aktiv=lambda w: w.get("wied") == "wöchentlich",
                  hilfe="leer = %s; z.B. di do, mo-fr" % WT_KURZ[tag.weekday()]),
             Feld("wbis", "Wiederholen bis", wert=wbis, lesen=_l_datum(heute),
-                 zeigen=regel_an, hilfe="leer = endlos"),
+                 aktiv=regel_an, hilfe="leer = endlos"),
         ]
     felder.append(Feld("ort", "Ort", wert=ort))
     if mit_gruppe:
@@ -1026,14 +1056,19 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                          zurueck=_quelle_folge(roh, w))
 
         r = _regel_felder(roh.get("rrule"))
+        # Ganztägig auch hier (18.10.2026): vorher fehlte das Feld bei Serien,
+        # „Von" war Pflicht — eine ganztägige Serie ließ sich nicht mehr
+        # speichern („uhrzeit fehlt"), z.B. nach Advanced → Stylebox. „Nur
+        # dieser Tag" einer Serie MIT Uhrzeit kann nicht ganztägig werden
+        # (die Abweichung erbt die Zeit der Regel) — dort bleibt es weg.
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
-            tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_regel=False,
-            mit_ganz=False, datum_name="Verschieben auf", mit_gruppe=False),
+            tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0, mit_regel=False,
+            mit_ganz=not t0, mit_tage=False, datum_name="Verschieben auf", mit_gruppe=False),
             nur_dieser, fokus=fokus)
         def form_alle():
             felder = _termin_felder(
-                tag, heute, titel=label, von=t0, bis=e0, ort=ort0, mit_ganz=False,
-                mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
+                tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0,
+                mit_tage=False, mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
                 wtage=r["wtage"], wbis=r["wbis"], roh=roh, quellen=quellen)
             return Formular("alle termine der serie", felder, alle, fokus=fokus)
         if fokus == "wied":
@@ -1077,9 +1112,9 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
     form_tag = lambda: Formular("nur dieser tag · " + datum_text(tag), [
         Feld("ganz", "Ganztägig", art="wahl", wert="nein" if t0 else "ja", optionen=("nein", "ja")),
         Feld("von", "Von", wert=t0, lesen=_l_zeit(leer_ok=False),
-             zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm"),
+             aktiv=lambda w: w.get("ganz") != "ja", hilfe="hh:mm"),
         Feld("bis", "Bis", wert=e0, lesen=_l_ende,
-             zeigen=lambda w: w.get("ganz") != "ja", hilfe="hh:mm, leer = ohne"),
+             aktiv=lambda w: w.get("ganz") != "ja", hilfe="hh:mm, leer = ohne"),
     ], tag_plan)
     def form_alle():
         titel = Feld("titel", "Titel", wert=label, lesen=_l_titel)

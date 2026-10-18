@@ -36,11 +36,11 @@ def daten(view="week", termine=None):
 
 
 def _feld(f, name):
-    return next(x for x in f.sichtbar() if x.name == name)
+    return next(x for x in f.felder if x.name == name)
 
 
 def _auf(f, name):
-    f.i = [x.name for x in f.sichtbar()].index(name)
+    f.i = [x.name for x in f.felder].index(name)
 
 
 def _stil(f):

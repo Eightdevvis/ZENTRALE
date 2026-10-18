@@ -671,10 +671,10 @@ class Bedienung:
         z, C = self.z, self.z.C
         kal = C.get("kal", C["acc"])
         if isinstance(dl, kw.Formular):
-            felder = dl.sichtbar()
+            felder = dl.felder                   # alle, feste Plätze (18.10.2026)
             self._zeichne_felder(dl.zeilen(), [f.art for f in felder],
                                  [f.adv for f in felder], dl.titel, dl.fehler,
-                                 by, bx, bh, bw)
+                                 by, bx, bh, bw, gilt=dl.gilt())
             if dl.box is not None:               # Fenster „advanced" über dem Formular
                 self._zeichne_advanced(dl.box, by, bx, bh, bw)
             return
@@ -690,11 +690,14 @@ class Bedienung:
         for i, zeile in enumerate(zeilen[:max(1, h - 4)]):
             z.addclip(y + 2 + i, x + 2, zeile, w - 4, C["bright"])
 
-    def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, by, bx, bh, bw):
+    def _zeichne_felder(self, zeilen, arten, stile, titel, fehler, by, bx, bh, bw,
+                        gilt=None):
         """Ein Kasten mit Feldzeilen (Formular und Fenster „advanced"):
         Beschriftung, Wert (aktiv in Akzentfläche), unten Hilfe/Fehler. Die
         Tasten stehen in der Leiste ganz unten (Tastentabelle, 11.10.2026).
-        `stile[i]`: dict mit „stil" → Rahmenzeichen farbig."""
+        `stile[i]`: dict mit „stil" → Rahmenzeichen farbig. `gilt[i]` falsch:
+        die Zeile gilt gerade nicht → ganz gedämpft (sie steht trotzdem da,
+        damit nichts den Platz wechselt — 18.10.2026)."""
         z, C = self.z, self.z.C
         kal = C.get("kal", C["acc"])
         bl = max(len(b) for b, *_ in zeilen) + 2
@@ -704,6 +707,10 @@ class Bedienung:
         y, x, w, h = self._kasten(by, bx, bh, bw, w, h, titel)
         for i, (besch, wert, aktiv, hilfe) in enumerate(zeilen):
             yy = y + 2 + i
+            if gilt is not None and i < len(gilt) and not gilt[i]:
+                z.addclip(yy, x + 2, besch, bl, C["faint"])
+                z.addclip(yy, x + 2 + bl, wert, w - bl - 4, C["faint"])
+                continue
             z.addclip(yy, x + 2, besch, bl, kal if aktiv else C["faint"])
             feld_w = w - bl - 4
             art = arten[i] if i < len(arten) else "text"
@@ -727,7 +734,7 @@ class Bedienung:
         zeilen = adv.zeilen()
         stile = [{"stil": adv.stil} if b == "Stylebox" else None for b, *_r in zeilen]
         self._zeichne_felder(zeilen, ["wahl"] * len(zeilen), stile, adv.titel, adv.fehler,
-                             by, bx, bh, bw)
+                             by, bx, bh, bw, gilt=adv.gilt())
         u = adv.unter
         if u is None:
             return
