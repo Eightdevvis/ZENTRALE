@@ -13,7 +13,7 @@ mahnt, wird abgeschaltet.
 
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
 
@@ -254,8 +254,10 @@ def test_eine_leere_antwort_wird_nicht_abgelegt(monkeypatch):
 
 # ── In welche Lage hinein sie spricht ─────────────────────────────────
 
-def _treiber(monkeypatch, lage):
+def _treiber(monkeypatch, lage, anstoss=None, jetzt=None, stream=None):
     """Den Treiber mit gestellter Lage und gefaelschtem Modell fahren.
+    jetzt: die Wanduhr beim Melden (stellt einen Schlaf nach); stream:
+    eigenes gefaelschtes Modell.
     -> (was das Modell als letzte Nachricht sah, was gemeldet wurde)"""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ui"))
     import ai
@@ -271,12 +273,18 @@ def _treiber(monkeypatch, lage):
         yield "Geige gleich."
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
+    if stream is not None:
+        def fake_stream(history, **kw):
+            gesehen["letzte"] = history[-1]["content"]
+            yield from stream(history, **kw)
     monkeypatch.setattr(ai, "chat_stream", fake_stream)
     monkeypatch.setattr(anwesenheit, "lage", lambda: lage)
     monkeypatch.setattr(melden, "desktop",
                         lambda text, **kw: gemeldet.append(text) or True)
-    takt_treiber.sprechen({"marke": "x", "auftrag": "Erinnere ihn an X."})
-    return gesehen["letzte"], gemeldet
+    if jetzt is not None:
+        monkeypatch.setattr(takt_treiber, "_jetzt", lambda: jetzt)
+    takt_treiber.sprechen(anstoss or {"marke": "x", "auftrag": "Erinnere ihn an X."})
+    return gesehen.get("letzte"), gemeldet
 
 
 def test_bei_offener_zentrale_kein_popup(monkeypatch):
@@ -310,6 +318,106 @@ def test_unbekannte_lage_wird_wie_abgewandt_behandelt(monkeypatch):
     import anwesenheit
     _, gemeldet = _treiber(monkeypatch, anwesenheit.UNBEKANNT)
     assert gemeldet == ["Geige gleich."]
+
+
+# ── Frische: was nach einem Schlaf zurueckkommt, wird nicht gemeldet ──
+#
+# Anlass 19.10.2026: ausgeloest 15:30 fuer 16:00, drei Sekunden spaeter
+# schlief der Laptop, der Cloud-Aufruf kam um 17:59 zurueck, und
+# notify-send meldete einen Termin, der seit einer Stunde vorbei war.
+
+def _osterziel(**mehr):
+    a = {"marke": "termin:OSTERZIEL:16:00:30", "auftrag": "Erinnere ihn.",
+         "ausgeloest": datetime(2026, 10, 19, 15, 30),
+         "beginn": datetime(2026, 10, 19, 16, 0),
+         "label": "OSTERZIEL", "time": "16:00"}
+    a.update(mehr)
+    return a
+
+
+@pytest.mark.kalender_beide
+def test_faellig_traegt_ausloesezeit_und_beginn(welt):
+    a = welt.faellig(_um(16, 45))
+    assert a["ausgeloest"] == _um(16, 45)
+    assert a["beginn"] == _um(17, 45)
+    assert (a["label"], a["time"]) == ("Geigenstunde", "17:45")
+
+
+def test_veraltet_nach_der_grenze_und_nach_terminbeginn():
+    a = _osterziel()
+    assert takt.veraltet(a, datetime(2026, 10, 19, 15, 30, 3)) is None
+    grenze = a["ausgeloest"] + timedelta(minutes=takt.FRISCH_GRENZE)
+    assert takt.veraltet(a, grenze) is None
+    assert "Grenze" in takt.veraltet(a, grenze + timedelta(seconds=1))
+    # Termin laeuft schon — das gewinnt, egal wie frisch.
+    spaet = _osterziel(ausgeloest=datetime(2026, 10, 19, 15, 59, 30))
+    assert "begonnen" in takt.veraltet(spaet, datetime(2026, 10, 19, 16, 0))
+    # Ohne Zeitstempel (alter Aufrufer): frisch.
+    assert takt.veraltet({"marke": "x", "auftrag": "y"}) is None
+
+
+def test_schlaf_zwischen_ausloesen_und_melden_kein_popup(monkeypatch):
+    """Die Uhr springt zwischen Ausloesen (15:30) und Melden (17:59)."""
+    import anwesenheit
+    import gespraeche
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WOANDERS,
+                           anstoss=_osterziel(),
+                           jetzt=datetime(2026, 10, 19, 17, 59))
+    assert gemeldet == []
+    # Im Verlauf als veraltet abgelegt, mit Grund.
+    letzte = gespraeche.nachrichten(gespraeche.ERINNERUNGEN)[-1]
+    assert letzte["rolle"] == "assistant"
+    assert any("Veraltet" in w and "begonnen" in w for w in letzte["warnungen"])
+
+
+def test_schlaf_kurz_vor_dem_termin_ebenso(monkeypatch):
+    """Termin noch nicht angefangen, aber die Ausloesung ist zu alt."""
+    import anwesenheit
+    import gespraeche
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WEG, anstoss=_osterziel(),
+                           jetzt=datetime(2026, 10, 19, 15, 50))
+    assert gemeldet == []
+    w = gespraeche.nachrichten(gespraeche.ERINNERUNGEN)[-1]["warnungen"]
+    assert any("Grenze" in x for x in w)
+
+
+def test_frische_erinnerung_wird_gemeldet(monkeypatch):
+    import anwesenheit
+    import gespraeche
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WOANDERS,
+                           anstoss=_osterziel(),
+                           jetzt=datetime(2026, 10, 19, 15, 30, 20))
+    assert gemeldet == ["Geige gleich."]
+    assert not gespraeche.nachrichten(gespraeche.ERINNERUNGEN)[-1].get("warnungen")
+
+
+def _haengt(history, **kw):
+    """Ein Modell, das nicht zurueckkommt, bis man es abbricht."""
+    kw["abbruch"].wait(5)
+    yield "zu spaet"
+
+
+def test_zeitgrenze_schickt_kurzmeldung_ohne_ki(monkeypatch):
+    import anwesenheit
+    import gespraeche
+    import takt_treiber
+    monkeypatch.setattr(takt_treiber, "KI_GRENZE", 0.2)
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WOANDERS,
+                           anstoss=_osterziel(), stream=_haengt,
+                           jetzt=datetime(2026, 10, 19, 15, 30, 1))
+    assert gemeldet == ["„OSTERZIEL“ fängt um 16:00 an."]
+    letzte = gespraeche.nachrichten(gespraeche.ERINNERUNGEN)[-1]
+    assert any("ohne KI" in w for w in letzte["warnungen"])
+
+
+def test_zeitgrenze_aber_veraltet_meldet_nichts(monkeypatch):
+    import anwesenheit
+    import takt_treiber
+    monkeypatch.setattr(takt_treiber, "KI_GRENZE", 0.2)
+    _, gemeldet = _treiber(monkeypatch, anwesenheit.WOANDERS,
+                           anstoss=_osterziel(), stream=_haengt,
+                           jetzt=datetime(2026, 10, 19, 17, 59))
+    assert gemeldet == []
 
 
 # ── Aufraeumen ────────────────────────────────────────────────────────

@@ -36,7 +36,7 @@ import json
 import dateien
 import os
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          '..', 'data', 'takt')
@@ -52,6 +52,14 @@ SCHWELLEN = (60, 30)
 # GROSSEN Fenster kaeme die 60-Minuten-Mahnung noch bei 40 Minuten an und
 # damit direkt vor der 30er — deshalb knapp.
 NACHLAUF = 5
+
+# Wie alt ein Anstoss beim MELDEN hoechstens sein darf (Minuten seit dem
+# Ausloesen, Wanduhr). Anlass 19.10.2026: Erinnerung um 15:30 ausgeloest,
+# 3 s spaeter schlief der Laptop, der Cloud-Aufruf ueberlebte den Schlaf und
+# kam um 17:59 zurueck — notify-send meldete einen Termin, der seit einer
+# Stunde vorbei war. Gleich NACHLAUF: was spaeter ankommt, als ein Anstoss
+# ueberhaupt nachgeholt werden darf, ist keine Erinnerung mehr.
+FRISCH_GRENZE = NACHLAUF
 
 RUHE_VON, RUHE_BIS = 22, 7      # Stunden; 22:00–06:59 wird geschwiegen
 MIN_ABSTAND = 20                # Minuten zwischen zwei Anstoessen
@@ -152,6 +160,13 @@ def faellig(jetzt: datetime | None = None) -> dict | None:
             continue
         return {
             "marke": marke,
+            # Fuer die Frische-Pruefung vor dem Melden (veraltet()): wann
+            # ausgeloest, wann der Termin beginnt — beides Wanduhr.
+            "ausgeloest": jetzt,
+            "beginn": (jetzt.replace(second=0, microsecond=0)
+                       + timedelta(minutes=n["minuten"])),
+            "label": n["label"],
+            "time": n["time"],
             "auftrag": (
                 f"Erinnere Sasha kurz daran, dass \"{n['label']}\" um "
                 f"{n['time']} anfaengt, also in etwa {schwelle} Minuten. "
@@ -160,6 +175,28 @@ def faellig(jetzt: datetime | None = None) -> dict | None:
                 f"dass er hinfahren muss, denk an die Wegzeit."
             ),
         }
+    return None
+
+
+def veraltet(anstoss: dict, jetzt: datetime | None = None) -> str | None:
+    """Ist der Anstoss zum Melden zu alt? -> Grund in Worten, oder None.
+
+    Direkt vor dem Melden fragen, mit der WANDUHR (datetime.now): die
+    monotone Uhr steht im Schlaf still, nach dem Aufwachen saehe ein
+    zwei Stunden alter Anstoss fuer sie frisch aus. Ohne Zeitstempel
+    (aelterer Aufrufer) gilt der Anstoss als frisch.
+    """
+    jetzt = jetzt or datetime.now()
+    beginn = anstoss.get("beginn")
+    if beginn is not None and jetzt >= beginn:
+        return (f"Termin hat um {beginn:%H:%M} schon begonnen "
+                f"(jetzt {jetzt:%H:%M})")
+    ausgeloest = anstoss.get("ausgeloest")
+    if ausgeloest is not None:
+        alter = (jetzt - ausgeloest).total_seconds() / 60
+        if alter > FRISCH_GRENZE:
+            return (f"um {ausgeloest:%H:%M} ausgeloest, jetzt {jetzt:%H:%M} — "
+                    f"{alter:.0f} min alt, Grenze {FRISCH_GRENZE} min")
     return None
 
 
