@@ -495,7 +495,9 @@ def test_b_uncommitted_ganztags_und_spanne_als_glas():
 def test_glas_mischt_den_grund_darunter():
     """kalender.py: der Grund der Zelle darunter wird mit der Kursfarbe
     gemischt; landet die Mischung auf dem alten Grund, wird kräftiger
-    gemischt (sonst wäre die Scheibe unsichtbar). Ohne curses-Bildschirm."""
+    gemischt (sonst wäre die Scheibe unsichtbar). Seit 19.10.2026 „kaum
+    sichtbar": nachts ein grauer Hauch, das Label leise in der Kursfarbe,
+    aber ≥ 3:1. Ohne curses-Bildschirm."""
     from types import SimpleNamespace
     from tui import pixel
     from tui.ansichten.kalender import Kalender
@@ -508,9 +510,10 @@ def test_glas_mischt_den_grund_darunter():
     selbst = SimpleNamespace(z=z)
     fg, grund, _x = Kalender._glas_mischen(selbst, info, "faint", "k_t3", None)
     assert fg == (138, 138, 138)                       # der Punkt bleibt, wie er war
-    assert grund != schwarz and grund[0] > grund[2]    # dunkles Orange, nicht grau
-    assert sum(grund) < sum(orange)                    # durchscheinend, nicht deckend
+    assert grund != schwarz and max(grund) <= 38       # ein Hauch über Schwarz
+    assert pixel.kontrast(grund, schwarz) < 1.4        # kaum sichtbar, nicht bunt-laut
     _fg, grund2, _x = Kalender._glas_mischen(selbst, info, "k_t0_inv", "k_t3", None)
     assert pixel.rgb_256(grund2) != pixel.rgb_256(cyan)     # Cyan, vom Glas getönt
     fg3, _g, _x = Kalender._glas_mischen(selbst, info, "dim", "k_t3", "k_t3")
-    assert fg3 == orange                               # Label in der Kursfarbe
+    assert fg3 != orange and fg3[0] > fg3[2]           # Label leise in der Kursfarbe …
+    assert pixel.kontrast(fg3, _g) >= 3                # … aber lesbar

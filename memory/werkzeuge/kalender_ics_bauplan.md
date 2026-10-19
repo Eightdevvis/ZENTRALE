@@ -89,6 +89,13 @@ getrennt angucken". Umsetzung:
   und in den Textzeilen von B bleibt blass (`k_…_blass`). Tags landet jede
   Mischung mit Weiß wieder auf dem Pastell; wo sie auf dem Grund darunter
   landen würde, wird kräftiger gemischt, damit die Scheibe sichtbar bleibt.
+  Seit 19.10.2026 „kaum sichtbar" (Sasha: „nen dicken ticken
+  transparenter"): im 256er-Modus runden Glas und blasse Flächen auf die
+  nächste der 256 MIT Graurampe (nicht `pixel.bunt` — dessen dunkelste Töne,
+  Stufe 95, sind nachts zu laut) → nachts ein grauer Hauch (~232–234), tags
+  Pastell oder Grau 238. Die Kursfarbe trägt das Label, leise gemischt, aber
+  stufenweise kräftiger bis ≥ 3:1. Regler `farben.DECKKRAFT` (night glas
+  .15 schrift .45, day glas .20 schrift .50); 24 Bit mischt exakt.
 - Google: eigener zweiter Kalender, damit es auf Handy/Tablet mitkommt
   (zweite Sammlung im Paar `zentrale`).
 - Nebenbei gefunden: die Marke `kalender_beide` lief bis heute beide Male

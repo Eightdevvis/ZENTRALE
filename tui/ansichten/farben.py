@@ -188,15 +188,19 @@ KAL = {
 # Seit 10.10.2026 abends ist es Glas (Leinwand.glas, kalender.py _glas_attr):
 # „glas" mischt den Grund JEDER Zelle darunter — Punktlinien, feste Termine —
 # mit der Kursfarbe; „flaeche"/„schrift" bleiben der Rückfall (blasse Fläche,
-# blasse Schrift in A und B). Nachts 0.30: die dunkelsten Töne der 256er, auf
-# denen die Neon-Schrift des Labels noch ≥ 3:1 hat. Tags landet jede Mischung
-# mit Weiß ohnehin wieder auf dem Pastell — durchscheinend wirkt es dort,
-# weil Punkte und Termine darunter sichtbar bleiben.
-DECKKRAFT = {"night": {"flaeche": 0.38, "schrift": 0.60, "glas": 0.30},
-             "day":   {"flaeche": 0.45, "schrift": 0.70, "glas": 0.45}}
-# Das Mischen selbst macht kontext.apply_theme (durchscheinend) bzw. für Glas
-# kalender.py — beide runden über pixel.bunt, damit ein dunkles Orange orange
-# bleibt statt auf die Graurampe zu fallen.
+# blasse Schrift in A und B).
+# Seit 19.10.2026 „kaum sichtbar" (Sasha: „nen dicken ticken transparenter"):
+# Flächen und Glas runden im 256er-Modus auf die nächste der 256 MIT
+# Graurampe — die dunkelsten bunten Töne (Stufe 95) wären nachts viel zu laut,
+# so bleibt ein grauer Hauch über dem Grund. Die Kursfarbe trägt die Schrift
+# (über pixel.bunt, behält den Farbton), so leise wie „schrift" sagt, aber nie
+# unter 3:1 gegen ihren Grund — dann wird sie stufenweise kräftiger. Tags sind
+# die Pastelle schon die hellsten der 256; dort wird vor allem die Schrift
+# leiser. Echte 24 Bit mischen exakt.
+DECKKRAFT = {"night": {"flaeche": 0.15, "schrift": 0.45, "glas": 0.15},
+             "day":   {"flaeche": 0.20, "schrift": 0.50, "glas": 0.20}}
+# Das Mischen selbst macht kontext.apply_theme (durchscheinend/leise) bzw. für
+# Glas kalender.py _glas_mischen.
 
 
 # ── Tagesphasen (Hintergrund der Woche, 10.10.2026) ─────────────────────

@@ -359,25 +359,36 @@ class Kalender:
             f, b, e = paare[unter[:-len(INV)]]      # „faint_inv" = faint umgedreht
             paar = (b, f, e)
         fg, bg, extra = paar or paare["dim"]
-        a0 = DECKKRAFT[info["thema"]]["glas"]
+        dk = DECKKRAFT[info["thema"]]
         oben = info["flaeche"][glas]
-        for a in (a0, a0 + 0.15, a0 + 0.3, a0 + 0.45, 1.0):
-            grund = tuple(round(u * (1 - a) + o * a) for u, o in zip(bg, oben))
+        for a in _stufen(dk["glas"]):
+            grund = pixel.mix(bg, oben, a)
             if not C.get("pix_true"):
-                # 256 Farben: auf die nächste BUNTE runden, sonst fiele ein dunkles
-                # Orange auf die Graurampe (wie kontext.apply_theme durchscheinend).
-                grund = pixel.bunt(grund)
+                # 256 Farben: die nächste der 256, Graurampe erlaubt — die
+                # dunkelsten bunten Töne (Stufe 95) wären für „kaum sichtbar"
+                # viel zu laut; nachts bleibt so ein grauer Hauch, die Farbe
+                # trägt das Label (Sasha, 19.10.2026).
+                grund = pixel.xterm_rgb(pixel.rgb_256(grund))
             # Landet die Mischung wieder auf dem Grund darunter (Pfirsich unter
             # Rosa, tags fast immer), wäre die Scheibe unsichtbar → kräftiger.
-            if z.pix_farbe(grund) != z.pix_farbe(bg) or a >= 1.0:
+            if z.pix_farbe(grund) != z.pix_farbe(bg):
                 break
         if schrift:
-            # Eigenes Label auf dem Glas: in der Kursfarbe (so liest es sich
-            # als Glas, nicht als Fläche), solange sie lesbar ist (≥ 3:1) —
-            # sonst die besser lesbare von Kursfarbe und Flächenschrift.
+            # Eigenes Label auf dem Glas: die Kursfarbe, zum Grund hin
+            # gemischt (DECKKRAFT schrift) — so leise, wie es lesbar bleibt
+            # (≥ 3:1). Reicht nicht einmal die volle Kursfarbe: die besser
+            # lesbare von Kursfarbe und Flächenschrift.
             kand = [p[0] for p in (paare.get(schrift), paare.get(glas + INV)) if p]
             if kand and _kontrast(kand[0], grund) < 3:
                 kand = [max(kand, key=lambda f: _kontrast(f, grund))]
+            elif kand:
+                for b in _stufen(dk["schrift"]):
+                    f = pixel.mix(grund, kand[0], b)
+                    if not C.get("pix_true"):
+                        f = pixel.bunt(f)               # Schrift behält den Farbton
+                    if _kontrast(f, grund) >= 3:
+                        kand = [f]
+                        break
             fg = kand[0] if kand else fg
             extra = 0
         return fg, grund, extra
@@ -388,15 +399,10 @@ class Kalender:
         return self.K["active"] and self.bedienung.W["dialog"] is not None
 
 
-def _hell(rgb):
-    """Relative Helligkeit (WCAG) einer RGB-Farbe."""
-    def k(v):
-        v /= 255
-        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-    r, g, b = (k(v) for v in rgb)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+_kontrast = pixel.kontrast
 
 
-def _kontrast(a, b):
-    ha, hb = _hell(a), _hell(b)
-    return (max(ha, hb) + 0.05) / (min(ha, hb) + 0.05)
+def _stufen(a0):
+    """Deckkraft a0, dann in Zehnteln kräftiger bis 1 — wer zu leise ist
+    (unsichtbar, unlesbar), nimmt die nächste Stufe."""
+    return [round(a0 + i / 10, 2) for i in range(int((1 - a0) * 10) + 1)] + [1.0]

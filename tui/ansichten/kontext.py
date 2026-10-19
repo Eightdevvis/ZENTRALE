@@ -206,17 +206,37 @@ class Kontext:
         # Kalender: eine Tabelle für alle Ansichten (farben.KAL).
         echt = curses.COLORS >= (1 << 24)
 
-        def durchscheinend(farbe, deckkraft):
-            """`farbe` zu `deckkraft` Anteil über den Theme-Grund gelegt."""
+        def durchscheinend(farbe, deckkraft, grau=False):
+            """`farbe` zu `deckkraft` Anteil über den Theme-Grund gelegt.
+            256 Farben: die nächste BUNTE (Schrift behält den Farbton) —
+            mit `grau` die nächste überhaupt, Graurampe erlaubt (Flächen:
+            ein grauer Hauch ist leiser als jeder bunte Ton)."""
             a, g = pixel.xterm_rgb(farbe), pixel.xterm_rgb(th["bg256"])
-            rgb = tuple(round(x * deckkraft + y * (1 - deckkraft)) for x, y in zip(a, g))
+            rgb = pixel.mix(g, a, deckkraft)
             if echt:
                 return max(8, (rgb[0] << 16) | (rgb[1] << 8) | rgb[2])
-            n = pixel.rgb_256(pixel.bunt(rgb))
+            n = pixel.rgb_256(rgb if grau else pixel.bunt(rgb))
             # Tags sind die Pastelle schon die hellsten der 256: landet die
             # Mischung wieder auf der Ausgangsfarbe, den nächsten helleren Ton
             # nehmen (notfalls fast Weiß — dann trägt nur die Schrift die Farbe).
             return pixel.rgb_256(rgb) if n == farbe else n
+
+        def leise(farbe, deckkraft, grund):
+            """Schrift so durchscheinend wie `deckkraft`, aber lesbar: so
+            lange kräftiger, bis sie ≥ 3:1 gegen `grund` hat."""
+            for d in [round(deckkraft + i / 20, 2) for i in range(int((1 - deckkraft) * 20) + 1)]:
+                n = durchscheinend(farbe, d)
+                if pixel.kontrast(rgb(n), rgb(grund)) >= 3:
+                    return n
+            return farbe
+
+        def glas_flaeche(farbe, deckkraft):
+            """Fläche als grauer/bunter Hauch, aber nie genau der Grund."""
+            for d in (deckkraft, deckkraft + 0.1, deckkraft + 0.2, deckkraft + 0.3):
+                n = durchscheinend(farbe, d, grau=True)
+                if n != bg:
+                    return n
+            return n
         def rgb(farbe):
             """Farbnummer (256er oder 24 Bit aus durchscheinend) → RGB."""
             if farbe > 255:
@@ -236,7 +256,8 @@ class Kontext:
                 k = "k_" + name
                 paare[k] = (rgb(schrift), rgb(bg), 0)
                 paare[k + "_inv"] = (rgb(f_schrift), rgb(f_grund), 0)
-                paare[k + "_blass"] = (rgb(durchscheinend(schrift, dk["schrift"])), rgb(bg), 0)
+                blass = leise(schrift, dk["schrift"], bg)
+                paare[k + "_blass"] = (rgb(blass), rgb(bg), 0)
                 flaeche[k] = rgb(f_grund)
                 curses.init_pair(pp, schrift, bg)
                 C["k_" + name] = curses.color_pair(pp)
@@ -244,11 +265,10 @@ class Kontext:
                 C["k_" + name + "_inv"] = curses.color_pair(pp + 1)
                 # „uncommitted": dieselbe Farbe, durchscheinend auf dem Grund
                 # (Rückfall, wo kein Glas geht — siehe kalender.py _glas_attr)
-                curses.init_pair(pp + 2, durchscheinend(schrift, dk["schrift"]), bg)
+                curses.init_pair(pp + 2, blass, bg)
                 C["k_" + name + "_blass"] = curses.color_pair(pp + 2)
-                curses.init_pair(pp + 3, schrift if tname == "night"
-                                 else durchscheinend(schrift, dk["schrift"]),
-                                 durchscheinend(f_grund, dk["flaeche"]))
+                hauch = glas_flaeche(f_grund, dk["flaeche"])
+                curses.init_pair(pp + 3, leise(schrift, dk["schrift"], hauch), hauch)
                 C["k_" + name + "_blass_inv"] = curses.color_pair(pp + 3)
                 pp += 4
             else:

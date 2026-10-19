@@ -42,6 +42,18 @@ def _d2(a, b):
     return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
 
 
+def kontrast(a, b):
+    """Kontrastverhältnis (WCAG) zweier RGB-Farben, 1 … 21."""
+    def hell(c):
+        def k(v):
+            v /= 255
+            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+        r, g, b_ = (k(v) for v in c)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b_
+    ha, hb = hell(a), hell(b)
+    return (max(ha, hb) + 0.05) / (min(ha, hb) + 0.05)
+
+
 # ── xterm-256 ↔ RGB ─────────────────────────────────────────────────────────
 _CUBE = (0, 95, 135, 175, 215, 255)
 _BASE16 = ("#000000", "#800000", "#008000", "#808000", "#000080", "#800080",
