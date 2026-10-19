@@ -152,8 +152,11 @@ def test_phasen_machen_keine_alarme_und_keinen_countdown(cal, monkeypatch):
         "termine", morgen.isoformat(), "Neu", "20:00", "21:00"))
     assert kalender.conflicts_for_proposed("rhythmus", morgen.isoformat(), "X",
                                            "20:00", "21:00") == []
-    from datetime import datetime
-    n = kalender.naechster_termin(datetime.combine(morgen, datetime.min.time()))
+    # Ab morgen 19:00 gezählt: die Phase (19:30) läge vor der Probe (20:00),
+    # andere Termine des Tages (Geigenstunde dienstags 17:45) sind schon vorbei
+    # — so prüft der Test an JEDEM Wochentag dasselbe.
+    from datetime import datetime, time
+    n = kalender.naechster_termin(datetime.combine(morgen, time(19, 0)))
     assert n and n["label"] == "Probe"
 
 

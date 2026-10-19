@@ -90,6 +90,11 @@ Einzelposten: `test_fraunces_nur_fuer_die_ueberschrift` 10,9 s → unter
    Lauf derselbe.
 7. **Wächter, die die Suite in einem Subprozess fahren, fahren die kleinste
    Runde, die ihren Zweck erfüllt** (z. B. `ZTUI_FUZZ_SESSIONS=2`).
+8. **Kein Ergebnis darf vom heutigen Datum abhängen.** Wer `date.today()`
+   braucht, formuliert die Erwartung so, dass Wochentag und Fixture-Routinen
+   egal sind (z. B. Zählstart hinter andere Termine legen), oder nimmt ein
+   festes Datum. Anlass 19.10.2026: montags kam die Dienstags-Routine
+   „Geigenstunde" vor „Probe", `test_phasen_machen_keine_alarme…` war rot.
 
 Regeln 1 und 2 prüft `tests/test_testarchitektur.py` statisch (AST); der
 Wächter wird rot, sobald eine Funktions-Fixture `mktemp` ruft oder eine
