@@ -180,6 +180,16 @@ def test_kollision_fragt_und_nein_speichert_nicht(tmp_path):
     assert not [p for m, p, _b in w if p == "/api/calendar/entry"]
 
 
+def test_kollision_y_speichert_trotzdem(tmp_path):
+    KONFLIKTE[:] = ["⚠ Kollision: Geige und Zahnarzt überlappen sich"]
+    try:
+        w, fehler = _lauf(tmp_path, _formular("Zahnarzt", "10:00", "11:00") + [b"y"])
+    finally:
+        KONFLIKTE.clear()
+    assert fehler == ""
+    assert [p for m, p, _b in w if p == "/api/calendar/entry"]
+
+
 def test_todo_kasten_mit_tab_und_a(tmp_path):
     w, fehler = _lauf(tmp_path, [b"\t", b"\t", b"a"] + _tipp("Blumen gießen") + [b"!"])
     assert fehler == ""

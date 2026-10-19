@@ -346,7 +346,7 @@ def formular_zeitraum(p: dict, tag: date, heute: date, zurueck=None) -> Formular
 def dialog_loeschen(p: dict, zurueck=None) -> Dialog:
     return Dialog("phase löschen", [Schritt(
         "ok", "Phase „%s“ ganz löschen?" % p.get("label", ""),
-        art="wahl", wahl={"j": True, "n": False})],
+        art="wahl", wahl={"y": True, "n": False})],
         lambda a: _plan([("DELETE", "/api/calendar/phase", {"kennung": p.get("kennung")})]
                         if a["ok"] else [], ("gelöscht: " + p.get("label", "")) if a["ok"] else "",
                         zurueck=zurueck))

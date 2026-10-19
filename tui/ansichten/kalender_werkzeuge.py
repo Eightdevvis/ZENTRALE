@@ -194,14 +194,16 @@ class Dialog:
 
     Tasten aus der Tabelle (kalender_kasten.py): ein Text-Schritt nimmt
     Freitext, eine Wahl die Buchstaben ihrer Antworten — je Satz von
-    Antworten eine Ansicht, damit die Leiste sagt, was j, t oder a heißt."""
+    Antworten eine Ansicht, damit die Leiste sagt, was y, t oder a heißt."""
 
     _ESC = ("esc", "abbrechen", "cancel")
     TASTEN = Tasten({
         "text": [("type", "tippen", "type"), ("enter", "ok", "ok"),
                  ("⌫", "zeichen_weg", "delete"), ("ctrl+u", "leeren", "clear"), _ESC],
-        "jn": [("j", "waehlen", "yes"), ("n", "waehlen", "no"), ("J/N", "waehlen"),
-               _ESC, ("any key", "falsch")],
+        # y/n (19.10.2026, Sasha: „j for yes bro, mach y rein"); j bleibt
+        # still als zweite Ja-Taste, damit niemand hängen bleibt.
+        "ny": [("y", "waehlen", "yes"), ("n", "waehlen", "no"), ("Y/N", "waehlen"),
+               ("j/J", "waehlen"), _ESC, ("any key", "falsch")],
         "at": [("t", "waehlen", "this day"), ("a", "waehlen", "all"), ("T/A", "waehlen"),
                _ESC, ("any key", "falsch")],
         "ant": [("a", "waehlen", "all"), ("t", "waehlen", "this day"),
@@ -265,6 +267,8 @@ class Dialog:
     def aktion_waehlen(self, taste):
         s = self.schritt
         k = "" if taste == "enter" else taste.lower()
+        if k == "j" and "j" not in s.wahl and "y" in s.wahl:
+            k = "y"                       # altes Ja, still weiter erlaubt
         if k not in s.wahl:
             return self.aktion_falsch(taste)
         self.antworten[s.name] = s.wahl[k]
@@ -320,7 +324,7 @@ def _plan(aufrufe=(), meldung="", konflikt=None, danach=None, weiter=None,
     (/api/calendar/konflikte) — kommt etwas zurück, fragt die Ansicht erst
     nach; danach: {"tag": date} o.ä. für die Auswahl nach dem Speichern.
     vorab: {"aufruf": (methode, pfad, body), "dann": antwort → Dialog|Plan}
-    — erst fragen, dann entscheiden (Gruppe für den Kurs: Probe, dann j/n).
+    — erst fragen, dann entscheiden (Gruppe für den Kurs: Probe, dann y/n).
     zurueck: () → Dialog, der nach den Aufrufen wieder aufgeht (der
     Rhythmus-Kasten nach dem Speichern einer Phase)."""
     return {"aufrufe": list(aufrufe), "meldung": meldung,
@@ -872,7 +876,7 @@ def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
 # Vorher ein eigenes Feld „Liste" mit bleibt/keine/wählen …; jetzt steht die
 # Wahl im Fenster „advanced". Beim Speichern eines bestehenden Eintrags:
 # neue/andere Liste → POST /api/calendar/quelle per Kennung; Typ zurück auf
-# normal → danach „aktuellen Titel übernehmen? (j/n)" (DELETE …/quelle).
+# normal → danach „aktuellen Titel übernehmen? (y/n)" (DELETE …/quelle).
 def _gleiche_quelle(a, b) -> bool:
     return (a or {}).get("art") == (b or {}).get("art") and (a or {}).get("id") == (b or {}).get("id")
 
@@ -897,7 +901,7 @@ def _quelle_folge(roh, w):
     live = roh.get("titel_live") or roh.get("label") or ""
     return lambda: Dialog("liste lösen", [Schritt(
         "ok", "aktuellen Titel „%s“ übernehmen?" % live, art="wahl",
-        wahl={"j": True, "n": False})],
+        wahl={"y": True, "n": False})],
         lambda a: kalender_quellen.plan_loesen(roh, a["ok"]))
 
 
@@ -961,7 +965,8 @@ def _regel_felder(rrule):
 # ── Tasten in Rückfragen: EIN Schema für alle Kalenderfunktionen ──────
 # Sasha, 10.10.2026: „wenn man löscht ist 1 = alle das ist inkonsistent …
 # mach sie konsistent, a for all find ich gut". Also überall:
-#   j / n      ja / nein          (Esc = abbrechen, wie n)
+#   y / n      ja / nein          (Esc = abbrechen, wie n; j geht still
+#                                  auch als Ja, 19.10.2026)
 #   a          alle (ganze Serie/Spanne)
 #   t          nur dieser Tag     (wie t im Rhythmus-Kasten)
 #   z          ein Zeitraum       (Rhythmus-Kasten)
@@ -1000,8 +1005,13 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             neu = {"day": w["datum"].isoformat(), "label": w["titel"],
                    "time": start or "", "ende": e_dt.strftime("%H:%M") if e_dt else "",
                    "ort": w.get("ort") or ""}
+            # Kollision nur prüfen, wenn sich Tag oder Zeit ändern (nur
+            # Stil/Gruppe/Liste → nichts Neues zu prüfen), und nie gegen den
+            # Termin selbst (`ausser`, 19.10.2026: „überlappt mit demselben").
+            zeit_neu = (neu["day"], neu["time"], neu["ende"]) != (iso, t0, e0)
             kon = ({"day": neu["day"], "label": neu["label"], "time": neu["time"],
-                    "ende": neu["ende"]} if neu["time"] and neu["ende"]
+                    "ende": neu["ende"], "ausser": roh.get("kennung")}
+                   if neu["time"] and neu["ende"] and zeit_neu
                    and _ziel_ebene(w, layer) != UNVERBINDLICH else None)
             return _plan([("PUT", "/api/calendar/eintrag",
                            {"layer": layer, "day": iso, "label": label,
@@ -1146,7 +1156,7 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
         if roh.get("deaktiviert"):
             return Dialog("wieder an", [Schritt(
                 "ok", "„%s“ am %s wieder aktivieren?" % (label, datum_text(tag)),
-                art="wahl", wahl={"j": True, "n": False})],
+                art="wahl", wahl={"y": True, "n": False})],
                 lambda a: _plan([("POST", "/api/calendar/routine/skip",
                                   {"layer": layer, "label": label, "day": iso,
                                    "time": t0, "off": False})] if a["ok"] else [],
@@ -1169,7 +1179,7 @@ def dialog_loeschen(roh: dict, tag: date) -> Dialog:
     day = roh.get("von") or iso if a_ == "spanne" else iso
     frage = ("Ganze Spanne „%s“ löschen?" if a_ == "spanne"
              else "„%s“ löschen?") % label
-    return Dialog("löschen", [Schritt("ok", frage, art="wahl", wahl={"j": True, "n": False})],
+    return Dialog("löschen", [Schritt("ok", frage, art="wahl", wahl={"y": True, "n": False})],
                   lambda a: _plan([("DELETE", "/api/calendar/eintrag",
                                     {"layer": layer, "day": day, "label": label,
                                      "time": None if a_ == "spanne" else t0})]
@@ -1222,7 +1232,7 @@ def dialog_todo_bearbeiten(lid, item) -> Dialog:
 
 def dialog_todo_loeschen(lid, item) -> Dialog:
     return Dialog("löschen", [Schritt("ok", "„%s“ löschen?" % item.get("text", ""),
-                                      art="wahl", wahl={"j": True, "n": False})],
+                                      art="wahl", wahl={"y": True, "n": False})],
                   lambda a: _plan([("DELETE", "/api/lists/%s/items/%s" % (lid, item["id"]), None)]
                                   if a["ok"] else [], "gelöscht" if a["ok"] else ""))
 

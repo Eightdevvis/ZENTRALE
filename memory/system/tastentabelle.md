@@ -70,7 +70,7 @@ selbst steht im Code (`TASTEN`) — hier nur, wie die Ansichten geschnitten sind
   `kalender_bedienung.TASTEN_A/B/C` — `a:termine`, `a:kalender`, `a:todo`
   (+ `_leer`/`_ohne`, wenn nichts zu wählen ist, + `_vom_monat`: Esc „back to
   month"), `b:monat`, `c:woche` (+ `_leer`), `ansehen` (jede Taste schließt);
-  dazu jeder Kasten mit eigener Tabelle: `frage:` (`text`, `jn`, `at`, `ant`,
+  dazu jeder Kasten mit eigener Tabelle: `frage:` (`text`, `ny`, `at`, `ant`,
   Rückfall `wahl`), `formular:` (`text`/`wahl`/`advanced`), `advanced:`,
   `quellen:`, `rhythmus:`, `stylebox:` (der Baustein bringt seine Tabelle
   samt Farbwähler `stylebox:farbe:…` selbst mit). `Kalender.ansicht()` nennt

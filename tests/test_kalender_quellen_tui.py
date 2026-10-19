@@ -262,7 +262,7 @@ def test_bearbeiten_typ_normal_fragt_titel_uebernehmen():
     assert p["aufrufe"][0][0] == "PUT"
     assert all(pf != "/api/calendar/quelle" for _m, pf, _b in p["aufrufe"])
     frage = p["zurueck"]()
-    assert "Steuern planen" in frage.zeile() and frage.ansicht() == "jn"   # j/n: die Leiste
+    assert "Steuern planen" in frage.zeile() and frage.ansicht() == "ny"   # y/n: die Leiste
     frage.taste(ord("j"))
     (meth, pfad, body), = frage.plan()["aufrufe"]
     assert (meth, pfad) == ("DELETE", "/api/calendar/quelle")

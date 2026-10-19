@@ -383,7 +383,7 @@ kategorie, bei Phasen motiv, bei Quellen `titel_live` & Co.).
 | `/api/calendar/spanne` | POST | Mehrtägig anlegen. Body `{layer?, von, bis, label, start_zeit?, end_zeit?, tageszeit?:[von,bis], ort?, kategorie?, kategorie_name?, quelle?:{art,id}, stil?}`. |
 | `/api/calendar/spanne` | PUT | Alle Tage einer Spanne. Body `{layer?, von, label, new:{label?, ort?, verschieben?, bis?}}`; `verschieben` keine Zahl → 400. |
 | `/api/calendar/spanne/tag` | POST | Uhrzeit EINES Tages einer Spanne. Body `{layer?, von, label, day, time?, ende?}`; leer = ganztägig. |
-| `/api/calendar/konflikte` | POST | Vor dem Speichern prüfen (Logik der KI-Rückfrage). Body `{layer?, day, label, time?, ende?}` → `{konflikte:[zeile]}`; schreibt nichts. |
+| `/api/calendar/konflikte` | POST | Vor dem Speichern prüfen (Logik der KI-Rückfrage). Body `{layer?, day, label, time?, ende?, ausser?}` (`ausser` = Kennung des bearbeiteten Eintrags, zählt nicht mit) → `{konflikte:[zeile]}`; schreibt nichts. |
 | `/api/calendar/eintrag` | DELETE | GENAU einen Einmal-Termin (oder Spanne am Start-Tag) löschen, exakter Titel, bei Gleichnamigen die Uhrzeit. Body `{layer?, day, label, time?}`. |
 | `/api/calendar/eintrag` | PUT | Einmal-Termin ändern, Rest bleibt. Body `{layer?, day, label, time?, new:{day?, label?, time?, ende?, ort?}}`. |
 | `/api/calendar/ebene` | POST | Eintrag per Kennung zwischen `termine` und `uncommitted` verschieben. Body `{kennung, ziel?}`; ohne ziel umschalten. |

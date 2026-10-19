@@ -654,7 +654,8 @@ def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
 
 
 def conflicts_for_proposed(layer: str, day: str, label: str,
-                           time: str | None = None, ende: str | None = None) -> list[str]:
+                           time: str | None = None, ende: str | None = None,
+                           ausser: str | None = None) -> list[str]:
     """
     Prüft einen NOCH NICHT geschriebenen Einmal-Termin HYPOTHETISCH auf Konflikte
     mit dem schon belegten Tag - ohne ihn zu speichern. Gedacht für die Erlaubnis-
@@ -675,6 +676,12 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
     Eintrag (kein `time`) löst also keine Reise-KONFLIKT-Zeile aus - dasselbe
     Verhalten wie im normalen read_calendar-Pfad, bewusst konsistent gehalten.
 
+    `ausser` (19.10.2026): Kennung des Eintrags, der gerade BEARBEITET wird —
+    er fällt aus den vorhandenen Einträgen raus, sonst kollidiert die neue
+    Fassung mit der alten, also mit sich selbst (Sasha: „überlappt komplett
+    mit demselben Termin"). Bei einer Routine tragen alle Vorkommen dieselbe
+    Kennung; gelesen wird nur `day`, also fällt genau das Vorkommen dort raus.
+
     Gibt [] bei ungültigem Datum ODER wenn der geplante Termin konfliktfrei ist.
     """
     try:
@@ -684,7 +691,8 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
     if layer in NUR_HINWEIS:
         return []                         # Unverbindliches/Phasen fragen nie nach
     existing = [e for e in entries_in_range(d, d).get(d.isoformat(), [])
-                if _verbindlich(e)]   # deaktiviert, uncommitted, Ausfall zählen nicht mit
+                if _verbindlich(e)    # deaktiviert, uncommitted, Ausfall zählen nicht mit
+                and not (ausser and e.get("kennung") == ausser)]   # nicht mit sich selbst
     phantom: dict = {"layer": (layer or "termine"),
                      "label": (label or "(neuer Termin)")}
     t = (time or "").strip()

@@ -595,7 +595,7 @@ class Bedienung:
                 W["dialog"] = kw.Dialog("kollision", [kw.Schritt(
                     "ok", "⚠ %s%s · trotzdem speichern?"
                     % (zeile, " (+%d)" % (len(k) - 1) if len(k) > 1 else ""),
-                    art="wahl", wahl={"j": True, "n": False})], lambda a: kw._plan())
+                    art="wahl", wahl={"y": True, "n": False})], lambda a: kw._plan())
                 W["nach_konflikt"] = plan
                 return
         if plan.get("weiter") is not None:     # „nur dieser Tag?" → der Kasten

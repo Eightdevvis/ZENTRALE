@@ -17,7 +17,7 @@ a/e/d anlegen/ändern/löschen, r wiederholen (t/w/m/j, alle wie viele, bis),
 c/p kopieren/einfügen, im TODO-Kasten a/e/d, ! erledigt (X), +/- Reihenfolge.
 Fragen stehen unten wie bei calcurse. Ergänzungen: „nur dieser Tag oder
 alle?" bei Routinen/Spannen (Handy-Kalender), ganztägig über mehrere Tage,
-Wochentage bei wöchentlich, Kollisions-Rückfrage vor dem Speichern (j/n).
+Wochentage bei wöchentlich, Kollisions-Rückfrage vor dem Speichern (y/n).
 Logik: `tui/ansichten/kalender_werkzeuge.py`, Tasten: `kalender_bedienung.py`,
 Backend: `core/kalender_bearbeiten.py` + Routen in `ui/routen/kalender.py`.
 B/C bleiben bis Etappe 2 Anzeige; danach fliegt der alte Kalender raus.
@@ -495,7 +495,7 @@ Neu erzeugen: `venv/bin/python scripts/kalender_vorschau.py --farbe aus --breite
 - **Ansehen-Fenster** schließt nur noch bei einer echten Taste (der Takt der
   Hauptschleife, `ch == -1`, schloss es sofort).
 - **Rückfragen, ein Schema** (`kalender_werkzeuge.py`, über `_wahl_umfang`):
-  j/n · a alle · t nur dieser Tag · z Zeitraum · Auswahl per Anfangsbuchstabe
+  y/n (j geht still mit) · a alle · t nur dieser Tag · z Zeitraum · Auswahl per Anfangsbuchstabe
   (u Uni, k keine, e eigene), keine Ziffern; Esc bricht ab.
 
 ## Titel aus Liste/Projekt in der TUI (10.10.2026)
@@ -534,7 +534,7 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
   ab (`/api/lists/<lid>/items/<iid>/toggle`) → „erledigt: X — jetzt: Y".
 - **Bearbeiten (e):** dasselbe Fenster. Neue/andere Liste → beim Speichern
   `POST /api/calendar/quelle` per Kennung; Typ zurück auf `normal` → danach
-  „aktuellen Titel „X“ übernehmen? (j/n)" (`DELETE …/quelle`,
+  „aktuellen Titel „X“ übernehmen? (y/n)" (`DELETE …/quelle`,
   `titel_uebernehmen`). Wird ein Einmal-Termin zur Wiederholung, wandert die
   Liste aus dem Fenster mit. Kopieren (c/p) nimmt Liste und Stil mit.
 - **Ansehen (Enter):** Liste, „Jetzt", „Danach" (die nächsten offenen,

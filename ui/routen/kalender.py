@@ -447,15 +447,18 @@ def api_calendar_spanne_tag():
 @bp.route('/api/calendar/konflikte', methods=['POST'])
 def api_calendar_konflikte():
     """VOR dem Speichern prüfen, ob ein geplanter Termin kollidiert (gleiche
-    Logik wie die KI-Rückfrage). Body: {layer?, day, label, time?, ende?} —
-    ohne Ende kein Intervall, also keine Überlappung (find_collisions).
+    Logik wie die KI-Rückfrage). Body: {layer?, day, label, time?, ende?,
+    ausser?} — ohne Ende kein Intervall, also keine Überlappung
+    (find_collisions); `ausser` = Kennung des Eintrags, der gerade bearbeitet
+    wird (zählt nicht mit, sonst kollidiert er mit sich selbst).
     Antwort {konflikte:[zeile, …]} — schreibt nichts."""
     b = request.get_json(silent=True) or {}
     try:
         k = kalender.conflicts_for_proposed(b.get('layer') or 'termine',
                                             b.get('day') or '', b.get('label') or '',
                                             time=b.get('time') or None,
-                                            ende=b.get('ende') or None)
+                                            ende=b.get('ende') or None,
+                                            ausser=b.get('ausser') or None)
     except Exception as e:
         return jsonify({"konflikte": [], "error": str(e)})
     return jsonify({"konflikte": k})

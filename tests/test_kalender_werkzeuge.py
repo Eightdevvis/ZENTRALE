@@ -242,6 +242,19 @@ def test_loeschen_routine_alle_oder_dieses():
     assert d.plan()["aufrufe"] == []
 
 
+def test_ja_heisst_y_und_j_geht_still_mit():
+    # Sasha, 19.10.2026: „j for yes bro, mach y rein" — die Leiste zeigt y,
+    # j bleibt als stilles Ja, damit niemand hängen bleibt.
+    d = kw.dialog_loeschen(ZAHN, TAG)
+    tasten = [t for t, _x in kw.Dialog.TASTEN.eintraege(d.ansicht())]
+    assert "y" in tasten and not any("j" in t.lower() for t in tasten)
+    assert tippe(kw.dialog_loeschen(ZAHN, TAG), "y").plan()["aufrufe"]
+    assert tippe(kw.dialog_loeschen(ZAHN, TAG), "j").plan()["aufrufe"]
+    d = kw.dialog_loeschen(ZAHN, TAG)
+    d.taste(ord("x"))
+    assert "bitte y/n" in d.fehler
+
+
 def test_loeschen_spanne_am_starttag_und_nein():
     d = tippe(kw.dialog_loeschen(MESSE, TAG), "j")
     assert d.plan()["aufrufe"][0][2]["day"] == "2026-10-06"

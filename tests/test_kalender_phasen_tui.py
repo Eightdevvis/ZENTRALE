@@ -173,7 +173,7 @@ def test_zeitraum_verdreht():
 
 def test_loeschen():
     d = kp.dialog_loeschen(SCHLAF, zurueck=lambda: "LISTE")
-    d.taste(ord("j"))
+    d.taste(ord("y"))
     plan = d.plan()
     assert plan["aufrufe"] == [("DELETE", "/api/calendar/phase", {"kennung": "u-schlaf"})]
     assert plan["zurueck"]() == "LISTE"
