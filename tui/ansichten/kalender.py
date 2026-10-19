@@ -237,7 +237,7 @@ class Kalender:
             x = ix
             for text, rolle in zeile:
                 stil = rolle.startswith(kalender_stil.MARKE)
-                attr = self._stil_attr(rolle) if stil else self._attr(rolle)
+                attr = self._attr(rolle)
                 if text.strip() or rolle.endswith((INV, LEISE)) or GLAS in rolle or stil:
                     z.addclip(by + 1 + i, x, text, ix + iw - x, attr)
                 x += text_breite(text)
@@ -253,6 +253,8 @@ class Kalender:
         C = self.z.C
         if GLAS in rolle:
             return self._glas_attr(rolle)
+        if rolle.startswith(kalender_stil.MARKE):
+            return self._stil_attr(rolle)
         if rolle.endswith(LEISE):
             return self._leise_attr(rolle[:-len(LEISE)])
         if rolle.endswith(INV):
@@ -273,26 +275,11 @@ class Kalender:
         info = C.get("kal_glas")
         if not info:
             return rueckfall
-        schl = ("stil", rolle, info["thema"], bool(C.get("pix_true")))
+        schl = ("rgb", rolle, info["thema"], bool(C.get("pix_true")))
         farben = self._glas_farben.get(schl)
         if farben is None:
-            paare = info["paare"]
-            kern = basis[:-len(LEISE)] if basis.endswith(LEISE) else basis
-            paar = paare.get(kern)
-            if paar is None and kern.endswith(INV) and kern[:-len(INV)] in paare:
-                f, b, _e = paare[kern[:-len(INV)]]
-                paar = (b, f, 0)
-            fg0, bg0, _e = paar or paare.get("dim") or ((200, 200, 200), C.get("pix_bg") or (0, 0, 0), 0)
-
-            def rgb(h, sonst):
-                if not h:
-                    return sonst
-                c = kalender_stil.stil_kern.hex_zu_rgb(h)
-                if not C.get("pix_true") and max(c) - min(c) >= 40:
-                    c = pixel.bunt(c)
-                return c
-            farben = self._glas_farben[schl] = (rgb(schrift, fg0), rgb(grund, bg0))
-        fg, bg = farben
+            farben = self._glas_farben[schl] = _rolle_rgb(C, info, rolle)
+        fg, bg, _e = farben
         attr = z.pix_attr(fg, bg)
         if (z.pix_farbe(fg), z.pix_farbe(bg)) not in z.PIX["pairs"]:
             return rueckfall                    # Paare voll → lieber Kursfarbe als Bernstein
@@ -330,21 +317,15 @@ class Kalender:
                                    if flaeche.endswith(INV) else C.get(flaeche, C["dim"]))
         rueckfall = basis | curses.A_DIM
         info = C.get("kal_glas")
-        paar = (info or {}).get("paare", {}).get(flaeche)
-        if not paar:
+        if not info:
             return rueckfall
-        schl = ("leise", flaeche, info["thema"], bool(C.get("pix_true")))
+        schl = ("rgb", flaeche + LEISE, info["thema"], bool(C.get("pix_true")))
         farben = self._glas_farben.get(schl)
         if farben is None:
-            fg, grund, _e = paar
-            for a in (0.45, 0.3, 0.15, 0.0):     # Anteil Grund in der Schrift
-                f = tuple(round(x * (1 - a) + y * a) for x, y in zip(fg, grund))
-                if not C.get("pix_true"):
-                    f = pixel.bunt(f)
-                if _kontrast(f, grund) >= 3 or a == 0.0:
-                    break
-            farben = self._glas_farben[schl] = (f, grund)
-        f, grund = farben
+            farben = self._glas_farben[schl] = _rolle_rgb(C, info, flaeche + LEISE)
+        if farben is None:
+            return rueckfall
+        f, grund, _e = farben
         attr = z.pix_attr(f, grund)
         if (z.pix_farbe(f), z.pix_farbe(grund)) not in z.PIX["pairs"]:
             return rueckfall
@@ -354,11 +335,12 @@ class Kalender:
         """(Schrift, Grund, Extra) einer Glaszelle als RGB — siehe _glas_attr."""
         C, z = self.z.C, self.z
         paare = info["paare"]
-        paar = paare.get(unter)
-        if paar is None and unter.endswith(INV) and unter[:-len(INV)] in paare:
-            f, b, e = paare[unter[:-len(INV)]]      # „faint_inv" = faint umgedreht
-            paar = (b, f, e)
-        fg, bg, extra = paar or paare["dim"]
+        # Die Zelle darunter über dieselbe Auflösung wie beim Zeichnen — auch
+        # leise Zeitzeilen und Stil-Rollen mit Hex-Farben. Vorher kannte die
+        # Mischung nur die festen Paare; über „k_t0_inv_leise" (Zeit eines
+        # festen Termins) nahm sie den Theme-Grund an → schwarze Zeile im
+        # Cyan-Block (19.10.2026).
+        fg, bg, extra = _rolle_rgb(C, info, unter) or paare["dim"]
         dk = DECKKRAFT[info["thema"]]
         oben = info["flaeche"][glas]
         for a in _stufen(dk["glas"]):
@@ -400,6 +382,47 @@ class Kalender:
 
 
 _kontrast = pixel.kontrast
+
+
+def _rolle_rgb(C, info, rolle):
+    """(Schrift, Grund, Extra) einer Leinwand-Rolle als RGB — dieselbe
+    Auflösung, mit der _attr sie zeichnet: Paletten-Paar („_inv" ohne eigenes
+    Paar = umgedreht), LEISE (Schrift zum Grund gemischt, ≥ 3:1) und
+    Stil-Rollen „$schrift$grund$basis" (Hex-Farben über dem Paar der Basis).
+    Unbekannt → None. Glas mischt damit über JEDER Unterrolle den echten
+    Grund."""
+    paare = info["paare"]
+    if rolle.startswith(kalender_stil.MARKE):
+        basis, schrift, grund = kalender_stil.teile(rolle)
+        kern = basis[:-len(LEISE)] if basis.endswith(LEISE) else basis
+        fg0, bg0, _e = (_rolle_rgb(C, info, kern) or paare.get("dim")
+                        or ((200, 200, 200), C.get("pix_bg") or (0, 0, 0), 0))
+
+        def rgb(h, sonst):
+            if not h:
+                return sonst
+            c = kalender_stil.stil_kern.hex_zu_rgb(h)
+            if not C.get("pix_true") and max(c) - min(c) >= 40:
+                c = pixel.bunt(c)
+            return c
+        return rgb(schrift, fg0), rgb(grund, bg0), 0
+    if rolle.endswith(LEISE):
+        paar = _rolle_rgb(C, info, rolle[:-len(LEISE)])
+        if paar is None:
+            return None
+        fg, grund, _e = paar
+        for a in (0.45, 0.3, 0.15, 0.0):     # Anteil Grund in der Schrift
+            f = tuple(round(x * (1 - a) + y * a) for x, y in zip(fg, grund))
+            if not C.get("pix_true"):
+                f = pixel.bunt(f)
+            if _kontrast(f, grund) >= 3 or a == 0.0:
+                break
+        return f, grund, 0
+    paar = paare.get(rolle)
+    if paar is None and rolle.endswith(INV) and rolle[:-len(INV)] in paare:
+        f, b, e = paare[rolle[:-len(INV)]]      # „faint_inv" = faint umgedreht
+        paar = (b, f, e)
+    return paar
 
 
 def _stufen(a0):

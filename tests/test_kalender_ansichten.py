@@ -517,3 +517,37 @@ def test_glas_mischt_den_grund_darunter():
     fg3, _g, _x = Kalender._glas_mischen(selbst, info, "dim", "k_t3", "k_t3")
     assert fg3 != orange and fg3[0] > fg3[2]           # Label leise in der Kursfarbe …
     assert pixel.kontrast(fg3, _g) >= 3                # … aber lesbar
+
+
+def test_glas_kennt_den_grund_jeder_unterrolle():
+    """Glas über einem FESTEN Block: auch die leise Zeitzeile („k_t0_inv" +
+    LEISE) und ein gestylter Termin („$schrift$grund$basis") geben ihren
+    echten Grund her — vorher fiel die Mischung auf den Theme-Grund zurück,
+    die Zeitzeile wurde im Cyan-Block schwarz (19.10.2026)."""
+    from types import SimpleNamespace
+    from tui import pixel
+    from tui.ansichten import kalender_stil as ks
+    from tui.ansichten.kalender import Kalender
+    orange, cyan, schwarz = (255, 175, 95), (0, 255, 255), (0, 0, 0)
+    info = {"thema": "night", "flaeche": {"k_t3": orange}, "paare": {
+        "dim": ((255, 255, 255), schwarz, 0), "k_t0": (cyan, schwarz, 0),
+        "k_t0_inv": (schwarz, cyan, 0), "k_t3": (orange, schwarz, 0),
+        "k_t3_inv": (schwarz, orange, 0)}}
+    z = SimpleNamespace(C={"pix_true": True}, pix_farbe=tuple)
+    selbst = SimpleNamespace(z=z)
+
+    def nah(a, b):
+        return max(abs(x - y) for x, y in zip(a, b)) <= 60
+
+    for unter, erwartet in (("k_t0_inv" + ka.LEISE, cyan),
+                            (ks.rolle("k_t0_inv", None, "#202060"), (32, 32, 96)),
+                            (ks.rolle("k_t0_inv" + ka.LEISE, "#ffffff", "#ff0000"), (255, 0, 0))):
+        _fg, grund, _x = Kalender._glas_mischen(selbst, info, unter, "k_t3", None)
+        assert nah(grund, erwartet), (unter, grund)       # der Block scheint durch
+        assert not nah(grund, schwarz), unter              # nicht der Theme-Grund
+    # Die Leinwand liefert genau diese Rollen: Glas über einem festen Block
+    lw = ka.Leinwand(10, 1)
+    lw.setze(0, 0, "14:15", "k_t0_inv" + ka.LEISE)
+    lw.glas(0, 0, 10, "k_t3")
+    rolle = lw.zeilen()[0][0][1]
+    assert ka.glas_teile(rolle)[0] == "k_t0_inv" + ka.LEISE
