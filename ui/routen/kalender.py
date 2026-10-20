@@ -20,6 +20,7 @@ import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, R
 import kalender_sync_zustand  # type: ignore  – Stand des Google-Syncs
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
+import uhr  # die eine Uhr (core/uhr.py)
 
 bp = Blueprint('kalender', __name__)
 
@@ -59,7 +60,7 @@ def api_calendar():
     view = (a.get('view') or 'week').lower()
     ref_s = a.get('ref')
     try:
-        ref = datetime.strptime(ref_s, '%Y-%m-%d').date() if ref_s else date.today()
+        ref = datetime.strptime(ref_s, '%Y-%m-%d').date() if ref_s else uhr.heute()
     except (TypeError, ValueError):
         return jsonify({"error": "ungültiges ref-datum (YYYY-MM-DD)"}), 400
 
@@ -83,7 +84,7 @@ def api_calendar():
 
     out['view'] = view
     out['ref'] = ref.isoformat()
-    out['today'] = date.today().isoformat()
+    out['today'] = uhr.heute().isoformat()
     # Zyklus-Marker für die sichtbaren Tage (abgeleitet aus dem »periode«-
     # Graphen, KEIN Kalender-Layer und nichts Gespeichertes): {iso: 'pms'|
     # 'next'}. Die Front tönt die Tage nur ein. Defensiv: nie crashen.
@@ -502,7 +503,7 @@ def _routine_per_kennung(k: str, new: dict):
             raise kalender_kennung.KalenderAbgelehnt(
                 "UNBEKANNTES-FELD", "wiederholung {…} nicht zusammen mit rrule/bis")
         alt = kalender_kennung.eintrag(k)
-        seit_s = felder.get('seit') or alt.get('seit') or date.today().isoformat()
+        seit_s = felder.get('seit') or alt.get('seit') or uhr.heute().isoformat()
         try:
             seit = date.fromisoformat(seit_s)
             ende = date.fromisoformat(w['bis']) if w.get('bis') else None

@@ -3,7 +3,9 @@
 # Der Graph-Reminder („bitte eintragen"): poppt EINMAL pro Sitzung ein
 # Kästchen auf, wenn ein Graph mit Tages-Reminder heute noch nicht geloggt
 # ist (store.reminders ← /api/graphs/reminders). Eine Taste klickt es weg →
-# bis Sitzungsende Ruhe für die gezeigten Graphen; neu fällige nagen weiter.
+# bis Tagesende Ruhe für die gezeigten Graphen (seit 20.10.2026; vorher bis
+# Sitzungsende, über Mitternacht blieb der neue Tag stumm); neu fällige
+# nagen weiter.
 # Bis 06.10.2026 drei lose Variablen (nag_*) und drei Stellen in der
 # Hauptschleife von run_ui, siehe memory/system/tui_bauplan.md.
 
@@ -17,6 +19,11 @@ class Erinnerung:
         self.nag_active = False       # Kästchen steht gerade offen?
         self.nag_items = []           # was es listet (ids für die Dismiss-Markierung)
         self.nag_dismissed = set()    # in dieser Sitzung weggeklickte graph-ids
+
+    def tageswechsel(self, alt, neu):
+        """Weggeklickt gilt für den Tag, nicht für die Sitzung: über
+        Mitternacht wäre der neue Tag sonst stumm (core/uhr.py, 20.10.2026)."""
+        self.nag_dismissed.clear()
 
     def taste(self, ch):
         """Bei offenem Kästchen: jede Taste klickt es weg (für diese Sitzung)."""

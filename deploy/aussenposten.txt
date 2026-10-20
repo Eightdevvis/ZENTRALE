@@ -35,6 +35,8 @@ core/listen_baum.py
 core/listen_bild.py
 core/graph_reihen.py
 core/tastentabelle.py
+# Die eine Uhr + Tageswechsel (2026-10-20, stdlib-only): Kalender, Graphen, Hauptschleife.
+core/uhr.py
 # Farbwähler und Stylebox (tui/bausteine/) prüfen CSS mit core/stil.py
 # (2026-10-10, stdlib-only).
 core/stil.py

@@ -24,7 +24,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 
 from . import kalender_ansichten, kalender_stil
 from . import kalender_werkzeuge as kw
-from .basis import BEENDEN
+from .basis import BEENDEN, kern_pfad
 from .farben import DECKKRAFT
 from .kalender_advanced import Advanced
 from .kalender_ansichten import (ANSICHT_NAMEN, GLAS, INV, LEISE, glas_teile,
@@ -34,6 +34,9 @@ from .kalender_bedienung import Bedienung
 from .kalender_phasen import PhasenListe
 from .kalender_quellen import QuellenWahl
 from .tasten import Tasten
+
+kern_pfad()
+import uhr  # noqa: E402  – core/uhr.py: die eine Uhr (Gefahrzone „Eingefrorener Tag")
 
 try:
     from tui.bausteine.stylebox import Stylebox
@@ -86,7 +89,9 @@ class Kalender:
         # data      : von der Bedienung beim Neuladen mit geleert (Altlast-frei)
         # showhidden: Deaktiviertes/Ausgefallenes zeigen (Taste x)
         # w         : Zustand der Bedienung (Auswahl, Kasten, Meldung)
-        self.K = z.K = {"active": False, "ref": date.today().isoformat(),
+        # ref wird hier nur vorbelegt: oeffnen() setzt heute, tageswechsel()
+        # rückt nach (Ausnahme im Wächter tests/test_tageswechsel.py).
+        self.K = z.K = {"active": False, "ref": uhr.heute().isoformat(),
                         "stil": "A", "sdata": None, "data": None,
                         "showhidden": False, "msg": ""}
         self.bedienung = Bedienung(self)
@@ -135,7 +140,59 @@ class Kalender:
         W["dialog"] = W["popup"] = None
         W["fokus"] = "termine"
         K["staende"], K["sprung"] = {}, None   # frisch geöffnet: alle Ansichten bei heute
-        self.bedienung.setze_tag(date.today())
+        self.bedienung.setze_tag(uhr.heute())
+
+    # ── Hot Reload: Ansicht und Tag reisen mit (zentrale_tui.run_ui) ───
+    def stand_fuer_neustart(self) -> dict:
+        """heute=True: stand auf dem heutigen Tag — nach dem Neustart dann
+        auf DEM heutigen, auch wenn Mitternacht dazwischen lag."""
+        tag = self.bedienung.tag()
+        return {"stil": self.K.get("stil"), "ref": self.K.get("ref"),
+                "tag": tag.isoformat(), "heute": tag == uhr.heute()}
+
+    def stand_nach_neustart(self, d: dict):
+        K = self.K
+        if d.get("stil") in ("A", "B", "C"):
+            K["stil"] = d["stil"]
+        if d.get("ref"):
+            K["ref"] = d["ref"]
+        if d.get("tag"):
+            alt = date.fromisoformat(d["tag"])
+            self.bedienung.setze_tag(alt)
+            if d.get("heute") and alt != uhr.heute():
+                self.tageswechsel(alt, uhr.heute())
+
+    # ── Tageswechsel (core/uhr.py, Anlass 20.10.2026) ──────────────────
+    # Die TUI lief über Mitternacht, der Kalender stand am Morgen noch auf
+    # dem 19.10.: Anker und gepufferte Antwort (mit ihrem `today`) blieben
+    # beim Öffnungstag. Jetzt: was auf dem alten Heute stand, rückt mit;
+    # ein bewusst gewählter anderer Tag bleibt stehen. Der Puffer fällt
+    # immer — er trägt die Heute-Markierung.
+    def tageswechsel(self, alt: date, neu: date):
+        K, W = self.K, self.bedienung.W
+        K["sdata"] = K["data"] = None
+        if W.get("tag") == alt:
+            self._mitruecken(alt, neu)
+        elif W.get("tag") is None and K.get("ref") == alt.isoformat():
+            K["ref"] = neu.isoformat()
+        staende = K.get("staende") or {}
+        for stil, (tag, idx, ref) in list(staende.items()):
+            if tag == alt:
+                staende[stil] = (neu, 0, self._ref_nach(stil, ref, alt, neu))
+
+    @staticmethod
+    def _ref_nach(stil, ref, alt, neu):
+        """A schiebt sein 3-Tage-Fenster um denselben Abstand; B/C stehen
+        auf dem Tag (Monat/Woche folgen daraus)."""
+        if stil == "A":
+            return (date.fromisoformat(ref) + (neu - alt)).isoformat()
+        return neu.isoformat()
+
+    def _mitruecken(self, alt, neu):
+        K, W = self.K, self.bedienung.W
+        if (K.get("stil") or "A") == "A" and not K.get("sprung"):
+            K["ref"] = self._ref_nach("A", K["ref"], alt, neu)
+        self.bedienung.setze_tag(neu, 0)
 
     # ── Ansicht wechseln: jede merkt sich ihren Tag ───────────────────
     # Sasha, 10.10.2026: „wenn ich danach wieder drauf wechsel is es

@@ -78,6 +78,8 @@ LAUF_TICK_MS = ansichten.technik.LAUF_TICK_MS   # Takt der Schleife, während ei
 BEENDEN = ansichten.basis.BEENDEN       # 'q' aus einer Ansicht: Hauptschleife verlassen
 STRG_C = 3                              # Strg+C als Zeichen (raw-Modus, run_ui)
 fussleiste = ansichten.fussleiste       # die Tastenzeile ganz unten
+ansichten.basis.kern_pfad()
+import uhr  # noqa: E402  – core/uhr.py: die eine Uhr + Tageswechsel
 
 
 def _theme_modul():
@@ -1017,6 +1019,19 @@ def bild_zeichnen(u):
     z.nachmalen()
 
 
+def tageswechsel_verkabeln(*ansichten_mit_tagesbezug):
+    """Tageswechsel (core/uhr.py, Anlass 20.10.2026: über Mitternacht blieb
+    der Kalender auf dem Vortag): wer sich etwas mit Tagesbezug merkt, hat
+    tageswechsel(alt, neu) und meldet sich hier an; run_ui fragt den
+    Wächter in jedem Durchlauf."""
+    w = uhr.Tageswechsel()
+    for ansicht in ansichten_mit_tagesbezug:
+        w.anmelden(ansicht.tageswechsel)
+    w.anmelden(lambda alt, neu: lebenslauf(
+        "TAGESWECHSEL %s → %s" % (alt.isoformat(), neu.isoformat())))
+    return w
+
+
 def run_ui(stdscr, store):
     import curses
 
@@ -1150,8 +1165,7 @@ def run_ui(stdscr, store):
             if zustand.get("active"):
                 d = {"app": name}
                 if name == "c":
-                    d.update(stil=K.get("stil"), ref=K.get("ref"),
-                             tag=kalender.bedienung.tag().isoformat())
+                    d.update(kalender.stand_fuer_neustart())
                 return d
         return None
 
@@ -1166,16 +1180,12 @@ def run_ui(stdscr, store):
                 try:
                     ansicht.oeffnen()
                     if name == "c":
-                        from datetime import date as _d
-                        if wieder.get("stil") in ("A", "B", "C"):
-                            K["stil"] = wieder["stil"]
-                        if wieder.get("ref"):
-                            K["ref"] = wieder["ref"]
-                        if wieder.get("tag"):
-                            kalender.bedienung.setze_tag(_d.fromisoformat(wieder["tag"]))
+                        kalender.stand_nach_neustart(wieder)
                     lebenslauf("HOT RELOAD: wieder offen: %s" % name)
                 except Exception as e:      # lieber Startseite als Absturz
                     lebenslauf("HOT RELOAD: %s nicht wieder geöffnet: %s" % (name, e))
+
+    tag_waechter = tageswechsel_verkabeln(kalender, graphen, erinnerung)
 
     u = types.SimpleNamespace(
         AI=AI, C=C, DASH=DASH, G=G, K=K, L=L, LAUF=LAUF, M=M, MAIL=MAIL,
@@ -1192,6 +1202,7 @@ def run_ui(stdscr, store):
     ansichten.fenster.verkabeln(z, u)
 
     while True:
+        tag_waechter.pruefen()
         # Neuer Code in tui/? Erst wenn er eine Sekunde ruht (ein Merge
         # schreibt mehrere Dateien) und kompiliert — und nie mitten im
         # Tippen, in der Befehlszeile oder während eine Antwort einläuft.

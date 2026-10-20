@@ -95,6 +95,9 @@ Einzelposten: `test_fraunces_nur_fuer_die_ueberschrift` 10,9 s → unter
    egal sind (z. B. Zählstart hinter andere Termine legen), oder nimmt ein
    festes Datum. Anlass 19.10.2026: montags kam die Dienstags-Routine
    „Geigenstunde" vor „Probe", `test_phasen_machen_keine_alarme…` war rot.
+   Zeitabhängiges selbst prüfen (z. B. über Mitternacht) mit gestellter Uhr:
+   `uhr.gestellt(...)` + `uhr.vorstellen(...)` (core/uhr.py, Gefahrzone
+   [../system/gefahrzonen.md](../system/gefahrzonen.md)).
 
 Regeln 1 und 2 prüft `tests/test_testarchitektur.py` statisch (AST); der
 Wächter wird rot, sobald eine Funktions-Fixture `mktemp` ruft oder eine

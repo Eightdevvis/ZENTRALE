@@ -46,6 +46,7 @@ import kalender_regel
 import kalender_rhythmus
 import kalender_speicher
 import stil as stil_kern
+import uhr  # die eine Uhr (core/uhr.py)
 from kalender_ics import FELD as _ICS_FELD, ohne_interna
 
 # ── Pfad & Locking ─────────────────────────────────────────────────────
@@ -381,7 +382,7 @@ def naechster_termin(jetzt: datetime | None = None) -> dict | None:
     Nur sichtbare Layer — dieselbe Regel wie beim Imprint: die KI soll
     nichts wissen, was Sasha nicht nachlesen kann.
     """
-    jetzt = jetzt or datetime.now()
+    jetzt = jetzt or uhr.jetzt()
     heute = jetzt.date()
     try:
         data = _load_raw()
@@ -966,7 +967,7 @@ def week_view(reference: date | None = None,
     nach Erlebtem fragt, ruft die KI das read_calendar-Tool.
     """
     if reference is None:
-        reference = date.today()
+        reference = uhr.heute()
     monday = reference - timedelta(days=reference.weekday())
     sunday = monday + timedelta(days=6)
     layers = None
@@ -998,7 +999,7 @@ def month_view(reference: date | None = None,
     Front - dieselbe Linie wie resolve_range/week_view.
     """
     if reference is None:
-        reference = date.today()
+        reference = uhr.heute()
     first = reference.replace(day=1)
     last = _month_last_day(first)
     grid_start = first - timedelta(days=first.weekday())      # Mo vor dem 1.

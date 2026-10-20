@@ -18,6 +18,7 @@ import kalender_kategorie
 import kalender_quelle
 import kalender_rhythmus
 import nutzer_angaben
+import uhr  # die eine Uhr (core/uhr.py)
 
 # Kein `import kalender` (das wäre ein Import-Kreis, kalender reicht dieses
 # Modul ja weiter): die zwei Lesewege, die hier gebraucht werden, schließt
@@ -635,7 +636,7 @@ def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
     tage = IMPRINT_TAGE if tage is None else tage
     if tage < 0:
         return ""
-    heute = date.today()
+    heute = uhr.heute()
     try:
         data = _load_raw()
     except Exception:
@@ -727,7 +728,7 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
     neu aufflackert. Reihenfolge: Reise-Absagen zuerst (vergisst man am
     leichtesten), dann tagesweise Konflikte + Kollisionen.
     """
-    today = date.today()
+    today = uhr.heute()
     end   = today + timedelta(days=max(0, horizon_days))
     away_blocks = _away_blocks(today, end)
 

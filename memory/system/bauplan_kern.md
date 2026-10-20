@@ -70,6 +70,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `listen_baum` | 1 | Reine Helfer über den Eintrags-Baum einer Liste (zählen, erledigt, Reihenfolge einer Ebene, flach, Pfad, Bernstein-Steine) — geteilt von Listen-Ansicht der TUI und Listen-Kachel, ohne Imports (seit 2026-10-10) |
 | `listen_bild` | 1 | DAS Bild einer Listen-Ebene (seit 2026-10-11): Kopf, Bernstein, Einträge als Kästen mit Titel und Markern, Auswahl als Rolle — neutrale Stücke `[text, rolle]`; Listen-Kachel und Listen-Ansicht der TUI malen beide nur das (Regel: [listen_app.md](../hub/listen_app.md)). Importiert nur `listen_baum`, steht in `deploy/aussenposten.txt` |
 | `graph_reihen` | 1 | Reine Helfer über die Messwerte eines Graphen (Zahl prüfen, Uhrzeit, Dauer, Reihe je Typ, letzter Wert, Sparkline) — geteilt von Graph-Werkzeug der TUI und Graph-Kachel, ohne Imports (seit 2026-10-10) |
+| `uhr` | 1 | Die eine Uhr (seit 2026-10-20): `heute()`/`jetzt()` bei jedem Aufruf, in Tests stellbar (`stellen`/`gestellt`/`vorstellen`), und das Tageswechsel-Ereignis (`Tageswechsel`) für die Schleifen von Backend und TUI — stdlib-only, ohne Imports; Regel: [gefahrzonen.md](gefahrzonen.md) |
 | `tastentabelle` | 1 | Format der Tastentabelle (welche Tasten eine App je Ansicht nimmt): Beschriftung → neutrale Tastennamen, prüfen, aus dem app.toml; geteilt von TUI (`tasten.py`, Bausteine) und `GET /api/tasten`, ohne Imports (seit 2026-10-11) |
 | `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
 | `werkzeug_gruppen` | 1 | Welche KI-Werkzeuge immer geladen sind, Gruppen und Schlagworte für die Werkzeug-Suche, die Vorauswahl des qwen-Profils, der Schalter `werkzeug_suche` (seit 2026-10-14) |
@@ -283,7 +284,7 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
-| `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `listen_bild`, `graph_reihen`, `stil`, `tastentabelle` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `listen_bild` seit 2026-10-11: Ansicht und Kachel zeigen dasselbe Bild einer Liste; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; `tastentabelle` seit 2026-10-11: TUI und Hub lesen Tastentabellen gleich; alle stehen in `deploy/aussenposten.txt`. |
+| `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `listen_bild`, `graph_reihen`, `stil`, `tastentabelle`, `uhr` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `listen_bild` seit 2026-10-11: Ansicht und Kachel zeigen dasselbe Bild einer Liste; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; `tastentabelle` seit 2026-10-11: TUI und Hub lesen Tastentabellen gleich; `uhr` seit 2026-10-20: dieselbe Uhr und derselbe Tageswechsel wie das Backend; alle stehen in `deploy/aussenposten.txt`. |
 
 Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
 liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).

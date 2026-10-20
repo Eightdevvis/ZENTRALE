@@ -230,7 +230,10 @@ def test_uncommitted_nur_hinweis(cal, monkeypatch):
     kalender.add_entry("termine", tag, "Fest", time="10:00", ende="11:00")
     kalender.add_entry("termine", tag, "Vielleicht", time="10:30", ende="11:30")
     kk.ebene_wechseln(_k("Vielleicht", "einmal"))
-    assert not [a for a in kalender.open_alarms(2) if a.get("tag") == tag]
+    # nur „Fest"/„Vielleicht" zählen: dienstags kollidieren die Fixture-
+    # Routinen untereinander (Regel 8, memory/betrieb/tests.md; rot am 20.10.2026)
+    assert not [a for a in kalender.open_alarms(2) if a.get("tag") == tag
+                and ("Fest" in a["text"] or "Vielleicht" in a["text"])]
     assert kf.conflicts_for_proposed("termine", tag, "Neu", "10:45", "11:15")   # gegen „Fest"
     assert kf.conflicts_for_proposed("uncommitted", tag, "Neu", "10:45", "11:15") == []
     text = kf.render_range_for_tool(date.today(), date.today())

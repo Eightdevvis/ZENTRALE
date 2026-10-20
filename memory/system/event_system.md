@@ -52,7 +52,10 @@ Simulation gegen echten GPIO-Trigger tauschen ohne `brain.py` anzufassen).
   vermeiden wir Tippfehler und haben einen zentralen Ort.
 - Aktuelle Events: `TIME_REACHED`, `MORNING_WAKEUP`, `BUTTON_PRESS`,
   `LIGHT_SENSOR_TRIGGER`, `SYSTEM_BOOT`, `DATA_COLLECTION`,
-  `PRESENCE_DETECTED`, `TUTOR_START`, `DOOR_TOGGLE`, `HOMECOMING`.
+  `PRESENCE_DETECTED`, `TUTOR_START`, `DOOR_TOGGLE`, `HOMECOMING`,
+  `DAY_CHANGED` (seit 2026-10-20: `core/uhr.Tageswechsel` in `main.py`
+  merkt Mitternacht, rechnet die Alarme sofort neu und schickt das Event in
+  den Loop; Regel und Verstecke: [gefahrzonen.md](gefahrzonen.md)).
 - `TUTOR_START` existiert als Konstante weiter, hat aber keinen Sender und
   keinen Handler. **Nicht** weil der Tutor pausiert (er läuft), sondern weil ein
   Auto-**Start** per Event bewusst nicht existiert: `brain.py` schickt bei

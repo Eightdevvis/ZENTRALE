@@ -17,12 +17,15 @@ import urllib.error
 import urllib.parse
 from datetime import date, timedelta
 
-from .basis import BEENDEN, api_call
+from .basis import BEENDEN, api_call, kern_pfad
 from . import kalender_advanced, kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_quellen as kq
 from . import kalender_kasten, kalender_stil
 from . import kalender_werkzeuge as kw
 from .tasten import Tasten
+
+kern_pfad()
+import uhr  # noqa: E402  – core/uhr.py: die eine Uhr
 
 FENSTER_TAGE = 3            # so viele Tage zeigt A (kalender_ansichten.ansicht_a)
 FOKUS = ("termine", "kalender", "todo")
@@ -149,7 +152,9 @@ class Bedienung:
         damit das 3-Tage-Fenster nie halb leer ist."""
         K = self.K
         ref = date.fromisoformat(K["ref"])
-        schluessel = (K["stil"], K["ref"])
+        # Mit dem Tag im Schlüssel: die Antwort trägt `today` (die Heute-
+        # Markierung) — über Mitternacht darf sie nicht kleben bleiben.
+        schluessel = (K["stil"], K["ref"], uhr.heute().isoformat())
         d = K.get("sdata")
         if d and d.get("_for") == schluessel:
             # Ein Fehlschlag bleibt nicht kleben: nach ein paar Sekunden neu
@@ -298,10 +303,10 @@ class Bedienung:
                         "w": d + timedelta(days=7), "W": d - timedelta(days=7),
                         "m": _monat(d, 1), "M": _monat(d, -1),
                         "y": _monat(d, 12), "Y": _monat(d, -12),
-                        "ctrl+g": date.today()}[taste])
+                        "ctrl+g": uhr.heute()}[taste])
 
     def aktion_gehe_zu(self, _t):
-        self._starte(kw.dialog_gehe_zu(date.today()))
+        self._starte(kw.dialog_gehe_zu(uhr.heute()))
 
     def aktion_erledigte(self, _t):
         self.K["showhidden"] = not self.K["showhidden"]
@@ -349,7 +354,7 @@ class Bedienung:
         self.setze_tag(self.tag() + timedelta(days=-1 if taste in ("left", "h") else 1))
 
     def aktion_neu(self, _t):                # a, A, Strg-A wie calcurse
-        self._starte(kw.formular_neu(self.tag(), date.today(), quellen=self._quellen_holen))
+        self._starte(kw.formular_neu(self.tag(), uhr.heute(), quellen=self._quellen_holen))
 
     def _termin(self):
         """Der gewählte Termin, sonst None und eine Meldung."""
@@ -366,7 +371,7 @@ class Bedienung:
     def aktion_aendern(self, _t):
         roh = self._termin()
         if roh:
-            self._starte(kw.formular_bearbeiten(roh, self.tag(), date.today(),
+            self._starte(kw.formular_bearbeiten(roh, self.tag(), uhr.heute(),
                                                 quellen=self._quellen_holen))
 
     def aktion_loeschen(self, _t):
@@ -378,7 +383,7 @@ class Bedienung:
         roh = self._termin()
         if not roh:
             return
-        dl = kw.formular_wiederholen(roh, self.tag(), date.today(), self._quellen_holen)
+        dl = kw.formular_wiederholen(roh, self.tag(), uhr.heute(), self._quellen_holen)
         if dl is None:
             self.W["msg"] = "eine spanne wiederholt sich nicht"
         else:
@@ -532,7 +537,7 @@ class Bedienung:
             motive = (api_call("/api/calendar/motive", timeout=4.0) or {}).get("motive")
         except Exception:
             motive = None
-        return kalender_phasen.PhasenListe(phasen or [], motive, self.tag(), date.today(),
+        return kalender_phasen.PhasenListe(phasen or [], motive, self.tag(), uhr.heute(),
                                            zurueck=self._rhythmus_kasten)
 
     # ── Dialoge und Aufrufe ────────────────────────────────────────────

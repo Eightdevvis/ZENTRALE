@@ -9,6 +9,10 @@ MORNING_WAKEUP       = "MORNING_WAKEUP"
 BUTTON_PRESS         = "BUTTON_PRESS"
 LIGHT_SENSOR_TRIGGER = "LIGHT_SENSOR_TRIGGER"
 SYSTEM_BOOT          = "SYSTEM_BOOT"
+# Mitternacht ist vorbei (core/uhr.Tageswechsel in core/main.py): wer sich
+# etwas mit Tagesbezug merkt, rechnet neu (Alarme sofort, nicht erst im
+# 5-min-Takt). Gefahrzone „Eingefrorener Tag", memory/system/gefahrzonen.md.
+DAY_CHANGED          = "DAY_CHANGED"
 DATA_COLLECTION      = "DATA_COLLECTION"
 PRESENCE_DETECTED    = "PRESENCE_DETECTED"   # Motion-Sensor hat jemanden erkannt
 

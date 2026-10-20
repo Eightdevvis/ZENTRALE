@@ -11,11 +11,12 @@ from clock import check_time
 from sensors import read_light_sensor, read_button, read_motion_sensor
 from events import (
     LIGHT_SENSOR_TRIGGER, BUTTON_PRESS, SYSTEM_BOOT, PRESENCE_DETECTED,
-    DOOR_TOGGLE,
+    DOOR_TOGGLE, DAY_CHANGED,
 )
 import state
 import kalender
 import ai_backends
+import uhr
 
 
 # Mapping: Sensor-Name aus dem Webhook -> intern verwendeter Event-Name.
@@ -33,6 +34,21 @@ _SENSOR_TO_EVENT = {
 def log(msg: str):
     print(msg)
     state.push_log(msg)
+
+
+def tageswechsel_verkabeln(waechter, event_queue: list) -> None:
+    """Was das Backend bei Mitternacht tut (Server im Dauerbetrieb, Anlass
+    20.10.2026): Alarme sofort neu rechnen — der Konflikt von gestern ist
+    keiner mehr, der Horizont rückt — und DAY_CHANGED in den Event-Loop.
+    Alles andere fragt „heute" ohnehin bei jedem Aufruf (core/uhr.py)."""
+    def neu(alt, neu_tag):
+        log(f"TAGESWECHSEL {alt.isoformat()} → {neu_tag.isoformat()}")
+        try:
+            state.set_alarms(kalender.alarme())
+        except Exception as e:
+            log(f"Alarm-Recompute (Tageswechsel) fehlgeschlagen: {e}")
+        event_queue.append(DAY_CHANGED)
+    waechter.anmelden(neu)
 
 # ZENTRALE-Root auf den Pfad legen damit wir ui importieren können
 _root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
@@ -96,8 +112,14 @@ def main():
     import hot_reload
     waechter = hot_reload.Waechter(log) if hot_reload.an() else None
 
+    tag_waechter = uhr.Tageswechsel()
+    tageswechsel_verkabeln(tag_waechter, event_queue)
+
     _alarm_tick = 0
     while True:
+        # 0️⃣ Mitternacht vorbei? (core/uhr.py — „heute" nie einfrieren)
+        tag_waechter.pruefen()
+
         # 1️⃣ Sensoren abfragen + State updaten
         button = read_button()
         light = read_light_sensor()

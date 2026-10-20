@@ -80,6 +80,9 @@ die Kosten wuchsen quadratisch. Das darf nicht wieder passieren:
 
 Details, Messwerte, alle Regeln: `memory/betrieb/tests.md`.
 
+**Gefahrzonen** (Fehler, die versteckt wiederkommen — z. B. „heute" nie
+einfrieren, immer `core/uhr.py` + Tageswechsel): `memory/system/gefahrzonen.md`.
+
 ## Wo die Doku liegt
 
 Die gesamte Projekt-Doku ist modular nach Thema abgelegt im Ordner

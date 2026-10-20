@@ -63,9 +63,17 @@ SOURCE = {
 # nur den LFS-Pointer zurück. Der echte Binär-Inhalt kommt über media.github…/
 # media/ (Branch `main`, Ordner `Data`). Diese Jahresdatei ist groß → der
 # einmalige Abruf gehört auf einen echten Rechner (wie der density-Ingest).
-_YEAR = os.environ.get("VIINA_YEAR") or str(datetime.now(timezone.utc).year)
+# Zur Abrufzeit gefragt, nicht beim Import: ein Backend im Dauerbetrieb
+# überlebt Silvester (Gefahrzone „Eingefrorener Tag", memory/system/gefahrzonen.md).
 _MEDIA = "https://media.githubusercontent.com/media/zhukovyuri/VIINA/main/Data"
-_URL = "%s/control_latest_%s.zip" % (_MEDIA, _YEAR)
+
+
+def _jahr() -> str:
+    return os.environ.get("VIINA_YEAR") or str(datetime.now(timezone.utc).year)
+
+
+def _url() -> str:
+    return "%s/control_latest_%s.zip" % (_MEDIA, _jahr())
 
 # Gazetteer geonameid → Koordinaten+Name (statische Struktur, ändert sich kaum).
 # KEIN git-LFS → normaler raw-Endpoint liefert die echte Datei (~31 MB).
@@ -127,7 +135,7 @@ def _timelines():
     Speicher: die ~6,7 Mio Zeilen werden als flache Liste (gid, iso_date, status)
     mit internierten Strings gehalten, EINMAL global sortiert und je Ort lauflängen-
     komprimiert — statt 6,7 Mio verschachtelter dict-Einträge."""
-    blob = _download(_URL)
+    blob = _download(_url())
     # Sicherung: kam versehentlich der LFS-Pointer statt der Binärdatei?
     if blob[:40].startswith(b"version https://git-lfs"):
         raise ValueError("VIINA: LFS-Pointer statt ZIP erhalten (falsche URL?)")
@@ -219,7 +227,7 @@ def _fetch():
     return {
         "schema": 2,
         "source": SOURCE,
-        "year": _YEAR,
+        "year": _jahr(),
         "date_min": dmin,
         "date_max": dmax,
         # Stand: jüngstes Datum in der Zeitreihe, sonst Abrufdatum.

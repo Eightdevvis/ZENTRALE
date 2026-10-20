@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from .basis import BEENDEN, _num, api_call, fmt_clock, parse_clock
 from .tasten import Tasten
 import graph_reihen  # noqa: E402  – core/, eingehängt von basis.kern_pfad
+import uhr  # noqa: E402  – core/uhr.py: die eine Uhr
 
 
 def _tlabel(tid):
@@ -247,6 +248,12 @@ class Graphen:
             G["sel"] = max(0, len(G["graphs"]) - 1)
         g_load_cycle()
 
+    def tageswechsel(self, alt, neu):
+        """Die Zyklus-Vorhersage zählt ab heute („in 3 Tagen") — offen über
+        Mitternacht neu holen (core/uhr.py)."""
+        if self.G.get("active"):
+            self.g_load()
+
     def g_load_cycle(self):
         """Zyklus-Vorhersage ziehen (nur der »periode«-Graph hat eine). Gerechnet
         wird im Backend aus genau den Werten, die hier eingetragen werden —
@@ -284,7 +291,7 @@ class Graphen:
     def g_target(self):
         """Ziel-Datum für Eintrag/Anzeige (heute minus dayoff)."""
         G = self.G
-        return date.today() - timedelta(days=max(0, G.get("dayoff", 0)))
+        return uhr.heute() - timedelta(days=max(0, G.get("dayoff", 0)))
 
     def g_daylabel(self):
         G, g_target = self.G, self.g_target
@@ -729,7 +736,7 @@ class Graphen:
         # groß: Fenster = tatsächliche Datenspanne (frühester wert … heute),
         #   über die volle Breite GESTRECKT, damit die Daten den Platz füllen
         #   statt rechts an der Achse zu kleben (mehrere Spalten/Tag möglich).
-        today = date.today()
+        today = uhr.heute()
         day_x_end = oleft + ow - 2
         avail = max(1, day_x_end - day_x0 + 1)
 

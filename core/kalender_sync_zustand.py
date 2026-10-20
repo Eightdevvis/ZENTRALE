@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 from datetime import datetime, timedelta
+import uhr  # die eine Uhr (core/uhr.py)
 
 # Ab wann gilt der Stand als alt (Timer läuft alle 3 min)? Sasha entscheidet.
 ALT_MIN = 10
@@ -97,7 +98,7 @@ def lesen() -> dict | None:
 def schreiben(code: int, art: str, fehler: str | None, jetzt: datetime | None = None) -> dict:
     """Den Stand nach einem Lauf festhalten (atomar). `letzter_erfolg` und
     `seit` kommen aus dem alten Stand mit."""
-    jetzt = (jetzt or datetime.now()).replace(microsecond=0)
+    jetzt = (jetzt or uhr.jetzt()).replace(microsecond=0)
     alt = lesen() or {}
     ok = art == "ok"
     z = {"letzter_versuch": jetzt.isoformat(),
@@ -134,7 +135,7 @@ def bewerten(z: dict | None = None, jetzt: datetime | None = None) -> dict:
     if not z:
         return {"bekannt": False, "problem": False, "alt": False,
                 "hinweis": None, "kurz": None}
-    jetzt = jetzt or datetime.now()
+    jetzt = jetzt or uhr.jetzt()
     grenze = timedelta(minutes=ALT_MIN)
     versuch, erfolg = _zeit(z.get("letzter_versuch")), _zeit(z.get("letzter_erfolg"))
     alt = (versuch is None or jetzt - versuch > grenze
