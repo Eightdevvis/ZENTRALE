@@ -21,7 +21,20 @@ wird: ein Graph namens »periode« (Typ `scale`, jeden Blutungstag die Stärke
 1–5). Gefunden wird er über den **Namens-Slug** (`graphs._slug` → `periode`),
 nicht über eine harte id — Groß-/Kleinschreibung und Umlaute sind egal.
 Gibt es ihn nicht oder hat er noch keine Werte, liefert alles sauber »nichts«
-(`/api/cycle` → `{}`) und die Fronten zeichnen einfach nicht.
+(`/api/cycle` → `{}`) und die Fronten zeichnen einfach nicht. Am Kalender
+steht dann der Grund mit drin: `cycle: {"fehler": "kein »periode«-Graph"}`
+(bzw. „noch keine Einträge …", „Werte … nicht lesbar"; ein Absturz der
+Rechnung → „Vorhersage fehlgeschlagen (Typ)" + Log-Zeile `ZYKLUS ✗`). Der
+Schlüssel ist kein ISO-Datum, die Fronten färben ihn nie.
+
+**Fortschreiben (seit 20.10.2026):** `day_marks()` markiert nicht nur den
+EINEN nächsten Start, sondern alle Zyklen im Takt der Zykluslänge, die in
+die sichtbare Spanne fallen. Der erste (ggf. überfällige) Start bleibt
+markiert; weitere nur, wenn ihr Start nicht vor heute liegt (ein
+vergangener Schätz-Termin ist keine Vorhersage). Vorher blieb jeder Monat
+nach einer verstrichenen Vorhersage leer, solange nichts neu geloggt wurde
+(Sasha: „wurde einmal angezeigt, danach nie wieder"). Getönt wird in A
+(Mini-Monat + Tageskopf), B (Tageszahl) und C (Spaltenkopf).
 
 ## Die Rechnung
 

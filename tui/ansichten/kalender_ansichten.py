@@ -1012,6 +1012,8 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
                      _a_rolle("a_akzent") + INV)
         elif d == heute:
             lw.setze(y, x0, kuerzen(" %d " % d.day, cw), ROLLE["heute"] + INV)
+        elif _a_zyklus(daten, d):            # Zyklus-Tönung wie im Mini-Monat von A
+            lw.setze(y, x0, kuerzen("%d" % d.day, cw), ROLLE["zyklus"])
         else:
             lw.setze(y, x0, kuerzen("%d" % d.day, cw),
                      ROLLE["wochenende"] if d.weekday() >= 5 else ROLLE["tag_belegt"])
@@ -1205,7 +1207,7 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
     tage = [_c_bloecke(daten, d, erledigte) for d in woche]
     x0 = 1 + g
     for i, d in enumerate(woche):
-        r = ROLLE["heute"] if d == heute else (
+        r = ROLLE["heute"] if d == heute else ROLLE["zyklus"] if _a_zyklus(daten, d) else (
             ROLLE["c_wochenende"] if d.weekday() >= 5 else ROLLE["titel"])
         kopf = "%s %s" % (WT[d.weekday()], d.strftime("%d."))
         kopf = kopf if len(kopf) < colw else WT[d.weekday()][:colw - 1]

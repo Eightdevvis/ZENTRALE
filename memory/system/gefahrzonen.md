@@ -97,3 +97,26 @@ live am 20.10. richtig), Imprint und Alarme im Kern (`kalender_konflikte`,
 rechnen ab heute bei jedem Aufruf), Jetzt-Block des Prompts
 (`ki_prompt`), Morgenblick, Kachel „mitlaufend" (`kachel_kalender`, ttl
 60 s), Kopfzeilen-Uhr der TUI.
+
+## 2. Stumme Leere (seit 20.10.2026)
+
+**Was:** eine Rechnung liefert „nichts" — ob es wirklich nichts gibt, ob
+die Daten fehlen oder ob sie abgestürzt ist, sieht man nicht. Ein
+`except Exception: x = {}` oder ein leeres Ergebnis ohne Grund macht aus
+einem Fehler eine leere Fläche, die wie „gerade nichts los" aussieht.
+
+**Woran man es erkennt:** ein Feld war einmal da und ist seitdem einfach
+weg, ohne Meldung im Log; die API liefert `{}`/`[]`, obwohl Daten da sind.
+
+**Wie richtig:** nie crashen, aber nie stumm: ein leeres Ergebnis trägt
+einen kurzen Grund (`{"fehler": "…"}` unter einem Schlüssel, den die
+Fronten ignorieren), ein abgefangener Absturz zusätzlich eine Log-Zeile
+(`state.push_log`). Und bei Vorhersagen prüfen, was passiert, wenn die
+Vorhersage selbst in der Vergangenheit liegt.
+
+**Bekannte Funde:**
+
+| Stelle | Was war stumm | Wirkung |
+|---|---|---|
+| `ui/routen/kalender.py` `cycle` + `core/cycle.day_marks` | `except: {}`; markiert wurde nur der EINE nächste Start — verstrichen und nichts neu geloggt → jeder spätere Monat leer, ohne Grund | **Sashas 20.10.:** „periodentracker im kalender wurde einmal angezeigt, danach nie wieder" (behoben: fortgeschrieben + `fehler`) |
+

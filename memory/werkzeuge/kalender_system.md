@@ -495,7 +495,8 @@ umschaltbar. Geteilte, front-agnostische Quelle (wie die Maps):
   Gespeichertes: der Zyklus-Rechner (`core/cycle.py`) leitet die Tage aus dem
   Lifestyle-Graphen »periode« ab und hängt sie an die sichtbare Spanne, damit
   die Fronten nur noch **tönen** statt zu rechnen — `next` = vorhergesagter
-  Perioden-Start, `pms` = die 7 Tage davor. Termine bleiben wichtiger als die
+  Perioden-Start, `pms` = die 7 Tage davor (fortgeschrieben über mehrere
+  Zyklen; ohne Vorhersage `{"fehler": "<grund>"}`). Termine bleiben wichtiger als die
   Schätzung (die Tönung liegt darunter). Siehe `memory/werkzeuge/zyklus_pms.md`.
 - **Backend** (`core/kalender.py`): `week_view()` (bestand) liefert die Mo-So-
   Woche; neu `month_view(reference)` liefert das **Monatsgitter** — alle Tage vom

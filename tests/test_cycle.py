@@ -129,7 +129,7 @@ def test_unsinnige_abstaende_fliegen_raus(monkeypatch):
 def test_day_marks_faerbt_pms_und_den_starttag(monkeypatch):
     _patch(monkeypatch, _days("2026-06-11", "2026-07-07"))
     p = cycle.predict(today=date(2026, 7, 27))
-    marks = cycle.day_marks(date(2026, 7, 20), date(2026, 8, 10), p)
+    marks = cycle.day_marks(date(2026, 7, 20), date(2026, 8, 10), p, today=date(2026, 7, 27))
     assert marks["2026-08-02"] == "next"
     assert marks["2026-07-26"] == "pms" and marks["2026-08-01"] == "pms"
     assert "2026-07-25" not in marks             # ein Tag vor dem Fenster
@@ -139,7 +139,44 @@ def test_day_marks_faerbt_pms_und_den_starttag(monkeypatch):
 def test_day_marks_ausserhalb_des_zeitraums_leer(monkeypatch):
     _patch(monkeypatch, _days("2026-06-11", "2026-07-07"))
     p = cycle.predict(today=date(2026, 7, 27))
-    assert cycle.day_marks(date(2026, 9, 1), date(2026, 9, 30), p) == {}
+    # vor dem PMS-Fenster (26.07.) liegt nichts
+    assert cycle.day_marks(date(2026, 7, 1), date(2026, 7, 20), p,
+                           today=date(2026, 7, 27)) == {}
+
+
+def test_day_marks_schreibt_die_vorhersage_fort(monkeypatch):
+    """Regression 20.10.2026: nur der EINE nächste Start wurde markiert — der
+    Monat danach blieb leer. Jetzt geht es im Takt der Zykluslänge weiter."""
+    _patch(monkeypatch, _days("2026-06-11", "2026-07-07"))   # ø 26 → 02.08.
+    heute = date(2026, 7, 27)
+    p = cycle.predict(today=heute)
+    m = cycle.day_marks(date(2026, 8, 3), date(2026, 9, 30), p, today=heute)
+    assert m["2026-08-28"] == "next" and m["2026-09-23"] == "next"
+    assert m["2026-08-21"] == "pms" and m["2026-08-27"] == "pms"
+
+
+def test_ueberfaellig_bleibt_der_kalender_nicht_leer(monkeypatch):
+    """Der eigentliche Fehler: seit dem letzten Eintrag ist die Vorhersage
+    verstrichen, nichts neu geloggt → der aktuelle Monat war leer. Der
+    überfällige Start bleibt markiert, die nächsten kommen dazu; vergangene
+    Schätz-Starts (vor heute, nicht der erste) werden nicht erfunden."""
+    _patch(monkeypatch, _days("2026-06-11", "2026-07-07"))   # 02.08., 28.08., 23.09., 19.10., 14.11.
+    heute = date(2026, 10, 10)
+    p = cycle.predict(today=heute)
+    assert p["overdue"] is True
+    m = cycle.day_marks(date(2026, 7, 27), date(2026, 11, 30), p, today=heute)
+    assert m["2026-08-02"] == "next"                     # überfällig, bleibt sichtbar
+    assert "2026-08-28" not in m and "2026-09-23" not in m   # vergangen: nicht erfunden
+    assert "2026-09-16" not in m
+    assert m["2026-10-19"] == "next" and m["2026-10-12"] == "pms"
+    assert m["2026-11-14"] == "next"
+
+
+def test_kalender_marken_nennt_den_grund(monkeypatch):
+    """Ohne Vorhersage kein stummes {}: der Grund steht unter "fehler"."""
+    monkeypatch.setattr(cycle, "_find_graph", lambda: None)
+    m = cycle.kalender_marken(date(2026, 7, 1), date(2026, 7, 31), today=date(2026, 7, 27))
+    assert m == {"fehler": "kein »periode«-Graph"}
 
 
 def test_day_marks_ohne_vorhersage_leer(monkeypatch):

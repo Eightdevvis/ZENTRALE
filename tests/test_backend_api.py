@@ -657,11 +657,77 @@ def test_api_cycle_rechnet_aus_den_graph_werten(client, tmp_path, monkeypatch):
 
     # …und dieselbe Rechnung hängt an der Kalender-Woche, damit die Front nur
     # noch einfärben muss (kein zweiter Request, keine Datums-Mathe im Browser).
-    cal = client.get("/api/calendar?view=week&ref=2026-07-27").get_json()
-    assert cal["cycle"]["2026-08-02"] == "next"
-    assert cal["cycle"]["2026-07-27"] == "pms"
-    # Woche ohne Zyklus-Tage bleibt leer (kein Dauer-Einfärben).
-    assert client.get("/api/calendar?view=week&ref=2026-09-14").get_json()["cycle"] == {}
+    import uhr
+    from datetime import datetime
+    with uhr.gestellt(datetime(2026, 7, 27, 12, 0)):
+        cal = client.get("/api/calendar?view=week&ref=2026-07-27").get_json()
+        assert cal["cycle"]["2026-08-02"] == "next"
+        assert cal["cycle"]["2026-07-27"] == "pms"
+        # Woche ohne Zyklus-Tage bleibt leer (kein Dauer-Einfärben).
+        assert client.get("/api/calendar?view=week&ref=2026-08-10").get_json()["cycle"] == {}
+
+
+def _periode_mit_werten(client, tmp_path, monkeypatch, tage):
+    """Künstlicher »periode«-Graph in tmp (nie echte Daten)."""
+    import graphs
+    from ui.routen import erfassung as app_mod
+    monkeypatch.setattr(graphs, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(graphs, "_REGISTRY", str(tmp_path / "graphs.json"))
+    monkeypatch.setattr(app_mod, "_DATA_DIR", str(tmp_path))
+    g = graphs.create_graph("Periode", "scale")
+    for day in tage:
+        client.post("/api/log", json={"category": g["id"],
+                                      "data": {"date": day, "value": 3}})
+
+
+def test_kalender_zeigt_vorhersage_auch_wenn_sie_ueberfaellig_ist(client, tmp_path, monkeypatch):
+    """Regression 20.10.2026: Vorhersage einmal gesehen, danach nie wieder.
+    Ursache: nur der EINE nächste Start wurde markiert; war er verstrichen und
+    nichts neu geloggt, blieb jeder spätere Monat leer. Jetzt schreibt die
+    Rechnung im Takt der Zykluslänge fort — und A/B/C färben die Tage."""
+    import uhr
+    from datetime import datetime, date
+    from tui.ansichten import kalender_ansichten as ka
+    _periode_mit_werten(client, tmp_path, monkeypatch,
+                        ("2026-06-11", "2026-06-12", "2026-07-07", "2026-07-08"))
+    # ø 26 t → 02.08. (überfällig), dann 28.08., 23.09., 19.10., 14.11.
+    with uhr.gestellt(datetime(2026, 10, 10, 9, 0)):
+        cal = client.get("/api/calendar?view=month&ref=2026-10-10").get_json()
+    c = cal["cycle"]
+    assert "fehler" not in c
+    assert c["2026-10-19"] == "next"
+    assert all(c["2026-10-%02d" % t] == "pms" for t in range(12, 19))
+    # Die Ansichten färben genau diese Tage (A Mini-Monat + Liste, B, C).
+    assert ka._a_zyklus(cal, date(2026, 10, 19))
+    assert not ka._a_zyklus(cal, date(2026, 10, 5))
+    zyk = ka.ROLLE["zyklus"]
+    b = ka.ansicht_b(cal, 110, 40)
+    assert any(r == zyk and t.strip() == "19" for z in b for t, r in z)
+    cal["ref"] = "2026-10-19"
+    cz = ka.ansicht_c(cal, 136, 30)
+    assert any(r == zyk for z in cz for _t, r in z)
+
+
+def test_kalender_nennt_den_grund_ohne_vorhersage(client, tmp_path, monkeypatch):
+    """Keine stumme Leere mehr: ohne »periode«-Graph steht der Grund drin, und
+    ein Absturz der Rechnung wird zu einem Grund + Log-Zeile, nie zu 500."""
+    import graphs
+    import cycle
+    import state
+    monkeypatch.setattr(graphs, "_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(graphs, "_REGISTRY", str(tmp_path / "graphs.json"))
+    cal = client.get("/api/calendar?view=month&ref=2026-10-10").get_json()
+    assert cal["cycle"] == {"fehler": "kein »periode«-Graph"}
+
+    def kaputt(*a, **k):
+        raise RuntimeError("test")
+    zeilen = []
+    monkeypatch.setattr(cycle, "kalender_marken", kaputt)
+    monkeypatch.setattr(state, "push_log", zeilen.append)
+    r = client.get("/api/calendar?view=month&ref=2026-10-10")
+    assert r.status_code == 200
+    assert "RuntimeError" in r.get_json()["cycle"]["fehler"]
+    assert any("ZYKLUS" in z for z in zeilen)
 
 
 def test_kalender_sperre_ist_409_mit_grund_statt_500(client, monkeypatch):

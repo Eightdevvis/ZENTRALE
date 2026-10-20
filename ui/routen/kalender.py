@@ -87,13 +87,16 @@ def api_calendar():
     out['today'] = uhr.heute().isoformat()
     # Zyklus-Marker für die sichtbaren Tage (abgeleitet aus dem »periode«-
     # Graphen, KEIN Kalender-Layer und nichts Gespeichertes): {iso: 'pms'|
-    # 'next'}. Die Front tönt die Tage nur ein. Defensiv: nie crashen.
+    # 'next'}. Die Front tönt die Tage nur ein. Nie crashen — aber auch nie
+    # stumm: ohne Vorhersage steht der Grund als {"fehler": …} drin, ein
+    # Absturz der Rechnung landet zusätzlich im Log (gefahrzonen.md).
     try:
         c_start = date.fromisoformat(out['start'])
         c_end = date.fromisoformat(out['end'])
-        out['cycle'] = cycle.day_marks(c_start, c_end)
-    except Exception:
-        out['cycle'] = {}
+        out['cycle'] = cycle.kalender_marken(c_start, c_end)
+    except Exception as e:
+        state.push_log(f"ZYKLUS ✗  Vorhersage fehlgeschlagen: {type(e).__name__}: {e}")
+        out['cycle'] = {"fehler": f"Vorhersage fehlgeschlagen ({type(e).__name__})"}
     # Offene Kalender-Alarme mitschicken (gleiche Quelle wie die Canvas-Ecke),
     # damit die Front pro Tag/Header dezent warnen kann. Defensiv: nie crashen.
     try:

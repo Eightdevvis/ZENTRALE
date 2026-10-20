@@ -30,6 +30,7 @@ import json
 from datetime import date, timedelta
 
 import graphs   # Registry (Definitionen) + _slug/_DATA_DIR — dieselbe Quelle
+import uhr      # die eine Uhr (core/uhr.py) — „heute" nie einfrieren
 
 # Name des Graphen, der den Zyklus trägt. Gesucht wird über den SLUG des
 # Namens (graphs._slug), nicht über eine harte id: der Graph heißt für Sasha
@@ -132,7 +133,7 @@ def predict(today=None):
     if not days:
         return None
 
-    today = today or date.today()
+    today = today or uhr.heute()
     starts = block_starts(days)
     last_start = starts[-1]
     length, source, n_gaps, spread = _cycle_len(starts)
@@ -171,7 +172,7 @@ def predict(today=None):
     }
 
 
-def day_marks(start, end, pred=None):
+def day_marks(start, end, pred=None, today=None):
     """
     Tages-Marker für einen Zeitraum [start, end] (date-Objekte) — die Form, in
     der Kalender-Fronten einfärben, ohne selbst rechnen zu müssen:
@@ -181,24 +182,68 @@ def day_marks(start, end, pred=None):
     'next' = vorhergesagter Perioden-Start, 'pms' = einer der 7 Tage davor.
     'next' gewinnt, falls sich beides überlappt. Leeres dict, wenn es keine
     Vorhersage gibt oder sie außerhalb des Zeitraums liegt.
+
+    Die Vorhersage wird im Takt der Zykluslänge in die Zukunft fortgeschrieben
+    (20.10.2026): vorher kam NUR der eine nächste Start — war der vorbei und
+    nichts neu geloggt, lag er im Monat davor und der Kalender blieb danach für
+    immer leer. Der überfällige Start bleibt markiert (er ist die Ansage
+    „hätte kommen sollen"); weitere Zyklen zählen nur, wenn ihr Start nicht
+    schon vor heute liegt — ein vergangener Schätz-Termin ist keine Vorhersage.
     """
-    pred = pred if pred is not None else predict()
+    pred = pred if pred is not None else predict(today)
     if not pred:
         return {}
-    out = {}
+    today = today or uhr.heute()
     try:
         nxt = date.fromisoformat(pred['next_start'])
-        pf = date.fromisoformat(pred['pms_from'])
-        pt = date.fromisoformat(pred['pms_to'])
+        laenge = int(pred['cycle_len'])
     except (KeyError, TypeError, ValueError):
         return {}
-    d = max(pf, start)
-    while d <= min(pt, end):
-        out[d.isoformat()] = 'pms'
-        d += timedelta(days=1)
-    if start <= nxt <= end:
-        out[nxt.isoformat()] = 'next'
+    if laenge <= PMS_DAYS:          # Müll-Daten: kein Zyklus kürzer als sein PMS
+        return {}
+    out = {}
+    for k in range(0, 1000):        # Deckel gegen endlose Zeiträume
+        n_k = nxt + timedelta(days=k * laenge)
+        pf = n_k - timedelta(days=PMS_DAYS)
+        if pf > end:
+            break
+        if k > 0 and n_k < today:
+            continue
+        d = max(pf, start)
+        while d <= min(n_k - timedelta(days=1), end):
+            out.setdefault(d.isoformat(), 'pms')
+            d += timedelta(days=1)
+        if start <= n_k <= end:
+            out[n_k.isoformat()] = 'next'
     return out
+
+
+def grund():
+    """Kurzer Grund, warum es KEINE Vorhersage gibt (None = es gibt eine).
+    Für die Kalender-API, damit ein leerer Zyklus nicht stumm bleibt."""
+    g = _find_graph()
+    if not g:
+        return 'kein »periode«-Graph'
+    path = graphs._values_path(g.get('id'))
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                json.load(f)
+        except Exception:
+            return 'Werte des »periode«-Graphen nicht lesbar'
+    if not _logged_days(g.get('id')):
+        return 'noch keine Einträge im »periode«-Graphen'
+    return None
+
+
+def kalender_marken(start, end, today=None):
+    """Marker für die Kalender-API: day_marks(), und wenn es gar keine
+    Vorhersage gibt, statt eines stummen {} der Grund als {"fehler": …}
+    (kein ISO-Datum als Schlüssel, die Fronten färben ihn also nie)."""
+    pred = predict(today)
+    if not pred:
+        return {'fehler': grund() or 'keine Vorhersage'}
+    return day_marks(start, end, pred, today)
 
 
 def summary(pred=None):
