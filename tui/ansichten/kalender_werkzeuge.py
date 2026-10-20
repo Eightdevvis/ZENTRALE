@@ -390,10 +390,14 @@ class Feld:
     kalender_advanced.py). `lesen(text)` → (ok, wert|fehlertext);
     `aktiv(werte)` → gilt gerade? (sonst gedämpft, übersprungen, beim
     Speichern ignoriert — das Feld bleibt aber stehen); `hilfe` Text oder
-    (werte) → Text."""
+    (werte) → Text.
+    `frei` (nur 'wahl'): die Option, bei der DIESELBE Zeile auch Text nimmt
+    („‹ eigene: Musik ›", Gruppe 20.10.2026) — der Text steht in `text`,
+    `frei_lesen(text)` prüft ihn, er geht als `frei_name` in die Werte."""
 
     def __init__(self, name, beschriftung, art="text", wert="", optionen=(),
-                 lesen=None, aktiv=None, hilfe=""):
+                 lesen=None, aktiv=None, hilfe="", frei=None, frei_name=None,
+                 frei_text="", frei_lesen=None):
         self.name, self.beschriftung, self.art = name, beschriftung, art
         self.text = str(wert or "") if art == "text" else ""
         self.adv = dict(wert or {}) if art == "advanced" else None
@@ -403,6 +407,14 @@ class Feld:
         self.lesen = lesen or (lambda s: (True, s.strip()))
         self.aktiv = aktiv or (lambda w: True)
         self.hilfe = hilfe
+        self.frei, self.frei_name = frei, frei_name
+        self.frei_lesen = frei_lesen or (lambda s: (True, s.strip()))
+        if frei is not None:
+            self.text = str(frei_text or "")
+
+    def frei_offen(self) -> bool:
+        """Steht die Wahl auf der Option mit Text (`frei`)?"""
+        return self.art == "wahl" and self.frei is not None and self.roh() == self.frei
 
     def roh(self):
         if self.art == "advanced":
@@ -468,6 +480,13 @@ class Formular:
                 werte.update(wert)
             else:
                 werte[f.name] = wert
+            if f.frei_offen():                 # „‹ eigene: … ›": der Text gehört dazu
+                ok, text = f.frei_lesen(f.text)
+                if not ok:
+                    self.fehler, self.fehler_feld = text, f.name
+                    self.i = self.felder.index(f)
+                    return False
+                werte[f.frei_name] = text
         p = self._pruefen(werte)
         if p:
             name, self.fehler = p
@@ -489,6 +508,12 @@ class Formular:
             ("⌫", "zeichen_weg", "delete"), ("ctrl+u", "leeren", "clear"), _ESC],
         "wahl": [("←→", "waehlen", "choose"), ("space", "waehlen")] + _FELD + [
             ("enter", "speichern", "save"), ("ctrl+s", "speichern"), _ESC],
+        # Wahl mit Text in derselben Zeile („‹ eigene: Musik_ ›", 20.10.2026):
+        # tippen (auch Leertaste) schreibt, ⌫/Strg-U löschen, ←→ wechseln
+        # weiter die Option (der Text bleibt fürs Zurückkommen), ↑↓/Tab gehen.
+        "wahltext": [("type", "tippen", "type"), ("←→", "waehlen", "choose")] + _FELD + [
+            ("enter", "speichern", "save"), ("ctrl+s", "speichern"),
+            ("⌫", "zeichen_weg", "delete"), ("ctrl+u", "leeren", "clear"), _ESC],
         # Enter/Leertaste/→ öffnen das Fenster „advanced", speichern mit Strg-S
         "advanced": [("enter", "advanced", "open")] + _FELD + [
             ("space/→", "advanced"), ("ctrl+s", "speichern", "save"), _ESC],
@@ -498,13 +523,15 @@ class Formular:
         return kalender_kasten.zustand(self)
 
     def ansicht(self) -> str:
+        if self.feld.frei_offen():
+            return "wahltext"
         return self.feld.art if self.feld.art in ("wahl", "advanced") else "text"
 
     def taste(self, ch: int) -> str:
         """→ 'weiter' | 'fertig' | 'abbruch'."""
         if self.box is not None:
             return self._box_taste(ch)
-        if 0x80 <= ch <= 0xFF and self.feld.art == "text":        # Umlaute
+        if 0x80 <= ch <= 0xFF and self.ansicht() in ("text", "wahltext"):     # Umlaute
             z = kalender_kasten.tippen_byte(self, ch)
             return self.aktion_tippen(z) if z else "weiter"
         return self.TASTEN.verteilen(self, self.ansicht(), ch) or "weiter"
@@ -595,6 +622,8 @@ class Formular:
                 # Keine Vorschau mehr in der Zeile, nur der Hinweis (Sasha,
                 # 11.10.2026: „ohne vorschau … einfach nur mini erklärung").
                 wert = ADVANCED_HINWEIS
+            elif f.frei_offen():
+                wert = "‹ %s: %s%s ›" % (f.roh(), f.text, "_" if k == k_jetzt else "")
             elif f.art == "wahl":
                 wert = "‹ %s ›" % f.roh()
             else:
@@ -642,11 +671,15 @@ def _gruppe_felder(roh=None) -> list:
         wert, name = GRUPPE_EIGENE, (roh.get("kategorie_name") or "")
     else:
         wert = kalender_gruppen.NAMEN.get(k, GRUPPE_KEINE)
-    ist_eigene = lambda w: w.get("gruppe") == GRUPPE_EIGENE
+    # EINE Zeile (20.10.2026, Sasha: „name der gruppe muss … nicht angezeigt
+    # werden, einfach so wenn man neu anlegt dass sich das dann aufklappt"):
+    # bei „eigene" wird sie selbst zum Textfeld, der Name geht als gruppe_name.
+    hilfe = lambda w: ("eigene: Namen tippen · ←→ andere Gruppe"
+                       if w.get("gruppe") == GRUPPE_EIGENE
+                       else "der Monat zeigt eine Gruppe je Tag als eine Zeile")
     return [Feld("gruppe", "Gruppe", art="wahl", wert=wert, optionen=_gruppe_optionen(),
-                 hilfe="der Monat zeigt eine Gruppe je Tag als eine Zeile"),
-            Feld("gruppe_name", "Name der Gruppe", wert=name, aktiv=ist_eigene,
-                 lesen=lambda s: (True, s.strip()) if s.strip() else (False, "name fehlt"))]
+                 hilfe=hilfe, frei=GRUPPE_EIGENE, frei_name="gruppe_name", frei_text=name,
+                 frei_lesen=lambda s: (True, s.strip()) if s.strip() else (False, "name fehlt"))]
 
 
 def _gruppe_wert(w) -> tuple:
@@ -736,17 +769,24 @@ def _stil_aufruf(roh, w) -> list:
 
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
-                   mit_regel=True, mit_ganz=True, mit_tage=None, mit_datum=True,
+                   mit_regel=True, mit_ganz=True, mit_letzter=None, mit_datum=True,
                    datum_name="Tag", mit_gruppe=True, roh=None, quellen=None):
-    """Die Felder des Termin-Kastens. `mit_tage` (Vorgabe: wie `mit_ganz`):
-    das Feld „Tage" (ganztägig über mehrere Tage) — nicht bei Serien."""
-    mit_tage = mit_ganz if mit_tage is None else mit_tage
+    """Die Felder des Termin-Kastens. `mit_letzter` (Vorgabe: wie `mit_ganz`
+    und `mit_datum`): das Feld „Letzter Tag" direkt unter „Tag" (ganztägig
+    über mehrere Tage; leer = nur dieser Tag) — nicht bei Serien."""
+    mit_letzter = (mit_ganz and mit_datum) if mit_letzter is None else mit_letzter
     ganz_an = lambda w: w.get("ganz") == "ja"
     regel_an = lambda w: w.get("wied", "keine") != "keine"
     felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
     if mit_datum:
         felder.append(Feld("datum", datum_name, wert=datum_text(tag),
                            lesen=_l_datum(heute), hilfe="TT.MM.JJJJ"))
+    if mit_letzter:
+        # Vorher „Tage" (eine Zahl, unter Bis) — Sasha, 20.10.2026: „etwas
+        # random, also unklar, was es macht, und wie hinplatziert".
+        felder.append(Feld("letzter", "Letzter Tag", lesen=_l_datum(heute),
+                           aktiv=lambda w: ganz_an(w) and not regel_an(w),
+                           hilfe="leer = nur dieser Tag; sonst mehrtägig bis einschließlich"))
     if mit_ganz:
         felder.append(Feld("ganz", "Ganztägig", art="wahl", wert="ja" if ganz else "nein",
                            optionen=("nein", "ja")))
@@ -756,9 +796,6 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
         Feld("bis", "Bis", wert=bis, lesen=_l_ende, aktiv=lambda w: not ganz_an(w),
              hilfe="hh:mm oder +1h, +2d20h"),
     ]
-    if mit_tage:
-        felder.append(Feld("tage", "Tage", wert="1", lesen=_l_zahl(),
-                           aktiv=lambda w: ganz_an(w) and not regel_an(w)))
     if mit_regel:
         felder += [
             Feld("wied", "Wiederholung", art="wahl", wert=wiederholung, optionen=WIEDERHOLUNG),
@@ -826,13 +863,12 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
                 **gruppe}
         return [("POST", "/api/calendar/routine", body)], "wiederholt sich: " + titel, None
     if start is None:
-        n = w.get("tage") or 1
-        if n == 1:
+        bis = w.get("letzter")
+        if not bis or bis <= tag:
             body = {"layer": layer, "day": tag.isoformat(), "label": titel, **gruppe}
             if ort:
                 body["ort"] = ort
             return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, None
-        bis = tag + timedelta(days=n - 1)
         body = {"layer": layer, "von": tag.isoformat(), "bis": bis.isoformat(), "label": titel,
                 **gruppe}
         if ort:
@@ -855,6 +891,15 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     return [("POST", "/api/calendar/entry", body)], "angelegt: " + titel, kon
 
 
+def _letzter_pruefen(tag):
+    """„Letzter Tag" vor „Tag" → Fehler am Feld (sonst None)."""
+    def pruefen(w):
+        if w.get("letzter") and w["letzter"] < (w.get("datum") or tag):
+            return "letzter", "letzter tag vor dem tag"
+        return None
+    return pruefen
+
+
 def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
     """a: neuer Termin am gewählten Tag (calcurse: der Tag im Kalender).
     Ein Listen-Termin ist seit 11.10.2026 kein eigener Weg mehr (früher
@@ -869,7 +914,8 @@ def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
         return _plan(aufrufe, meldung, konflikt=kon, danach={"tag": w.get("datum") or tag})
     # committed (Standard) oder uncommitted: Advanced → Status (seit
     # 11.10.2026, vorher eigenes Feld „Verbindlich"); umschalten auch mit u.
-    return Formular("neuer termin", _termin_felder(tag, heute, quellen=quellen), plan)
+    return Formular("neuer termin", _termin_felder(tag, heute, quellen=quellen), plan,
+                    pruefen=_letzter_pruefen(tag))
 
 
 # ── Typ liste beim Bearbeiten (Feld „Advanced", 11.10.2026) ────────────
@@ -996,7 +1042,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                        {"layer": layer, "day": iso, "label": label, "time": t0 or None})
                 return _plan(aufrufe + [weg], meldung)
             start, e_dt = _zeiten(w["datum"], w)
-            if e_dt and e_dt.date() > w["datum"]:       # über Mitternacht → Spanne
+            mehrtaegig = w.get("letzter") and w["letzter"] > w["datum"]
+            if (e_dt and e_dt.date() > w["datum"]) or mehrtaegig:   # → Spanne
                 aufrufe, meldung, _k = _neu_plan(w, tag, _ziel_ebene(w, layer),
                                                  _quelle_bleibt(roh, w))
                 weg = ("DELETE", "/api/calendar/eintrag",
@@ -1022,7 +1069,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                          zurueck=_quelle_folge(roh, w))
         felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
                                 ort=ort0, roh=roh, quellen=quellen)
-        return Formular("termin ändern", felder, plan, fokus=fokus)
+        return Formular("termin ändern", felder, plan, fokus=fokus,
+                        pruefen=_letzter_pruefen(tag))
 
     if a_ == "routine":
         def nur_dieser(w):
@@ -1073,12 +1121,12 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
         # (die Abweichung erbt die Zeit der Regel) — dort bleibt es weg.
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
             tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0, mit_regel=False,
-            mit_ganz=not t0, mit_tage=False, datum_name="Verschieben auf", mit_gruppe=False),
+            mit_ganz=not t0, mit_letzter=False, datum_name="Verschieben auf", mit_gruppe=False),
             nur_dieser, fokus=fokus)
         def form_alle():
             felder = _termin_felder(
                 tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0,
-                mit_tage=False, mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
+                mit_letzter=False, mit_datum=False, wiederholung=r["wiederholung"], alle=r["alle"],
                 wtage=r["wtage"], wbis=r["wbis"], roh=roh, quellen=quellen)
             return Formular("alle termine der serie", felder, alle, fokus=fokus)
         if fokus == "wied":

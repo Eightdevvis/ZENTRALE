@@ -7,6 +7,7 @@ statt jeden tag welche fächer genau, dafür ist die wochenansicht" — gewählt
 Gruppe, Enter zeigt ihre Glieder; das Formular schickt die Gruppe mit. Dazu:
 die TUI-Kopie von titel_schluessel rechnet wie der Kern (core/kalender_kategorie.py).
 """
+import curses
 import os
 import sys
 from datetime import date
@@ -129,7 +130,7 @@ def test_neue_routine_mit_eigener_gruppe():
     _waehle(f, "wied", "wöchentlich")
     _waehle(f, "gruppe", "eigene")
     assert f.taste(10) == "weiter" and f.fehler == "name fehlt"
-    _feld(f, "gruppe_name").text = "Musik"
+    _feld(f, "gruppe").text = "Musik"
     assert f.taste(10) == "fertig"
     (_m, pfad, body), = f.plan()["aufrufe"]
     assert pfad == "/api/calendar/routine"
@@ -181,3 +182,83 @@ def test_namen_vom_backend():
     assert kw._gruppe_optionen() == ("keine", "Uni", "Sport", "eigene")
     kg.namen_setzen(None)                   # Backend weg: Namen bleiben
     assert "sport" in kg.NAMEN
+
+
+# ── „eigene" klappt in derselben Zeile auf (20.10.2026) ────────────────
+# Sasha: „name der gruppe muss in bearbeitung und erstellung nicht angezeigt
+# werden, einfach so wenn man neu anlegt dass sich das dann aufklappt".
+def _zeile(f, beschriftung="Gruppe"):
+    return next(w for b, w, *_r in f.zeilen() if b == beschriftung)
+
+
+def _auf_gruppe(f):
+    f.i = [x.name for x in f.felder].index("gruppe")
+
+
+def test_eigene_gruppe_tippt_in_derselben_zeile():
+    f = kw.formular_neu(TAG, HEUTE)
+    assert all(x.name != "gruppe_name" for x in f.felder)
+    _feld(f, "titel").text = "Chor"
+    _feld(f, "von").text = "19:00"
+    _auf_gruppe(f)
+    assert f.ansicht() == "wahl" and _zeile(f) == "‹ keine ›"
+    f.taste(curses.KEY_LEFT)                      # keine → (rückwärts) eigene
+    assert f.ansicht() == "wahltext" and _zeile(f) == "‹ eigene: _ ›"
+    for b in "Mü sik".encode("utf-8"):            # Leertaste und Umlaute tippen
+        f.taste(b)
+    assert _zeile(f) == "‹ eigene: Mü sik_ ›"
+    for _ in range(5):                            # „ü sik“ weg
+        f.taste(curses.KEY_BACKSPACE)
+    f.taste(ord("u"))
+    assert _feld(f, "gruppe").text == "Mu"
+    f.taste(curses.KEY_LEFT)                      # ← wechselt weiter die Option
+    vorige = _feld(f, "gruppe").optionen[-2]
+    assert _feld(f, "gruppe").roh() == vorige and _zeile(f) == "‹ %s ›" % vorige
+    f.taste(curses.KEY_RIGHT)                     # zurück: der Name ist noch da
+    assert _zeile(f) == "‹ eigene: Mu_ ›"
+    f.taste(9)
+    assert f.feld.name == "advanced"              # Tab verlässt die Zeile
+    assert _zeile(f) == "‹ eigene: Mu ›"
+    assert f.taste(19) == "fertig", f.fehler                # Strg-S
+    (_m, _p, body), = f.plan()["aufrufe"]
+    assert (body["kategorie"], body["kategorie_name"]) == ("custom", "Mu")
+
+
+def test_eigene_gruppe_ohne_namen_fehler_und_fokus_bleibt():
+    f = kw.formular_neu(TAG, HEUTE)
+    _feld(f, "titel").text = "Chor"
+    _feld(f, "von").text = "19:00"
+    _waehle(f, "gruppe", "eigene")
+    _feld(f, "gruppe").text = "   "
+    assert f.taste(10) == "weiter" and f.fehler == "name fehlt"
+    assert f.feld.name == "gruppe" and f.ansicht() == "wahltext"
+    f.taste(ord("X"))
+    assert f.fehler == ""                         # wer tippt, sieht den Fehler nicht mehr
+
+
+def test_bearbeiten_zeigt_eigenen_namen_in_der_zeile():
+    roh = _e("Probe", "19:00", "21:00", kat="custom", kategorie_name="Musik")
+    f = kw.formular_bearbeiten(roh, TAG, HEUTE)
+    assert _zeile(f) == "‹ eigene: Musik ›"
+    assert f.taste(10) == "fertig"                # unverändert → kein Aufruf
+    assert all(p != "/api/calendar/kategorie" for _m, p, _b in f.plan()["aufrufe"])
+    f = kw.formular_bearbeiten(roh, TAG, HEUTE)
+    _auf_gruppe(f)
+    f.taste(curses.KEY_BACKSPACE)
+    assert f.taste(10) == "fertig"
+    assert f.plan()["aufrufe"][-1] == ("POST", "/api/calendar/kategorie", {
+        "kennung": "k-Probe", "kategorie": "custom", "kategorie_name": "Musi"})
+
+
+def test_serie_alle_und_spanne_haben_die_eine_zeile():
+    serie = _e("Chor", "19:00", "21:00", kat="custom", kategorie_name="Musik",
+               recurring=True, rrule="FREQ=WEEKLY;BYDAY=WE")
+    spanne = {"label": "Reise", "von": "2026-10-07", "bis": "2026-10-09", "layer": "termine",
+              "spanning": True, "kategorie": "custom", "kategorie_name": "Fern", "kennung": "k-r"}
+    for roh, name in ((serie, "Musik"), (spanne, "Fern")):
+        d = kw.formular_bearbeiten(roh, TAG, HEUTE)
+        d.taste(ord("a"))
+        f = d.plan()["weiter"]
+        assert [x.name for x in f.felder].count("gruppe") == 1
+        assert all(x.name != "gruppe_name" for x in f.felder)
+        assert _zeile(f) == "‹ eigene: %s ›" % name

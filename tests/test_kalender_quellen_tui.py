@@ -9,7 +9,7 @@ Geprüft: Anzeige in A/B/C (tui/ansichten/kalender_ansichten.py), der Kasten
 „welche Liste?" und die Pläne (kalender_quellen.py, kalender_werkzeuge.py).
 Reine Logik — ohne Terminal und ohne Backend.
 """
-from datetime import date
+from datetime import date, timedelta
 
 from tui.ansichten import kalender_ansichten as ka
 from tui.ansichten import kalender_beispiel as kb
@@ -198,7 +198,7 @@ def test_neu_typ_liste_als_routine_und_spanne():
          "wied": "wöchentlich", "alle": 1, "wtage": [], "wbis": None}
     (_m, pfad, body), = kw._neu_plan(w, TAG, quelle=q)[0]
     assert pfad == "/api/calendar/routine" and body["quelle"] == Q
-    w = {"titel": "todo", "datum": TAG, "ganz": "ja", "tage": 3, "wied": "keine"}
+    w = {"titel": "todo", "datum": TAG, "ganz": "ja", "letzter": TAG + timedelta(days=2), "wied": "keine"}
     (_m, pfad, body), = kw._neu_plan(w, TAG, quelle=q)[0]
     assert pfad == "/api/calendar/spanne" and body["quelle"] == Q
 

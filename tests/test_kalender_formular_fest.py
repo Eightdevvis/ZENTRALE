@@ -59,35 +59,47 @@ def test_feldpositionen_aendern_sich_nicht_beim_umschalten_von_ganztaegig_und_wi
             _setze(f, "ganz", ganz)
             _setze(f, "wied", wied)
             assert _plaetze(f) == plaetze, (ganz, wied)
-    # ganztägig + wöchentlich: Uhrzeit und Tage gelten nicht → „—", gedämpft
+    # ganztägig + wöchentlich: Uhrzeit und Letzter Tag gelten nicht → „—"
     _setze(f, "ganz", "ja")
     _setze(f, "wied", "wöchentlich")
     werte = {b: w for b, w, *_r in f.zeilen()}
-    assert werte["Von"] == werte["Bis"] == werte["Tage"] == kw.NICHT_AKTIV
+    assert werte["Von"] == werte["Bis"] == werte["Letzter Tag"] == kw.NICHT_AKTIV
     assert werte["An Tagen"] == "" and werte["Abstand"] == "1"
     gilt = dict(zip([x.name for x in f.felder], f.gilt()))
-    assert not gilt["von"] and not gilt["tage"] and gilt["wtage"]
+    assert not gilt["von"] and not gilt["letzter"] and gilt["wtage"]
+    # „Letzter Tag" steht direkt unter „Tag", „Tage" gibt es nicht mehr
+    assert plaetze[1:4] == ["Tag", "Letzter Tag", "Ganztägig"] and "Tage" not in plaetze
+    # keine eigene Zeile „Name der Gruppe": „eigene" klappt in der Zeile auf
+    assert "Name der Gruppe" not in plaetze
+    _setze(f, "gruppe", "eigene")
+    assert _plaetze(f) == plaetze
 
 
 def test_tab_ueberspringt_was_nicht_gilt_und_landet_wieder_am_selben_platz():
     f = kw.formular_neu(TAG, TAG)
     f.i = [x.name for x in f.felder].index("ganz")
+    f.taste(curses.KEY_UP)
+    assert f.feld.name == "datum"                  # ganztägig nein: Letzter Tag übersprungen
+    f.taste(TAB)
     f.taste(curses.KEY_RIGHT)                      # ganztägig: ja
+    f.taste(curses.KEY_UP)
+    assert f.feld.name == "letzter"                # gilt jetzt
     f.taste(TAB)
-    assert f.feld.name == "tage"                   # Von/Bis übersprungen
     f.taste(TAB)
-    assert f.feld.name == "wied"
-    f.taste(curses.KEY_RIGHT)                      # täglich: Tage gilt nicht mehr
+    assert f.feld.name == "wied"                   # Von/Bis übersprungen
+    f.taste(curses.KEY_RIGHT)                      # täglich: Letzter Tag gilt nicht mehr
     f.taste(TAB)
     assert f.feld.name == "alle"
     f.taste(TAB)
     assert f.feld.name == "wbis"                   # An Tagen nur bei wöchentlich
     for _ in range(3):                             # wbis → alle → wied → ganz
         f.taste(curses.KEY_UP)
-    assert f.feld.name == "ganz"                   # ↑ überspringt Tage/Bis/Von
+    assert f.feld.name == "ganz"                   # ↑ überspringt Bis/Von
+    f.taste(curses.KEY_UP)
+    assert f.feld.name == "datum"                  # mit Wiederholung: Letzter Tag nicht
     # der Platz des Feldes in der Liste ist der, auf dem es steht
     assert [a for _b, _w, a, _h in f.zeilen()].index(True) == \
-        [x.name for x in f.felder].index("ganz")
+        [x.name for x in f.felder].index("datum")
 
 
 def test_was_nicht_gilt_wird_beim_speichern_ignoriert():
@@ -176,3 +188,55 @@ def test_serie_mit_uhrzeit_ganztaegig_umschalten_loescht_die_zeit():
     assert f.taste(STRG_S) == "fertig", f.fehler
     neu = f.plan()["aufrufe"][0][2]["new"]
     assert neu["time"] == "" and neu["ende"] == ""
+
+
+# ── „Letzter Tag" statt „Tage" (20.10.2026) ───────────────────────────
+# Sasha: „diese ‚tage'-Option ist etwas random, also unklar, was es macht,
+# und wie hinplatziert". Jetzt ein Datum direkt unter „Tag".
+def test_letzter_tag_leer_ist_ein_tag_spaeter_ist_spanne_frueher_ist_fehler():
+    f = kw.formular_neu(TAG, TAG)
+    f.felder[0].text = "Urlaub"
+    _setze(f, "ganz", "ja")
+    assert f.taste(STRG_S) == "fertig", f.fehler
+    (_m, pfad, _b), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/entry"
+    f = kw.formular_neu(TAG, TAG)
+    f.felder[0].text = "Urlaub"
+    _setze(f, "ganz", "ja")
+    _feld(f, "letzter").text = "06.10.2026"
+    assert f.taste(STRG_S) == "weiter" and f.fehler == "letzter tag vor dem tag"
+    assert f.feld.name == "letzter"
+    _feld(f, "letzter").text = "10.10.2026"
+    assert f.taste(STRG_S) == "fertig", f.fehler
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/spanne" and (body["von"], body["bis"]) == \
+        ("2026-10-07", "2026-10-10")
+
+
+def test_letzter_tag_gilt_nur_ganztaegig_ohne_wiederholung():
+    f = kw.formular_neu(TAG, TAG)
+    f.felder[0].text = "Kurs"
+    _feld(f, "von").text = "10:00"
+    _feld(f, "letzter").text = "quatsch"           # gilt nicht → ignoriert
+    assert f.taste(STRG_S) == "fertig", f.fehler
+    assert "letzter" not in f.antworten
+
+
+def test_bearbeiten_ganztaegig_mit_letztem_tag_wird_spanne():
+    roh = {"day": "2026-10-07", "label": "Urlaub", "kennung": "k-u", "layer": "termine"}
+    f = kw.formular_bearbeiten(roh, TAG, TAG)
+    assert _feld(f, "letzter").text == ""
+    _feld(f, "letzter").text = "09.10.2026"
+    assert f.taste(STRG_S) == "fertig", f.fehler
+    aufrufe = f.plan()["aufrufe"]
+    assert aufrufe[0][1] == "/api/calendar/spanne" and aufrufe[0][2]["bis"] == "2026-10-09"
+    assert aufrufe[-1][:2] == ("DELETE", "/api/calendar/eintrag")
+
+
+def test_serien_kaesten_haben_keinen_letzten_tag():
+    roh = {"day": "2026-10-07", "label": "Gym", "kennung": "k-g", "layer": "termine",
+           "recurring": True, "rrule": "FREQ=WEEKLY;BYDAY=WE"}
+    for t in ("a", "t"):
+        d = kw.formular_bearbeiten(roh, TAG, TAG)
+        d.taste(ord(t))
+        assert all(x.name != "letzter" for x in d.plan()["weiter"].felder)

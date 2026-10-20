@@ -10,7 +10,7 @@ in A/B/C (kalender_ansichten.py, kalender_stil.py) und die Farbpaare
 (kalender.py). Reine Logik — ohne Terminal und ohne Backend.
 """
 import curses
-from datetime import date
+from datetime import date, timedelta
 
 from tui.ansichten import kalender_ansichten as ka
 from tui.ansichten import kalender_beispiel as kb
@@ -133,7 +133,7 @@ def test_speichern_neu_schickt_stil_mit():
          "wied": "wöchentlich", "alle": 1, "wtage": [], "wbis": None, "stil": STIL}
     (_m, pfad, body), = kw._neu_plan(w, TAG)[0]
     assert pfad == "/api/calendar/routine" and body["stil"] == STIL
-    w = {"titel": "Reise", "datum": TAG, "ganz": "ja", "tage": 3, "wied": "keine", "stil": STIL}
+    w = {"titel": "Reise", "datum": TAG, "ganz": "ja", "letzter": TAG + timedelta(days=2), "wied": "keine", "stil": STIL}
     (_m, pfad, body), = kw._neu_plan(w, TAG)[0]
     assert pfad == "/api/calendar/spanne" and body["stil"] == STIL
 

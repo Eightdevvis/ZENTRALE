@@ -9,9 +9,9 @@ den platz wechseln usw das sollte eigentlich nie passieren".
 
 - Alle Felder eines Formulars stehen immer da (`Formular.felder`, `zeilen()`
   liefert jedes). Ob ein Feld gerade gilt, sagt `Feld.aktiv(werte)` (früher
-  `zeigen=`, das ausblendete) — z. B. Von/Bis bei ganztägig, Tage nur
+  `zeigen=`, das ausblendete) — z. B. Von/Bis bei ganztägig, Letzter Tag nur
   ganztägig ohne Wiederholung, Abstand/Wiederholen bis nur mit Wiederholung,
-  An Tagen nur wöchentlich, Name der Gruppe nur bei „eigene".
+  An Tagen nur wöchentlich.
 - Was nicht gilt: Wert „—" (`NICHT_AKTIV`), Beschriftung und Wert gedämpft
   (`_zeichne_felder(..., gilt=)` in `kalender_bedienung.py`); Tab/↑↓
   überspringen es (`_auf_aktives`); beim Speichern wird es ignoriert
@@ -30,5 +30,26 @@ tag") hatten kein Feld „Ganztägig" (`mit_ganz=False`), „Von" war Pflicht �
 eine ganztägige Serie ließ sich gar nicht speichern; aufgefallen nach
 Advanced → Stylebox. Jetzt haben beide das Feld (vorbelegt aus der Uhrzeit;
 „nur dieser Tag" nur bei ganztägigen Serien, weil eine Abweichung die Zeit
-der Regel erbt). „Tage" gibt es bei Serien nicht (`mit_tage=False`).
+der Regel erbt). „Letzter Tag" gibt es bei Serien nicht (`mit_letzter=False`).
 Tests: `tests/test_kalender_formular_fest.py`.
+
+## Gruppe „eigene" in derselben Zeile (20.10.2026)
+
+„name der gruppe muss in bearbeitung und erstellung nicht angezeigt werden,
+einfach so wenn man neu anlegt dass sich das dann aufklappt". Keine Zeile
+„Name der Gruppe" mehr: steht „Gruppe" auf „eigene", wird DIESELBE Zeile zum
+Textfeld (`Feld(frei=…)`, Ansicht `wahltext`): „‹ eigene: Musik_ ›". Tippen
+(auch Leertaste, Umlaute) schreibt den Namen, ⌫ löscht ein Zeichen, Strg-U
+alles; ←→ wechseln weiter die Option (der Name bleibt fürs Zurückkommen);
+↑↓/Tab verlassen die Zeile, Enter/Strg-S speichern. Leerer Name → „name
+fehlt", Fokus bleibt auf der Zeile. Beim Bearbeiten steht „‹ eigene: <name> ›".
+Gilt in neu, bearbeiten, Serie „alle", ganze Spanne (nie „nur dieser Tag").
+
+## „Letzter Tag" statt „Tage" (20.10.2026)
+
+„diese ‚tage'-Option ist etwas random". Jetzt ein Datum direkt unter „Tag"
+(TT.MM.JJJJ wie „Tag"), gilt nur ganztägig ohne Wiederholung. Leer = nur
+dieser Tag; später als „Tag" → Spanne (POST …/spanne, beim Bearbeiten eines
+Einzeltermins: Spanne neu + alter Eintrag weg); früher → „letzter tag vor dem
+tag" (`_letzter_pruefen`). Tests: `tests/test_kalender_formular_fest.py`,
+`tests/test_kalender_gruppen_tui.py`.

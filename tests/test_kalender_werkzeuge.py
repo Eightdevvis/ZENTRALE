@@ -120,7 +120,7 @@ def test_anlegen_ende_vor_start_ist_naechster_tag():
 
 def test_anlegen_ganztags_mehrere_tage():
     f = kw.formular_neu(TAG, HEUTE)
-    fuelle(f, titel="Urlaub", ganz="ja", tage="3")
+    fuelle(f, titel="Urlaub", ganz="ja", letzter="09.10.2026")
     assert f.plan()["aufrufe"] == [("POST", "/api/calendar/spanne", {
         "layer": "termine", "von": "2026-10-07", "bis": "2026-10-09", "label": "Urlaub"})]
 

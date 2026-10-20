@@ -103,6 +103,16 @@ def _formular(u, art=None):
         _t(u, "x")                               # Titel: ⌫ hat etwas zu löschen
 
 
+def _formular_eigene(u):
+    """Gruppe auf „eigene" (← von „keine"), ein Zeichen Name getippt."""
+    _formular(u)
+    for _ in range(16):
+        if _bed(u).W["dialog"].feld.name == "gruppe":
+            break
+        _t(u, TAB)
+    _t(u, curses.KEY_LEFT, "x")
+
+
 def _advanced(u, zeile=0):
     _formular(u, "advanced")
     _t(u, ENTER, *([curses.KEY_DOWN] * zeile))
@@ -180,6 +190,7 @@ ZUSTAENDE = {
     "formular:text": _formular,
     "formular:wahl": lambda u: _formular(u, "wahl"),
     "formular:advanced": lambda u: _formular(u, "advanced"),
+    "formular:wahltext": _formular_eigene,
     "advanced:typ": _advanced,
     "advanced:liste": _advanced_liste,
     "advanced:stil": _advanced_stil,
