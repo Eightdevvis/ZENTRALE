@@ -18,6 +18,7 @@
 from datetime import date, datetime, timedelta
 
 import kalender
+import kalender_deadline
 import kalender_regel
 from kalender_fehler import KalenderAbgelehnt
 
@@ -103,8 +104,11 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
                 bis: str | None = None, wochentage=None, time: str | None = None,
                 ende: str | None = None, ort: str | None = None,
                 kategorie: str | None = None, kategorie_name: str | None = None,
-                quelle: dict | None = None, stil: dict | None = None) -> bool:
+                quelle: dict | None = None, stil: dict | None = None,
+                typ: str | None = None, vorwarnung=None) -> bool:
     """Neue Routine ab `seit` (dem gewählten Tag), wie calcurse „r".
+    `typ`/`vorwarnung`: Termintyp deadline (kalender_deadline, 20.10.2026 —
+    z. B. jede Woche Abgabe Fr 23:59), geprüft in kalender.add_routine.
     `kategorie`/`kategorie_name`: Gruppe (seit 10.10.2026, TUI-Formular;
     geprüft in kalender._mit_kategorie). `quelle`: Titel live aus
     Liste/Projekt (kalender._mit_quelle; TUI „neu für eine Liste", 10.10.2026).
@@ -123,6 +127,10 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
         extras["quelle"] = quelle
     if stil:
         extras["stil"] = stil
+    if typ:
+        extras["typ"] = typ
+    if vorwarnung is not None:
+        extras["vorwarnung"] = vorwarnung
     return kalender.add_routine(layer or "termine", label.strip(), regel,
                                 time=_hhmm(time) if time else None, **extras)
 
@@ -212,6 +220,7 @@ def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
             r.pop("aus", None)
             r.pop("abweichungen", None)
         _nicht_vor(r.get("time"), r.get("ende"))
+        kalender_deadline.pruefen(r)      # Deadline: Uhrzeit ja, Ende nie
         kalender._save_raw(data)
         return True
 
@@ -472,6 +481,7 @@ def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
         if not e.get("time") and "time" in neu and not neu["time"]:
             e.pop("ende", None)            # ganztägig gemacht: Ende fällt mit weg
         _nicht_vor(e.get("time"), e.get("ende"))
+        kalender_deadline.pruefen(e)      # Deadline: Uhrzeit ja, Ende nie
         if "ort" in neu:
             if (neu["ort"] or "").strip():
                 e["ort"] = neu["ort"].strip()

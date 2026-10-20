@@ -27,7 +27,7 @@ import unicodedata
 import zlib
 from datetime import date, timedelta
 
-from . import kalender_gruppen, kalender_motive, kalender_stil
+from . import kalender_deadline, kalender_gruppen, kalender_motive, kalender_stil
 
 # ── Ansichten und Taste v ──────────────────────────────────────────────
 ANSICHTEN = ("A", "B", "C")
@@ -460,6 +460,11 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         s, en = None, s
     if s is not None and en is not None and en <= s:
         en = None
+    # Deadline (20.10.2026): ein Zeitpunkt — ein Ende (vom Server dazugegeben)
+    # zählt nicht; ohne Uhrzeit ist es keine (dann wie ein normaler Termin).
+    deadline = kalender_deadline.ist(e) and s is not None and not spanne
+    if deadline:
+        en = None
     return {
         "label": label, "start": s, "ende": en, "spanne": spanne,
         "erster": erster, "letzter": letzter, "tag": iso,
@@ -473,6 +478,7 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         # Ebene „uncommitted": liegt durchscheinend über den Terminen
         "unv": e.get("layer") == UNVERBINDLICH,
         "ausfall": bool(e.get("ausfall")),
+        "deadline": deadline,
         # Der API-Eintrag selbst: die Werkzeuge (kalender_werkzeuge.py) arbeiten
         # mit DERSELBEN Liste in DERSELBEN Reihenfolge wie die Ansicht.
         "roh": e,
@@ -495,7 +501,10 @@ def _tag_eintraege(daten: dict, iso: str, erledigte: bool) -> list:
         aus = bool(e.get("deaktiviert") or e.get("ausfall"))
         if aus and not erledigte:
             continue
-        out.append(_normiere(e, iso, aus))
+        t = _normiere(e, iso, aus)
+        if t["deadline"] and not kalender_deadline.zeigen(t):
+            continue                   # überschritten, und Sasha will sie nicht sehen
+        out.append(t)
     # Spannen zuerst (sie rahmen den Tag), dann Ganztägiges, dann nach Zeit.
     out.sort(key=lambda t: (not t["spanne"], t["start"] is not None,
                             t["start"] if t["start"] is not None else 0))
@@ -774,6 +783,12 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
         for k, t in enumerate(eintr):
             if k < erst:
                 continue
+            if t["deadline"]:                # eine Zeile, Leucht-Rot (kalender_deadline)
+                if zy + 1 > y_ende:
+                    break
+                _a_deadline(lw, zy, cx, cw, t, hier and k == sel_idx)
+                zy += 2
+                continue
             zeit = _a_zeit(t)
             if zy + (2 if zeit else 1) > y_ende:
                 break
@@ -807,6 +822,20 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
             zy += 2                          # Luft zwischen Terminen, wie calcurse
         if i < n - 1:
             lw.setze(y0 + bh - 1, cx - 1, "─" * (cw + 2), ROLLE["rahmen"])
+
+
+def _a_deadline(lw, y, cx, cw, t, gewaehlt):
+    """A: „⚑ 23:59 Analysis HÜ · in 2 T" — gewählt in der Akzentfläche,
+    ab kalender_deadline.FLAECHE_AB als leuchtende Fläche."""
+    txt = kuerzen(kalender_deadline.a_text(t), cw - 1)
+    if gewaehlt:
+        lw.setze(y, cx + 1, txt + " " * (cw - 1 - text_breite(txt)), _a_rolle("a_akzent") + INV)
+        return
+    st = kalender_deadline.stufe(t["roh"], t["tag"])
+    r = ROLLE["aus"] if t["aus"] else kalender_deadline.rolle(st, t["unv"])
+    if kalender_deadline.flaeche(st) and not t["unv"] and not t["aus"]:
+        r += INV
+    lw.setze(y, cx + 1, txt, r)
 
 
 def _a_phasen(lw, y, x, platz, daten, d):
@@ -1033,6 +1062,14 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
                 txt = _b_text(t, cw)
                 lw.setze(yy, x0, txt + " " * (cw - text_breite(txt)), _a_rolle("a_akzent") + INV)
                 continue
+            if t["deadline"]:                # Leucht-Rot mit ⚑ (kalender_deadline)
+                st = kalender_deadline.stufe(t["roh"], t["tag"])
+                r = ROLLE["aus"] if t["aus"] else kalender_deadline.rolle(st, t["unv"])
+                txt = kuerzen(kalender_deadline.b_text(t, cw), cw)
+                if kalender_deadline.flaeche(st) and not t["unv"] and not t["aus"]:
+                    txt, r = txt + " " * (cw - text_breite(txt)), r + INV
+                lw.setze(yy, x0, txt, r)
+                continue
             if t["start"] is None and t["ende"] is None:
                 # Ganztägig als Band: Fläche über die ganze Zellenbreite.
                 band = kuerzen(t["label"], cw)
@@ -1065,6 +1102,8 @@ def _b_text(t: dict, cw: int) -> str:
     übrig bleibt — dann lieber den Titel; die Uhrzeit zeigen A und C."""
     if t.get("gruppe"):
         return kuerzen(kalender_gruppen.text(t, cw), cw)
+    if t.get("deadline"):
+        return kuerzen(kalender_deadline.b_text(t, cw), cw)
     zeit = _hm(t["start"]) + " " if t["start"] is not None and cw >= 9 else ""
     return kuerzen(zeit + t["label"], cw)
 
@@ -1102,14 +1141,24 @@ def _balken_text(sp: dict, a: date, b: date, n: int) -> str:
 # ── C: Woche als Zeitachse ─────────────────────────────────────────────
 _SCHRITTE = (10, 15, 20, 30, 40, 60, 90, 120, 180, 240, 360)
 _STANDARD_DAUER = 60      # Termin ohne Ende: eine Stunde Fläche
+# Ganztags-Zone (20.10.2026, Sasha: „ich habe 2 am freitag angelegt und es wird
+# nur eins angezeigt … sie sollen sich oben stacken"): so viele Zeilen höchstens,
+# darüber steht in der letzten „+n". Die Zone ist so hoch wie der Tag mit den
+# meisten Ganztägigen (über die Woche einheitlich), die Zeitachse rückt darunter.
+GANZTAGS_ZEILEN = 4
+GANZTAGS_ACHSE_MIN = 6    # so viele Zeilen behält die Zeitachse mindestens
 
 
 def _c_bloecke(daten, tag: date, erledigte):
-    """Zeit-Blöcke eines Tages: [(start, ende, eintrag)] und die
-    Ganztags-Einträge ohne Spanne (die gehören nicht auf die Achse)."""
-    bloecke, ganz = [], []
+    """Zeit-Blöcke eines Tages: [(start, ende, eintrag)], die Ganztags-
+    Einträge ohne Spanne (die gehören nicht auf die Achse) und die Deadlines
+    (ein Zeitpunkt: eine Linie über allem, keine Bahn — kalender_deadline)."""
+    bloecke, ganz, deadlines = [], [], []
     for t in _tag_eintraege(daten, tag.isoformat(), erledigte):
         s, e = t["start"], t["ende"]
+        if t["deadline"]:
+            deadlines.append(t)
+            continue
         if t["spanne"]:
             # Spannentage ohne Uhrzeit füllen den ganzen Tag — so wird die
             # Spanne zur durchgehenden Fläche über alle ihre Tage.
@@ -1123,7 +1172,7 @@ def _c_bloecke(daten, tag: date, erledigte):
         elif e is None:
             e = min(24 * 60, s + _STANDARD_DAUER)
         bloecke.append((s, e, t))
-    return bloecke, ganz
+    return bloecke, ganz, deadlines
 
 
 def _c_bahnen(bloecke):
@@ -1214,39 +1263,51 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
         if d == sel_tag:                     # gewählter Tag: Kopf in Akzentfläche
             r, kopf = _a_rolle("a_akzent") + INV, kopf + " " * (colw - 1 - text_breite(kopf))
         lw.setze(1, x0 + i * colw, kopf, r)
-    y0 = 2
-    if any(ganz for _b, ganz in tage):
-        lw.setze(y0, 1, kuerzen("ganzt.", g - 1), ROLLE["zeit"])
-        for i, (_b, ganz) in enumerate(tage):
-            if ganz:
-                # Feste zuerst: sie sind der Grund, uncommitted liegt als Glas
-                # darüber (ohne eigenes Label, wenn schon ein festes dasteht —
-                # „+n" sagt, dass da mehr ist).
-                fest = [x for x in ganz if not x["unv"]]
-                glas = [x for x in ganz if x["unv"] and not x["aus"]]
-                t = (fest or ganz)[0]
-                txt = t["label"] + (" +%d" % (len(ganz) - 1) if len(ganz) > 1 else "")
-                band = kuerzen(txt, colw - 1)
-                xx = x0 + i * colw
-                if sel is not None and any(x["roh"] is sel for x in ganz):
-                    t = next(x for x in ganz if x["roh"] is sel)
-                    band = kuerzen(t["label"], colw - 1)
-                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)),
-                             _a_rolle("a_akzent") + INV)
-                elif fest or not glas:
-                    r_band = _rolle(t) + ("" if t["aus"] else INV)
-                    if t["stil"] and not t["aus"]:
-                        r_band = kalender_stil.flaechen_rolle(r_band, t["stil"])
-                    lw.setze(y0, xx, band + " " * (colw - 1 - text_breite(band)), r_band)
-                    if glas:
-                        lw.glas(y0, xx, colw - 1, _glasrolle(glas[0]))
-                else:
-                    lw.glas(y0, xx, colw - 1, _glasrolle(t), band)
-        y0 += 1
+    y0 = 2 + _c_ganztags(lw, 2, hoehe, x0, g, colw, tage, sel)
     # Tagesphasen: leiser Hintergrund HINTER Punktlinien und Terminen
     phasen = [kalender_motive.tag_phasen(daten, d) for d in woche]
     _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel, (woche, phasen))
     return lw.zeilen()
+
+
+def _c_ganztags(lw, y0, hoehe, x0, g, colw, tage, sel) -> int:
+    """Die Ganztags-Zone: je Tag ALLE Ganztägigen untereinander, in der
+    Reihenfolge der Auswahl (_tag_eintraege). So hoch wie der Tag mit den
+    meisten, höchstens GANZTAGS_ZEILEN (die Zeitachse behält
+    GANZTAGS_ACHSE_MIN); passt ein Tag nicht hinein, steht in der letzten
+    Zeile „+n" — außer der gewählte Eintrag läge dahinter, dann steht er
+    dort. Uncommitted liegt als Glas in seiner eigenen Zeile. -> Zeilen."""
+    meiste = max((len(ganz) for _b, ganz, _d in tage), default=0)
+    if not meiste:
+        return 0
+    platz = max(1, min(GANZTAGS_ZEILEN, hoehe - 1 - y0 - GANZTAGS_ACHSE_MIN))
+    zeilen = min(meiste, platz)
+    lw.setze(y0, 1, kuerzen("ganzt.", g - 1), ROLLE["zeit"])
+    pw = colw - 1
+    for i, (_b, ganz, _d) in enumerate(tage):
+        xx = x0 + i * colw
+        gew = next((t for t in ganz if sel is not None and t["roh"] is sel), None)
+        zeige = ganz if len(ganz) <= zeilen else ganz[:max(1, zeilen - 1)]
+        if gew is not None and not any(t is gew for t in zeige):
+            zeige = zeige[:-1] + [gew]
+        mehr = len(ganz) - len(zeige)
+        for k, t in enumerate(zeige):
+            # nur eine Zeile und mehr als einer: „+n" hängt am Titel
+            zusatz = " +%d" % mehr if mehr and zeilen == 1 else ""
+            band = kuerzen(t["label"], pw - len(zusatz)) + zusatz
+            y = y0 + k
+            if t is gew:
+                lw.setze(y, xx, band + " " * (pw - text_breite(band)), _a_rolle("a_akzent") + INV)
+            elif t["unv"] and not t["aus"] and not t["stil"]:
+                lw.glas(y, xx, pw, _glasrolle(t), band)
+            else:
+                r_band = _rolle(t) + ("" if t["aus"] else INV)
+                if t["stil"] and not t["aus"]:
+                    r_band = kalender_stil.flaechen_rolle(r_band, t["stil"])
+                lw.setze(y, xx, band + " " * (pw - text_breite(band)), r_band)
+        if mehr and zeilen > 1:
+            lw.setze(y0 + zeilen - 1, xx, kuerzen("+%d mehr" % mehr, pw), ROLLE["leer"])
+    return zeilen
 
 
 def _punktlinie_um_muster(lw, y, x, n):
@@ -1280,8 +1341,8 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
     sicht = reihen * m
     lo = basis_lo
     if sel is not None:                      # gewählter Termin ganz draußen → hinrollen
-        for bloecke, _g in tage:
-            for s0, e0, t in bloecke:
+        for bloecke, _g, dls in tage:
+            for s0, e0, t in bloecke + [(d["start"], d["start"] + 1, d) for d in dls]:
                 if t["roh"] is not sel:
                     continue
                 if e0 <= lo:
@@ -1311,7 +1372,7 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
             else:
                 lw.setze(y0 + k, x0, "·" * (7 * colw), ROLLE["rahmen"])
     pw = colw - 1
-    for i, (bloecke, _g) in enumerate(tage):
+    for i, (bloecke, _g, _d) in enumerate(tage):
         # Sasha, 10.10.2026: „immer den uncommitted kalender AUF den normalen
         # drüberpacken". Darum teilen sich uncommitted-Blöcke KEINE Bahnen mit
         # festen: die festen rechnen ihre Bahnen unter sich, uncommitted
@@ -1367,3 +1428,9 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
             lw.setze(y0, rechts, "▲", _a_rolle("a_akzent"))
         if any(s >= sicht_ende for _bi, s, e, _t in alle):
             lw.setze(y0 + n - 1, rechts, "▼", _a_rolle("a_akzent"))
+    # Deadlines zuletzt: eine hingemalte Linie ÜBER allem (kalender_deadline)
+    for i, (_b, _g, dls) in enumerate(tage):
+        if dls:
+            kalender_deadline.c_zeichnen(lw, y0, n, lo, m, x0 + i * colw, pw, dls, sel,
+                                         kuerzen=kuerzen, text_breite=text_breite,
+                                         akzent=_a_rolle("a_akzent"))

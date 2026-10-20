@@ -121,6 +121,22 @@ CODES = {
     "K-STIL-UNGUELTIG": (
         "Der Stil ist kein gültiges dict aus CSS-Eigenschaften (oder bei einer Phase).",
         "Nur border-style, border-color, background-color, color, --zentrale-muster; Farben als #rrggbb; {} entfernt den Stil."),
+    # Termintyp deadline (KALENDER, 2026-10-20)
+    "K-TYP-UNBEKANNT": (
+        "Diesen Termintyp gibt es nicht.",
+        "typ normal oder deadline nehmen."),
+    "K-VORWARNUNG-UNGUELTIG": (
+        "Die Vorwarnung ist keine gültige Dauer.",
+        "Minuten als Zahl oder Text wie 3d, 12h, 1d12h angeben (höchstens 366 Tage)."),
+    "K-DEADLINE-OHNE-ZEIT": (
+        "Eine Deadline braucht eine Uhrzeit — sie ist ein Zeitpunkt.",
+        "time mitgeben; nennt Sasha keine, 23:59 vorschlagen oder fragen."),
+    "K-DEADLINE-MIT-ENDE": (
+        "Eine Deadline hat kein Ende.",
+        "ende weglassen bzw. mit ende \"\" entfernen, dann erneut."),
+    "K-DEADLINE-SPANNE": (
+        "Ein mehrtägiger Termin kann keine Deadline sein.",
+        "Die Deadline als eigenen Termin am letzten Tag mit Uhrzeit anlegen."),
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt.",
         "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),

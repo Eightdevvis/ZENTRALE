@@ -9,11 +9,14 @@ Darum steht im Formular (kalender_werkzeuge.py) nur noch EIN Feld „Advanced"
 mit einer Zusammenfassung („typ normal · stil keine"). Enter darauf öffnet
 dieses Fenster mit diesen Zeilen:
 
-  Typ       ‹ normal › | ‹ liste ›   (←→/Leertaste)
+  Typ       ‹ normal › | ‹ liste › | ‹ deadline ›   (←→/Leertaste)
   Liste     gilt nur bei Typ liste: Enter öffnet den Kasten „welche Liste?"
             (bei Typ normal steht die Zeile gedämpft mit „—" und wird
             übersprungen — feste Plätze wie im Formular, 18.10.2026)
             (kalender_quellen.QuellenWahl — Listen ≡ und Projekte ◆)
+  Vorwarnung  gilt nur bei Typ deadline (20.10.2026): ab wann sie rot
+            leuchtet und erinnert — tippen wie „3d", „12h", „1d12h"
+            (Vorgabe 3d); sonst gedämpft „—", übersprungen
   Stylebox  Vorschau; Enter öffnet die Stylebox (tui/bausteine/stylebox.py),
             ⌫/Entf = kein Stil
   Status    ‹ committed › | ‹ uncommitted › (←→/Leertaste). Sasha, 11.10.2026:
@@ -33,16 +36,20 @@ Reine Logik, kein Zeichnen, kein HTTP: die Listen holt die Bedienung über
 """
 from __future__ import annotations
 
-from . import kalender_kasten, kalender_quellen, kalender_stil
+from . import kalender_deadline, kalender_kasten, kalender_quellen, kalender_stil
 from .tasten import Tasten
 
-NORMAL, LISTE = "normal", "liste"
-TYPEN = (NORMAL, LISTE)
+NORMAL, LISTE, DEADLINE = "normal", "liste", "deadline"
+TYPEN = (NORMAL, LISTE, DEADLINE)
+# Ein mehrtägiger Termin kann keine Deadline sein (Kern: DEADLINE-SPANNE).
+TYPEN_SPANNE = (NORMAL, LISTE)
 COMMITTED, UNCOMMITTED = "committed", "uncommitted"
 STATUS = (COMMITTED, UNCOMMITTED)
 
 HILFE = {
-    "typ": "normal = eigener Titel · liste = Titel ist der oberste offene Punkt",
+    "typ": "normal = eigener Titel · liste = Titel ist der oberste offene Punkt"
+           " · deadline = ein Zeitpunkt, leuchtet rot",
+    "vorwarnung": "ab wann sie leuchtet + erinnert: 3d, 12h, 1d12h",
     "liste": "die liste oder das projekt, aus dem der titel kommt",
     "stil": "rahmen, farben und muster des kastens",
     "status": "uncommitted = blass, nicht fest",
@@ -55,8 +62,36 @@ def wert_von(roh=None) -> dict:
     Status aus der Ebene (`layer` uncommitted → uncommitted)."""
     q = kalender_quellen.quelle_von(roh or {})
     status = UNCOMMITTED if (roh or {}).get("layer") == UNCOMMITTED else COMMITTED
-    return {"typ": LISTE if q else NORMAL, "quelle": q, "stil": kalender_stil.von(roh or {}),
-            "status": status}
+    typ = DEADLINE if kalender_deadline.ist(roh) else (LISTE if q else NORMAL)
+    return {"typ": typ, "quelle": q, "stil": kalender_stil.von(roh or {}),
+            "status": status, "vorwarnung": kalender_deadline.vorwarnung(roh or {})}
+
+
+def ist_deadline(wert) -> bool:
+    return (wert or {}).get("typ") == DEADLINE
+
+
+def _dauer_lesen(text):
+    """„3d" → 4320 (wie core/kalender_deadline.dauer_lesen; die TUI darf den
+    Kern nicht importieren — tests/test_kalender_deadline_tui.py prüft, dass
+    beide gleich rechnen)."""
+    import re
+    s = str(text or "").strip().lower().replace(" ", "")
+    if s.isdigit():
+        return int(s)
+    m = re.match(r"^(?:(\d+)(?:d|t|tage?n?))?(?:(\d+)h)?(?:(\d+)m(?:in)?)?$", s)
+    if not s or not m or not any(m.groups()):
+        return None
+    d, h, mi = (int(x or 0) for x in m.groups())
+    v = d * 1440 + h * 60 + mi
+    return v if v <= 366 * 1440 else None
+
+
+def dauer_text(minuten) -> str:
+    """4320 → „3d", 2160 → „1d12h", 90 → „1h30m"."""
+    d, rest = divmod(max(0, int(minuten)), 1440)
+    h, m = divmod(rest, 60)
+    return "".join([f"{d}d"] * bool(d) + [f"{h}h"] * bool(h) + [f"{m}m"] * bool(m)) or "0m"
 
 
 def quelle(wert: dict):
@@ -80,6 +115,9 @@ def zusammenfassung(wert: dict) -> str:
     „typ liste: todo · stil ╔═╗ rand #ff8800" (+ „ · uncommitted")."""
     q = quelle(wert)
     typ = "typ liste: %s" % q["name"] if q else "typ normal"
+    if ist_deadline(wert):
+        typ = "typ deadline · vorwarnung %s" % dauer_text((wert or {}).get(
+            "vorwarnung", kalender_deadline.VORWARNUNG_STANDARD))
     aus = "%s · stil %s" % (typ, _stil_text((wert or {}).get("stil")))
     return aus + (" · uncommitted" if (wert or {}).get("status") == UNCOMMITTED else "")
 
@@ -90,9 +128,13 @@ class Advanced:
 
     titel = "advanced"
 
-    def __init__(self, wert: dict, quellen=None, text=""):
+    def __init__(self, wert: dict, quellen=None, text="", typen=TYPEN):
         wert = wert or {}
-        self.typ = wert.get("typ") if wert.get("typ") in TYPEN else NORMAL
+        self.typen = tuple(typen)
+        self.typ = wert.get("typ") if wert.get("typ") in self.typen else NORMAL
+        v = wert.get("vorwarnung")
+        self.vorwarnung = dauer_text(v if isinstance(v, int) else
+                                     kalender_deadline.VORWARNUNG_STANDARD)
         self.quelle = wert.get("quelle")      # bleibt gemerkt, auch wenn Typ normal
         self.stil = dict(wert.get("stil") or {})
         # Ohne „status" im Wert keine Zeile (z.B. ein Formular ohne Ebene)
@@ -105,17 +147,23 @@ class Advanced:
     def wert(self) -> dict:
         w = {"typ": self.typ, "quelle": self.quelle if self.typ == LISTE else None,
              "stil": dict(self.stil)}
+        v = _dauer_lesen(self.vorwarnung)
+        w["vorwarnung"] = v if v is not None else kalender_deadline.VORWARNUNG_STANDARD
         if self.status:
             w["status"] = self.status
         return w
 
     def reihen(self) -> list:
-        """Alle Zeilen, feste Plätze (die Zeile „Liste" steht immer da)."""
-        return ["typ", "liste", "stil"] + (["status"] if self.status else [])
+        """Alle Zeilen, feste Plätze (die Zeilen „Liste" und „Vorwarnung"
+        stehen immer da; Vorwarnung nur, wo es Deadlines geben kann)."""
+        return (["typ", "liste"] + (["vorwarnung"] if DEADLINE in self.typen else [])
+                + ["stil"] + (["status"] if self.status else []))
 
     def gilt(self) -> list:
-        """Je Zeile: gilt sie gerade? („Liste" nur bei Typ liste)"""
-        return [r != "liste" or self.typ == LISTE for r in self.reihen()]
+        """Je Zeile: gilt sie gerade? („Liste" nur bei Typ liste,
+        „Vorwarnung" nur bei Typ deadline)"""
+        nur = {"liste": LISTE, "vorwarnung": DEADLINE}
+        return [r not in nur or self.typ == nur[r] for r in self.reihen()]
 
     def _auf_aktive(self, schritt):
         g = self.gilt()
@@ -137,7 +185,9 @@ class Advanced:
         jetzt = self.reihen().index(self.reihe)
         for k, (r, g) in enumerate(zip(self.reihen(), self.gilt())):
             if not g:
-                b, w = "Liste", "—"
+                b, w = ("Vorwarnung" if r == "vorwarnung" else "Liste"), "—"
+            elif r == "vorwarnung":
+                b, w = "Vorwarnung", self.vorwarnung + ("_" if k == jetzt else "")
             elif r == "typ":
                 b, w = "Typ", "‹ %s ›" % self.typ
             elif r == "liste":
@@ -158,6 +208,9 @@ class Advanced:
         "typ": [("←→", "typ", "type"), ("space", "typ"), ("enter", "uebernehmen", "apply")]
         + _ZEILE + _ENDE,
         "liste": [("enter", "liste", "choose list"), ("space/→", "liste")] + _ZEILE + _ENDE,
+        "vorwarnung": [("type", "tippen", "type"), ("⌫", "zeichen_weg", "delete"),
+                       ("ctrl+u", "leeren", "clear"), ("enter", "uebernehmen", "apply")]
+        + _ZEILE + _ENDE,
         "stil": [("enter", "stylebox", "stylebox"), ("space/→", "stylebox"),
                  ("⌫/del", "kein_stil", "no style")] + _ZEILE + _ENDE,
         "status": [("←→", "status", "commit"), ("space", "status"),
@@ -189,8 +242,21 @@ class Advanced:
 
     def aktion_typ(self, taste):
         self.fehler = ""
-        k = TYPEN.index(self.typ) + (-1 if taste == "left" else 1)
-        self.typ = TYPEN[k % len(TYPEN)]
+        k = self.typen.index(self.typ) + (-1 if taste == "left" else 1)
+        self.typ = self.typen[k % len(self.typen)]
+
+    def aktion_tippen(self, zeichen):          # nur in der Zeile „Vorwarnung"
+        self.fehler = ""
+        if len(zeichen) == 1 and (zeichen.isalnum() or zeichen == " "):
+            self.vorwarnung = (self.vorwarnung + zeichen)[:12]
+
+    def aktion_zeichen_weg(self, _t):
+        self.fehler = ""
+        self.vorwarnung = self.vorwarnung[:-1]
+
+    def aktion_leeren(self, _t):
+        self.fehler = ""
+        self.vorwarnung = ""
 
     def aktion_status(self, _t):
         self.fehler = ""
@@ -209,6 +275,10 @@ class Advanced:
         self.stil = {}
 
     def _pruefen(self) -> bool:
+        if self.typ == DEADLINE and _dauer_lesen(self.vorwarnung) is None:
+            self.fehler = "vorwarnung wie 3d, 12h, 1d12h (höchstens 366d)"
+            self.i = self.reihen().index("vorwarnung")
+            return False
         if self.typ == LISTE and not self.quelle:
             self.fehler = "erst eine liste wählen — oder typ normal"
             self.i = self.reihen().index("liste")

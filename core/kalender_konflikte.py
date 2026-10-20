@@ -14,6 +14,7 @@ import hashlib
 import os
 from datetime import date, timedelta
 
+import kalender_deadline
 import kalender_kategorie
 import kalender_quelle
 import kalender_rhythmus
@@ -74,6 +75,8 @@ def _interval(e: dict) -> tuple[int, int] | None:
     None wenn er KEIN echtes Zeit-Intervall ist (time/ende fehlt oder
     ende <= start). Ganztags-Einträge (nur 'label') fallen so bewusst raus.
     """
+    if kalender_deadline.ist_deadline(e):
+        return None      # Deadline (20.10.2026): ein Zeitpunkt, belegt keine Zeit
     s  = _to_minutes(e.get("time", ""))
     en = _to_minutes(e.get("ende", ""))
     if s is None or en is None or en <= s:
@@ -353,6 +356,8 @@ def _conflict_lines(day: date, entries: list[dict],
                 continue  # der Reise-Eintrag nicht gegen sich selbst
             if e.get("recurring"):
                 continue  # Routine → fällt auf der Reise sowieso aus, kein Alarm
+            if kalender_deadline.ist_deadline(e):
+                continue  # Deadline: man muss nicht hin, abgeben geht auch von unterwegs
             appt_ort = e.get("ort")
             if blk["ort"] and appt_ort and appt_ort == blk["ort"]:
                 continue  # gleicher Ort wie Reiseziel → kein Konflikt
@@ -448,17 +453,28 @@ def _ebene_text(e: dict) -> str:
         teile = [RHYTHMUS] + ([e["motiv"]] if e.get("motiv") else [])
     else:
         teile = [str(lname)]
+    if kalender_deadline.ist_deadline(e):
+        # „[deadline]" statt „[termine]" (die Ebene termine ist der Normalfall)
+        teile = (["deadline"] if lname == "termine" else teile + ["deadline"])
     gruppe = kalender_kategorie.anzeige(e)
     if gruppe:
         teile.append(gruppe)
     return " · ".join(teile)
 
 
+def _deadline_rest(e: dict, day_iso: str, stunden: bool = True) -> str:
+    """„ (in 2 Tagen)" hinter einer Deadline — ab der echten Uhr."""
+    if not kalender_deadline.ist_deadline(e):
+        return ""
+    return f" ({kalender_deadline.rest_text(e, day_iso, uhr.jetzt(), stunden)})"
+
+
 def render_range_for_tool(start: date, end: date,
                           layers: list[str] | None = None,
-                          suche: str | None = None) -> str:
+                          suche: str | None = None, *, stunden: bool = True) -> str:
     """
     Formatiert die Einträge in [start, end] als Tool-Antwort für die KI.
+    `stunden`: Deadlines heute mit „in 3 h" (der Imprint: ohne, s. dort).
 
     Kernpunkt gegen die Wochentag-Halluzination: jeder Tag kommt MIT
     ausgeschriebenem Wochentag ("Dienstag, 09.06.2026: …"). Vorher gab das
@@ -539,7 +555,8 @@ def render_range_for_tool(start: date, end: date,
                     pass
             # Titel aus Liste/Projekt: das oberste Item, dahinter dezent die
             # Liste — „10:00-12:00 Steuern planen (aus Liste: todo)".
-            lines.append(f"  [{_ebene_text(e)}] {t}{kalender_quelle.anzeige_titel(e)}{bis}{ort}")
+            lines.append(f"  [{_ebene_text(e)}] {t}{kalender_quelle.anzeige_titel(e)}{bis}{ort}"
+                         f"{_deadline_rest(e, day_iso, stunden)}")
         # (Keine ⚠-Warnzeilen mehr hier - die laufen über den Alarm-Kanal,
         #  siehe open_alarms. Der Read bleibt saubere Terminliste.)
     return "\n".join(lines)
@@ -581,6 +598,10 @@ _IMPRINT_LISTE = (
     "Titel davor ist der Punkt, der dort gerade oben steht — er "
     "wechselt von selbst, wenn {nutzer} umsortiert oder abhakt. Es "
     "ist ein normaler Termin (belegt).")
+_IMPRINT_DEADLINE = (
+    "\n\n[deadline] ist ein Zeitpunkt (Abgabe, Frist), keine belegte Zeit: "
+    "{er} muss bis dahin fertig sein, nicht dort sein. Kollidiert nie. In "
+    "der Klammer steht, wie lange es noch hin ist.")
 
 
 def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
@@ -644,10 +665,12 @@ def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
     layers = [name for name, lyr in data.get("layers", {}).items()
               if lyr.get("default_visible", True)]
     liste = render_range_for_tool(heute, heute + timedelta(days=tage),
-                                  layers=layers)
+                                  layers=layers, stunden=False)
     grenze = _IMPRINT_GRENZE
     if "(aus Liste: " in liste or "(aus Projekt: " in liste:
         grenze += _IMPRINT_LISTE
+    if "[deadline" in liste or " · deadline" in liste:
+        grenze += _IMPRINT_DEADLINE
     for platzhalter, wort in _IMPRINT_BETONT.items():
         grenze = grenze.replace(platzhalter, wort if betont else wort.lower())
     grenze = nutzer_angaben.einsetzen(grenze)
@@ -735,9 +758,15 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
     raw: list[tuple] = []   # (kind, roh-Zeile, tag|None) in Anzeige-Reihenfolge
     for line in _absage_alarms(away_blocks):
         raw.append(("ABSAGEN", line, None))
+    jetzt = uhr.jetzt()
     for day_iso, entries in entries_in_range(today, end).items():
         d = date.fromisoformat(day_iso)
         entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted/Ausfall: kein Alarm
+        # Deadline im Vorwarn-Fenster (20.10.2026): EIN Hinweis, dessen Text
+        # sich höchstens einmal am Tag ändert („in 2 Tagen" → „morgen").
+        for e in entries:
+            if kalender_deadline.ist_deadline(e) and kalender_deadline.im_fenster(e, day_iso, jetzt):
+                raw.append(("Deadline", kalender_deadline.alarm_text(e, day_iso, jetzt), day_iso))
         for line in _conflict_lines(d, entries, away_blocks):
             raw.append(("KONFLIKT", line, day_iso))
         for line in day_warnings(entries):

@@ -53,3 +53,10 @@ dieser Tag; später als „Tag" → Spanne (POST …/spanne, beim Bearbeiten ein
 Einzeltermins: Spanne neu + alter Eintrag weg); früher → „letzter tag vor dem
 tag" (`_letzter_pruefen`). Tests: `tests/test_kalender_formular_fest.py`,
 `tests/test_kalender_gruppen_tui.py`.
+
+## Typ deadline (20.10.2026)
+
+Advanced → Typ deadline: „Letzter Tag", „Ganztägig", „Bis" bleiben an ihrem
+Platz und stehen gedämpft „—"; im Fenster advanced die Zeile „Vorwarnung"
+(immer da, gilt nur bei deadline). Alles Weitere:
+[kalender_deadline.md](kalender_deadline.md).

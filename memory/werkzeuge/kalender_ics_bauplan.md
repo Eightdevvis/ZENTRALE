@@ -346,6 +346,7 @@ backups immer überall hinzuschmeißen."*
 | `aus` (einzeln deaktiviert) | EXDATE + `X-ZENTRALE-AUS` |
 | `pausen` (Ferien) | EXDATEs an jeder Routine gleichen Namens + `X-ZENTRALE-PAUSE` (die Notiz mit Grund) |
 | `absage_noetig` | `X-ZENTRALE-ABSAGE-NOETIG:TRUE` |
+| `typ: deadline`, `vorwarnung` (20.10.2026) | `X-ZENTRALE-TYP:DEADLINE`, DTEND = DTSTART, Vorwarnung als `VALARM` (`TRIGGER:-P3D`) — [kalender_deadline.md](kalender_deadline.md) |
 | Ebene `erlebt` | fällt weg — Inhalt wandert **unverändert** ins Archiv der Nebendaten |
 | `reisezeiten`, `puffer_min`, Ebenen-Titel/Farbe/Sichtbarkeit, `version` | Nebendaten `data/kalender_neben.json` |
 

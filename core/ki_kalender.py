@@ -44,10 +44,12 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import kalender
+import kalender_deadline
 import kalender_kategorie
 import kalender_kennung
 import kalender_quelle
 import kalender_rhythmus
+import uhr  # die eine Uhr (core/uhr.py)
 import werkzeug_befund
 
 _WOTAG_LANG = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
@@ -510,7 +512,7 @@ def _lesen_gross(start, end, layers, suche) -> str:
             s = zuordnung.stueck(e, tag)
             if s is not None and s.art == "routine" and s not in serien:
                 serien.append(s)
-            zeilen.append("  " + _vorkommen_zeile(e, s))
+            zeilen.append("  " + _vorkommen_zeile(e, s, tag))
     if serien:
         zeilen.append("Serien darin:")
         zeilen += ["  " + beschreiben(s, daten) + f" ({s.rrule})" for s in serien]
@@ -521,7 +523,7 @@ def _lesen_gross(start, end, layers, suche) -> str:
     return "\n".join(zeilen)
 
 
-def _vorkommen_zeile(e: dict, s) -> str:
+def _vorkommen_zeile(e: dict, s, tag: str | None = None) -> str:
     kenn = f"#{s.kennung} " if s is not None else "#? "
     if e.get("ausfall"):
         return f"{kenn}ℹ {e['label']} fällt aus ({e['ausfall']}) — kein Termin an diesem Tag"
@@ -534,7 +536,14 @@ def _vorkommen_zeile(e: dict, s) -> str:
     serie = " ↻" if e.get("recurring") else ""
     titel = kalender_quelle.anzeige_titel(e)      # Liste/Projekt: oberstes Item (aus Liste: …)
     return (f"{kenn}{zeit(e.get('time'), e.get('ende'), bool(e.get('ueber_nacht')))} "
-            f"{titel}{bis}{ort} [{ebene_text(e)}]{serie}")
+            f"{titel}{bis}{ort} [{ebene_text(e)}]{serie}{_deadline_rest(e, tag)}")
+
+
+def _deadline_rest(e: dict, tag) -> str:
+    """Deadline (20.10.2026): „ (in 2 Tagen)" bzw. „ (überschritten)"."""
+    if not tag or not kalender_deadline.ist_deadline(e):
+        return ""
+    return f" ({kalender_deadline.rest_text(e, tag, uhr.jetzt())})"
 
 
 def ebene_text(e: dict) -> str:
@@ -548,6 +557,10 @@ def ebene_text(e: dict) -> str:
         teile = [str(lname)] + ([e["motiv"]] if e.get("motiv") else [])
     else:
         teile = [str(lname)]
+    if kalender_deadline.ist_deadline(e):
+        # Termintyp deadline: Zeitpunkt mit Vorwarnung (kalender_deadline)
+        teile.append("deadline · Vorwarnung "
+                     + kalender_deadline.dauer_text(kalender_deadline.vorwarnung_von(e)))
     gruppe = kalender_kategorie.anzeige(e)
     if gruppe:
         teile.append(gruppe)

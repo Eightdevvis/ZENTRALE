@@ -23,7 +23,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
-from . import kalender_advanced, kalender_gruppen, kalender_kasten, kalender_quellen, kalender_stil
+from . import (kalender_advanced, kalender_deadline, kalender_gruppen, kalender_kasten,
+               kalender_quellen, kalender_stil)
 from .kalender_ansichten import _tag_eintraege, monat_eintraege
 from .tasten import Tasten
 
@@ -402,6 +403,7 @@ class Feld:
         self.text = str(wert or "") if art == "text" else ""
         self.adv = dict(wert or {}) if art == "advanced" else None
         self.quellen = None             # art 'advanced': () → GET /api/calendar/quellen
+        self.typen = kalender_advanced.TYPEN    # art 'advanced': wählbare Typen
         self.optionen = tuple(optionen)
         self.wahl = self.optionen.index(wert) if wert in self.optionen else 0
         self.lesen = lesen or (lambda s: (True, s.strip()))
@@ -589,7 +591,8 @@ class Formular:
     # lässt es, wie es war. Gespeichert wird erst mit dem Formular.
     def _box_oeffnen(self, f):
         text = (self.roh_werte().get("titel") or "").strip()
-        self.box = kalender_advanced.Advanced(f.adv, quellen=f.quellen, text=text)
+        self.box = kalender_advanced.Advanced(f.adv, quellen=f.quellen, text=text,
+                                              typen=f.typen)
         self._box_feld = f
 
     def _box_taste(self, ch) -> str:
@@ -727,22 +730,27 @@ def _gruppe_aufruf(roh, w) -> list:
 # Serie — darum nicht im Kasten „nur dieser Tag". Beim Speichern breitet es
 # sich in den Werten aus: typ, quelle (nur bei liste, sonst None), stil,
 # status (committed/uncommitted — seit 11.10.2026 hier statt „Verbindlich").
-ADVANCED_HILFE = "typ (normal/liste), stylebox, status"
+ADVANCED_HILFE = "typ (normal/liste/deadline), stylebox, status"
+DEADLINE_ZEIT = "23:59"                 # Deadline ohne Uhrzeit: bis Tagesende (Regler)
 _QUELLE_TITEL_HILFE = "nur Rückfall, falls die Liste fehlt — es steht der oberste offene Punkt da"
 
 
 ADVANCED_HINWEIS = "see for more options"
 
 
-def _advanced_feld(roh, titel_feld, quellen=None) -> Feld:
+def _advanced_feld(roh, titel_feld, quellen=None, typen=kalender_advanced.TYPEN) -> Feld:
     """Das Feld, vorbelegt aus `roh`; der Titel daneben darf bei Typ liste
-    leer bleiben (= Name der Liste) und sagt dann, dass er nur Rückfall ist."""
+    leer bleiben (= Name der Liste) und sagt dann, dass er nur Rückfall ist.
+    `typen`: was „Typ" anbietet (eine Spanne kann keine Deadline sein)."""
     f = Feld("advanced", "Advanced", art="advanced", wert=kalender_advanced.wert_von(roh),
              lesen=lambda d: (True, {"typ": d.get("typ"), "quelle": kalender_advanced.quelle(d),
                                      "stil": dict(d.get("stil") or {}),
-                                     **({"status": d["status"]} if d.get("status") else {})}),
+                                     **({"status": d["status"]} if d.get("status") else {}),
+                                     **({"vorwarnung": d.get("vorwarnung")}
+                                        if kalender_advanced.ist_deadline(d) else {})}),
              hilfe=ADVANCED_HILFE)
     f.quellen = quellen
+    f.typen = tuple(typen)
 
     def titel_lesen(s):
         q = kalender_advanced.quelle(f.adv)
@@ -750,6 +758,32 @@ def _advanced_feld(roh, titel_feld, quellen=None) -> Feld:
     titel_feld.lesen = titel_lesen
     titel_feld.hilfe = lambda w: _QUELLE_TITEL_HILFE if kalender_advanced.quelle(f.adv) else ""
     return f
+
+
+def _typ_body(w) -> dict:
+    """Typ deadline für einen NEUEN Eintrag: {typ, vorwarnung} (leer = normal)."""
+    if w.get("typ") != kalender_advanced.DEADLINE:
+        return {}
+    return {"typ": kalender_advanced.DEADLINE,
+            "vorwarnung": w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)}
+
+
+def _typ_aufrufe(roh, w) -> tuple:
+    """Typ eines bestehenden Eintrags geändert → (vorher, nachher): zurück
+    zu normal VOR dem Ändern (sonst lehnt der Kern ein neues Ende ab),
+    zur Deadline bzw. neue Vorwarnung NACH dem Ändern (dann ist das Ende
+    schon weg). Je höchstens EIN Aufruf POST /api/calendar/typ per Kennung."""
+    if "typ" not in w or not roh.get("kennung"):
+        return [], []
+    alt, neu = kalender_deadline.ist(roh), w.get("typ") == kalender_advanced.DEADLINE
+    k = roh["kennung"]
+    if alt and not neu:
+        return [("POST", "/api/calendar/typ", {"kennung": k, "typ": "normal"})], []
+    v = w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)
+    if neu and (not alt or kalender_deadline.vorwarnung(roh) != v):
+        return [], [("POST", "/api/calendar/typ",
+                     {"kennung": k, "typ": "deadline", "vorwarnung": v})]
+    return [], []
 
 
 def _stil_body(w) -> dict:
@@ -770,12 +804,22 @@ def _stil_aufruf(roh, w) -> list:
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                    wiederholung="keine", alle="1", wtage="", wbis="",
                    mit_regel=True, mit_ganz=True, mit_letzter=None, mit_datum=True,
-                   datum_name="Tag", mit_gruppe=True, roh=None, quellen=None):
+                   datum_name="Tag", mit_gruppe=True, roh=None, quellen=None, deadline=False):
     """Die Felder des Termin-Kastens. `mit_letzter` (Vorgabe: wie `mit_ganz`
     und `mit_datum`): das Feld „Letzter Tag" direkt unter „Tag" (ganztägig
-    über mehrere Tage; leer = nur dieser Tag) — nicht bei Serien."""
+    über mehrere Tage; leer = nur dieser Tag) — nicht bei Serien.
+    Typ deadline (Advanced, 20.10.2026): ein Zeitpunkt — „Ganztägig",
+    „Letzter Tag" und „Bis" stehen gedämpft („—", feste Plätze), „Von" ist
+    die Uhrzeit (leer = DEADLINE_ZEIT). Ohne Feld Advanced (Kasten „nur
+    dieser Tag") sagt `deadline`, ob es eine ist."""
     mit_letzter = (mit_ganz and mit_datum) if mit_letzter is None else mit_letzter
-    ganz_an = lambda w: w.get("ganz") == "ja"
+    adv = []                                # das Feld Advanced, sobald es gebaut ist
+
+    def dl(w=None):
+        if adv:
+            return kalender_advanced.ist_deadline(adv[0].adv)
+        return bool(deadline)
+    ganz_an = lambda w: w.get("ganz") == "ja" and not dl(w)
     regel_an = lambda w: w.get("wied", "keine") != "keine"
     felder = [Feld("titel", "Titel", wert=titel, lesen=_l_titel)]
     if mit_datum:
@@ -789,12 +833,19 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
                            hilfe="leer = nur dieser Tag; sonst mehrtägig bis einschließlich"))
     if mit_ganz:
         felder.append(Feld("ganz", "Ganztägig", art="wahl", wert="ja" if ganz else "nein",
-                           optionen=("nein", "ja")))
+                           optionen=("nein", "ja"), aktiv=lambda w: not dl(w)))
+    von_pflicht = _l_zeit(leer_ok=False)
+
+    def von_lesen(s):
+        if dl() and not s.strip():
+            return True, DEADLINE_ZEIT       # Deadline ohne Uhrzeit: bis Tagesende
+        return von_pflicht(s)
     felder += [
-        Feld("von", "Von", wert=von, lesen=_l_zeit(leer_ok=False),
-             aktiv=lambda w: not ganz_an(w), hilfe="hh:mm"),
-        Feld("bis", "Bis", wert=bis, lesen=_l_ende, aktiv=lambda w: not ganz_an(w),
-             hilfe="hh:mm oder +1h, +2d20h"),
+        Feld("von", "Von", wert=von, lesen=von_lesen, aktiv=lambda w: not ganz_an(w),
+             hilfe=lambda w: ("hh:mm der deadline · leer = %s" % DEADLINE_ZEIT)
+             if dl(w) else "hh:mm"),
+        Feld("bis", "Bis", wert=bis, lesen=_l_ende,
+             aktiv=lambda w: not ganz_an(w) and not dl(w), hilfe="hh:mm oder +1h, +2d20h"),
     ]
     if mit_regel:
         felder += [
@@ -809,7 +860,8 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
         ]
     felder.append(Feld("ort", "Ort", wert=ort))
     if mit_gruppe:
-        felder += _gruppe_felder(roh) + [_advanced_feld(roh, felder[0], quellen)]
+        adv.append(_advanced_feld(roh, felder[0], quellen))
+        felder += _gruppe_felder(roh) + adv
     return felder
 
 
@@ -837,7 +889,7 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     Body mit; ein leerer Titel wird ihr Name (der Rückfall)."""
     tag = w.get("datum") or tag
     titel, ort = (w.get("titel") or (quelle or {}).get("name") or ""), (w.get("ort") or None)
-    gruppe = {**_gruppe_body(w), **_stil_body(w)}
+    gruppe = {**_gruppe_body(w), **_stil_body(w), **_typ_body(w)}
     if quelle:
         gruppe = {**gruppe, "quelle": {"art": quelle["art"], "id": quelle["id"]}}
     start, e_dt = _zeiten(tag, w)
@@ -845,7 +897,8 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     wied = w.get("wied", "keine")
     if wied != "keine":
         alle = w.get("alle") or 1
-        if wied == "täglich" and alle == 1 and w.get("wbis") and (e_dt is None or e_dt.date() == tag):
+        if wied == "täglich" and alle == 1 and w.get("wbis") and (e_dt is None or e_dt.date() == tag) \
+                and not _typ_body(w):        # eine tägliche Deadline bleibt eine Serie
             body = {"layer": layer, "von": tag.isoformat(), "bis": w["wbis"].isoformat(),
                     "label": titel}
             if start:
@@ -1060,10 +1113,11 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                     "ende": neu["ende"], "ausser": roh.get("kennung")}
                    if neu["time"] and neu["ende"] and zeit_neu
                    and _ziel_ebene(w, layer) != UNVERBINDLICH else None)
-            return _plan([("PUT", "/api/calendar/eintrag",
-                           {"layer": layer, "day": iso, "label": label,
-                            "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
-                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
+            vor, nach = _typ_aufrufe(roh, w)
+            return _plan(vor + [("PUT", "/api/calendar/eintrag",
+                                 {"layer": layer, "day": iso, "label": label,
+                                  "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
+                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + nach
                          + _ebene_aufruf(roh, w),
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
                          zurueck=_quelle_folge(roh, w))
@@ -1104,10 +1158,11 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                              "wochentage": wochentage(r["wtage"]) or None}
                 if neu_regel != alt_regel:
                     neu["wiederholung"] = neu_regel
-            aufrufe = [("PUT", "/api/calendar/routine",
-                        {"layer": layer, "label": label, "day": iso,
-                         "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
-                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + _ebene_aufruf(roh, w)
+            vor, nach = _typ_aufrufe(roh, w)
+            aufrufe = vor + [("PUT", "/api/calendar/routine",
+                              {"layer": layer, "label": label, "day": iso,
+                               "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
+                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + nach + _ebene_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
             return _plan(aufrufe, "alle geändert: " + w["titel"],
@@ -1121,7 +1176,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
         # (die Abweichung erbt die Zeit der Regel) — dort bleibt es weg.
         form_dieser = lambda: Formular("nur dieser tag · " + datum_text(tag), _termin_felder(
             tag, heute, titel=label, ganz=not t0, von=t0, bis=e0, ort=ort0, mit_regel=False,
-            mit_ganz=not t0, mit_letzter=False, datum_name="Verschieben auf", mit_gruppe=False),
+            mit_ganz=not t0, mit_letzter=False, datum_name="Verschieben auf", mit_gruppe=False,
+            deadline=kalender_deadline.ist(roh)),
             nur_dieser, fokus=fokus)
         def form_alle():
             felder = _termin_felder(
@@ -1181,7 +1237,8 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             Feld("erster", "Erster Tag", wert=datum_text(von_d), lesen=_l_datum(heute)),
             Feld("letzter", "Letzter Tag", wert=datum_text(bis_d), lesen=_l_datum(heute)),
             Feld("ort", "Ort", wert=ort0),
-        ] + _gruppe_felder(roh) + [_advanced_feld(roh, titel, quellen)], alle_plan,
+        ] + _gruppe_felder(roh) + [_advanced_feld(roh, titel, quellen,
+                                                  kalender_advanced.TYPEN_SPANNE)], alle_plan,
             pruefen=alle_pruefen)
     return Dialog("ändern", [_wahl_umfang(roh)], lambda a: _plan(
         weiter=form_tag() if a["umfang"] == "dieser" else form_alle()))
@@ -1246,6 +1303,9 @@ def kopie(roh: dict) -> dict:
         k["quelle"] = {"art": q["art"], "id": q["id"]}
     if kalender_stil.von(roh):                 # das Aussehen kommt mit
         k["stil"] = kalender_stil.von(roh)
+    if kalender_deadline.ist(roh):             # eine Deadline bleibt eine (ohne Ende)
+        k.pop("ende", None)
+        k.update(typ="deadline", vorwarnung=kalender_deadline.vorwarnung(roh))
     return k
 
 
@@ -1294,7 +1354,11 @@ def details(roh: dict, tag: date, vorschau: dict | None = None) -> list:
     zeilen = [(roh.get("titel_live") if quelle else None) or roh.get("label", "?"), ""]
     zeilen.append("Tag      %s, %s" % (WT_LANG[tag.weekday()], datum_text(tag)))
     t, e = roh.get("time"), roh.get("ende")
-    if t or e:
+    if kalender_deadline.ist(roh) and t:
+        zeilen.append("Deadline %s · %s" % (t, kalender_deadline.rest_kurz(roh, tag) or "?"))
+        zeilen.append("Vorwarn. %s vorher" % kalender_advanced.dauer_text(
+            kalender_deadline.vorwarnung(roh)))
+    elif t or e:
         zeilen.append("Zeit     %s%s" % (t or "..:..", (" -> " + e) if e else ""))
     else:
         zeilen.append("Zeit     ganztägig")

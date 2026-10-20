@@ -22,6 +22,7 @@ import uuid
 from datetime import date
 
 import kalender
+import kalender_deadline
 import kalender_kategorie
 import kalender_quelle
 import kalender_regel
@@ -171,15 +172,18 @@ def _aus_liste_nehmen(data, lname, ort, obj):
 
 def eintrag_aendern(k: str, *, label=None, tag=None, time=None, ende=None, ort=None,
                     von=None, bis=None, times=None, enden=None,
-                    kategorie=None, kategorie_name=None) -> dict:
+                    kategorie=None, kategorie_name=None, typ=None, vorwarnung=None) -> dict:
     """Einen Einmal-Termin ODER eine Spanne ändern.
     Einmal: label, tag (verschieben), time, ende, ort.
     Spanne: label, ort, von/bis (erster/letzter Tag; die Tageszeiten wandern
     beim Verschieben von `von` mit), times/enden = {tag: "HH:MM"|"" } für
     einzelne Tage ("" = an dem Tag ohne Uhrzeit bzw. ohne Ende).
-    kategorie/kategorie_name: Gruppe (kalender_kategorie.pruefen)."""
+    kategorie/kategorie_name: Gruppe (kalender_kategorie.pruefen).
+    typ ("deadline"|"normal") und vorwarnung (Minuten oder „3d"): Termintyp
+    deadline (kalender_deadline) — nur Einmal-Termine mit Uhrzeit, ohne Ende."""
     def arbeit(data, art, lname, o, obj):
         neu = copy.deepcopy(obj)
+        kalender_deadline.setzen(neu, typ, vorwarnung)
         if label is not None:
             if not label.strip():
                 raise KalenderAbgelehnt("TITEL-LEER")
@@ -237,6 +241,8 @@ def eintrag_aendern(k: str, *, label=None, tag=None, time=None, ende=None, ort=N
                 _zeiten((neu.get("times") or {}).get(t), e)
             neu["bis"] = neu_bis.isoformat()
             neuer_tag = neu_von.isoformat()
+        kalender_deadline.pruefen(neu, spanne=art == "spanne",
+                                  phase=kalender_rhythmus.ist_phase(neu, lname))
         # alles geprüft → erst jetzt am Dict ändern
         obj.clear()
         obj.update(neu)
@@ -261,7 +267,8 @@ def eintrag_loeschen(k: str) -> None:
 
 def routine_aendern(k: str, *, time=None, ende=None, ort=None, label=None,
                     rrule=None, seit=None, bis=None, motiv=None,
-                    kategorie=None, kategorie_name=None, nur_phase=False) -> dict:
+                    kategorie=None, kategorie_name=None, nur_phase=False,
+                    typ=None, vorwarnung=None) -> dict:
     """ALLE Vorkommen einer Routine. rrule als Text (wird geprüft); wer die
     Regel ändert, behält Aus-Tage und Abweichungen (sie gelten weiter für
     die Tage, die es noch gibt). Pausen hängen an der Kennung — Umbenennen
@@ -274,6 +281,7 @@ def routine_aendern(k: str, *, time=None, ende=None, ort=None, label=None,
         if (nur_phase or motiv is not None) and not phase:
             raise KalenderAbgelehnt("KEINE-PHASE", f"{k} liegt in der Ebene {lname!r}")
         neu = copy.deepcopy(obj)
+        kalender_deadline.setzen(neu, typ, vorwarnung)     # typ deadline (20.10.2026)
         if motiv is not None:
             neu["motiv"] = kalender_rhythmus.motiv_pruefen(motiv)
         kalender_kategorie.setzen(neu, kategorie, kategorie_name)
@@ -304,6 +312,7 @@ def routine_aendern(k: str, *, time=None, ende=None, ort=None, label=None,
         if phase and not neu.get("time"):
             raise KalenderAbgelehnt("PHASE-OHNE-ZEIT")
         _zeiten(neu.get("time"), neu.get("ende"), ueber_mitternacht=phase)
+        kalender_deadline.pruefen(neu, phase=phase)
         # Pausen, die noch per Titel an dieser Routine hingen, fest anbinden,
         # bevor der Titel sich ändert.
         if neu.get("label") != obj.get("label"):
@@ -699,5 +708,33 @@ def stil_setzen(k: str, stil) -> dict:
             obj["stil"] = sauber
         else:
             obj.pop("stil", None)
+        return False
+    return _schreiben(k, arbeit)
+
+
+# ── Termintyp deadline (20.10.2026) ────────────────────────────────────
+# Sasha: „ne deadline is ja ne ganz andere art von termin". Ein Zeitpunkt mit
+# Vorwarnung (core/kalender_deadline.py); gilt für den ganzen Termin bzw.
+# die ganze Serie, wie Gruppe und Stil.
+def typ_setzen(k: str, typ: str, vorwarnung=None) -> dict:
+    """Termin oder Routine zur Deadline machen (typ "deadline", vorwarnung
+    in Minuten oder als Text „3d"; ohne: die alte bzw. die Vorgabe) bzw.
+    zurück zum normalen Termin (typ "normal": typ und vorwarnung fallen weg).
+    Codes: TYP-UNBEKANNT, VORWARNUNG-UNGUELTIG, DEADLINE-OHNE-ZEIT,
+    DEADLINE-MIT-ENDE (erst ende entfernen), DEADLINE-SPANNE, IST-PHASE.
+    Ein Schreibvorgang; abgelehnt = nichts geschrieben."""
+    if typ is None:
+        raise KalenderAbgelehnt("TYP-UNBEKANNT", "kein typ angegeben (normal oder deadline)")
+    t = kalender_deadline.typ_pruefen(typ)                # vor dem Laden
+    if vorwarnung is not None:
+        kalender_deadline.vorwarnung_pruefen(vorwarnung)
+
+    def arbeit(data, art, lname, o, obj):
+        neu = copy.deepcopy(obj)
+        kalender_deadline.setzen(neu, t, vorwarnung)
+        kalender_deadline.pruefen(neu, spanne=art == "spanne",
+                                  phase=kalender_rhythmus.ist_phase(neu, lname))
+        obj.clear()
+        obj.update(neu)
         return False
     return _schreiben(k, arbeit)

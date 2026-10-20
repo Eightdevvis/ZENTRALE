@@ -350,7 +350,6 @@ komplettem Präfix (gemessen 1,4 Cent) für garantiert nichts — Zustände steh
 im Wissens-Block. Vorher fand sie dort manchmal etwas, weil der gelöschte
 Auto-Spiegel Krankheiten in den `erlebt`-Layer geschrieben hatte.
 
-
 | Tool                    | Wann                                                |
 |-------------------------|-----------------------------------------------------|
 | `read_time`             | Wie spät es ist + nächster Termin mit Abstand       |

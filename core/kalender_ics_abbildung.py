@@ -28,6 +28,10 @@
 #                               nur COLOR von außen -> background-color
 #   Ebene rhythmus           -> TRANSP:TRANSPARENT, Ende vor Beginn = DTEND
 #                               am Folgetag (Schlaf 23:00–07:00)
+#   typ deadline (Zeitpunkt) -> X-ZENTRALE-TYP:DEADLINE, DTEND = DTSTART
+#                               (Dauer 0); vorwarnung -> VALARM (ACTION:DISPLAY,
+#                               TRIGGER:-P3D, X-ZENTRALE-VORWARNUNG:TRUE), damit
+#                               Handy/Google erinnern (core/kalender_deadline.py)
 #
 # Das Verlust-Prinzip: ein Feld wird nur dann auf eine iCalendar-Property
 # abgebildet, wenn es sich EXAKT zurücklesen lässt ("17:45" ja, "10" nein).
@@ -44,7 +48,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from icalendar import Calendar, Event, Timezone, vRecur, vText
+from icalendar import Alarm, Calendar, Event, Timezone, vRecur, vText
 
 import kalender_kategorie
 import kalender_quelle
@@ -69,6 +73,11 @@ X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 X_MOTIV = "X-ZENTRALE-MOTIV"
 X_QUELLE = "X-ZENTRALE-QUELLE"
 X_STIL = "X-ZENTRALE-STIL"
+X_TYP = "X-ZENTRALE-TYP"
+X_VORWARNUNG = "X-ZENTRALE-VORWARNUNG"     # Marke an UNSEREM VALARM
+TYP_DEADLINE = "DEADLINE"
+ALARM_TEXT = "Deadline: "                  # DESCRIPTION unseres VALARM (Erkennung,
+                                           # falls ein Server die Marke verwirft)
 
 # Was ZENTRALE an einem Ereignis selbst verwaltet. Alles ANDERE an einer
 # vorhandenen Datei (DESCRIPTION, VALARM, Google-Eigenheiten, ...) wird beim
@@ -255,6 +264,68 @@ def _kopf(ev: Event, e: dict, rest: dict) -> None:
         ev.add("CATEGORIES", namen)
         for feld in ("kategorie", "kategorie_name", "kategorien_weitere"):
             rest.pop(feld, None)
+    _deadline_abbilden(ev, e, rest)
+
+
+def _ist_deadline(e: dict) -> bool:
+    return e.get("typ") == "deadline"
+
+
+def _deadline_abbilden(ev: Event, e: dict, rest: dict) -> None:
+    """typ deadline → X-ZENTRALE-TYP:DEADLINE; vorwarnung (Minuten ≥ 0) →
+    VALARM mit relativem TRIGGER vor dem Beginn (Handy/Google erinnern).
+    Anderes (unbekannter typ, kaputte vorwarnung) bleibt in den Extras."""
+    if not _ist_deadline(e):
+        return
+    ev.add(X_TYP, TYP_DEADLINE)
+    rest.pop("typ", None)
+    v = e.get("vorwarnung")
+    if isinstance(v, int) and not isinstance(v, bool) and v >= 0:
+        al = Alarm()
+        al.add("ACTION", "DISPLAY")
+        al.add("DESCRIPTION", ALARM_TEXT + str(e.get("label") or ""))
+        al.add("TRIGGER", -timedelta(minutes=v))
+        al.add(X_VORWARNUNG, "TRUE")
+        ev.add_component(al)
+        rest.pop("vorwarnung", None)
+
+
+def _alarm_minuten(al) -> int | None:
+    """Ein VALARM mit relativem TRIGGER vor/zum Beginn → Minuten davor."""
+    t = al.get("TRIGGER")
+    dt = getattr(t, "dt", None)
+    if not isinstance(dt, timedelta) or dt > timedelta(0):
+        return None
+    if str(getattr(t, "params", {}).get("RELATED", "START")).upper() != "START":
+        return None
+    sek = -dt.total_seconds()
+    return int(sek // 60) if sek % 60 == 0 else None
+
+
+def _vorwarnung_lesen(ev) -> int | None:
+    """Unsere Vorwarnung: der markierte VALARM; fehlt die Marke (ein Server
+    hat sie verworfen), der mit unserer DESCRIPTION; sonst der erste
+    relative Alarm (am Handy umgestellt)."""
+    alarme = [k for k in ev.subcomponents if getattr(k, "name", "") == "VALARM"]
+    for wahl in (lambda a: str(a.get(X_VORWARNUNG) or "").upper() == "TRUE",
+                 lambda a: str(a.get("DESCRIPTION") or "").startswith(ALARM_TEXT),
+                 lambda a: True):
+        for a in alarme:
+            if wahl(a) and _alarm_minuten(a) is not None:
+                return _alarm_minuten(a)
+    return None
+
+
+def _eigener_alarm(al, trigger: set) -> bool:
+    """Ist dieser VALARM einer alten Datei UNSERE Vorwarnung? Dann ersetzt
+    ihn die neue Fassung (sonst stünde er doppelt da). `trigger`: die
+    Minuten unserer alten und neuen Vorwarnung — ein Server, der Marke und
+    DESCRIPTION verwirft, darf die Alarme nicht bei jedem Schreiben vermehren."""
+    if getattr(al, "name", "") != "VALARM":
+        return False
+    return (str(al.get(X_VORWARNUNG) or "").upper() == "TRUE"
+            or str(al.get("DESCRIPTION") or "").startswith(ALARM_TEXT)
+            or _alarm_minuten(al) in trigger)
 
 
 def _stil_text(e: dict) -> str | None:
@@ -400,6 +471,13 @@ def _ende_text(start, ende) -> str | None:
     return None
 
 
+def _null_dauer(ev, d, t, e) -> None:
+    """Deadline: DTEND = DTSTART (ein Zeitpunkt, Dauer 0) — ohne DTEND gäbe
+    Google ihr eine Stunde. Liest sich als „kein Ende" zurück (_ende_text)."""
+    if _ist_deadline(e) and ev.get("DTEND") is None:
+        ev.add("DTEND", _ts(d, t))
+
+
 def _durchsichtig(komps) -> None:
     """Phasen belegen nichts: TRANSP:TRANSPARENT (Google: „verfügbar")."""
     for k in komps:
@@ -416,6 +494,7 @@ def _einzel(d, e, rest, roh, uid, pos, jetzt, rhythmus=False):
         if e["time"] != _fmt(t):
             roh["time"] = [e["time"], _fmt(t)]
         _ende_abbilden(ev, d, t, e, rest, roh, ueber_nacht=rhythmus)
+        _null_dauer(ev, d, t, e)
         return [ev], True
     ev.add("DTSTART", d)
     ev.add("DTEND", d + timedelta(days=1))
@@ -604,6 +683,7 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
             roh["time"] = [r["time"], _fmt(t)]
         ev.add("DTSTART", _ts(start_d, t))
         _ende_abbilden(ev, start_d, t, r, rest, roh, ueber_nacht=rhythmus)
+        _null_dauer(ev, start_d, t, r)
     else:
         ev.add("DTSTART", start_d)
         ev.add("DTEND", start_d + timedelta(days=1))
@@ -867,6 +947,11 @@ def _kopf_lesen(ev, daten: dict) -> None:
     for c in _liste(ev.get("CATEGORIES")):
         namen += [str(x) for x in getattr(c, "cats", [c])]
     daten.update(kalender_kategorie.aus_namen(namen))
+    if str(ev.get(X_TYP) or "").upper() == TYP_DEADLINE:
+        daten["typ"] = "deadline"
+        v = _vorwarnung_lesen(ev)
+        if v is not None:
+            daten["vorwarnung"] = v
 
 
 def _roh_anwenden(ev, daten: dict) -> None:
@@ -907,7 +992,8 @@ def _termin_lesen(ev, start, ende, extras):
     _kopf_lesen(ev, daten)
     if isinstance(start, datetime):
         daten["time"] = _fmt(start)
-        if _ende_text(start, ende):
+        # Deadline: ein Ende, das ein Server dazugab (Google +1 h), gilt nicht
+        if _ende_text(start, ende) and not _ist_deadline(daten):
             daten["ende"] = _ende_text(start, ende)
     _roh_anwenden(ev, daten)
     return _luecken_fuellen(daten, extras)
@@ -983,7 +1069,7 @@ def _routine_lesen(ev, abw, start, ende, rr, extras):
     daten["rrule"] = regel
     if isinstance(start, datetime):
         daten["time"] = _fmt(start)
-        if _ende_text(start, ende):
+        if _ende_text(start, ende) and not _ist_deadline(daten):
             daten["ende"] = _ende_text(start, ende)
     _roh_anwenden(ev, daten)
     if str(ev.get(X_OHNE_ANFANG) or "").upper() != "TRUE":
@@ -1071,6 +1157,10 @@ def zusammenfuehren(alt: bytes | None, neu: Calendar, uid: str) -> bytes:
 
     alte = {schluessel(ev): ev for ev in alt_kal.walk("VEVENT")
             if str(ev.get("UID") or "") == uid}
+    # Unsere Vorwarnung (VALARM einer Deadline) ersetzt die neue Fassung; alle
+    # anderen Alarme (vom Handy, von Google) bleiben.
+    trigger = {_vorwarnung_lesen(ev) for ev in list(alte.values()) + list(neu.walk("VEVENT"))
+               if str(ev.get(X_TYP) or "").upper() == TYP_DEADLINE} - {None}
 
     raus = Calendar()
     for name, wert in neu.property_items(recursive=False):
@@ -1105,8 +1195,8 @@ def zusammenfuehren(alt: bytes | None, neu: Calendar, uid: str) -> bytes:
                 if name == "URL" and str(wert).startswith("zentrale://"):
                     continue
                 ev.add(name, wert)
-            if not ev.subcomponents:
-                for sub in alt_ev.subcomponents:
+            for sub in alt_ev.subcomponents:
+                if not _eigener_alarm(sub, trigger):
                     ev.add_component(sub)
         raus.add_component(ev)
 

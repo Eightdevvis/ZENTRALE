@@ -138,6 +138,16 @@ def _neue_kennung(vorher: set):
     return next(iter(neu)) if len(neu) == 1 else None
 
 
+def _typ_extras(body: dict, extras: dict) -> None:
+    """Termintyp deadline (20.10.2026): `typ` ("deadline"|"normal") und
+    `vorwarnung` (Minuten oder „3d") weiterreichen — geprüft wird im Kern
+    (kalender_deadline; Ablehnung 400 mit code)."""
+    if body.get('typ'):
+        extras['typ'] = body['typ']
+    if body.get('vorwarnung') is not None:
+        extras['vorwarnung'] = body['vorwarnung']
+
+
 @bp.route('/api/calendar/entry', methods=['POST'])
 def api_calendar_add_entry():
     """
@@ -174,6 +184,7 @@ def api_calendar_add_entry():
         extras['quelle'] = body['quelle']    # {art, id}; label darf dann fehlen
     if body.get('stil'):
         extras['stil'] = body['stil']        # {css: wert}, geprüft in kalender.add_*
+    _typ_extras(body, extras)                # typ deadline + vorwarnung (20.10.2026)
     # Mehrtägiger (ganztägiger) Termin: `bis`-Datum gesetzt → Spanne statt
     # Einmal-Termin. Kein Konflikt-Check (ganztägig, kein Zeit-Slot).
     bis = (body.get('bis') or '').strip()
@@ -318,7 +329,8 @@ def api_calendar_add_routine():
             body.get('wochentage') or None, body.get('time') or None,
             body.get('ende') or None, body.get('ort') or None,
             body.get('kategorie') or None, body.get('kategorie_name') or None,
-            body.get('quelle') or None, stil=body.get('stil') or None)
+            body.get('quelle') or None, stil=body.get('stil') or None,
+            typ=body.get('typ') or None, vorwarnung=body.get('vorwarnung'))
         return (jsonify({"ok": True, "kennung": _neue_kennung(vorher)}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
@@ -341,6 +353,7 @@ def api_calendar_add_routine():
         extras['quelle'] = body['quelle']
     if body.get('stil'):
         extras['stil'] = body['stil']
+    _typ_extras(body, extras)
     vorher = _alle_kennungen()
     ok = kalender.add_routine(layer, label, rrule, time=time, **extras)
     if not ok:
@@ -477,9 +490,9 @@ def api_calendar_konflikte():
 _EINTRAG_NEU = {'day': 'tag', 'label': 'label', 'time': 'time', 'ende': 'ende',
                 'ort': 'ort', 'von': 'von', 'bis': 'bis', 'times': 'times',
                 'enden': 'enden', 'kategorie': 'kategorie',
-                'kategorie_name': 'kategorie_name'}
+                'kategorie_name': 'kategorie_name', 'typ': 'typ', 'vorwarnung': 'vorwarnung'}
 _ROUTINE_NEU = {k: k for k in ('label', 'time', 'ende', 'ort', 'rrule', 'seit', 'bis',
-                               'motiv', 'kategorie', 'kategorie_name')}
+                               'motiv', 'kategorie', 'kategorie_name', 'typ', 'vorwarnung')}
 
 
 def _felder(new: dict, erlaubt: dict) -> dict:
@@ -706,3 +719,16 @@ def api_calendar_stil():
     stil = b.get('stil')
     return jsonify(kalender_kennung.stil_setzen(
         b.get('kennung') or '', {} if stil is None else stil))
+
+
+# ── Termintyp deadline (seit 20.10.2026) ───────────────────────────────
+# Ein Zeitpunkt mit Vorwarnung (core/kalender_deadline.py): Uhrzeit Pflicht,
+# kein Ende, nie mehrtägig; leuchtet in den Ansichten, kollidiert nie.
+@bp.route('/api/calendar/typ', methods=['POST'])
+def api_calendar_typ():
+    """Body: {kennung, typ: "deadline"|"normal", vorwarnung?: Minuten|"3d"} —
+    normal entfernt typ und vorwarnung. Antwort: der Eintrag (kennung, art,
+    layer, typ, vorwarnung …); Ablehnung 400 {error, code}."""
+    b = request.get_json(silent=True) or {}
+    return jsonify(kalender_kennung.typ_setzen(
+        b.get('kennung') or '', b.get('typ'), vorwarnung=b.get('vorwarnung')))

@@ -77,12 +77,13 @@ def _hm(m) -> str:
 def zusammenfassen(eintraege: list) -> list:
     """Normierte Einträge eines Tages → dieselbe Liste, nur dass alle mit
     Uhrzeit und gleicher Gruppe EINE Zeile sind (an der Stelle des ersten).
-    Spannen, Ganztägiges und Ausgeschaltetes bleiben einzeln: ein Balken
-    oder ein „✗" sagt mehr als der Gruppenname."""
+    Spannen, Ganztägiges, Ausgeschaltetes und Deadlines bleiben einzeln: ein
+    Balken, ein „✗" oder ein „⚑" sagt mehr als der Gruppenname."""
     gruppen: dict = {}
     for t in eintraege:
         k = schluessel(t.get("roh"))
-        if k and not t["spanne"] and not t["aus"] and t["start"] is not None:
+        if k and not t["spanne"] and not t["aus"] and t["start"] is not None \
+                and not t.get("deadline"):        # eine Deadline steht immer für sich
             gruppen.setdefault(k, []).append(t)
     if not gruppen:
         return list(eintraege)

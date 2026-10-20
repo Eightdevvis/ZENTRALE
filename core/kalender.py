@@ -40,6 +40,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import state  # Logging in den UI-Terminal-Stream
+import kalender_deadline
 import kalender_kategorie
 import kalender_quelle
 import kalender_regel
@@ -286,6 +287,8 @@ def add_entry(layer: str, day: str, label: str,
     """
     label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
     time = _zeiten_normal(time, extras)
+    # Termintyp deadline (20.10.2026): Zeitpunkt mit Vorwarnung, geprüft vor dem Laden
+    extras = kalender_deadline.aus_extras(extras, time, phase=layer == kalender_rhythmus.EBENE)
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -323,6 +326,7 @@ def add_span(layer: str, von: str, bis: str, label: str, **extras) -> bool:
         state.push_log(f"[calendar] Spanne verdreht: bis {bis} < von {von}")
         return False
     label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
+    extras = kalender_deadline.aus_extras(extras, None, spanne=True)   # → DEADLINE-SPANNE
     with _lock:
         data = _load_raw()
         if layer not in data.get("layers", {}):
@@ -688,6 +692,7 @@ def add_routine(layer: str, label: str, rrule_str: str,
         return False
     label, extras = _mit_quelle(layer, label, _mit_stil(layer, _mit_kategorie(extras)))
     time = _zeiten_normal(time, extras)
+    extras = kalender_deadline.aus_extras(extras, time, phase=layer == kalender_rhythmus.EBENE)
 
     with _lock:
         data = _load_raw()
@@ -784,7 +789,7 @@ def kennung(e: dict) -> str | None:
 # Felder einer Routine, die jedes Vorkommen mitbekommt (zusätzlich zu Zeit,
 # Ende, Ort …): Motiv der Phase, Gruppe, Quelle, Stil des Kastens.
 _MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere", "quelle",
-               "stil")
+               "stil", "typ", "vorwarnung")
 
 
 def _ueber_nacht_markieren(e: dict) -> None:
@@ -903,7 +908,7 @@ def entries_in_range(start: date, end: date,
                     # Phase (motiv) und Gruppe (kategorie) mitgeben — die
                     # Ansichten fassen danach zusammen, die KI liest sie.
                     for feld in _MITGEGEBEN:
-                        if r.get(feld):
+                        if r.get(feld) or (feld == "vorwarnung" and feld in r):   # 0 = ohne
                             entry[feld] = copy.deepcopy(r[feld])
                     # absage_noetig: diese Routine muss bei Abwesenheit aktiv
                     # abgesagt werden (z.B. Geige bei der Lehrerin), fällt NICHT

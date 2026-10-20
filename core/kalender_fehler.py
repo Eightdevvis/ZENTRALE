@@ -41,6 +41,12 @@ CODES = {
     "OHNE-QUELLE": "Der Eintrag hat keine Quelle.",
     # Aussehen des Kastens (core/stil.py, Stylebox der TUI), seit 10.10.2026
     "STIL-UNGUELTIG": "Der Stil ist kein gültiges dict aus CSS-Eigenschaften (Farben als #rrggbb).",
+    # Termintyp deadline (core/kalender_deadline.py), seit 20.10.2026
+    "TYP-UNBEKANNT": "Diesen Termintyp gibt es nicht (normal, deadline).",
+    "VORWARNUNG-UNGUELTIG": "Die Vorwarnung ist keine Dauer (Minuten oder z. B. 3d, 12h, 1d12h; höchstens 366 Tage).",
+    "DEADLINE-OHNE-ZEIT": "Eine Deadline braucht eine Uhrzeit (sie ist ein Zeitpunkt).",
+    "DEADLINE-MIT-ENDE": "Eine Deadline hat kein Ende (sie ist ein Zeitpunkt) — ende entfernen.",
+    "DEADLINE-SPANNE": "Ein mehrtägiger Termin kann keine Deadline sein.",
 }
 
 

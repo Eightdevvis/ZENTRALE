@@ -155,6 +155,12 @@ KAL = {
         "sp3":        (213, 213, 16, "graph"),   # Pink
         "sp4":        (117, 117, 16, "net"),     # Himmel
         "wochenende": (117, 117, 16, "net"),     # helles Cyan
+        # Deadline (20.10.2026, kalender_deadline.py): je näher, desto kräftiger
+        "dl0":        (131, 131, 16,  "warn"),   # fern: gedämpftes Rot
+        "dl1":        (167, 167, 16,  "warn"),   # im Fenster: Rot
+        "dl2":        (160, 160, 231, "warn"),   # näher: kräftiges Rot
+        "dl3":        (196, 196, 16,  "warn"),   # ganz nah: Neon-Rot (als Fläche)
+        "dlx":        (242, 242, 16,  "faint"),  # überschritten: grau
     },
     "day": {
         "akzent":     (29,  151, 22,  "kal"),    # Salbei / Salbei-Fläche
@@ -176,6 +182,12 @@ KAL = {
         "sp3":        (125, 225, 125, "graph"),  # Beere / Blütenrosa
         "sp4":        (25,  153, 17,  "net"),    # Wasser / Himmel
         "wochenende": (24,  153, 17,  "net"),    # Tiefwasser
+        # Deadline: dunkles, kräftiges Rot, lesbar auf Weiß (≥ 4,5:1)
+        "dl0":        (95,  224, 52,  "warn"),   # fern: Rotbraun, gedämpft
+        "dl1":        (124, 217, 52,  "warn"),   # im Fenster: Karmin
+        "dl2":        (160, 210, 88,  "warn"),   # näher: kräftiges Rot
+        "dl3":        (160, 160, 231, "warn"),   # ganz nah: weiß auf Rot (Fläche)
+        "dlx":        (242, 254, 238, "faint"),  # überschritten: grau
     },
 }
 
