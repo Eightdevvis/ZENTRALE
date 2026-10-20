@@ -20,7 +20,9 @@
 
 from datetime import date
 
+import fehlercodes
 import kalender
+import kalender_deadline
 import kalender_kategorie
 import kalender_kennung
 import kalender_quelle
@@ -84,6 +86,46 @@ def quelle_satz(x: dict) -> str:
     return f" (aus {wort}: {name}, jetzt: „{x.get('titel_live')}“)"
 
 
+# ── Termintyp deadline (2026-10-20, core/kalender_deadline.py) ─────────
+# Bei diesen Codes steht im Abbruch gleich, was als Nächstes zu tun ist
+# (Spalte „Was tun" in core/fehlercodes.py) — ohne Umweg über explain_error.
+_DEADLINE_CODES = ("TYP-UNBEKANNT", "VORWARNUNG-UNGUELTIG", "DEADLINE-OHNE-ZEIT",
+                   "DEADLINE-MIT-ENDE", "DEADLINE-SPANNE")
+
+
+def _grund(e: KalenderAbgelehnt) -> str:
+    if e.code in _DEADLINE_CODES:
+        return f"{e.grund} {fehlercodes.CODES['K-' + e.code][1]}"
+    return e.grund
+
+
+def _typ(args: dict) -> dict:
+    """typ/vorwarnung, nur die genannten (leer zählt als nicht genannt)."""
+    return {k: args[k] for k in ("typ", "vorwarnung") if _text(args, k)}
+
+
+def _typ_verlangt(typ: dict, anlegen: bool) -> dict:
+    """Was nachgelesen dastehen muss. Prüft die Vorwarnung VOR dem Schreiben."""
+    vw = kalender_deadline.vorwarnung_pruefen(typ["vorwarnung"]) if "vorwarnung" in typ else None
+    if typ.get("typ") == kalender_deadline.NORMAL:
+        return {"typ": None, "vorwarnung": None}
+    v = {}
+    if typ.get("typ") == kalender_deadline.TYP:
+        v["typ"] = kalender_deadline.TYP
+        if anlegen and vw is None:
+            vw = kalender_deadline.VORWARNUNG_STANDARD
+    if vw is not None:
+        v["vorwarnung"] = vw
+    return v
+
+
+def _ende_weg(typ: dict, neu: dict, s) -> bool:
+    """Zur Deadline gemacht, ohne neues Ende: ein bisheriges Ende fällt weg
+    (eine Deadline ist ein Zeitpunkt; leere Felder kommen beim Modell nicht
+    durch, ende "" ginge also gar nicht)."""
+    return typ.get("typ") == kalender_deadline.TYP and "ende" not in neu and bool(s.ende)
+
+
 def _ist_phase(s) -> bool:
     return kalender_rhythmus.ist_phase(s.roh, s.layer)
 
@@ -116,7 +158,7 @@ class KalenderAdapter:
         except ka._Abbruch as e:
             raise Ablehnung(e.code, e.grund)
         except KalenderAbgelehnt as e:
-            raise Ablehnung(e.code, e.grund)
+            raise Ablehnung(e.code, _grund(e))
 
     def nachlesen(self, kennung: str):
         try:
@@ -185,6 +227,14 @@ def _frage(name: str, args: dict):
         extra.append(f"Gruppe {gruppe}")
     if _text(args, "nur_von") or _text(args, "nur_bis"):
         extra.append(f"nur vom {_text(args, 'nur_von') or '?'} bis {_text(args, 'nur_bis') or '?'}")
+    typ, vw = _text(args, "typ").lower(), _text(args, "vorwarnung")
+    if typ == kalender_deadline.TYP:
+        extra.append("als Deadline" + (" (nur Zeitpunkt, ohne Ende)" if name.startswith("edit")
+                                       else "") + (f", Vorwarnung {vw}" if vw else ""))
+    elif typ == kalender_deadline.NORMAL:
+        extra.append("wieder als normaler Termin")
+    elif vw:
+        extra.append(f"Vorwarnung {vw}")
     if extra and text.endswith("?"):
         text = text[:-1] + " (" + ", ".join(extra) + ")?"
     return text
@@ -229,9 +279,12 @@ def termin_eintragen(args: dict) -> Ergebnis:
     t, e = ka._uhr("time", args.get("time")), ka._uhr("ende", args.get("ende"))
     ka._reihenfolge(t, e)
     k_gruppe, n_gruppe = _gruppe(args)
+    typ = _typ(args)
+    typ_verlangt = _typ_verlangt(typ, anlegen=True)
     vorher = ka._kennungen()
     extras = {k: v for k, v in (("ende", e), ("ort", ort)) if v}
     extras.update(_gruppe_verlangt(k_gruppe, n_gruppe))
+    extras.update(typ)
     if q:
         extras["quelle"] = q
     if not kalender.add_entry(layer=layer, day=tag, label=label, time=t or None, **extras):
@@ -244,7 +297,7 @@ def termin_eintragen(args: dict) -> Ergebnis:
         n = kk.termine_am(x.get("tag") or tag)
         return f"{quelle_satz(x)}. Der Tag hat {n} {'Eintrag' if n == 1 else 'Einträge'}"
     return Ergebnis(kennung=k, verlangt={"label": label, "tag": tag, "time": t, "ende": e,
-                                         "ort": ort, "quelle": q,
+                                         "ort": ort, "quelle": q, **typ_verlangt,
                                          **_gruppe_verlangt(k_gruppe, n_gruppe)},
                     nachsatz=nachsatz, zusatz=ka._hinweise)
 
@@ -254,27 +307,33 @@ def termin_aendern(args: dict) -> Ergebnis:
     neu_tag = ka._tag("neuer_tag", args.get("neuer_tag"), pflicht=False)
     felder = {k: _text(args, k) for k in ("time", "ende", "ort", "neuer_titel", "bis")}
     felder = {k: v for k, v in felder.items() if v}
-    if not felder and not neu_tag:
+    typ = _typ(args)
+    if not felder and not neu_tag and not typ:
         raise Ablehnung("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
+    typ_verlangt = _typ_verlangt(typ, anlegen=False)
     if s.bis:
+        if typ.get("typ") == kalender_deadline.TYP:     # vor der Uhrzeit: der genauere Grund
+            raise KalenderAbgelehnt("DEADLINE-SPANNE")
         if "time" in felder or "ende" in felder:
             raise Ablehnung("K-SPANNE-UHRZEIT", "Uhrzeiten einzelner Tage eines mehrtägigen "
                             "Termins ändert dieses Werkzeug nicht — das geht in der Kalender-Ansicht")
         bis = ka._tag("bis", felder["bis"]) if "bis" in felder else None
         kalender_kennung.eintrag_aendern(s.uid, label=felder.get("neuer_titel"),
-                                         ort=felder.get("ort"), von=neu_tag or None, bis=bis)
+                                         ort=felder.get("ort"), von=neu_tag or None, bis=bis,
+                                         **typ)
         return Ergebnis(kennung=s.uid, vorher=_vorher(s),
                         zusatz=lambda x: kk.beleg_warnungen(x.get("label") or ""))
     if "bis" in felder:
         raise Ablehnung("K-UNBEKANNTES-FELD", "'bis' gibt es nur bei mehrtägigen Terminen")
     t = ka._uhr("time", felder["time"]) if "time" in felder else (s.time or "")
-    e = ka._uhr("ende", felder["ende"]) if "ende" in felder else (s.ende or "")
+    weg = _ende_weg(typ, felder, s)
+    e = ka._uhr("ende", felder["ende"]) if "ende" in felder else ("" if weg else s.ende or "")
     ka._reihenfolge(t, e)
     kalender_kennung.eintrag_aendern(
         s.uid, label=felder.get("neuer_titel"), tag=neu_tag or None,
-        time=t if "time" in felder else None, ende=e if "ende" in felder else None,
-        ort=felder.get("ort"))
-    verlangt = {"time": t, "ende": e, "tag": neu_tag or s.day}
+        time=t if "time" in felder else None, ende=e if "ende" in felder or weg else None,
+        ort=felder.get("ort"), **typ)
+    verlangt = {"time": t, "ende": e, "tag": neu_tag or s.day, **typ_verlangt}
     if "ort" in felder:
         verlangt["ort"] = felder["ort"]
     if "neuer_titel" in felder:
@@ -306,9 +365,12 @@ def routine_eintragen(args: dict) -> Ergebnis:
     von, bis = ka._zeitraum(args, pflicht=True)
     regel = kk.regel_mit_ende(rrule, bis)
     k_gruppe, n_gruppe = _gruppe(args)
+    typ = _typ(args)
+    typ_verlangt = _typ_verlangt(typ, anlegen=True)
     vorher = ka._kennungen()
     extras = {k: v for k, v in (("ende", e), ("ort", ort), ("seit", von)) if v}
     extras.update(_gruppe_verlangt(k_gruppe, n_gruppe))
+    extras.update(typ)
     if q:
         extras["quelle"] = q
     if not kalender.add_routine(layer=layer, label=label, rrule_str=regel, time=t or None,
@@ -319,7 +381,8 @@ def routine_eintragen(args: dict) -> Ergebnis:
         raise Ablehnung("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine nicht im Kalender")
     return Ergebnis(
         kennung=k, verlangt={"label": label, "rrule": regel, "time": t, "ende": e, "ort": ort,
-                             "seit": von, "quelle": q, **_gruppe_verlangt(k_gruppe, n_gruppe)},
+                             "seit": von, "quelle": q, **typ_verlangt,
+                             **_gruppe_verlangt(k_gruppe, n_gruppe)},
         nachsatz=lambda x: f"{quelle_satz(x)}, {kk.naechstes(kk.stueck_von(k))}",
         zusatz=lambda x: _doppelt_hinweis(x, label))
 
@@ -348,18 +411,20 @@ def routine_aendern(args: dict) -> Ergebnis:
         return _routine_absagen(s, nur_am) if nur_am else _routine_loeschen(s)
     neu = {k: _text(args, k) for k in ("time", "ende", "ort", "rrule", "neuer_titel", "von", "bis")}
     neu = {k: v for k, v in neu.items() if v}
-    if not neu:
+    typ = _typ(args)
+    if not neu and not typ:
         raise Ablehnung("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
     t = ka._uhr("time", neu["time"]) if "time" in neu else (s.time or "")
-    e = ka._uhr("ende", neu["ende"]) if "ende" in neu else (s.ende or "")
+    weg = _ende_weg(typ, neu, s) and not (nur_am or nur)
+    e = ka._uhr("ende", neu["ende"]) if "ende" in neu else ("" if weg else s.ende or "")
     ka._reihenfolge(t, e, ueber_mitternacht=_ist_phase(s))
     if nur_am or nur:
-        for feld in ("von", "bis", "rrule"):
-            if feld in neu:
+        for feld in ("von", "bis", "rrule", *typ):
+            if feld in neu or feld in typ:
                 raise Ablehnung("K-UNBEKANNTES-FELD", f"{feld} gilt für die ganze Serie — "
                                 "ohne nur_am/nur_von/nur_bis")
         return _tage_aendern(s, nur or (nur_am, nur_am), neu, t, e)
-    return _serie_aendern(s, neu, t, e)
+    return _serie_aendern(s, neu, t, e, typ, weg)
 
 
 def _nur_spanne(args: dict, nur_am: str):
@@ -375,14 +440,18 @@ def _nur_spanne(args: dict, nur_am: str):
     return von, bis
 
 
-def _serie_aendern(s, neu: dict, t: str, e: str) -> Ergebnis:
+def _serie_aendern(s, neu: dict, t: str, e: str, typ: dict | None = None,
+                   ende_weg: bool = False) -> Ergebnis:
+    typ = typ or {}
+    typ_verlangt = _typ_verlangt(typ, anlegen=False)
     regel, seit = ka._neue_regel(s, neu)
     if regel is not None and not kalender_regel.regel_gueltig(regel):
         raise Ablehnung("K-RRULE-UNGUELTIG", f"Regel {regel!r} ist ungültig")
     kalender_kennung.routine_aendern(
-        s.uid, time=t if "time" in neu else None, ende=e if "ende" in neu else None,
-        ort=neu.get("ort"), label=neu.get("neuer_titel"), rrule=regel, seit=seit)
-    verlangt = {"time": t, "ende": e}
+        s.uid, time=t if "time" in neu else None,
+        ende=e if "ende" in neu or ende_weg else None,
+        ort=neu.get("ort"), label=neu.get("neuer_titel"), rrule=regel, seit=seit, **typ)
+    verlangt = {"time": t, "ende": e, **typ_verlangt}
     for feld, name in (("ort", "ort"), ("neuer_titel", "label")):
         if feld in neu:
             verlangt[name] = neu[feld]
@@ -397,7 +466,7 @@ def _serie_aendern(s, neu: dict, t: str, e: str) -> Ergebnis:
 
 def _serie_hinweise(x: dict, uid: str) -> str:
     jetzt = kk.stueck_von(uid)
-    zusatz = ka._OHNE_ENDE if x.get("time") and not x.get("ende") \
+    zusatz = ka._OHNE_ENDE if ka.ohne_ende(x) \
         and x.get("layer") != kalender_rhythmus.EBENE else ""
     andere = [(y, f) for y in kk.stuecke() if y.art == "routine" and y.layer == jetzt.layer
               and y.label.casefold() == jetzt.label.casefold()

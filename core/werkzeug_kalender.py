@@ -82,6 +82,21 @@ _NUR_AM = _s(f"{_DATUM}: nur dieses eine Datum ändern (bzw. bei 'loeschen' absa
 _NUR_VON = _s(f"{_DATUM}: erster Tag, an dem die Änderung gilt (mit nur_bis; nur diese "
               "Tage, höchstens 366). Die Serie bleibt sonst, wie sie ist.")
 _NUR_BIS = _s(f"{_DATUM}: letzter Tag, an dem die Änderung gilt (mit nur_von).")
+# Termintyp deadline (2026-10-20, Kern: core/kalender_deadline.py). Die
+# Erklärung steht in den Feldern — der Werkzeug-Text zählt gegen den
+# Kalender-Deckel (tests/test_profil.py), die Felder nicht.
+_TYP_NEU = {"type": "string", "enum": ["normal", "deadline"],
+            "description": ("'deadline' für eine Frist oder Abgabe: ein Zeitpunkt, keine belegte "
+                            "Zeit; leuchtet vorher rot und erinnert. Braucht time (nennt Sasha "
+                            "keine Uhrzeit, 23:59 vorschlagen), hat kein ende. Sonst weglassen."),
+            X: {"wort": "Typ", "ungueltig": "TYP-UNBEKANNT"}}
+_TYP_AENDERN = {**_TYP_NEU,
+                "description": ("'deadline' macht daraus eine Frist (Zeitpunkt zu time; ein "
+                                "bisheriges Ende fällt weg), 'normal' wieder einen gewöhnlichen "
+                                "Termin ohne Vorwarnung.")}
+_VORWARNUNG = _s("Nur bei deadline: wie lange vorher sie rot leuchtet und erinnert, z. B. "
+                 "'3d', '12h', '1d12h' (Standard 3d, höchstens 366d).",
+                 wort="Vorwarnung", ungueltig="VORWARNUNG-UNGUELTIG")
 
 
 def _aktion(name, beschreibung, felder, pflicht=(), **x) -> dict:
@@ -97,8 +112,8 @@ AKTIONEN = [
     # ── die bisherigen (Namen und klein-Felder bleiben) ──
     _aktion(
         "add_calendar_entry",
-        "Trägt einen Einmal-Termin oder eine Frist ein. Ende und Ort mitgeben, wenn "
-        "bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.",
+        "Trägt einen Einmal-Termin oder eine Frist (typ deadline) ein. Ende und Ort "
+        "mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.",
         {
             "layer": _s("Ebene: 'termine' (Standard, fest zugesagt) oder 'uncommitted' "
                         "(vielleicht).", schwach=False),
@@ -108,6 +123,7 @@ AKTIONEN = [
             "ende": _ENDE, "ort": _ORT,
             "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME,
             "quelle_art": _QUELLE_ART, "quelle_id": _QUELLE_ID,
+            "typ": _TYP_NEU, "vorwarnung": _VORWARNUNG,
         },
         pflicht=("day", "kategorie"),
         art="anlegen", alltag="termine eintragen", worte=("Termin eingetragen", "Termin eintragen"),
@@ -128,6 +144,7 @@ AKTIONEN = [
             "von": _ZEITRAUM_VON, "bis": _ZEITRAUM_BIS,
             "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME,
             "quelle_art": _QUELLE_ART, "quelle_id": _QUELLE_ID,
+            "typ": _TYP_NEU, "vorwarnung": _VORWARNUNG,
         },
         pflicht=("rrule", "von", "bis", "kategorie"),
         art="anlegen", alltag="routinen eintragen",
@@ -155,6 +172,7 @@ AKTIONEN = [
                       "der Zeitraum der Serie ändern soll."),
             "bis": _s(f"{_DATUM}: neuer letzter Tag der ganzen Serie (begrenzt auch Serien "
                       "„ohne Enddatum“). Nur mitgeben, wenn sich der Zeitraum ändern soll."),
+            "typ": _TYP_AENDERN, "vorwarnung": _VORWARNUNG,
         },
         pflicht=("aktion",),
         art="aendern", alltag="routinen ändern", worte=("Routine geändert", "Routine ändern"),
@@ -202,6 +220,7 @@ AKTIONEN = [
             "ort": _s("Neuer Ort"),
             "neuer_titel": _s("Neuer Titel"),
             "bis": _s(f"Nur mehrtägig: neuer letzter Tag {_DATUM}"),
+            "typ": _TYP_AENDERN, "vorwarnung": _VORWARNUNG,
         },
         art="aendern", alltag="termine ändern", worte=("Termin geändert", "Termin ändern"),
         beweis="liest den Termin per Kennung nach: Tag, Zeit, Ende, Ort",

@@ -67,6 +67,8 @@ gehen wie Gruppe und Stil an jedes Vorkommen (`kalender._MITGEGEBEN`).
   (`[uncommitted · vielleicht · deadline]`, mit Gruppe `[deadline · Uni]`),
   dazu ein Satz unter dem Imprint, nur wenn eine Deadline dasteht. Die
   KI-Zeile (`ki_kalender`) nennt `deadline · Vorwarnung 3d` und den Rest.
+- KI-Werkzeuge (anlegen/ändern mit `typ`, `vorwarnung`):
+  [../ki/ki_kalender.md](../ki/ki_kalender.md), „Deadlines über die Werkzeuge".
 
 ## Schnittstelle
 

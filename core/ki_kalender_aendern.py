@@ -31,6 +31,7 @@
 from datetime import date
 
 import kalender
+import kalender_deadline
 import kalender_kennung
 import kalender_regel
 import kalender_rhythmus
@@ -125,17 +126,26 @@ def _ort(e: dict) -> str:
     return f" @ {e['ort']}" if e.get("ort") else ""
 
 
+def _deadline(e: dict) -> str:
+    """Termintyp deadline (20.10.2026): „ (Deadline, Vorwarnung 3d)"."""
+    if not kalender_deadline.ist_deadline(e):
+        return ""
+    return (" (Deadline, Vorwarnung "
+            f"{kalender_deadline.dauer_text(kalender_deadline.vorwarnung_von(e))})")
+
+
 def termin_satz(e: dict) -> str:
     if e.get("art") == "spanne":
         return (f"Kalendereintrag „{e.get('label')}“ {kk.datum(e.get('von'))} bis "
                 f"{kk.datum(e.get('bis'))} (mehrtägig){_ort(e)}")
     return (f"Kalendereintrag „{e.get('label')}“ am {kk.datum(e.get('tag'))} "
-            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}")
+            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}{_deadline(e)}")
 
 
 def routine_satz(e: dict) -> str:
     return (f"Routine „{e.get('label')}“ {kk.regel_text(e.get('rrule'), False)} "
-            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}{kk.zeitraum_von(e)}")
+            f"{kk.zeit(e.get('time'), e.get('ende'))}{_ort(e)}{kk.zeitraum_von(e)}"
+            f"{_deadline(e)}")
 
 
 def _versuch_termin(label, tag, t="", e="", ort="") -> str:
@@ -145,9 +155,14 @@ def _versuch_termin(label, tag, t="", e="", ort="") -> str:
     return f"Kalendereintrag „{label}“{wann}{zeit}" + (f" @ {ort}" if ort else "")
 
 
+def ohne_ende(e: dict) -> bool:
+    """Beginn ohne Ende, und das ist eine Lücke? Eine Deadline hat nie eins."""
+    return bool(e.get("time")) and not e.get("ende") and not kalender_deadline.ist_deadline(e)
+
+
 def _hinweise(e: dict) -> str:
     teile = []
-    if e.get("time") and not e.get("ende"):
+    if ohne_ende(e):
         teile.append(_OHNE_ENDE)
     teile.append(kk.beleg_warnungen(e.get("label") or ""))
     return " ".join(teile)
@@ -473,7 +488,7 @@ def _serie_aendern(s, neu: dict, t: str, e: str):
                        + "; ".join(falsch) + "); der alte Stand ist wiederhergestellt")
     jetzt = kk.stueck_von(s.uid)
     satz = f"{routine_satz(x)} GEÄNDERT{_kenn(x)}, {kk.naechstes(jetzt)}."
-    zusatz = _OHNE_ENDE if x.get("time") and not x.get("ende") else ""
+    zusatz = _OHNE_ENDE if ohne_ende(x) else ""
     # Gleichnamige mit Feldern, die diese nicht hat (2026-10-09, f01): wird
     # die andere danach gelöscht, wären sie weg — das soll vorher dastehen.
     andere = [(y, f) for y in kk.stuecke() if y.art == "routine" and y.layer == jetzt.layer

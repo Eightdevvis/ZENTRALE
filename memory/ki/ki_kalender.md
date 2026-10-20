@@ -73,6 +73,40 @@ Fallen. Aus `ki_system.md` ausgelagert am 2026-10-11 (Inhalt unverändert übern
   (wöchentlich do 18:10–19:10)"), bei Routinen auch Uhrzeit, Ende, Ort.
 - Was der Kalender-Kern dafür noch können müsste: `claude_web_plan.md` §7.
 
+## Deadlines über die Werkzeuge (seit 2026-10-20)
+
+Termintyp und Kern: [../werkzeuge/kalender_deadline.md](../werkzeuge/kalender_deadline.md).
+Auf `gross` (erzeugte Werkzeuge, `core/werkzeug_kalender.py`, Adapter
+`core/ki_kalender_adapter.py`) haben `add_calendar_entry`,
+`add_calendar_routine`, `edit_calendar_entry` und `edit_calendar_routine` die
+Felder `typ` (`normal`|`deadline`) und `vorwarnung` („3d", „12h", „1d12h";
+Vorgabe 3d). Die Erklärung steht in den Feldern (der Werkzeug-Text zählt gegen
+den Kalender-Deckel in `tests/test_profil.py`); nur `add_calendar_entry` sagt
+im Text „Frist (typ deadline)".
+
+- **Zur Deadline machen** (edit): ein bisheriges Ende fällt von selbst weg —
+  leere Felder kommen beim Modell nicht durch, `ende ""` ginge gar nicht.
+  Ein ausdrücklich genanntes Ende → `K-DEADLINE-MIT-ENDE`.
+- **`typ normal`** entfernt `typ` und `vorwarnung`. Bei Routinen gilt der Typ
+  für die ganze Serie; mit `nur_am`/`nur_von` → `K-UNBEKANNTES-FELD`.
+- **Fehlercodes mit nächstem Schritt:** bei `K-DEADLINE-OHNE-ZEIT`
+  (23:59 vorschlagen oder fragen), `-MIT-ENDE`, `-SPANNE`,
+  `K-VORWARNUNG-UNGUELTIG`, `K-TYP-UNBEKANNT` hängt der Adapter die Spalte
+  „Was tun" aus `core/fehlercodes.py` an den Abbruch — ohne Umweg über
+  `explain_error`. Mehrtägig + deadline meldet `K-DEADLINE-SPANNE` vor
+  `K-SPANNE-UHRZEIT`.
+- **Belege:** der Satz nennt „(Deadline, Vorwarnung 3d)"
+  (`ki_kalender_aendern._deadline`); der Hinweis „Kein Ende angegeben" entfällt
+  bei Deadlines (`ohne_ende`). Die Gate-Frage nennt „als Deadline, Vorwarnung …".
+- **read_calendar** zeigt `[termine · deadline · Vorwarnung 3d]` und den Rest
+  („in 2 Tagen", `ki_kalender._deadline_rest`).
+- **qwen** bekommt dieselben gross-Werkzeuge (Zuschnitt „schwach" lässt
+  `typ`/`vorwarnung` drin). **klein** und der handgeschriebene gross-Weg
+  (`werkzeuge_erzeugt = aus`) haben die Felder nicht — klein bleibt, wie es
+  gemessen ist, der Handweg fällt laut Adapter-Kopf weg.
+
+Tests: `tests/test_ki_kalender_deadline.py`.
+
 ## Historie
 
 - **2026-10-08** — Kennungen, genau ein Eintrag, nur genannte Felder, `bis` bei
@@ -80,3 +114,4 @@ Fallen. Aus `ki_system.md` ausgelagert am 2026-10-11 (Inhalt unverändert übern
 - **2026-10-09** — feste Kennungen aus der UID, Schreiben per Kennung, Serien nur
   mit Zeitraum, Pausen fest an einer Routine, was beim Löschen verloren geht.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
+- **2026-10-20** — Deadlines über die Werkzeuge (`typ`, `vorwarnung`).

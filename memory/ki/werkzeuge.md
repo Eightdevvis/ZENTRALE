@@ -38,7 +38,7 @@ und nimmt beide Schreibweisen an (siehe „Zwei Schienen" in [prompt_aufbau.md](
 | `unzip` | nur `gross` | Eine Zip der Ablage auspacken: jede Datei ein Dokument (gegatet), `ansehen=true` zeigt nur den Inhalt (frei) |
 | `replace_document`, `trash_document`, `restore_document` | nur `gross` | Ablage: ersetzen (alt in den Papierkorb), wegräumen, zurückholen — KI-Dokumente frei, Sashas jedes Mal gefragt ([ablage.md](ablage.md); ersetzt `remove_input`, 2026-10-11) |
 | `read_xlsx`, `create_xlsx`, `edit_xlsx` | nur `gross` | Tabellen (Excel/CSV) in der Ablage ([tabellen.md](tabellen.md)) |
-| `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort, `nur_am` und Pflicht-Zeitraum `von`/`bis` bei Routinen (s. [ki_kalender.md](ki_kalender.md)) |
+| `read_calendar` / `add_calendar_*` / `edit_calendar_routine` / `delete_calendar_entry` | = | Kalender lesen/schreiben/löschen (s. `memory/werkzeuge/kalender_system.md`); auf `gross` mit Kennungen, Ende/Ort, `nur_am` und Pflicht-Zeitraum `von`/`bis` bei Routinen, `typ` deadline + `vorwarnung` (s. [ki_kalender.md](ki_kalender.md)) |
 | `edit_calendar_entry` | nur `gross` | Einen Einzeltermin ändern, nur genannte Felder (gegatet) |
 | `read_calendar_warnings` | nur `gross` | Die Kalender-Warnungen frisch, dieselben wie Sashas ⚠ |
 | `web_search`  | `web_suche`  | Im Internet suchen (gegatet, s. [internet_netz.md](internet_netz.md)) |
