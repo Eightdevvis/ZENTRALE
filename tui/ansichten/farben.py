@@ -161,6 +161,9 @@ KAL = {
         "dl2":        (160, 160, 231, "warn"),   # näher: kräftiges Rot
         "dl3":        (196, 196, 16,  "warn"),   # ganz nah: Neon-Rot (als Fläche)
         "dlx":        (242, 242, 16,  "faint"),  # überschritten: grau
+        # Jetzt-Linie (20.10.2026, kalender_jetzt.py): Gold — nicht das Gelb
+        # von „heute" (227), nicht der Bernstein der Fokusleiste (214)
+        "jetzt":      (220, 220, 16,  "num"),
     },
     "day": {
         "akzent":     (29,  151, 22,  "kal"),    # Salbei / Salbei-Fläche
@@ -188,6 +191,8 @@ KAL = {
         "dl2":        (160, 210, 88,  "warn"),   # näher: kräftiges Rot
         "dl3":        (160, 160, 231, "warn"),   # ganz nah: weiß auf Rot (Fläche)
         "dlx":        (242, 254, 238, "faint"),  # überschritten: grau
+        # Jetzt-Linie: dunkles Gold, auf Weiß 3,3:1 (Strich und Pfeil, kein Text)
+        "jetzt":      (136, 230, 94,  "num"),
     },
 }
 

@@ -11,6 +11,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 | **Kalender: Google-Sync-Stand** | Zustand nach jedem Sync-Lauf (Zugang abgelaufen, kein Netz, Löschsperre …), Route `/api/calendar/sync`, Warnung in TUI und Alarm-Kanal | [kalender_sync_zustand.md](kalender_sync_zustand.md) |
 | **Kalender-Ansichten** | TUI-Entwürfe A/B/C (Tagesliste, Monatsraster, Zeitachse), Taste v dreht jetziger → A → B → C, Tab Woche/Monat; Tagesrhythmus als Hintergrund + Kasten R, Gruppen im Monat + Taste G | [kalender_ansichten_vorschau.md](kalender_ansichten_vorschau.md) |
 | **Kalender: Deadline + Ganztägiges** | Termintyp deadline (Zeitpunkt mit Vorwarnung, .ics mit VALARM, leuchtet rot, kollidiert nie); Ganztägiges in der Woche gestapelt | [kalender_deadline.md](kalender_deadline.md) |
+| **Kalender: Jetzt-Linie** | goldener Strich mit ▸ zur aktuellen Uhrzeit in der Woche (C), ▸ vor dem laufenden/nächsten Termin in A | [kalender_jetzt.md](kalender_jetzt.md) |
 | **Kalender-Formular** | feste Plätze: Felder wechseln nie den Platz, was nicht gilt steht gedämpft („—") und wird übersprungen; Ganztägig bei Serien | [kalender_formular.md](kalender_formular.md) |
 | **Mail** | IMAP-Triage per Sender-Keymap; der Ordner IST der Status, kein Flag | [mail_system.md](mail_system.md) |
 | Mail neu: Übergabe an eine eigene Sitzung (Wünsche, Vorbild Kalender, Bestand, erste Fragen) | [mail_neu_uebergabe.md](mail_neu_uebergabe.md) |

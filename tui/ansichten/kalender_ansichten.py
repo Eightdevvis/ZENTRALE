@@ -27,7 +27,7 @@ import unicodedata
 import zlib
 from datetime import date, timedelta
 
-from . import kalender_deadline, kalender_gruppen, kalender_motive, kalender_stil
+from . import kalender_deadline, kalender_gruppen, kalender_jetzt, kalender_motive, kalender_stil
 
 # ── Ansichten und Taste v ──────────────────────────────────────────────
 ANSICHTEN = ("A", "B", "C")
@@ -692,7 +692,7 @@ def ansicht_a(daten, breite: int, hoehe: int, erledigte: bool = False,
     heute, start, ende = _rahmen(daten)
     ref = _datum(daten.get("ref"))
     ab = ref if ref and start <= ref <= ende else (heute if start <= heute <= ende else start)
-    jetzt = jetzt or datetime.now()
+    jetzt = uhr_jetzt = jetzt or kalender_jetzt.jetzt()   # ▸ steht beim echten Jetzt, wie in C
     if jetzt.date() != heute:          # Vorschau/Tests mit festem „heute"
         jetzt = datetime.combine(heute, jetzt.time())
     aw = auswahl or {}
@@ -701,12 +701,12 @@ def ansicht_a(daten, breite: int, hoehe: int, erledigte: bool = False,
     if breite >= 86:
         rw = min(40, max(35, (breite - 1) * 2 // 7))
         lbreite = breite - rw - 1
-        _a_liste(lw, 0, 0, lbreite, h, daten, ab, heute, erledigte, tage, aw)
+        _a_liste(lw, 0, 0, lbreite, h, daten, ab, heute, erledigte, tage, aw, uhr_jetzt)
         hm = _a_monat(lw, 0, lbreite + 1, rw, daten, ab, heute, erledigte, aw)
         if h - hm >= 5:
             _a_todo(lw, hm, lbreite + 1, rw, h - hm, daten, erledigte, aw)
     else:
-        _a_liste(lw, 0, 0, breite, h, daten, ab, heute, erledigte, tage, aw)
+        _a_liste(lw, 0, 0, breite, h, daten, ab, heute, erledigte, tage, aw, uhr_jetzt)
     _a_status(lw, hoehe - 1, breite, daten, ab, ende, jetzt, erledigte)
     return lw.zeilen()
 
@@ -741,10 +741,11 @@ def _a_zyklus(daten, d) -> bool:
     return isinstance(c, dict) and bool(c.get(d.isoformat()))
 
 
-def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
+def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None, jetzt=None):
     """`tage` Tage ab `ab`, jeder Block gleich hoch. Was in einen Block nicht
     passt, wird abgeschnitten — wer mehr sehen will, blättert (←→). Der
-    gewählte Termin (aw: tag + idx) steht invertiert, wie bei calcurse."""
+    gewählte Termin (aw: tag + idx) steht invertiert, wie bei calcurse; vor
+    dem laufenden bzw. nächsten von heute steht ein goldener ▸ (kalender_jetzt)."""
     aw = aw or {}
     yy = _paneel(lw, y, x, w, h, "Termine", aktiv=aw.get("fokus", "termine") == "termine")
     sel_tag, sel_idx = aw.get("tag"), aw.get("idx", 0)
@@ -773,6 +774,8 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
         zy = y0 + 1
         eintr = _tag_eintraege(daten, d.isoformat(), erledigte)
         hier = zeigen and sel_tag == d.isoformat()
+        ziel = (kalender_jetzt.a_ziel(eintr, jetzt)
+                if jetzt is not None and d == jetzt.date() else None)
         if not eintr and zy < y_ende:
             lw.setze(zy, cx + 2, "--", ROLLE["leer"] + (INV if hier else ""))
         # Scrollt der gewählte Termin aus dem Block, beginnt der Block später.
@@ -792,6 +795,8 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None):
             zeit = _a_zeit(t)
             if zy + (2 if zeit else 1) > y_ende:
                 break
+            if t is ziel:
+                lw.setze(zy, cx, kalender_jetzt.PFEIL, kalender_jetzt.ROLLE)
             inv = INV if (hier and k == sel_idx) else ""
             r = ROLLE["a_akzent"] if inv else _rolle(t)     # Auswahl: Akzentfläche wie in B/C
             if zeit:
@@ -1226,7 +1231,7 @@ def _c_zeilen(t: dict, s: int, e: int, bw: int, hoch: int) -> list:
 
 
 def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
-              auswahl: dict | None = None) -> list:
+              auswahl: dict | None = None, jetzt=None) -> list:
     """Eine Woche, Stunden nach unten, Tage nebeneinander. Termine sind
     Flächen so lang wie ihre Dauer; ein Spannentag ohne Uhrzeit ist eine
     volle Säule, so läuft die Spanne als Fläche über ihre Tage."""
@@ -1266,7 +1271,10 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
     y0 = 2 + _c_ganztags(lw, 2, hoehe, x0, g, colw, tage, sel)
     # Tagesphasen: leiser Hintergrund HINTER Punktlinien und Terminen
     phasen = [kalender_motive.tag_phasen(daten, d) for d in woche]
-    _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel, (woche, phasen))
+    fenster = _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel, (woche, phasen))
+    if fenster:                              # Jetzt-Linie: über allem Freien (kalender_jetzt)
+        kalender_jetzt.c_zeichnen(lw, y0, fenster[2], fenster[0], fenster[1], woche, x0,
+                                  colw, jetzt)
     return lw.zeilen()
 
 
@@ -1326,10 +1334,11 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
     aufziehen); der Zeilen-Takt ist der feinste, mit dem es in die Höhe
     passt. Was ganz außerhalb liegt, zeigt der Tag mit ▲ (früher) bzw.
     ▼ (später). Wird so ein Termin gewählt, rollt das Fenster zu ihm —
-    für die ganze Woche, damit die Uhrzeiten links für alle Tage stimmen."""
+    für die ganze Woche, damit die Uhrzeiten links für alle Tage stimmen.
+    -> (lo, takt, zeilen) des Fensters, ohne Platz None."""
     reihen = y_ende - y0
     if reihen < 1:
-        return
+        return None
     basis_lo, basis_hi = 8 * 60, 22 * 60
     for m in _SCHRITTE:
         # Beschriftung lab muss ein Vielfaches des Takts sein und der Anfang
@@ -1434,3 +1443,4 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
             kalender_deadline.c_zeichnen(lw, y0, n, lo, m, x0 + i * colw, pw, dls, sel,
                                          kuerzen=kuerzen, text_breite=text_breite,
                                          akzent=_a_rolle("a_akzent"))
+    return lo, m, n
