@@ -369,8 +369,8 @@ class Kalender:
                 lambda c: pixel.xterm_rgb(pixel.rgb_256(c)))   # wie das Terminal rundet
             farben = self._glas_farben[schl] = (kalender_jetzt.gold(u[1], gold0, rund), u[1])
         fg, grund = farben
-        attr = z.pix_attr(fg, grund)
-        if (z.pix_farbe(fg), z.pix_farbe(grund)) not in z.PIX["pairs"]:
+        attr = z.pix_genau(fg, grund)
+        if attr is None:
             return rueckfall
         return attr
 
