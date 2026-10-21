@@ -22,7 +22,7 @@ try:                                    # Pixel-Baustein (tui/pixel.py)
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
     import pixel
 
-from . import kalender_ansichten, kalender_stil
+from . import kalender_ansichten, kalender_jetzt, kalender_stil
 from . import kalender_werkzeuge as kw
 from .basis import BEENDEN, kern_pfad
 from .farben import DECKKRAFT
@@ -308,6 +308,8 @@ class Kalender:
     def _attr(self, rolle):
         """Rolle der Leinwand (kalender_ansichten) → curses-Attribut."""
         C = self.z.C
+        if rolle.startswith(kalender_jetzt.MARKE):
+            return self._jetzt_attr(rolle[len(kalender_jetzt.MARKE):])
         if GLAS in rolle:
             return self._glas_attr(rolle)
         if rolle.startswith(kalender_stil.MARKE):
@@ -340,6 +342,36 @@ class Kalender:
         attr = z.pix_attr(fg, bg)
         if (z.pix_farbe(fg), z.pix_farbe(bg)) not in z.PIX["pairs"]:
             return rueckfall                    # Paare voll → lieber Kursfarbe als Bernstein
+        return attr
+
+    def _jetzt_attr(self, unter):
+        """„^<darunter>" (Jetzt-Linie, kalender_jetzt.zelle) → Gold auf dem
+        Grund der Rolle darunter (Block, Glas, Stylebox, Deadline-Linie), in
+        der Goldstufe mit ≥ 3:1 (kalender_jetzt.gold). Ohne 256 Farben oder
+        wenn die Paare ausgehen: „k_jetzt" fett."""
+        C, z = self.z.C, self.z
+        rueckfall = C.get(kalender_jetzt.ROLLE, C["dim"]) | curses.A_BOLD
+        info = C.get("kal_glas")
+        if not info:
+            return rueckfall
+        schl = ("jetzt", unter, info["thema"], bool(C.get("pix_true")))
+        farben = self._glas_farben.get(schl)
+        if farben is None:
+            u_unter, glas, schrift = glas_teile(unter)
+            if glas and glas in info["flaeche"]:
+                u = self._glas_mischen(info, u_unter, glas, schrift)
+            else:
+                u = _rolle_rgb(C, info, u_unter) or info["paare"].get("dim")
+            if u is None:
+                return rueckfall
+            gold0 = (info["paare"].get(kalender_jetzt.ROLLE) or (None,))[0]
+            rund = None if C.get("pix_true") else (
+                lambda c: pixel.xterm_rgb(pixel.rgb_256(c)))   # wie das Terminal rundet
+            farben = self._glas_farben[schl] = (kalender_jetzt.gold(u[1], gold0, rund), u[1])
+        fg, grund = farben
+        attr = z.pix_attr(fg, grund)
+        if (z.pix_farbe(fg), z.pix_farbe(grund)) not in z.PIX["pairs"]:
+            return rueckfall
         return attr
 
     def _glas_attr(self, rolle):

@@ -692,7 +692,7 @@ def ansicht_a(daten, breite: int, hoehe: int, erledigte: bool = False,
     heute, start, ende = _rahmen(daten)
     ref = _datum(daten.get("ref"))
     ab = ref if ref and start <= ref <= ende else (heute if start <= heute <= ende else start)
-    jetzt = uhr_jetzt = jetzt or kalender_jetzt.jetzt()   # ▸ steht beim echten Jetzt, wie in C
+    jetzt = uhr_jetzt = jetzt or kalender_jetzt.jetzt()   # ► steht beim echten Jetzt, wie in C
     if jetzt.date() != heute:          # Vorschau/Tests mit festem „heute"
         jetzt = datetime.combine(heute, jetzt.time())
     aw = auswahl or {}
@@ -745,7 +745,7 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None, jetzt=N
     """`tage` Tage ab `ab`, jeder Block gleich hoch. Was in einen Block nicht
     passt, wird abgeschnitten — wer mehr sehen will, blättert (←→). Der
     gewählte Termin (aw: tag + idx) steht invertiert, wie bei calcurse; vor
-    dem laufenden bzw. nächsten von heute steht ein goldener ▸ (kalender_jetzt)."""
+    dem laufenden bzw. nächsten von heute steht ein goldener ► (kalender_jetzt)."""
     aw = aw or {}
     yy = _paneel(lw, y, x, w, h, "Termine", aktiv=aw.get("fokus", "termine") == "termine")
     sel_tag, sel_idx = aw.get("tag"), aw.get("idx", 0)
@@ -1272,7 +1272,7 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
     # Tagesphasen: leiser Hintergrund HINTER Punktlinien und Terminen
     phasen = [kalender_motive.tag_phasen(daten, d) for d in woche]
     fenster = _c_achse(lw, y0, hoehe - 1, x0, g, colw, tage, breite, sel, (woche, phasen))
-    if fenster:                              # Jetzt-Linie: über allem Freien (kalender_jetzt)
+    if fenster:                              # Jetzt-Linie: über allem, golden (kalender_jetzt)
         kalender_jetzt.c_zeichnen(lw, y0, fenster[2], fenster[0], fenster[1], woche, x0,
                                   colw, jetzt)
     return lw.zeilen()

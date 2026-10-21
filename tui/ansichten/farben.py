@@ -191,7 +191,8 @@ KAL = {
         "dl2":        (160, 210, 88,  "warn"),   # näher: kräftiges Rot
         "dl3":        (160, 160, 231, "warn"),   # ganz nah: weiß auf Rot (Fläche)
         "dlx":        (242, 254, 238, "faint"),  # überschritten: grau
-        # Jetzt-Linie: dunkles Gold, auf Weiß 3,3:1 (Strich und Pfeil, kein Text)
+        # Jetzt-Linie: dunkles Gold, auf Weiß 3,3:1; über Flächen wählt
+        # kalender_jetzt.gold die nächste Stufe mit ≥ 3:1
         "jetzt":      (136, 230, 94,  "num"),
     },
 }

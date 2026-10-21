@@ -2,17 +2,20 @@
 
 Sasha: „füge einen goldenen kleinen strich mit kleinem pfeil links dran
 hinzu, der genau anzeigt, wo die zeit grade runterläuft, in der
-wochenansicht".
+wochenansicht". 21.10.: „ja der soll immer drüber laufen, immer sichtbar
+sein, klaro."
 
   C (Woche)  in der Spalte von HEUTE, zur aktuellen Uhrzeit (auf die
-             nächstliegende Rasterzeile gerundet): „▸" im Spalt links der
-             Tagesspalte, dann ein dünner Strich „─" über die Spalte. Er
-             übermalt nur, was frei ist (Leerzellen, Punktlinie, Phasen-
-             Muster, Glas über Freiem) golden; im Leerraum eines Termins
-             läuft er in dessen Schrift weiter (DURCH_BLOCK) — Text und
-             Deadlines bleiben, wie sie sind. Nur, wenn heute in der Woche liegt und
-             die Uhrzeit im sichtbaren Fenster.
-  A (Liste)  ein „▸" vor dem Termin von heute, der gerade läuft, sonst vor
+             nächstliegende Rasterzeile gerundet): „►" im Spalt links der
+             Tagesspalte, dann „─" über die GANZE Spalte, durchgehend golden
+             — auch über Terminen, Glas, Phasen und Deadlines. Freie Zellen
+             bekommen den Strich; Zellen mit Text (Blocktitel, Zeitzeile)
+             behalten ihr Zeichen, nur die Schrift wird golden (Rolle
+             MARKE + darunter: Gold auf dem Grund der Zelle, kalender.py
+             wählt die Goldstufe mit ≥ 3:1). Deadlines: ⚑ und Text bleiben
+             rot, nur ihr „━" wird golden — der goldene ► links steht immer.
+             Nur, wenn heute in der Woche liegt und die Uhrzeit im Fenster.
+  A (Liste)  ein „►" vor dem Termin von heute, der gerade läuft, sonst vor
              dem nächsten.
 
 Gold (farben.KAL „jetzt"), dünn — gegen die Deadline (rot, „━" dick, ⚑)
@@ -27,16 +30,31 @@ from .basis import kern_pfad
 kern_pfad()
 import uhr  # noqa: E402  – core/uhr.py: die eine Uhr
 
+try:                                    # Pixel-Baustein (tui/pixel.py)
+    from tui import pixel
+except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
+    import pixel
+
 # ── Regler (Sasha entscheidet die Optik) ───────────────────────────────
 ROLLE = "k_jetzt"
-PFEIL = "▸"
+PFEIL = "►"
 STRICH = "─"
 C_ZEIGEN = True
 A_ZEIGEN = True
-# Über einem Termin: der Leerraum der Fläche bekommt den Strich in der
-# Schrift des Blocks (Text bleibt). False: dort bleibt nur der Pfeil.
-DURCH_BLOCK = True
+# „^<darunter>": goldene Schrift auf dem Grund der Rolle darunter (Block,
+# Glas, Stylebox, Deadline-Linie) — kalender.py löst sie auf.
+MARKE = "^"
+KONTRAST_MIN = 3.0
+# Goldstufen hell → dunkel (bis 95,95,0 die xterm-256-Töne, dann Schwarz-
+# Gold). Reicht die Theme-Farbe auf einem Grund nicht (Gold auf hellem
+# Pastell tags, auf Neon nachts), nimmt kalender.py die nächste Stufe mit
+# ≥ KONTRAST_MIN — gemessen an der Farbe, die das Terminal wirklich zeigt.
+GOLDSTUFEN = ((255, 255, 175), (255, 255, 135), (255, 215, 95), (255, 215, 0),
+              (215, 175, 0), (175, 135, 0), (135, 95, 0), (95, 95, 0),
+              (75, 55, 0), (48, 38, 0))
 GLAS = "~"          # wie kalender_ansichten.GLAS (Kreis-Import vermeiden)
+DL_ROLLE = "k_dl"   # kalender_deadline.ROLLEN
+DL_LINIE = "━╍"     # kalender_deadline.LINIE, LINIE_UNV
 
 
 def jetzt():
@@ -53,11 +71,6 @@ def c_zeile(jm: int, lo: int, m: int, n: int) -> int | None:
     if n < 1 or m < 1 or not lo <= jm < lo + n * m:
         return None
     return min(n - 1, (2 * (jm - lo) + m) // (2 * m))
-
-
-def _flaeche(rolle: str) -> bool:
-    """Fläche eines Termins (Kursfarbe, leise Zeitzeile, Stylebox)."""
-    return rolle.endswith(("_inv", "_inv_leise")) or rolle.startswith("$")
 
 
 def _frei(ch: str, rolle: str) -> bool:
@@ -84,17 +97,47 @@ def c_zeichnen(lw, y0: int, n: int, lo: int, m: int, woche: list, x0: int,
     x = x0 + woche.index(dt.date()) * colw
     reihe = lw.z[y]
     for cx in range(max(0, x), min(lw.b, x + colw - 1)):
-        ch, r = reihe[cx]
-        teile = r.split(GLAS)
-        if len(teile) == 1 and _frei(ch, r):
-            reihe[cx] = (STRICH, ROLLE)
-        elif len(teile) == 2 and _frei(ch, teile[0]):      # Glas ohne eigene Schrift
-            reihe[cx] = (STRICH, ROLLE + GLAS + teile[1])
-        elif DURCH_BLOCK and len(teile) == 1 and ch == " " and _flaeche(r):
-            reihe[cx] = (STRICH, r)        # Leerraum im Block: Strich in Blockschrift
+        reihe[cx] = zelle(*reihe[cx])
     if 0 <= x - 1 < lw.b:
         reihe[x - 1] = (PFEIL, ROLLE)
     return y
+
+
+def zelle(ch: str, r: str) -> tuple:
+    """Eine Zelle der Jetzt-Zeile: Freies → goldener Strich (auf dem Grund
+    der Theme-Farbe); auf einer Fläche/Glas der Strich bzw. das Zeichen in
+    Gold auf deren Grund; Deadline: nur die Linie golden, ⚑ und Text rot."""
+    teile = r.split(GLAS)
+    if r.startswith(DL_ROLLE):
+        return (ch, MARKE + r) if ch in DL_LINIE else (ch, r)
+    if len(teile) == 1 and _frei(ch, r):
+        return STRICH, ROLLE
+    if ch == " " or (len(teile) == 2 and _frei(ch, teile[0])):
+        return STRICH, MARKE + r
+    return ch, MARKE + r
+
+
+def gold(grund, gold0=None, rund=None) -> tuple:
+    """Goldstufe für Schrift auf `grund` (RGB): die Theme-Farbe `gold0`,
+    wenn sie ≥ KONTRAST_MIN hat — sonst die nächstliegende Stufe in
+    GOLDSTUFEN, die es schafft (zum Dunklen hin auf hellem Grund, zum
+    Hellen auf dunklem). Schafft es keine: die mit dem besten Kontrast.
+    `rund`: RGB → was das Terminal daraus macht (256er-Modus), daran wird
+    gemessen; zurück kommt die gerundete Farbe."""
+    rund = rund or tuple
+    k = pixel.kontrast
+    if gold0 is not None and k(rund(gold0), grund) >= KONTRAST_MIN:
+        return rund(gold0)
+    stufen = [rund(g) for g in GOLDSTUFEN]
+    start = (min(range(len(GOLDSTUFEN)), key=lambda i: pixel._d2(GOLDSTUFEN[i], gold0))
+             if gold0 is not None else 3)
+    dunkler = sum(grund) > sum(GOLDSTUFEN[start])      # heller Grund → dunkleres Gold
+    nach = sorted(range(len(stufen)),
+                  key=lambda i: (abs(i - start), (i < start) if dunkler else (i > start)))
+    for i in nach:
+        if k(stufen[i], grund) >= KONTRAST_MIN:
+            return stufen[i]
+    return max(stufen, key=lambda g: k(g, grund))
 
 
 def a_ziel(eintraege: list, dt) -> object | None:
