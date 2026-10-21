@@ -818,7 +818,7 @@ def bild_zeichnen(u):
     Reminder (früher die zweite Hälfte der Hauptschleife von run_ui)."""
     import curses
     AI, C, DASH, G, K, L, LAUF = u.AI, u.C, u.DASH, u.G, u.K, u.L, u.LAUF
-    M, MAIL, NOTE, PIANO, PIX, TECH = u.M, u.MAIL, u.NOTE, u.PIANO, u.PIX, u.TECH
+    M, MAIL, NOTE, PIANO, TECH = u.M, u.MAIL, u.NOTE, u.PIANO, u.TECH
     addclip, bz, chat, dashboard = u.addclip, u.bz, u.chat, u.dashboard
     draw_box, erinnerung, fokus, graphen = u.draw_box, u.erinnerung, u.fokus, u.graphen
     kalender, karte, klavier, notizen = u.kalender, u.karte, u.klavier, u.notizen
@@ -844,13 +844,11 @@ def bild_zeichnen(u):
 
     H, W = stdscr.getmaxyx()
     stdscr.erase()
-    # Pixel-Farbpaare: zu Beginn des Bildes leeren, sobald das Budget halb
-    # verbraucht ist — ein Bild braucht höchstens ~70 je Symbol, so läuft es
-    # nie MITTEN im Bild über. Vorher wurde nur in der Bernsteinleiste
-    # geleert; seit alle Apps animierte Symbole haben, lief es auf der
-    # Startseite voll und alles Neue fiel auf Bernstein-Orange zurück.
-    if PIX["voll"] or len(PIX["pairs"]) > (PIX["top"] - PIX["base"]) // 2:
-        PIX["pairs"].clear(); PIX["voll"] = False
+    # Pixel-Farbpaare: neues Bild → was es nicht wieder anfordert, darf
+    # neu belegt werden (Kontext.pix_attr, 2026-10-21). Vorher wurde hier
+    # bei halbem Vorrat alles geleert; ein Bild mit mehr Farben als der
+    # halbe Vorrat (Auge im leeren Chat, ~95) lief dann mitten im Bild über.
+    z.pix_neues_bild()
 
     if terminal_too_small(H, W):
         safe_addstr(0, 0, "Terminal zu klein (min 60x14).", C["warn"])

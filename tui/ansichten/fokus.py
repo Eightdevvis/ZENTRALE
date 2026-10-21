@@ -1152,7 +1152,7 @@ class Fokus:
         Breite, nur schöner — Pixel-Steine (Sashas Treppenschliff, der zuletzt
         abgehakte glimmt) oder schattierte Bernstein-Spalten; der Zähler in
         Bernstein. Gewählt (isel -1): › links, Zähler invers."""
-        C, L, PIX, PIX_MODUS = self.z.C, self.L, self.z.PIX, self.z.PIX_MODUS
+        C, L, PIX_MODUS = self.z.C, self.L, self.z.PIX_MODUS
         pix_attr, safe_addstr = self.z.pix_attr, self.z.safe_addstr
         done, total, breite = info["done"], info["total"], info["breite"]
         sel = (L["isel"] == -1)
@@ -1160,8 +1160,6 @@ class Fokus:
         sw = breite - 2                           # Steine zwischen ▐ und ▌
         zattr = (C["amber"] | curses.A_REVERSE) if sel else C["amber"]
         if C.get("pix_bg") is not None and PIX_MODUS != "off":
-            if PIX["voll"]:
-                PIX["pairs"].clear(); PIX["voll"] = False
             glimm = int(time.time() * 4) % 8
             rows = pixel.bernstein_zellen(done, total, breite, C["pix_bg"], glimm,
                                           "half" if PIX_MODUS == "half" else "mix")

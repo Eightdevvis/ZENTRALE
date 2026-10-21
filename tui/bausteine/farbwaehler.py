@@ -598,9 +598,9 @@ class Farbwaehler:
         self._regler_marke(z, iy + zeile_wert, ix + kb + 4)
 
     def _zeichne_farbig(self, z, iy, ix, kh, kb):
-        C, PIX = z.C, z.PIX
+        C = z.C
         bg = C["pix_bg"]
-        frei = (PIX["top"] - PIX["base"]) - len(PIX["pairs"])
+        frei = z.pix_frei()
         budget = frei - RESERVE - kh - 2                      # Regler + Feld
         self.farbe_256 = z.pix_farbe
         zellen, self.stufen_jetzt = self.rad_fuer_budget(

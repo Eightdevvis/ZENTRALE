@@ -39,10 +39,15 @@ class Kontext:
         # liegt der Pfad zu core/). Die Datei ist die einzige Wahrheit.
         self._theme = theme_state
         self.C = {}
-        # Farbpaare des Pixel-Baustein: (fg, bg) → curses-Attribut, vergeben von
-        # PIX["base"] bis PIX["top"]; läuft das Budget voll, wird es zu Beginn des
-        # nächsten Bildes geleert (nie mitten im Bild — Paare sind Referenzen).
-        self.PIX = {"pairs": {}, "base": 0, "top": 0, "voll": False}
+        # Farbpaare des Pixel-Baustein: (fg, bg) → curses-Attribut, Nummern
+        # PIX["base"] bis PIX["top"]. Seit 2026-10-21 nach Bildern verwaltet
+        # (pix_attr): ist der Vorrat voll, wird das am längsten unbenutzte Paar
+        # neu belegt — aber nur eins, das im laufenden Bild nicht vorkommt
+        # (Paare sind Referenzen: umdefiniert färbt curses jede Zelle mit).
+        # "platz": key → [Nummer, Bild der letzten Nutzung]; "bild" zählt
+        # pix_neues_bild() hoch; "fest": Theme-Paare, die ein Pixel mitnutzt.
+        self.PIX = {"pairs": {}, "base": 0, "top": 0, "voll": False,
+                    "platz": {}, "bild": 0, "fest": {}}
         self.PIX_MODUS = (os.environ.get("ZENTRALE_PIXEL") or "mix").strip().lower()
         # 24-Bit-Flächen (2026-10-11, tui/echtfarbe.py): None = aus, dann
         # zeichnen alle über die 256er-Paare wie bisher. Wer echt malt, ruft
@@ -60,22 +65,108 @@ class Kontext:
             return n if n >= 8 else 8          # 0–7 wären Palettenfarben
         return pixel.rgb_256(rgb)
 
+    def pix_neues_bild(self):
+        """Zu Beginn jedes Bildes (nach erase): ab jetzt ist frei, was das
+        neue Bild nicht wieder anfordert."""
+        PIX = self.PIX
+        PIX["bild"] = PIX.get("bild", 0) + 1
+        PIX["voll"] = False
+
+    def pix_frei(self):
+        """Wie viele Pixel-Paare das laufende Bild noch neu anlegen kann."""
+        PIX = self.PIX
+        jetzt = PIX.get("bild", 0)
+        im_bild = sum(1 for k, (_n, b) in PIX.get("platz", {}).items()
+                      if b == jetzt and k in PIX["pairs"])
+        return max(0, PIX["top"] - PIX["base"] + 1 - im_bild)
+
     def pix_attr(self, fg, bg):
-        C, PIX, pix_farbe = self.C, self.PIX, self.pix_farbe
+        PIX, pix_farbe = self.PIX, self.pix_farbe
         key = (pix_farbe(fg), pix_farbe(bg))
-        attr = PIX["pairs"].get(key)
-        if attr is None:
-            n = PIX["top"] - len(PIX["pairs"])
-            if n <= PIX["base"]:
-                PIX["voll"] = True
-                return C.get("amber", 0)
-            try:
-                curses.init_pair(n, key[0], key[1])
-                attr = curses.color_pair(n)
-            except curses.error:
-                return C.get("amber", 0)
-            PIX["pairs"][key] = attr
+        fest = PIX.get("fest")
+        if fest and not self.C.get("pix_true"):
+            attr = fest.get(key)             # dieselben Farben hat das Theme schon
+            if attr is not None:
+                return attr
+        pairs = PIX["pairs"]
+        platz = PIX.setdefault("platz", {})
+        jetzt = PIX.setdefault("bild", 0)
+        attr = pairs.get(key)
+        if attr is not None:
+            pairs[key] = pairs.pop(key)       # ans Ende: zuletzt benutzt
+            if key in platz:
+                platz[key][1] = jetzt
+            return attr
+        n = self._pix_platz(jetzt)
+        if n is None:                         # ein Bild braucht mehr Paare als es gibt
+            PIX["voll"] = True
+            return self._pix_naechstes(key)
+        try:
+            curses.init_pair(n, key[0], key[1])
+            attr = curses.color_pair(n)
+        except curses.error:
+            return self._pix_naechstes(key)
+        pairs[key] = attr
+        platz[key] = [n, jetzt]
         return attr
+
+    def pix_genau(self, fg, bg):
+        """Wie pix_attr, aber None statt einer Ersatzfarbe, wenn es für
+        genau diese Farben kein Paar gibt (Vorrat voll) — für Ansichten mit
+        eigenem Rückfall (Kalender-Glas)."""
+        attr = self.pix_attr(fg, bg)
+        PIX = self.PIX
+        key = (self.pix_farbe(fg), self.pix_farbe(bg))
+        if key in PIX["pairs"]:
+            return attr
+        if not self.C.get("pix_true") and key in (PIX.get("fest") or {}):
+            return attr
+        return None
+
+    def _pix_platz(self, jetzt):
+        """Eine freie Paarnummer: erst nie vergebene, sonst die des am
+        längsten unbenutzten Paars, das im laufenden Bild nicht vorkommt.
+        None, wenn alle im laufenden Bild gebraucht werden."""
+        PIX = self.PIX
+        pairs, platz = PIX["pairs"], PIX["platz"]
+        if len(platz) != len(pairs) or any(k not in pairs for k in platz):
+            # von außen geleert/geändert (Theme, Tests): Buch neu abgleichen
+            for k in [k for k in platz if k not in pairs]:
+                del platz[k]
+        belegt = {n for n, _b in platz.values()}
+        if len(belegt) < PIX["top"] - PIX["base"] + 1:
+            for n in range(PIX["top"], PIX["base"] - 1, -1):
+                if n not in belegt:
+                    return n
+        for k in pairs:                       # vorne = am längsten unbenutzt
+            if k in platz:
+                n, b = platz[k]
+                if b == jetzt:
+                    return None               # alles davor/dahinter ist jünger
+                del pairs[k], platz[k]
+                return n
+        return None
+
+    def _pix_farbe_rgb(self, n):
+        if self.C.get("pix_true"):
+            return (n >> 16 & 255, n >> 8 & 255, n & 255)
+        return pixel.xterm_rgb(n)
+
+    def _pix_naechstes(self, key):
+        """Letzter Ausweg: das vorhandene Pixel-Paar, dessen Farben dem
+        gewünschten am nächsten liegen (statt Bernstein)."""
+        PIX, rgb = self.PIX, self._pix_farbe_rgb
+        kandidaten = list(PIX["pairs"].items())
+        if not kandidaten and not self.C.get("pix_true"):
+            kandidaten = list(PIX.get("fest", {}).items())   # Theme-Paare erst ganz zuletzt
+        if not kandidaten:
+            return self.C.get("amber", 0)
+        f, h = rgb(key[0]), rgb(key[1])
+
+        def abstand(k):
+            a, b = rgb(k[0]), rgb(k[1])
+            return sum((x - y) ** 2 for x, y in zip(f + h, a + b))
+        return min(kandidaten, key=lambda kv: abstand(kv[0]))[1]
 
     def apply_theme(self, tname):
         C, PIX, has_color, stdscr = self.C, self.PIX, self.has_color, self.stdscr
@@ -103,7 +194,23 @@ class Kontext:
         c256 = curses.COLORS >= 256
         th = THEMES[tname]
         bg = th["bg256"] if c256 else th["bg8"]
-        for i, r in enumerate(ROLES, start=1):
+        # Feste Paare über paar(): gleiche (Schrift, Grund) teilen sich EIN
+        # Paar (2026-10-21). Vorher bekam jede Rolle/Kalenderfarbe ihr eigenes,
+        # auch wenn es dasselbe Farbenpaar war — 65 Doppelte im Nachtthema,
+        # die dem Pixel-Vorrat fehlten (Auge im leeren Chat lief über).
+        # Sichtbar ändert sich nichts: gleiche Farben, gleiches Paar.
+        fest = {}
+        pp = 1                             # nächstes freies Farbpaar
+
+        def paar(fg, hg):
+            nonlocal pp
+            n = fest.get((fg, hg))
+            if n is None:
+                n = fest[(fg, hg)] = pp
+                curses.init_pair(n, fg, hg)
+                pp += 1
+            return curses.color_pair(n)
+        for r in ROLES:
             if r == "band":
                 continue                       # eigener Hintergrund, siehe unten
             c8, c2, extra = th[r]
@@ -111,17 +218,13 @@ class Kontext:
             # 8-Farben: reinweißer Text geht nur via A_BOLD (bright white)
             if not c256 and fg == curses.COLOR_WHITE and r in ("dim", "ink", "bright"):
                 extra |= curses.A_BOLD
-            curses.init_pair(i, fg, bg)
-            C[r] = curses.color_pair(i) | extra
+            C[r] = paar(fg, bg) | extra
         # Schlaf-Bande: GEFÄRBTER HINTERGRUND, kein Vordergrund. curses kennt
         # keine Schichten — "hinter den Kurven" heißt: die Zelle bekommt eine
         # bg-Farbe, Punkt/Kurve wird als Glyph DAVOR in dieselbe Zelle gesetzt.
         # Echtes bg-Färben geht nur mit 256 Farben; sonst Schattenblock ▒.
-        bi = ROLES.index("band") + 1
-        pp = len(ROLES) + 1                # nächstes freies Farbpaar
         if c256:
-            curses.init_pair(bi, th["band_fg"], th["band_bg"])
-            C["band"] = curses.color_pair(bi)
+            C["band"] = paar(th["band_fg"], th["band_bg"])
             C["band_is_bg"] = True
             # "Auf-Band"-Varianten: gleiche fg jeder Rolle, aber band-bg. Eine
             # Kurve, die DURCH die Bande läuft, wird damit gezeichnet → ihr Glyph
@@ -130,16 +233,12 @@ class Kontext:
                 if r in ("band", "ink"):
                     continue
                 _c8, c2, extra = th[r]
-                curses.init_pair(pp, c2, th["band_bg"])
-                C[r + "@band"] = curses.color_pair(pp) | extra
-                pp += 1
+                C[r + "@band"] = paar(c2, th["band_bg"]) | extra
             # Banden-KANTE als Vordergrund: band-bg-Farbe als fg auf Theme-bg.
             # Damit lassen sich Halbblöcke ▀/▄ am oberen/unteren Rand der Schlaf-
             # Bande in Bandfarbe zeichnen → sub-zellen-feine Ränder (sonst schnappt
             # der Balken auf ganze Zeilen ≈ 2–3 h und wirkt grob/hackig).
-            curses.init_pair(pp, th["band_bg"], bg)
-            C["band_edge"] = curses.color_pair(pp)
-            pp += 1
+            C["band_edge"] = paar(th["band_bg"], bg)
         else:
             C["band"] = C["faint"]
             C["band_is_bg"] = False
@@ -151,23 +250,17 @@ class Kontext:
         # Die Schlaf-Bande hat Vorrang: sie wird SPÄTER gemalt und überschreibt
         # die Zyklus-Fläche (siehe draw_overlay).
         if c256 and curses.COLOR_PAIRS >= pp + len(ROLES) + 10:
-            curses.init_pair(pp, th["cyc"][1], th["cyc_bg"])
-            C["cycbg"] = curses.color_pair(pp)
+            C["cycbg"] = paar(th["cyc"][1], th["cyc_bg"])
             C["cyc_is_bg"] = True
-            pp += 1
             for r in ROLES:
                 if r in ("band", "ink"):
                     continue
                 _c8, c2, extra = th[r]
-                curses.init_pair(pp, c2, th["cyc_bg"])
-                C[r + "@cyc"] = curses.color_pair(pp) | extra
-                pp += 1
+                C[r + "@cyc"] = paar(c2, th["cyc_bg"]) | extra
             # Halbblock-Kante der Schlaf-Bande, wenn sie IN der Zyklus-Fläche
             # liegt: Bandfarbe als fg auf Zyklus-bg — sonst risse die Kante
             # ein Loch (Theme-bg) in die Tönung.
-            curses.init_pair(pp, th["band_bg"], th["cyc_bg"])
-            C["band_edge@cyc"] = curses.color_pair(pp)
-            pp += 1
+            C["band_edge@cyc"] = paar(th["band_bg"], th["cyc_bg"])
         else:
             # 8 Farben (oder zu wenig Farbpaare): keine Fläche möglich →
             # gepunktete Senkrechte im Vordergrund als Rückfallebene.
@@ -178,9 +271,7 @@ class Kontext:
         if c256:
             C["ombre"] = []
             for g in th.get("ombre", [245]):
-                curses.init_pair(pp, g, bg)
-                C["ombre"].append(curses.color_pair(pp))
-                pp += 1
+                C["ombre"].append(paar(g, bg))
         else:
             C["ombre"] = [C["dim"], C["dim"], C["faint"],
                           C["faint"], C["faint"] | curses.A_DIM]
@@ -190,19 +281,12 @@ class Kontext:
         # so bleibt die Taste eine geschlossene Fläche mit heller Schrift darauf.
         # Gedrückt wird die Fläche zur Akzentfarbe (Schrift dann dunkel).
         if c256:
-            curses.init_pair(pp, 231, th.get("key_bg", 16))
-            C["key_black"] = curses.color_pair(pp)
-            pp += 1
-            curses.init_pair(pp, th.get("key_bg", 16), th["acc"][1])
-            C["key_press"] = curses.color_pair(pp)
+            C["key_black"] = paar(231, th.get("key_bg", 16))
+            C["key_press"] = paar(th.get("key_bg", 16), th["acc"][1])
         else:
             # 8 Farben: schwarze Fläche, weiße Schrift nur via A_BOLD.
-            curses.init_pair(pp, curses.COLOR_WHITE, curses.COLOR_BLACK)
-            C["key_black"] = curses.color_pair(pp) | curses.A_BOLD
-            pp += 1
-            curses.init_pair(pp, curses.COLOR_BLACK, th["acc"][0])
-            C["key_press"] = curses.color_pair(pp)
-        pp += 1
+            C["key_black"] = paar(curses.COLOR_WHITE, curses.COLOR_BLACK) | curses.A_BOLD
+            C["key_press"] = paar(curses.COLOR_BLACK, th["acc"][0])
         # Kalender: eine Tabelle für alle Ansichten (farben.KAL).
         echt = curses.COLORS >= (1 << 24)
 
@@ -259,18 +343,13 @@ class Kontext:
                 blass = leise(schrift, dk["schrift"], bg)
                 paare[k + "_blass"] = (rgb(blass), rgb(bg), 0)
                 flaeche[k] = rgb(f_grund)
-                curses.init_pair(pp, schrift, bg)
-                C["k_" + name] = curses.color_pair(pp)
-                curses.init_pair(pp + 1, f_schrift, f_grund)
-                C["k_" + name + "_inv"] = curses.color_pair(pp + 1)
+                C["k_" + name] = paar(schrift, bg)
+                C["k_" + name + "_inv"] = paar(f_schrift, f_grund)
                 # „uncommitted": dieselbe Farbe, durchscheinend auf dem Grund
                 # (Rückfall, wo kein Glas geht — siehe kalender.py _glas_attr)
-                curses.init_pair(pp + 2, blass, bg)
-                C["k_" + name + "_blass"] = curses.color_pair(pp + 2)
+                C["k_" + name + "_blass"] = paar(blass, bg)
                 hauch = glas_flaeche(f_grund, dk["flaeche"])
-                curses.init_pair(pp + 3, leise(schrift, dk["schrift"], hauch), hauch)
-                C["k_" + name + "_blass_inv"] = curses.color_pair(pp + 3)
-                pp += 4
+                C["k_" + name + "_blass_inv"] = paar(leise(schrift, dk["schrift"], hauch), hauch)
             else:
                 C["k_" + name] = C[rueck]
                 C["k_" + name + "_inv"] = C[rueck] | curses.A_REVERSE
@@ -282,10 +361,8 @@ class Kontext:
         for motiv, farbe in MOTIV_FARBEN[tname].items():
             k = "k_m_" + motiv
             if c256:
-                curses.init_pair(pp, farbe, bg)
-                C[k] = curses.color_pair(pp)
+                C[k] = paar(farbe, bg)
                 paare[k] = (rgb(farbe), rgb(bg), 0)
-                pp += 1
             else:
                 C[k] = C["faint"]
         C["kal_glas"] = ({"thema": tname, "paare": paare, "flaeche": flaeche}
@@ -298,12 +375,8 @@ class Kontext:
         C["keyframe"], C["keyglow"] = [], []
         if c256:
             for col in th.get("key_neon", []):
-                curses.init_pair(pp, col, th.get("key_bg", 16))
-                C["keyframe"].append(curses.color_pair(pp) | curses.A_BOLD)
-                pp += 1
-                curses.init_pair(pp, col, bg)
-                C["keyglow"].append(curses.color_pair(pp) | curses.A_BOLD)
-                pp += 1
+                C["keyframe"].append(paar(col, th.get("key_bg", 16)) | curses.A_BOLD)
+                C["keyglow"].append(paar(col, bg) | curses.A_BOLD)
         # Pixel-Baustein: Theme-Hintergrund als RGB + freie Farbpaare ab pp.
         # Paare über 255 passen nicht ins curses-Attribut → Budget bis 255.
         C["pix_bg"] = pixel.xterm_rgb(th["bg256"]) if c256 else None
@@ -311,6 +384,11 @@ class Kontext:
         PIX["base"] = pp
         PIX["top"] = min(255, curses.COLOR_PAIRS - 1)
         PIX["pairs"].clear()
+        PIX["platz"] = {}
+        # feste Paare, die ein Pixel mitbenutzen darf: nur 256er-Nummern
+        # (mit 24 Bit sind Pixel-Farben RGB-Zahlen, Theme-Farben nicht)
+        PIX["fest"] = ({k: curses.color_pair(n) for k, n in fest.items()}
+                       if c256 else {})
         # leere Zellen (erase) bekommen den Theme-Hintergrund
         stdscr.bkgd(" ", C["ink"])
         if self.echt is not None:        # neue Paare/Grund: echte Flächen neu schreiben

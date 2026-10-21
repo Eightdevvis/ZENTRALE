@@ -339,9 +339,9 @@ class Kalender:
         if farben is None:
             farben = self._glas_farben[schl] = _rolle_rgb(C, info, rolle)
         fg, bg, _e = farben
-        attr = z.pix_attr(fg, bg)
-        if (z.pix_farbe(fg), z.pix_farbe(bg)) not in z.PIX["pairs"]:
-            return rueckfall                    # Paare voll → lieber Kursfarbe als Bernstein
+        attr = z.pix_genau(fg, bg)
+        if attr is None:
+            return rueckfall                    # Paare voll → lieber Kursfarbe als Ersatzfarbe
         return attr
 
     def _jetzt_attr(self, unter):
@@ -391,9 +391,9 @@ class Kalender:
         if farben is None:
             farben = self._glas_farben[schl] = self._glas_mischen(info, unter, glas, schrift)
         fg, grund, extra = farben
-        attr = z.pix_attr(fg, grund)
-        if (z.pix_farbe(fg), z.pix_farbe(grund)) not in z.PIX["pairs"]:
-            return rueckfall                    # Paare voll → lieber blass als Bernstein
+        attr = z.pix_genau(fg, grund)
+        if attr is None:
+            return rueckfall                    # Paare voll → lieber blass als Ersatzfarbe
         return attr | extra
 
     def _leise_attr(self, flaeche):
@@ -415,8 +415,8 @@ class Kalender:
         if farben is None:
             return rueckfall
         f, grund, _e = farben
-        attr = z.pix_attr(f, grund)
-        if (z.pix_farbe(f), z.pix_farbe(grund)) not in z.PIX["pairs"]:
+        attr = z.pix_genau(f, grund)
+        if attr is None:
             return rueckfall
         return attr
 

@@ -261,6 +261,10 @@ class _Z:
             self.PIX["pairs"][(tuple(fg), tuple(bg))] = 99
         return 99 if not self.voll else 0
 
+    def pix_genau(self, fg, bg):          # wie Kontext.pix_genau: None = kein eigenes Paar
+        attr = self.pix_attr(fg, bg)
+        return attr if (tuple(fg), tuple(bg)) in self.PIX["pairs"] else None
+
 
 def _kal(z):
     from tui.ansichten.kalender import Kalender

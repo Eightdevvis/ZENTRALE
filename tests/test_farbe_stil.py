@@ -253,6 +253,10 @@ class _Z:
             self.PIX["pairs"][key] = 1000 + len(self.PIX["pairs"])
         return self.PIX["pairs"][key]
 
+    def pix_frei(self):
+        """Wie Kontext.pix_frei: hier zählen alle Paare als im laufenden Bild."""
+        return (self.PIX["top"] - self.PIX["base"]) - len(self.PIX["pairs"])
+
     def safe_addstr(self, y, x, text, attr=0):
         for i, ch in enumerate(str(text)):
             self.schirm[(y, x + i)] = (ch, attr)

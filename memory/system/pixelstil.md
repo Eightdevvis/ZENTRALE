@@ -43,7 +43,7 @@ Was ihn ausmacht, wo der Code liegt und wie ein neues Symbol gebaut wird.
 | Denk-Adern: `adern_zellen(t, dauer, breite, hoehe, thema, ausklang)` | `tui/ansichten/denkadern.py` |
 | Symbole der Chat-Seitenleiste (Braille, 4×2 Felder = 8×8 Punkte): `BILDER`, `codieren`, `symbol_zellen` | `tui/ansichten/symbole.py` |
 | Probe-Bild wie im Terminal (Sextanten als Blöcke, Braille aus der Ersatzschrift): `python3 scripts/icon_probe.py ZIEL` | `scripts/icon_probe.py` |
-| Farbpaare anlegen (begrenztes Budget, 24 Bit wenn möglich): `Kontext.pix_attr`, `pix_farbe`; Modus `ZENTRALE_PIXEL=half` für Terminals ohne Sextanten | `tui/ansichten/kontext.py` |
+| Farbpaare anlegen (begrenztes Budget, 24 Bit wenn möglich): `Kontext.pix_attr`, `pix_farbe`, `pix_neues_bild`, `pix_frei` — Verwaltung siehe [Farbpaar-Vorrat](#farbpaar-vorrat); Modus `ZENTRALE_PIXEL=half` für Terminals ohne Sextanten | `tui/ansichten/kontext.py` |
 | Farbwähler-Kreis (2026-10-10): mit 256 Farben EINE Farbe je Feld, am Rand ein Sextant gegen den Grund — jede Farbe kostet genau ein Paar; seit 11.10. mit 24 Bit Halbblöcke in exakten Farben an curses vorbei ([bausteine_farbe_stil.md](../hub/bausteine_farbe_stil.md)) | `tui/bausteine/farbwaehler.py` |
 | 24-Bit-Flächen nach curses' refresh (2026-10-11): Platzhalter in curses, danach `38;2`/`48;2` selbst schreiben; Einstellung `farbe_truecolor` auto/an/aus | `tui/echtfarbe.py`, `Kontext.echt_malen`/`nachmalen` |
 | Zellform aus dem Terminal (2026-10-11): `zell_seiten()` (TIOCGWINSZ, sonst 1:2), `zell_ay()`; nach Größenänderung `zellmass_vergessen()` | `tui/pixel.py` |
@@ -53,6 +53,31 @@ Alle Pixel-Funktionen sind **curses-frei**: sie liefern Zellen
 `(zeichen, fg_rgb, bg_rgb)`, die Ansicht setzt sie mit
 `safe_addstr(y, x, zeichen, z.pix_attr(fg, bg))`. Testbar ohne Bildschirm
 (`tests/test_tui_pixel.py`, `tests/test_denkadern.py`).
+
+## Farbpaar-Vorrat
+
+curses kennt höchstens 255 Farbpaare (Python setzt die Paarnummer in 8 Bit
+des Attributs; mehr Paare des Terminals helfen nicht). Ein Paar ist eine
+Referenz: wird es umdefiniert, färbt curses jede Zelle mit, die es trägt.
+
+- **Feste Paare** (`apply_theme`, Hilfsfunktion `paar(fg, bg)`): gleiche
+  Schrift/Grund-Kombination = EIN Paar, egal wie viele Rollen sie nutzen
+  (seit 2026-10-21). Nachtthema 124 statt 189, Tagthema 110 statt 175 —
+  sichtbar gleich, jede Rolle und jede Kalenderfarbe hat dieselben Farben.
+- **Pixel-Paare** (`pix_attr`) nehmen den Rest (Nacht 131, Tag 145). Ist
+  eine Pixelfarbe schon ein festes Paar, wird das mitbenutzt. Die
+  Hauptschleife ruft nach `erase()` `z.pix_neues_bild()`; ist der Vorrat
+  voll, wird das am längsten unbenutzte Paar neu belegt, aber **nie eins,
+  das das laufende Bild schon benutzt**. Wer wissen will, wie viel ein
+  Bild noch neu anlegen kann (Farbwähler): `z.pix_frei()`.
+- Reicht es trotzdem nicht (ein Bild braucht mehr Paare als es gibt),
+  nimmt `pix_attr` das vorhandene Pixel-Paar mit den nächstliegenden
+  Farben, Bernstein nur ohne jedes Paar. `PIX["voll"]` meldet das.
+- Anlass: das Auge im leeren Chat braucht 41–105 Paare je Bild (meist
+  ~95). Nach den Kalenderfarben (4 Paare je Farbe) blieben 65 frei,
+  die alte Regel „bei halbem Vorrat zu Bildbeginn leeren" lief mitten im
+  Bild über, und der Rest des Auges wurde gelb und wanderte.
+  Tests: `tests/test_pixel_paare.py`.
 
 ## Regeln für neue Symbole
 
