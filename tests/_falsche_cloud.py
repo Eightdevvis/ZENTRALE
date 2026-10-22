@@ -3,8 +3,12 @@ Routen aus memory/hub/knoten_beitritt.md („Bauplan v1 — Schnittstelle"),
 alles im Speicher. Nie das Netz, nie die echte Cloud.
 
 Sie prüft, was der echte Server prüfen muss, so weit es den Client betrifft:
-Code wird verbraucht, anmelde_schluessel nur als Hash, Bearer-Sitzung,
-Compare-and-Swap auf den Kopf der Mitte (409 jemand_schneller)."""
+Code wird verbraucht (Groß/klein und Leerzeichen egal), anmelde_schluessel nur
+als Hash, KDF mindestens 19456 KiB, Bearer-Sitzung, Notfall-Token nur für das
+Passwort, altes_anmelde_schluessel beim Passwortwechsel, Knoten nur unter dem
+eigenen Namen, Blobs nach sha256 (400 pruefsumme / blob_fehlt),
+Compare-and-Swap auf den Kopf der Mitte (409 jemand_schneller).
+Stand: Absprache mit dem Server-Teil 2026-10-22 (cloud/openapi.yaml)."""
 
 import base64
 import hashlib
@@ -17,9 +21,10 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 class Zustand:
     def __init__(self):
-        self.codes = {"EINLADUNG-1", "EINLADUNG-2"}
+        self.codes = {"ZB-AAAA-BBBB-CCCC-DDDD", "ZB-EEEE-FFFF-GGGG-HHHH"}
         self.konten = {}            # mail → dict
-        self.sitzungen = {}         # token → mail
+        self.sitzungen = {}         # token → (mail, knoten | None); None = Notfall-Token
+        self.blobs = {}             # sha256 → bytes
         self.kopf = {}              # mail → kennung | None
         self.staende = {}           # kennung → {name: bytes}
         self.eltern = {}            # kennung → basis
@@ -28,6 +33,10 @@ class Zustand:
         self.aufrufe = []           # (methode, pfad) — zum Nachsehen in Tests
         self.zaehler = 0
         self.sperre = threading.Lock()
+
+
+def _code(c):
+    return "".join(str(c or "").split()).upper()
 
 
 def _hash(anmelde):
@@ -57,14 +66,22 @@ class _Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}")
 
-    def _mail(self):
+    def _sitzung(self):
         kopf = self.headers.get("Authorization", "")
         if kopf.startswith("Bearer "):
             return self.z.sitzungen.get(kopf[7:])
         return None
 
+    def _mail(self):
+        s = self._sitzung()
+        return s[0] if s and s[1] is not None else None
+
     def _code_ok(self, abfrage):
-        return (abfrage.get("code") or [""])[0] in self.z.codes or self._mail()
+        return _code((abfrage.get("code") or [""])[0]) in self.z.codes or self._mail()
+
+    def _roh(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(n)
 
     # ── Verteiler ──────────────────────────────────────────────────────
     def _gehen(self, methode):
@@ -98,15 +115,17 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._antwort(200, {"salz": k["salz"], "kdf": k["kdf"]})
             erfunden = hashlib.sha256(b"fake" + mail.encode()).digest()[:16]
             return self._antwort(200, {"salz": base64.urlsafe_b64encode(erfunden).rstrip(b"=").decode(),
-                                       "kdf": {"name": "argon2id", "t": 1, "m": 64, "p": 1}})
+                                       "kdf": {"name": "argon2id", "t": 1, "m": 19456, "p": 1}})
         if (m, pfad) == ("POST", "/v1/konto"):
             d = self._json()
-            if d.get("code") not in z.codes:
+            if _code(d.get("code")) not in z.codes:
                 return self._fehler(403, "code_ungueltig", "This invite code is not valid.")
+            if int(d["kdf"].get("m", 0)) < 19456:
+                return self._fehler(400, "ungueltig", "Key derivation too weak.")
             mail = d["mail"].lower()
             if mail in z.konten:
                 return self._fehler(409, "mail_vergeben", "An account with this email exists.")
-            z.codes.discard(d["code"])
+            z.codes.discard(_code(d["code"]))
             z.konten[mail] = {"salz": d["salz"], "kdf": d["kdf"], "hash": _hash(d["anmelde_schluessel"]),
                               "verpackt_passwort": d["verpackt_passwort"],
                               "verpackt_notfall": d["verpackt_notfall"],
@@ -119,7 +138,7 @@ class _Handler(BaseHTTPRequestHandler):
             if not k or k["hash"] != _hash(d["anmelde_schluessel"]):
                 return self._fehler(401, "falsch", "Wrong email or password.")
             token = secrets.token_hex(16)
-            z.sitzungen[token] = d["mail"].lower()
+            z.sitzungen[token] = (d["mail"].lower(), d.get("knoten") or "")
             return self._antwort(200, {"token": token, "laeuft_ab": "2099-01-01T00:00:00Z",
                                        "verpackt_passwort": k["verpackt_passwort"]})
         if (m, pfad) == ("DELETE", "/v1/sitzung"):
@@ -132,8 +151,9 @@ class _Handler(BaseHTTPRequestHandler):
             if not k or k["notfall_beweis"] != _hash(d["notfall_beweis"]):
                 return self._fehler(403, "falsch", "Wrong emergency key.")
             token = secrets.token_hex(16)
-            z.sitzungen[token] = d["mail"].lower()
-            return self._antwort(200, {"verpackt_notfall": k["verpackt_notfall"], "token": token})
+            z.sitzungen[token] = (d["mail"].lower(), None)       # nur fürs Passwort
+            return self._antwort(200, {"verpackt_notfall": k["verpackt_notfall"], "token": token,
+                                       "laeuft_ab": "2099-01-01T00:00:00Z"})
         if (m, pfad) == ("GET", "/v1/paket"):
             if not self._code_ok(abfrage) or not z.paket:
                 return self._fehler(403, "code_ungueltig", "Invite code or login needed.")
@@ -145,15 +165,26 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._fehler(403, "code_ungueltig", "Invite code or login needed.")
             return self._antwort(200, roh=z.paket[1])
 
-        mail = self._mail()
-        if mail is None:
+        sitzung = self._sitzung()
+        if sitzung is None:
             return self._fehler(401, "nicht_angemeldet", "Not logged in.")
         if (m, pfad) == ("PUT", "/v1/konto/passwort"):
             d = self._json()
-            k = z.konten[mail]
+            k = z.konten[sitzung[0]]
+            if sitzung[1] is not None and _hash(d.get("altes_anmelde_schluessel") or "") != k["hash"]:
+                return self._fehler(403, "falsche_anmeldung", "The current password is wrong.")
+            if int(d["kdf"].get("m", 0)) < 19456:
+                return self._fehler(400, "ungueltig", "Key derivation too weak.")
             k.update(salz=d["salz"], kdf=d["kdf"], hash=_hash(d["anmelde_schluessel"]),
                      verpackt_passwort=d["verpackt_passwort"])
+            eigen = self.headers.get("Authorization", "")[7:]
+            for t in [t for t, s in z.sitzungen.items() if s[0] == sitzung[0] and t != eigen
+                      or (t == eigen and s[1] is None)]:
+                del z.sitzungen[t]          # alle anderen Sitzungen enden, Notfall-Token auch
             return self._antwort(200, {})
+        mail = self._mail()
+        if mail is None:
+            return self._fehler(403, "nur_passwort", "This session may only set a new password.")
         if (m, pfad) == ("GET", "/v1/mitte"):
             kopf = z.kopf.get(mail)
             return self._antwort(200, {"kennung": kopf,
@@ -164,11 +195,24 @@ class _Handler(BaseHTTPRequestHandler):
             if name not in stand:
                 return self._fehler(404, "fehlt", "No such file.")
             return self._antwort(200, roh=stand[name])
+        if (m, pfad) == ("POST", "/v1/mitte/fehlende"):
+            return self._antwort(200, {"fehlen": [s for s in self._json().get("sha256", [])
+                                                  if s not in z.blobs]})
+        if m == "PUT" and pfad.startswith("/v1/mitte/blob/"):
+            sha, daten = pfad.rsplit("/", 1)[1], self._roh()
+            if hashlib.sha256(daten).hexdigest() != sha:
+                return self._fehler(400, "pruefsumme", "Checksum mismatch.")
+            z.blobs[sha] = daten
+            return self._antwort(200, {})
         if (m, pfad) == ("POST", "/v1/mitte/stand"):
             d = self._json()
             if d.get("basis") != z.kopf.get(mail):
                 return self._fehler(409, "jemand_schneller", "Someone else was faster.")
+            if any(s not in z.blobs for s in d.get("verweise", {}).values()):
+                return self._fehler(400, "blob_fehlt", "A referenced blob is missing.")
             neu = dict(z.staende.get(d.get("basis"), {}))
+            for name, sha in d.get("verweise", {}).items():
+                neu[name] = z.blobs[sha]
             for name, b64 in d.get("schreiben", {}).items():
                 neu[name] = base64.b64decode(b64)
             for name in d.get("loeschen", []):
@@ -184,7 +228,10 @@ class _Handler(BaseHTTPRequestHandler):
                 k = z.eltern.get(k)
             return self._antwort(200, {"enthaelt": k is not None})
         if m == "PUT" and pfad.startswith("/v1/knoten/"):
-            z.knoten.setdefault(mail, {})[unquote(pfad.rsplit("/", 1)[1])] = self._json()
+            name = unquote(pfad.rsplit("/", 1)[1])
+            if name != sitzung[1]:
+                return self._fehler(403, "fremder_knoten", "You can only describe your own device.")
+            z.knoten.setdefault(mail, {})[name] = self._json()
             return self._antwort(200, {})
         if (m, pfad) == ("GET", "/v1/knoten"):
             return self._antwort(200, {"knoten": list(z.knoten.get(mail, {}).values())})

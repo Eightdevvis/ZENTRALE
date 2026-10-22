@@ -87,7 +87,7 @@ Der Abgleich kennt die Mitte nur über vier Handgriffe (`core/abgleich_mitte.py`
 |---|---|
 | `holen()` | `GET /v1/mitte` → `{kennung|null, namen}`; die Dateien erst beim Lesen, je `GET /v1/mitte/datei/<name>` |
 | `vorbereiten(...)` | nur im Speicher; gibt eine **vorläufige** Kennung zurück: `vorlaeufig-` + Prüfwert des neuen `inhalt.enc` |
-| `senden(kennung)` | **ein** `POST /v1/mitte/stand` `{basis, schreiben: {name: base64}, loeschen}` → `{kennung}`; **409** = jemand war schneller → `False` |
+| `senden(kennung)` | sha256 je Datei → `POST /v1/mitte/fehlende {sha256: [...]}` → `{fehlen}`; nur die fehlenden als `PUT /v1/mitte/blob/<sha256>` (rohe Bytes, je höchstens 24 MiB); dann `POST /v1/mitte/stand {basis, verweise: {name: sha256}, loeschen}` → `{kennung}`; **409** = jemand war schneller → `False`; **400 `blob_fehlt`** → einmal nachladen, nochmal |
 | `enthaelt(kennung)` | `GET /v1/mitte/enthaelt/<kennung>`; eine vorläufige Kennung (Absturz nach dem Senden) erkennt sie daran, dass genau dieses `inhalt.enc` in der Mitte liegt — Fernet würfelt, also stammt es dann von uns |
 
 - **Schlüssel:** bei `http` der `konto_schluessel` aus `~/.config/zentrale/konto.json`

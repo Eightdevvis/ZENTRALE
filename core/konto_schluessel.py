@@ -22,12 +22,17 @@
 #     (das Fernet-Format selbst).
 #   - Passwort als UTF-8 nach Unicode-NFC.
 #   - kdf = {"name": "argon2id", "t": 3, "m": 65536, "p": 4}, m in KiB.
+#   - Untergrenze m ≥ 19456 KiB (OWASP; der Server verlangt dasselbe). Der
+#     Client nimmt schwächere Werte auch vom Server NICHT an — sonst könnte
+#     ein böser Server billig gerechnete anmelde_schluessel bekommen und das
+#     Passwort durchprobieren.
 
 import base64
 import os
 import unicodedata
 
 KDF_VORGABE = {"name": "argon2id", "t": 3, "m": 65536, "p": 4}
+KDF_MIN_M = 19456
 INFO_ANMELDEN = b"zentrale/anmelden/v1"
 INFO_VERPACKEN = b"zentrale/verpacken/v1"
 INFO_NOTFALL = b"zentrale/notfall/v1"
@@ -64,6 +69,9 @@ def kdf_lesen(kdf) -> dict:
         raise SchluesselFehler("The server sent unreadable key derivation values.") from None
     if t < 1 or p < 1 or m < 8 * p:
         raise SchluesselFehler("The server sent invalid key derivation values.")
+    if m < KDF_MIN_M:
+        raise SchluesselFehler("The server asked for a key derivation weaker than allowed "
+                               f"(memory {m} KiB < {KDF_MIN_M} KiB). Refusing for your safety.")
     return {"name": "argon2id", "t": t, "m": m, "p": p}
 
 

@@ -71,7 +71,7 @@ class Spiel(Terminal):
 def geraet(monkeypatch, tmp_path):
     c = FalscheCloud()
     monkeypatch.setenv("ZENTRALE_CLOUD", c.adresse)
-    monkeypatch.setattr(ks, "KDF_VORGABE", {"name": "argon2id", "t": 1, "m": 64, "p": 1})
+    monkeypatch.setattr(ks, "KDF_VORGABE", {"name": "argon2id", "t": 1, "m": 19456, "p": 1})
     monkeypatch.setattr(dateien, "knoten", lambda: "minipc")
     monkeypatch.setenv("ZENTRALE_ABGLEICH_DIR", str(tmp_path / "abgleich"))
     monkeypatch.setattr(ai_config, "_CONFIG_PATH", str(tmp_path / "ai_config.json"))
@@ -93,7 +93,7 @@ def _einstellungen(geraet):
 def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     from zentrale_cli import assistent
     term = Spiel("2",                                          # neues Konto
-                 "EINLADUNG-1", "s@x.org", PW, PW, "y",         # Code, Mail, Passwort ×2, gesichert
+                 "ZB-AAAA-BBBB-CCCC-DDDD", "s@x.org", PW, PW, "y",         # Code, Mail, Passwort ×2, gesichert
                  "2",                                          # einzeln wählen
                  "n", "1 5", "")                               # nichts, dann Listen + Gedächtnis
     assert befehle.eingerichtet() is False
@@ -117,10 +117,10 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
 
 def test_assistent_notfallschluessel_nicht_bestaetigt_kein_konto(geraet):
     from zentrale_cli import assistent
-    term = Spiel("2", "EINLADUNG-1", "s@x.org", PW, PW, "n")
+    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "s@x.org", PW, PW, "n")
     assert assistent.setup(term) == 1
     assert not geraet.zustand.konten and not konto.angemeldet()
-    assert "EINLADUNG-1" in geraet.zustand.codes
+    assert "ZB-AAAA-BBBB-CCCC-DDDD" in geraet.zustand.codes
 
 
 def test_assistent_lokal_bleiben(geraet):
@@ -144,7 +144,7 @@ def test_erster_start_ohne_einrichtung_erst_assistent_dann_tui(geraet, monkeypat
 
 
 def test_login_falsches_passwort_ein_satz_kein_traceback(geraet):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "EINLADUNG-1", PW)
+    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     konto.abmelden()
     term = Spiel("s@x.org", "falsch-falsch-falsch")
     assert haupt.main(["login"], term=term) == 1
@@ -152,7 +152,7 @@ def test_login_falsches_passwort_ein_satz_kein_traceback(geraet):
 
 
 def test_devices_meldet_sich_selbst_und_listet(geraet, monkeypatch):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "EINLADUNG-1", PW)
+    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     term = Spiel()
     assert befehle.devices(term) == 0
     b = geraet.zustand.knoten["s@x.org"]["minipc"]

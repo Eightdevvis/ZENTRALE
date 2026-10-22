@@ -120,7 +120,7 @@ def test_notfall_text_hin_und_zurueck_auch_schlampig_getippt():
 
 
 def test_falsches_passwort_packt_nicht_aus():
-    klein = {"name": "argon2id", "t": 1, "m": 64, "p": 1}
+    klein = {"name": "argon2id", "t": 1, "m": 19456, "p": 1}
     konto = ks.neuer_konto_schluessel()
     teile = ks.passwort_teile("richtig-richtig", konto, klein)
     salz = ks.b64u_lesen(teile["salz"])
@@ -131,9 +131,10 @@ def test_falsches_passwort_packt_nicht_aus():
     assert ks.auspacken(ks.verpack_schluessel(richtig), teile["verpackt_passwort"], "x") == konto
 
 
-def test_kdf_werte_vom_server_auch_mit_langnamen_und_kaputte_abgelehnt():
-    assert ks.kdf_lesen({"name": "argon2id", "iterations": 2, "memory": 1024, "parallelism": 2}) \
-        == {"name": "argon2id", "t": 2, "m": 1024, "p": 2}
-    for kaputt in ({"name": "pbkdf2"}, {"t": 0}, {"m": "viel"}):
+def test_kdf_werte_vom_server_auch_mit_langnamen_kaputte_und_schwache_abgelehnt():
+    assert ks.kdf_lesen({"name": "argon2id", "iterations": 2, "memory": 19456, "parallelism": 2}) \
+        == {"name": "argon2id", "t": 2, "m": 19456, "p": 2}
+    # Zu wenig Speicher: ein böser Server könnte sonst billig durchprobieren.
+    for kaputt in ({"name": "pbkdf2"}, {"t": 0}, {"m": "viel"}, {"t": 1, "m": 8192, "p": 1}):
         with pytest.raises(ks.SchluesselFehler):
             ks.kdf_lesen(kaputt)

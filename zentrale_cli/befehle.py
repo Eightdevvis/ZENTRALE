@@ -198,6 +198,8 @@ def status(term):
 def geraet_melden(sorte="vollknoten") -> dict:
     """Die eigene Beschreibung in die Cloud (PUT /v1/knoten/<name>)."""
     b = knoten.beschreibung(sorte, wurzel=WURZEL)
+    # Der Server nimmt nur den Namen, mit dem diese Sitzung angemeldet ist.
+    b["name"] = (konto.lesen() or {}).get("knoten") or b["name"]
     try:
         konto.client().put("/v1/knoten/" + b["name"], b)
     except cloud_api.CloudFehler as e:

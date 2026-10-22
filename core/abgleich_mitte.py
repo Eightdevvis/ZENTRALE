@@ -12,7 +12,6 @@
 # Seit 2026-10-22 zwei Arten: `git` (GitHub, Sashas Weg bis heute) und
 # `http` (die ZENTRALE-Cloud, memory/hub/knoten_beitritt.md „Bauplan v1").
 
-import base64
 import hashlib
 import os
 import subprocess
@@ -157,7 +156,8 @@ class HttpMitte:
 
         holen       GET  /v1/mitte  (+ GET /v1/mitte/datei/<name> je Datei, erst bei Bedarf)
         vorbereiten nur im Speicher; → vorläufige Kennung
-        senden      POST /v1/mitte/stand {basis, schreiben, loeschen} → True, 409 → False
+        senden      POST /v1/mitte/fehlende → PUT /v1/mitte/blob/<sha256> (nur was fehlt)
+                    → POST /v1/mitte/stand {basis, verweise, loeschen} → True, 409 → False
         enthaelt    GET  /v1/mitte/enthaelt/<kennung>
 
     „Nur senden, wenn die Mitte noch auf meinem Stand ist" macht der Server
@@ -221,18 +221,44 @@ class HttpMitte:
         self._vorrat[kennung] = (dict(schreiben), list(loeschen))
         return kennung
 
+    MAX_BLOB = 24 * 1024 * 1024
+
+    def _hochladen(self, inhalte: dict):
+        """Was der Server noch nicht hat, als Blob hochladen
+        (POST /v1/mitte/fehlende → PUT /v1/mitte/blob/<sha256>)."""
+        d = self._rufen(self.client.post, "/v1/mitte/fehlende", {"sha256": sorted(inhalte)})
+        for sha in d.get("fehlen") or []:
+            if sha not in inhalte:
+                continue
+            self._rufen(self.client.bytes_senden, "/v1/mitte/blob/" + sha, inhalte[sha])
+
     def senden(self, kennung: str) -> bool:
-        """In die Mitte stellen. False = jemand war schneller (neu holen)."""
+        """In die Mitte stellen. False = jemand war schneller (neu holen).
+
+        Die Dateien gehen einzeln als Blob nach Prüfsumme hoch (nur, was dem
+        Server fehlt); der neue Stand ist dann nur eine Liste von Verweisen
+        Name → sha256 — so bleibt jede Anfrage klein, auch bei der ersten
+        Befüllung."""
         schreiben, loeschen = self._vorrat[kennung]
-        daten = {"basis": self._basis,
-                 "schreiben": {n: base64.b64encode(b).decode("ascii") for n, b in schreiben.items()},
-                 "loeschen": loeschen}
-        try:
-            d = self.client.post("/v1/mitte/stand", daten)
-        except cloud_api.CloudFehler as e:
-            if e.status == 409:
-                return False
-            raise MitteFehler("Sending to the cloud failed: " + str(e)) from None
+        inhalte, verweise = {}, {}
+        for name, b in schreiben.items():
+            if len(b) > self.MAX_BLOB:
+                raise MitteFehler(f"A file is too large for the cloud ({len(b) // 2**20} MiB, "
+                                  f"at most {self.MAX_BLOB // 2**20} MiB).")
+            sha = hashlib.sha256(b).hexdigest()
+            inhalte[sha], verweise[name] = b, sha
+        daten = {"basis": self._basis, "verweise": verweise, "loeschen": list(loeschen)}
+        for versuch in range(2):
+            self._hochladen(inhalte)
+            try:
+                d = self.client.post("/v1/mitte/stand", daten)
+                break
+            except cloud_api.CloudFehler as e:
+                if e.status == 409:
+                    return False
+                if e.code == "blob_fehlt" and versuch == 0:
+                    continue          # zwischen Hochladen und Stand verschwunden: nochmal
+                raise MitteFehler("Sending to the cloud failed: " + str(e)) from None
         echt = d.get("kennung")
         if not echt:
             raise MitteFehler("The cloud accepted the data but sent no version id.")

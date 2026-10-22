@@ -12,7 +12,7 @@ import konto
 import konto_schluessel as ks
 from _falsche_cloud import FalscheCloud
 
-KLEIN = {"name": "argon2id", "t": 1, "m": 64, "p": 1}   # schnell; das Schema ist dasselbe
+KLEIN = {"name": "argon2id", "t": 1, "m": 19456, "p": 1}   # schnell; das Schema ist dasselbe
 PW = "ein-langes-passwort"
 
 
@@ -34,7 +34,7 @@ def _geraet(cloud, monkeypatch, name):
 
 def _anlegen(cloud, mail="Sasha@Example.org"):
     e = konto.Entwurf(PW)
-    return e, konto.anlegen(e, mail, "EINLADUNG-1", PW)
+    return e, konto.anlegen(e, mail, "ZB-AAAA-BBBB-CCCC-DDDD", PW)
 
 
 def test_anlegen_meldet_an_und_legt_schluessel_600_ab(cloud):
@@ -42,7 +42,7 @@ def test_anlegen_meldet_an_und_legt_schluessel_600_ab(cloud):
     assert d["mail"] == "sasha@example.org"
     assert konto.konto_schluessel() == e.konto_schluessel
     assert stat.S_IMODE(os.stat(konto.datei()).st_mode) == 0o600
-    assert "EINLADUNG-1" not in cloud.zustand.codes          # Code verbraucht
+    assert "ZB-AAAA-BBBB-CCCC-DDDD" not in cloud.zustand.codes          # Code verbraucht
 
 
 def test_der_server_sieht_nie_passwort_oder_schluessel(cloud):
@@ -68,6 +68,11 @@ def test_falsches_passwort_klarer_fehler_und_nichts_abgelegt(cloud, monkeypatch)
     with pytest.raises(konto.KontoFehler, match="Wrong email or password"):
         konto.anmelden("sasha@example.org", "falsch-falsch-falsch")
     assert not os.path.exists(konto.datei())
+
+
+def test_code_gross_klein_und_leerzeichen_egal(cloud):
+    konto.anlegen(konto.Entwurf(PW), "a@b.c", " zb-aaaa-bbbb-cccc-dddd ", PW)
+    assert konto.angemeldet()
 
 
 def test_ungueltiger_code_klarer_fehler(cloud):
@@ -100,9 +105,10 @@ def test_falscher_notfallschluessel_klarer_fehler(cloud):
 
 def test_passwort_aendern_prueft_das_alte(cloud, monkeypatch):
     e, _ = _anlegen(cloud)
-    with pytest.raises(konto.KontoFehler, match="Wrong"):
+    with pytest.raises(konto.KontoFehler, match="Wrong current password"):
         konto.passwort_aendern("falsch-falsch-falsch", "noch-ein-passwort")
     konto.passwort_aendern(PW, "noch-ein-passwort")
+    assert konto.client().get("/v1/mitte")["kennung"] is None      # diese Sitzung lebt weiter
     _geraet(cloud, monkeypatch, "pc")
     konto.anmelden("sasha@example.org", "noch-ein-passwort")
     assert konto.konto_schluessel() == e.konto_schluessel

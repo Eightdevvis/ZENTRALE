@@ -122,7 +122,7 @@ def anlegen(entwurf: Entwurf, mail: str, code: str, passwort: str, knoten: str =
     """Konto beim Server anlegen (verbraucht den Einladungscode) und gleich
     anmelden."""
     mail = _mail(mail)
-    code = (code or "").strip()
+    code = "".join((code or "").split()).upper()     # ZB-XXXX-…, Groß/klein und Leerzeichen egal
     if not code:
         raise KontoFehler("An invite code is required.")
     c = cloud_api.Client(basis)
@@ -217,18 +217,26 @@ def wiederherstellen(mail: str, notfall_text: str, neues_passwort: str,
 
 def passwort_aendern(altes: str, neues: str) -> dict:
     """Nur verpackt_passwort ändert sich; der konto_schluessel (und damit
-    alle Daten) bleibt. Das alte Passwort wird beim Server geprüft."""
+    alle Daten) bleibt. Der Server prüft das alte Passwort über
+    `altes_anmelde_schluessel` (aus altem Salz + alten KDF-Werten) und
+    beendet alle anderen Sitzungen; diese hier bleibt."""
     passwort_pruefen(neues)
     d = lesen()
     if d is None:
         raise KontoFehler("Not logged in. Run 'zentrale login' first.")
-    c = cloud_api.Client(d.get("server"))
+    c = cloud_api.Client(d.get("server"), token=d.get("token"))
     try:
-        s, k = _sitzung(c, d["mail"], altes, d.get("knoten") or dateien.knoten())
+        salz, kdf = _vorab(c, d["mail"])
+        alt = ks.anmelde_schluessel(ks.hauptschluessel(altes, salz, kdf))
+        teile = ks.passwort_teile(neues, d["konto_schluessel"].encode("ascii"))
     except ks.SchluesselFehler as e:
         raise KontoFehler(str(e)) from None
-    c.token = s.get("token")
-    _cloud(c.put, "/v1/konto/passwort", ks.passwort_teile(neues, k))
-    _speichern(c.basis, d["mail"], s.get("token"), s.get("laeuft_ab"), k,
-               d.get("knoten") or dateien.knoten())
+    try:
+        c.put("/v1/konto/passwort", dict(teile, altes_anmelde_schluessel=alt))
+    except cloud_api.CloudFehler as e:
+        if e.code == "nicht_angemeldet":
+            raise KontoFehler("Your session has expired. Run 'zentrale login' first.") from None
+        if e.status in (401, 403):
+            raise KontoFehler("Wrong current password.") from None
+        raise KontoFehler(str(e)) from None
     return lesen()

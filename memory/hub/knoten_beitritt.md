@@ -291,10 +291,13 @@ gegen dieselbe Schnittstelle):
 | `salz` | 16 zufällige Bytes |
 | Notfallschlüssel als Text | Base32 (RFC 4648) ohne `=`, 52 Zeichen, 13 Vierergruppen mit `-`; beim Eingeben egal: Groß/klein, Leerzeichen, `0/1/8` → `O/I/B` |
 | `knoten` in `POST /v1/sitzung` | Hostname als Text |
-| `schreiben` in `POST /v1/mitte/stand` | Standard-Base64 mit `=` |
-| `GET /v1/knoten` | Liste oder `{knoten: [...]}` — beides wird gelesen |
-| Notfall | `POST /v1/notfall` → `{verpackt_notfall, token}`; mit diesem Token `PUT /v1/konto/passwort`, danach normal anmelden |
-| Passwort ändern | erst `POST /v1/sitzung` mit dem alten (prüft es), dann `PUT /v1/konto/passwort` |
+| Hochladen in die Mitte (abgesprochen mit dem Server-Teil, 22.10.) | Blobs nach sha256: `POST /v1/mitte/fehlende` → `PUT /v1/mitte/blob/<sha256>` (rohe Bytes, ≤ 24 MiB, 400 `pruefsumme`) → `POST /v1/mitte/stand {basis, verweise: {name: sha256}, loeschen}`; 400 `blob_fehlt` → einmal nachladen. Das alte `schreiben` (Base64) nutzt der Client nicht |
+| `GET /v1/knoten` | `{knoten: [...]}` (eine nackte Liste wird auch gelesen) |
+| `PUT /v1/knoten/<name>` | nur unter dem Namen, mit dem die Sitzung angemeldet ist (sonst 403 `fremder_knoten`) |
+| Notfall | `POST /v1/notfall` → `{verpackt_notfall, token, laeuft_ab}`; der Token darf NUR `PUT /v1/konto/passwort`; danach normal anmelden |
+| Passwort ändern | `PUT /v1/konto/passwort` mit der Sitzung + `altes_anmelde_schluessel` (altes Passwort, altes Salz/KDF über `/v1/vorab`); der Server beendet die anderen Sitzungen |
+| KDF-Untergrenze | `m` ≥ 19456 KiB — der Client nimmt schwächere Werte auch vom Server nicht an |
+| Einladungscode | `ZB-XXXX-XXXX-XXXX-XXXX`; der Client schickt ihn groß und ohne Leerzeichen |
 | Mindestlänge Passwort | 10 Zeichen (nur Client) |
 | Fehler 401 | Client sagt „Wrong email or password." bzw. „Not logged in" |
 
@@ -318,8 +321,8 @@ neue Vektoren, nie still.
 - Dateien der Mitte kommen ohne Stand-Angabe („aktueller Stand"); ein
   optionales `?stand=<kennung>` an `GET /v1/mitte/datei/<name>` machte das
   Lesen exakt statt „neu holen, wenn es sich bewegt".
-- Erste Befüllung schickt alles in EINEM `POST` (Base64) — bei großen Daten
-  an die Grenzen des Workers denken (Anfragegröße).
+- Einzelne Dateien über 24 MiB lehnt der Client mit klarem Satz ab (Grenze
+  eines Blobs); Anhänge in der Ablage könnten so groß sein.
 - Ein ganzer Lauf von `install.sh` auf einem frischen EndeavourOS steht aus
   (geprüft: Syntax, shellcheck, Schutz des vorhandenen Befehls).
 - **Sashas Entwickler-Checkout bleibt unberührt:** `~/.local/bin/zentrale`

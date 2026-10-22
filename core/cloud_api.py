@@ -61,6 +61,7 @@ class Client:
             kopf["Content-Type"] = "application/json"
         elif roh_body is not None:
             body = roh_body
+            kopf["Content-Type"] = "application/octet-stream"
         if self.token:
             kopf["Authorization"] = "Bearer " + self.token
         anfrage = urllib.request.Request(url, data=body, method=methode, headers=kopf)
@@ -104,6 +105,10 @@ class Client:
 
     def delete(self, pfad, **kw):
         return self.roh("DELETE", pfad, **kw)[1]
+
+    def bytes_senden(self, pfad, daten: bytes):
+        """PUT mit rohen Bytes (application/octet-stream)."""
+        return self.roh("PUT", pfad, roh_body=daten)[1]
 
     def bytes_holen(self, pfad, abfrage=None):
         return self.roh("GET", pfad, abfrage=abfrage, erwartet_bytes=True)[1]

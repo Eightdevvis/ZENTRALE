@@ -27,7 +27,7 @@ LISTE = [{"id": "einkauf", "name": "Einkauf", "next_item": 2,
 def cloud(monkeypatch):
     c = FalscheCloud()
     monkeypatch.setenv("ZENTRALE_CLOUD", c.adresse)
-    monkeypatch.setattr(ks, "KDF_VORGABE", {"name": "argon2id", "t": 1, "m": 64, "p": 1})
+    monkeypatch.setattr(ks, "KDF_VORGABE", {"name": "argon2id", "t": 1, "m": 19456, "p": 1})
     yield c
     c.stopp()
 
@@ -37,7 +37,7 @@ def _mitte(cloud, token=None):
 
 
 def _token(cloud):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "EINLADUNG-1", PW)
+    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     return konto.lesen()["token"]
 
 
@@ -83,6 +83,32 @@ def test_vorlaeufige_kennung_nach_absturz_noch_erkennbar(cloud):
     assert _mitte(cloud, token).enthaelt(abgleich_mitte.VORLAEUFIG + "0" * 32) is False
 
 
+def test_nur_fehlende_blobs_gehen_hoch_und_stand_ist_nur_verweise(cloud):
+    token = _token(cloud)
+    m = _mitte(cloud, token)
+    m.holen()
+    m.senden(m.vorbereiten({"inhalt.enc": b"I1", "d/a.enc": b"A"}, [], ""))
+    m.holen()
+    m.senden(m.vorbereiten({"inhalt.enc": b"I2", "d/b.enc": b"A"}, ["d/a.enc"], ""))
+    blobs = [p for meth, p in cloud.zustand.aufrufe if meth == "PUT" and "/blob/" in p]
+    assert len(blobs) == 3                       # I1, A, I2 — A nicht zweimal
+    stand, lesen, namen = m.holen()
+    assert sorted(namen) == ["d/b.enc", "inhalt.enc"] and lesen("d/b.enc") == b"A"
+
+
+def test_blob_fehlt_wird_einmal_nachgeladen(cloud, monkeypatch):
+    m = _mitte(cloud, _token(cloud))
+    m.holen()
+    echt, erstes = abgleich_mitte.HttpMitte._hochladen, {"mal": True}
+
+    def vergisst_beim_ersten_mal(self, inhalte):
+        if erstes.pop("mal", False):
+            return
+        echt(self, inhalte)
+    monkeypatch.setattr(abgleich_mitte.HttpMitte, "_hochladen", vergisst_beim_ersten_mal)
+    assert m.senden(m.vorbereiten({"inhalt.enc": b"I"}, [], "")) is True
+
+
 def test_ohne_sitzung_klarer_fehler(cloud):
     with pytest.raises(abgleich_mitte.MitteFehler, match="(?i)not logged in"):
         _mitte(cloud).holen()
@@ -126,7 +152,7 @@ def zwei(cloud, monkeypatch, tmp_path):
     monkeypatch.setattr(ai_config, "_save", lambda: None)
     laptop = Geraet(cloud, monkeypatch, tmp_path, "laptop").ich()
     entwurf = konto.Entwurf(PW)
-    konto.anlegen(entwurf, "s@x.org", "EINLADUNG-1", PW)
+    konto.anlegen(entwurf, "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     pc = Geraet(cloud, monkeypatch, tmp_path, "pc").ich()
     konto.anmelden("s@x.org", PW)
     laptop.konto_schluessel = entwurf.konto_schluessel
