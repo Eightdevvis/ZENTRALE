@@ -504,6 +504,56 @@ def test_c_bahnen_dehnen_sich_in_freie_nachbarbahnen():
     assert lagen["B"] == (1, 1, 3)
 
 
+def test_c_bahnen_nach_gezeichneten_zeilen():
+    """10:00–10:15 und 10:15–11:00 schneiden sich in Minuten nicht, landen
+    bei 30-min-Takt aber beide auf der 10:00-Zeile: nebeneinander, nie
+    übereinander. Ohne Raster bleiben es zwei volle Spalten."""
+    bl = [(600, 615, {"name": "A"}), (615, 660, {"name": "B"})]
+    assert _lagen(bl) == {"A": (0, 0, 1), "B": (0, 0, 1)}
+    lagen = {t["name"]: (bi, bis, nb)
+             for bi, bis, nb, _s, _e, t in ka._c_bahnen(bl, (480, 30))}
+    assert lagen == {"A": (0, 0, 2), "B": (1, 1, 2)}
+    # auf getrennten Zeilen bleibt es bei voller Spalte
+    bl = [(600, 630, {"name": "A"}), (630, 660, {"name": "B"})]
+    assert {t["name"]: nb for _bi, _bis, nb, _s, _e, t in ka._c_bahnen(bl, (480, 30))} \
+        == {"A": 1, "B": 1}
+
+
+def test_c_dehnung_nie_ueber_belegten_nachbarn():
+    """Wer sich nach rechts dehnt, prüft die ganze gezeichnete Höhe: B (Bahn 1)
+    endet vor D, aber D teilt sich mit A die Zeilen — A darf nicht über D."""
+    bl = [(540, 600, {"name": "A"}), (540, 570, {"name": "B"}),
+          (585, 660, {"name": "D"})]
+    for raster in (None, (480, 30), (480, 60)):
+        out = ka._c_bahnen(bl, raster)
+        lo, m = raster or (0, 1)
+        z = {t["name"]: ((s - lo) // m, -(-(e - lo) // m), bi, bis)
+             for bi, bis, _nb, s, e, t in out}
+        for x in z:
+            for y in z:
+                if x < y and z[x][0] < z[y][1] and z[y][0] < z[x][1]:
+                    assert z[x][3] < z[y][2] or z[y][3] < z[x][2], (raster, x, y, out)
+
+
+def test_c_sprechstunden_woche_nebeneinander():
+    """Nachgebaut aus Sashas Woche (22.10.2026): feste Veranstaltung mit einem
+    festen Termin, der in Minuten nach ihr beginnt, aber auf ihrer letzten
+    Rasterzeile liegt; dazu zwei uncommitted Sprechstunden, die sich ebenso
+    berühren. Je Ebene nebeneinander, uncommitted als Glas darüber."""
+    termine = [{"day": "2026-10-05", "label": "Saalübung", "time": "14:15", "ende": "16:10"},
+               {"day": "2026-10-05", "label": "Drive", "time": "16:10", "ende": "17:00"},
+               {"day": "2026-10-05", "label": "SA", "time": "18:00", "ende": "18:40"},
+               {"day": "2026-10-05", "label": "SB", "time": "18:40", "ende": "19:30"}]
+    d = _unv(daten("week", termine=termine, routinen=[]), "SA", "SB")
+    zeilen = ka.ansicht_c(d, 110, 34)       # 34 hoch: 30-min-Takt
+    a, b = _spalte(110, 0)
+    for x, y in (("Saalü", "Drive"), ("SA", "SB")):
+        zx = [i for i, z in enumerate(zeilen) if x in text(z)[a:b + 1]]
+        zy = [i for i, z in enumerate(zeilen) if y in text(z)[a:b + 1]]
+        assert zx and zy, (x, y)
+        assert text(zeilen[zx[0]]).index(x) != text(zeilen[zy[0]]).index(y)
+
+
 def test_c_freier_termin_behaelt_volle_breite_neben_ueberlappung():
     termine = [{"day": "2026-10-05", "label": "Frei", "time": "09:00", "ende": "10:00"},
                {"day": "2026-10-05", "label": "Eins", "time": "13:00", "ende": "15:00"},

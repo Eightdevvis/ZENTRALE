@@ -1180,15 +1180,29 @@ def _c_bloecke(daten, tag: date, erledigte):
     return bloecke, ganz, deadlines
 
 
-def _c_bahnen(bloecke):
+def _c_bahnen(bloecke, raster=None):
     """Überschneidungen nebeneinander, wie im Google-/Apple-Kalender: Bahnen
     gelten je Überlappungs-Gruppe (zusammenhängende Kette sich schneidender
     Blöcke), nicht für den ganzen Tag (Sasha, 22.10.2026: sonst werden alle
     Termine gequetscht, obwohl sie Platz hätten). In der Gruppe bekommt
     jeder Block die erste freie Bahn (Greedy) und dehnt sich nach rechts in
     Nachbarbahnen aus, in denen nichts mit ihm kollidiert.
+
+    Ob sich zwei Blöcke schneiden, entscheiden die GEZEICHNETEN Zeilen, nicht
+    die Minuten: raster=(lo, takt) rechnet jeden Block auf die Rasterzeilen um,
+    die _c_achse ihm gibt (10:00–10:15 und 10:15–11:00 liegen bei 30-min-Takt
+    beide auf der 10:00-Zeile). Sonst bekämen beide die volle Spalte und der
+    zweite übermalte den ersten (Sasha, 22.10.2026: „überdecken sich nun
+    einfach nur"). Ohne raster gelten die Minuten.
     -> [(bahn, bis_bahn, bahnen_der_gruppe, s, e, t)]; ein Block ohne
     Überschneidung ist (0, 0, 1, …) = volle Spalte."""
+    def spanne(s, e):
+        if raster is None:
+            return s, e
+        lo, m = raster
+        k0 = (s - lo) // m
+        return k0, max(k0 + 1, -(-(e - lo) // m))   # wie k0/k1 in _c_achse
+
     out: list = []
     gruppe: list = []
     ende_je_bahn: list = []
@@ -1196,26 +1210,27 @@ def _c_bahnen(bloecke):
 
     def abschliessen():
         ng = max(1, len(ende_je_bahn))
-        for bi, s, e, t in gruppe:
+        for bi, a, b, s, e, t in gruppe:
             bis = bi
             while bis + 1 < ng and not any(
-                    b == bis + 1 and s2 < e and s < e2 for b, s2, e2, _t in gruppe):
+                    g[0] == bis + 1 and g[1] < b and a < g[2] for g in gruppe):
                 bis += 1
             out.append((bi, bis, ng, s, e, t))
 
-    for s, e, t in sorted(bloecke, key=lambda b: (b[0], -b[1])):
-        if gruppen_ende is not None and s >= gruppen_ende:
+    zeilen = [spanne(s, e) + (s, e, t) for s, e, t in bloecke]
+    for a, b, s, e, t in sorted(zeilen, key=lambda z: (z[0], z[2], -z[1], -z[3])):
+        if gruppen_ende is not None and a >= gruppen_ende:
             abschliessen()
             gruppe, ende_je_bahn, gruppen_ende = [], [], None
         for i, be in enumerate(ende_je_bahn):
-            if s >= be:
-                ende_je_bahn[i] = e
+            if a >= be:
+                ende_je_bahn[i] = b
                 break
         else:
             i = len(ende_je_bahn)
-            ende_je_bahn.append(e)
-        gruppe.append((i, s, e, t))
-        gruppen_ende = e if gruppen_ende is None else max(gruppen_ende, e)
+            ende_je_bahn.append(b)
+        gruppe.append((i, a, b, s, e, t))
+        gruppen_ende = b if gruppen_ende is None else max(gruppen_ende, b)
     if gruppe:
         abschliessen()
     return out
@@ -1413,7 +1428,7 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
         alle = []
         for ebene in ([b for b in bloecke if not b[2]["unv"]],
                       [b for b in bloecke if b[2]["unv"]]):
-            bahnen = _c_bahnen(ebene)
+            bahnen = _c_bahnen(ebene, (lo, m))
             alle += bahnen
             for bi, bis, nb, s, e, t in bahnen:
                 if e <= lo or s >= sicht_ende:

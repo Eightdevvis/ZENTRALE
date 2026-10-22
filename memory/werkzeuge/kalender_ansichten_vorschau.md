@@ -68,13 +68,10 @@ Listen-Sidebar heraus).
   über ihre Zellen samt Trennern („ Fr 18:00 ━━ Wochenende Berlin ━━ So 14:00 ").
   Über die Woche hinaus: `▶` / `◀`. Wird es eng, wird zuerst der Titel gekürzt,
   von und bis bleiben.
-- **C — Woche als Zeitachse** (Wochendaten): Termine als Flächen nach Dauer,
-  Spannentage ohne Uhrzeit als volle Säule → durchgehende Fläche, Spannen
-  reihum verschieden gefärbt, Überschneidungen nebeneinander — Bahnen und
-  Breite je Überlappungs-Gruppe (seit 22.10.2026, `_c_bahnen`): ein Termin
-  ohne Überschneidung behält die volle Spalte, in der Gruppe dehnt sich ein
-  Block in freie Nachbarbahnen nach rechts. Bereich 08–22 Uhr,
-  erweitert um jede echte Uhrzeit; ist Höhe übrig, beginnt die Achse früher.
+- **C — Woche als Zeitachse** (Wochendaten): Flächen nach Dauer, Spannentage ohne Uhrzeit als volle Säule, Spannen reihum gefärbt. Überschneidungen
+  nebeneinander, Bahnen je Überlappungs-Gruppe (`_c_bahnen`, 22.10.2026), gemessen in GEZEICHNETEN Rasterzeilen, nicht Minuten (sonst übermalt
+  10:15–11:00 bei 30-min-Takt 10:00–10:15); ohne Überschneidung volle Spalte, sonst Dehnung nur in Nachbarbahnen, die über die ganze Höhe frei
+  sind. 08–22 Uhr, erweitert um jede echte Uhrzeit; ist Höhe übrig, beginnt die Achse früher.
 
 ## Warum so
 
