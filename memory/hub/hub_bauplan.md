@@ -24,6 +24,17 @@ Keine eigenen Daten- oder Schnittstellen-Formate: Feld-/Datenbeschreibungen
 sind **JSON Schema** (2020-12), HTTP-Schnittstellen **OpenAPI 3.1**
 (`openapi.yaml`), Adressen **URIs** (RFC 3986), Flächen **JSON Canvas**.
 
+## Leitlinie: überall deploybar (Sasha, 2026-10-22)
+
+*„zentrale muss im kern barebone sein und überall drauf gemorpht werden
+können — android mit app, browser app, tablet app, raspberry pi full view, AR
+stardust XR environment usw."* Jede Oberfläche ist nur ein weiterer **Knoten**
+([knoten_beitritt.md](knoten_beitritt.md)). Darum: Protokolle (Cloud, Mitte,
+Kacheln) nur HTTP + JSON + Standard-Krypto, beschrieben in OpenAPI/JSON
+Schema und mit **Testvektoren**, damit eine Dart-, JS- oder Rust-Fassung sie
+allein aus der Doku nachbauen und Byte für Byte prüfen kann. Keine Logik in
+einer Oberfläche — Terminal und TUI rufen nur auf.
+
 ## Die eine Regel
 
 **Eine App importiert keinen Code einer anderen App und keinen Hub-Code.
