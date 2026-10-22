@@ -137,7 +137,15 @@ def test_schalter_aus_laesst_die_liste_wie_sie_war(monkeypatch):
     assert "search_tools" not in _namen(aus)
     monkeypatch.setenv("ZENTRALE_WERKZEUG_SUCHE", "an")
     an = werkzeug_register.schema("gross")
-    assert an[:-1] == aus and _namen(an)[-1] == "search_tools"
+    assert _namen(an)[:-1] == _namen(aus) and _namen(an)[-1] == "search_tools"
+    # Schritt 9 (2026-10-22): mit Schalter hängt an wenigen Texten ein Satz
+    # an (Feld mit_suche); sonst ist alles gleich.
+    for a, b in zip(aus, an):
+        w = werkzeug_register.eintrag(a["function"]["name"])
+        if w.mit_suche:
+            b = {**b, "function": {**b["function"], "description":
+                                   b["function"]["description"][:-len(w.mit_suche) - 1]}}
+        assert a == b
     assert "search_tools" not in _namen(werkzeug_register.schema("klein"))
 
 

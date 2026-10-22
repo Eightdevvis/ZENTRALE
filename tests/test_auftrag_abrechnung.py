@@ -293,7 +293,7 @@ def test_route_speichert_auftrag_und_tui_zeigt_offen(client, monkeypatch):
         chat_stream = staticmethod(gen)
     monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
-    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     r = client.post("/api/chat", json={"message": "geige fällt wegen der ferien aus"})
     ev = [json.loads(z[5:]) for z in r.get_data(as_text=True).splitlines()
           if z.startswith("data:")]

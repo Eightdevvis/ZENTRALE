@@ -236,7 +236,8 @@ def is_available() -> bool:
 
 # ── Tool-Schema-Übersetzung ────────────────────────────────────────────
 
-def _to_anthropic_tools(openai_tools: list, zurueckstellen=frozenset()) -> list:
+def _to_anthropic_tools(openai_tools: list, zurueckstellen=frozenset(),
+                        beispiele: bool = False) -> list:
     """
     Übersetzt das OpenAI/Ollama-Schema (ai.TOOLS) ins Anthropic-Format.
 
@@ -251,7 +252,12 @@ def _to_anthropic_tools(openai_tools: list, zurueckstellen=frozenset()) -> list:
     defer_loading — das Modell sieht sie erst, wenn ein search_tools-
     Ergebnis sie per tool_reference nennt (core/werkzeug_suche.py). Die
     Liste selbst bleibt dieselbe, also auch der Cache-Präfix.
+
+    beispiele (2026-10-22, KI-Bibel W-05): nur für gross — input_examples aus
+    core/werkzeug_beispiele.py, an Werkzeugen ohne defer_loading.
     """
+    if beispiele:
+        import werkzeug_beispiele
     out = []
     for t in openai_tools or []:
         fn = t.get("function", t)          # toleriert beide Formen
@@ -262,6 +268,10 @@ def _to_anthropic_tools(openai_tools: list, zurueckstellen=frozenset()) -> list:
         }
         if fn["name"] in zurueckstellen:
             eintrag["defer_loading"] = True
+        elif beispiele:
+            b = werkzeug_beispiele.fuer(fn["name"], eintrag["input_schema"])
+            if b:
+                eintrag["input_examples"] = b
         out.append(eintrag)
     return out
 
@@ -304,13 +314,21 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None,
     schiene = schiene or _profil()
     teile = [schiene.system(system, dashview=ki_prompt._DASHVIEW,
                             graph=ki_prompt.GRAPH_KONTEXT)]
+    # Werkzeug-Suche (Schritt 9, 2026-10-22, KI-Bibel W-08): direkt hinter den
+    # Meta-Regeln ein Absatz, was geladen ist und was search_tools holt; die
+    # Stellen dahinter, die zurückgestellte Werkzeuge nennen, sagen es kurz
+    # mit. Nur auf einer Schiene mit MERKMALE["werkzeug_suche"] und nur mit
+    # eingeschalteter Einstellung — aus bleibt der Kopf byte-gleich.
+    suche = _suche_im_prompt(schiene)
+    if suche:
+        teile.append(schiene.SUCHE)
     # Das Datei-Gedaechtnis: Steckbrief, Ziele, Dossier-TITEL. Gehoert in
     # den gecachten Teil — es aendert sich fast nie, und genau darin liegt
     # der Unterschied zum alten Graph-Block, der bei jedem Turn neu und
     # ungecacht mitreiste.
     try:
         import gedaechtnis
-        kopf = gedaechtnis.kopf_block()
+        kopf = gedaechtnis.kopf_block(suche=suche)
     except Exception:
         kopf = ""
     if kopf:
@@ -335,7 +353,7 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None,
     if projekt and getattr(schiene, "MERKMALE", {}).get("projekte"):
         try:
             import projekte
-            block = projekte.prompt_block(projekt)
+            block = projekte.prompt_block(projekt, suche=suche)
         except Exception:
             block = ""
         if block:
@@ -385,12 +403,18 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     parts = []
     if mem_ctx:
         parts.append(mem_ctx)
-    parts.append(ki_prompt._now_prompt())
+    schiene = _profil()
+    # Werkzeug-Suche an (Schritt 9): read_time heißt „über search_tools“.
+    # Aus bleibt der Block byte-gleich (Aufruf ohne Argument wie vorher).
+    parts.append(ki_prompt._now_prompt(suche=True) if _suche_im_prompt(schiene)
+                 else ki_prompt._now_prompt())
     if not tutor_mode:
         # Der Imprint steht NICHT hier, sondern im gecachten Kopf
         # (_static_system). Er ändert sich mit dem Tag, nicht mit dem Turn —
         # hier unten würde er bei jedem Turn ungecacht mitbezahlt.
-        alarm = ki_prompt._alarm_prompt()
+        # gross: eigener Alarm-Text ohne Dashboard (KI-Bibel B-03).
+        alarm = (ki_prompt._alarm_prompt(gross=True) if schiene.NAME == "gross"
+                 else ki_prompt._alarm_prompt())
         if alarm:
             parts.append(alarm)
         if via_mic:
@@ -398,7 +422,7 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
         # Offene Zusagen (2026-10-09, core/ehrlichkeit.py): wechseln mit dem
         # Gespräch, also hier hinter dem Cache-Breakpoint, nie im festen Kopf.
         # Nur auf gross — klein bekommt den Umschlag ohnehin nicht.
-        if _profil().NAME == "gross":
+        if schiene.NAME == "gross":
             offen = ehrlichkeit.umschlag_block()
             if offen:
                 parts.append(offen)
@@ -643,7 +667,9 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # sie frei. Aus: dieselbe Liste wie immer.
     suche = (not tutor_mode and _suche_an(active_tools))
     zurueck = _zurueckgestellt() if suche else frozenset()
-    anthro_tools = _to_anthropic_tools(active_tools, zurueck)
+    schiene = _profil().NAME if tools is None else "klein"
+    anthro_tools = _to_anthropic_tools(active_tools, zurueck,
+                                       beispiele=schiene == "gross" and not tutor_mode)
     ablauf_melden(sys_blocks[0]["text"], volatile, messages, tutor_mode)
 
     adapter = _AnthropicAdapter(_get_client(), model or _model(),
@@ -653,7 +679,6 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     if suche:
         import werkzeug_suche
         adapter.freigeschaltet.dazu(werkzeug_suche.aus_verlauf(messages))
-    schiene = _profil().NAME if tools is None else "klein"
     yield from werkzeug_schleife.laufen(
         adapter, tutor_mode=tutor_mode, active_exec=active_exec,
         user_query=user_query, store=store, abbruch=abbruch,
@@ -663,6 +688,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         pruefer=ehrlichkeit.pruefer_fuer(messages, schiene=schiene,
                                          tutor_mode=tutor_mode,
                                          kontext=sys_blocks[0]["text"] + "\n" + volatile))
+
+
+def _suche_im_prompt(schiene) -> bool:
+    """Spricht der Prompt von der Werkzeug-Suche? Nur auf einer Schiene, die
+    sie kennt (MERKMALE["werkzeug_suche"], heute gross), und nur mit der
+    Einstellung werkzeug_suche = an (memory/ki/werkzeug_suche.md, Schritt 9)."""
+    if not getattr(schiene, "MERKMALE", {}).get("werkzeug_suche"):
+        return False
+    import werkzeug_gruppen
+    return werkzeug_gruppen.suche_an()
 
 
 def _suche_an(tools) -> bool:

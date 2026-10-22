@@ -46,6 +46,7 @@
 # sind schienen-spezifisch, wer sie IST nicht.
 
 import nutzer_angaben
+import werkzeug_gruppen
 import werkzeug_register
 
 from . import klein
@@ -270,6 +271,23 @@ _CAPABILITIES_VORLAGE = """## Meta-Regeln
 7. Bezieht sich {nutzer} auf Früheres („wie letztens", „das mit …"): erst search_chats."""
 
 
+# ── Werkzeug-Suche im Prompt (Schritt 9, 2026-10-22, KI-Bibel W-08) ─────
+# Anthropic (tool-search-tool): die Kategorien im System-Prompt nennen, damit
+# das Modell weiß, wonach es suchen kann. Ein Absatz hinter den Meta-Regeln
+# (cloud._static_system, nur mit MERKMALE["werkzeug_suche"] und Einstellung
+# werkzeug_suche = an): was geladen ist, dass alles andere über search_tools
+# kommt — auch die Werkzeuge, die die Meta-Regeln beim Namen nennen — und
+# eine Zeile Kategorien. Die Kern-Liste kommt aus werkzeug_gruppen.IMMER,
+# damit Prompt und Register nicht auseinanderlaufen. Aus: nichts davon.
+SUCHE = ("## Werkzeuge laden\n\n"
+         "Geladen sind anfangs nur " + ", ".join(werkzeug_gruppen.IMMER[:-1]) + " und "
+         + werkzeug_gruppen.IMMER[-1] + ". Jedes andere Werkzeug holst du mit "
+         "search_tools, bevor du es rufst, auch die, die dieser Prompt beim Namen nennt. "
+         "Kategorien: Termine und Routinen schreiben · Uhrzeit · Notizen und "
+         "Gedächtnis · frühere Gespräche · Skills · Rückfragen mit Knöpfen · Browser "
+         "· Ablage, Dateien, PDF, Word, Excel · Mail und News · Messreihen · Projekte.")
+
+
 # Platzhalter statt „Sasha" (2026-10-09, wie in klein): gefüllt beim Import
 # für die Namen unten und in system() bei jedem Aufruf aus den Einstellungen.
 _SYSTEM_PROMPT       = nutzer_angaben.einsetzen(_SYSTEM_VORLAGE)
@@ -309,6 +327,10 @@ MERKMALE = {
     # Projekt-Block (Anweisungen + Wissensliste) im festen Kopf, wenn das
     # Gespräch zu einem Projekt gehört (Phase 6, 2026-10-07). klein nicht.
     "projekte":     True,
+    # Werkzeug-Suche (Schritt 9, 2026-10-22): diese Schiene kennt search_tools
+    # und bekommt mit eingeschalteter Einstellung den Absatz SUCHE und die
+    # Hinweise „über search_tools“ (cloud._suche_im_prompt). klein nicht.
+    "werkzeug_suche": True,
 }
 
 

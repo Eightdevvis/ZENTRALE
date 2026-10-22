@@ -80,7 +80,7 @@ _MONTHS_DE = ["", "Januar", "Februar", "März", "April", "Mai", "Juni",
               "Juli", "August", "September", "Oktober", "November", "Dezember"]
 
 
-def _now_prompt() -> str:
+def _now_prompt(suche: bool = False) -> str:
     """
     Baut den Jetzt-Block: Datum und die Grenzen dessen, was sie ohne
     Werkzeug weiß.
@@ -99,6 +99,9 @@ def _now_prompt() -> str:
 
     Das Datum bleibt: es wechselt einmal am Tag statt jede Minute, und
     ohne es wäre jede Aussage über "heute" ein Tool-Aufruf.
+
+    suche (2026-10-22, Werkzeug-Suche Schritt 9): read_time ist dann erst
+    nach search_tools da — der Satz sagt es. Aus: byte-gleich wie vorher.
     """
     now = datetime.now()
     weekday = _WEEKDAYS_DE[now.weekday()]
@@ -111,7 +114,8 @@ def _now_prompt() -> str:
         "Tage, NICHT der aktuelle Tag.\n\n"
         "Die UHRZEIT steht hier bewusst nicht: du weißt nicht, wie spät es "
         "ist. Brauchst du sie wirklich - weil {nutzer} danach fragt oder weil "
-        "es für eine Entscheidung zählt - ruf read_time. Rate nie, und "
+        "es für eine Entscheidung zählt - ruf read_time" + (
+            " (über search_tools)" if suche else "") + ". Rate nie, und "
         "rechne nichts aus dem Kopf aus."
     )
     # {nutzer}: Name aus den Einstellungen (core/nutzer_angaben.py, 2026-10-09).
@@ -149,7 +153,7 @@ def _imprint_prompt(betont: bool = True) -> str:
         return ""
 
 
-def _alarm_prompt() -> str:
+def _alarm_prompt(gross: bool = False) -> str:
     """
     Baut den "offene Erinnerungen"-Block aus dem Alarm-Kanal (state.get_alarms,
     gefüllt von kalender.open_alarms). Ersetzt das frühere Inline-Mischen der
@@ -166,6 +170,8 @@ def _alarm_prompt() -> str:
     alarms = state.get_alarms()
     if not alarms:
         return ""
+    if gross:
+        return _alarm_gross(alarms)
     # Gemeinsamer Verhaltens-Schwanz (gilt in beiden Varianten).
     tail = (
         "Bring sie EINMAL aktiv zur Sprache, wenn sie zum Gespräch passt - z.B. "
@@ -196,6 +202,25 @@ def _alarm_prompt() -> str:
     for a in alarms:
         lines.append("- " + str(a.get("text", "")).strip())
     lines.append(nutzer_angaben.einsetzen(framing))
+    return "\n".join(lines)
+
+
+# Der Alarm-Block auf gross (2026-10-22, KI-Bibel B-03, P-02): ohne
+# Dashboard und ohne [[bild: alarm]] — beides gibt es dort nicht (die TUI zeigt
+# keins) — und in normaler Schreibung statt EINMAL/KONFLIKT. klein bleibt
+# byte-gleich (gemessen; tests/test_prompt_nutzer.py).
+_ALARM_GROSS = (
+    "Das sind stehende Erinnerungen für {nutzer}, vom Kalender berechnet. Sprich "
+    "eine einmal an, wenn sie zum Gespräch passt, etwa bei einer Frage nach dem Tag "
+    "oder dem Kalender oder wenn ein neuer Termin in eine Reise fällt; nicht in jeder "
+    "Antwort. Bei einem Termin in einer Reise oder einer nötigen Absage einmal kurz "
+    "rückversichern, dann klar warnen und per ask_choice nachhaken, ob abgesagt ist.")
+
+
+def _alarm_gross(alarms) -> str:
+    lines = ["## Offene Erinnerungen"]
+    lines += ["- " + str(a.get("text", "")).strip() for a in alarms]
+    lines.append(nutzer_angaben.einsetzen(_ALARM_GROSS))
     return "\n".join(lines)
 
 

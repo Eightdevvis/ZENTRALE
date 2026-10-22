@@ -88,7 +88,7 @@ def welt(monkeypatch):
     monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken", lambda *a, **k: None)
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
-    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_now_prompt", lambda: "## Jetzt\nMontag, 10:00")
     monkeypatch.setattr(erlaubnis, "braucht_erlaubnis", lambda *a, **k: False)
     ausgefuehrt = []

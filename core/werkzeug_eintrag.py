@@ -87,6 +87,10 @@ class Werkzeug:
                     zum ECHTEN Freigabestand angehängt (erlaubnis.
                     mit_freigabe): freigegeben oder „fragt per Knopf".
                     schema() bleibt ohne ihn, byte-gleich.
+
+    Seit 2026-10-22 (Werkzeug-Suche Schritt 9, KI-Bibel W-08):
+    mit_suche       Satz für gross, nur mit Einstellung werkzeug_suche = an:
+                    welches genannte Werkzeug erst über search_tools kommt.
     """
     name: str
     parameter: dict
@@ -113,6 +117,16 @@ class Werkzeug:
     gruppe: str | None = None
     schalter: str | None = None
     freigabe_im_text: bool = False
+    mit_suche: str | None = None
+
+    def text_auf(self, schiene: str, suche: bool = False) -> str | None:
+        """Die Beschreibung, wie sie ans Modell geht. Mit Werkzeug-Suche an
+        (Schritt 9, 2026-10-22) hängt auf gross `mit_suche` an: ein Satz, dass
+        ein genanntes Werkzeug erst über search_tools kommt. Aus: byte-gleich."""
+        text = self.beschreibung(schiene)
+        if suche and schiene == "gross" and text and self.mit_suche:
+            return f"{text} {self.mit_suche}"
+        return text
 
     def beschreibung(self, schiene: str) -> str | None:
         return getattr(self, schiene)

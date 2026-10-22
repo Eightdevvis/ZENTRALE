@@ -214,7 +214,7 @@ EINTRAEGE = [
         beweis="liest die Kopie nach: neuer Text da, alter weg, Angehängtes am Ende",
         klein=None,
         gross=(
-            "Legt eine geänderte KOPIE einer Word-Datei in die Ablage: Text "
+            "Legt eine geänderte Kopie einer Word-Datei in die Ablage: Text "
             "wörtlich ersetzen und/oder Markdown hinten anhängen. Das "
             "Original bleibt. Wird bestätigt."
         ),

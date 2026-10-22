@@ -292,9 +292,13 @@ def test_der_schnitt_haelt():
     # Antwort (sonst legt sie jede Einkaufsliste ab oder nie etwas); die
     # anderen drei sind je ein Satz. Wer mehr will, schreibt es in die
     # Meta-Regeln, nicht in jedes Schema.
+    # 22.10.2026 von 650 auf 780 (KI-Bibel W-04, keine Überschneidung):
+    # read_document und update_document sagen jetzt, wofür sie gegenüber
+    # read_file und replace_document da sind (beide lesen bzw. erneuern
+    # Ablage-Dokumente); vorher war das für Mensch und Modell nicht zu sagen.
     besch_ablage = sum(len(t["function"]["description"]) for t in gross.TOOLS
                        if t["function"]["name"] in ablage)
-    assert 0 < besch_ablage < 650
+    assert 0 < besch_ablage < 780
     # Projekte (07.10.2026, Phase 6): ein Werkzeug, ~90 Zeichen. Deckel 200:
     # WAS im Projekt steht, sagt der Projekt-Block im Kopf (nur bei einem
     # Projekt-Gespräch); das Werkzeug sagt nur, dass es von dort liest.

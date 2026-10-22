@@ -187,7 +187,7 @@ def test_route_speichert_sendet_und_protokolliert(monkeypatch):
         chat_stream = staticmethod(gen)
     monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
-    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     client = app.test_client()
     r = client.post("/api/chat", json={"message": "wann ist analysis I?"})
     ev = [json.loads(z[5:]) for z in r.get_data(as_text=True).splitlines()

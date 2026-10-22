@@ -78,8 +78,10 @@ def aktuell():
         listen = {}
         for name, schiene in (("klein", klein), ("gross", gross)):
             listen[name + "_openai"] = json.dumps(schiene.TOOLS, ensure_ascii=False)
+            # gross mit input_examples (2026-10-22, KI-Bibel W-05), wie cloud.run.
             listen[name + "_anthropic"] = json.dumps(
-                cloud._to_anthropic_tools(schiene.TOOLS), ensure_ascii=False)
+                cloud._to_anthropic_tools(schiene.TOOLS, beispiele=name == "gross"),
+                ensure_ascii=False)
 
         namen = []
         for schiene in (klein, gross):

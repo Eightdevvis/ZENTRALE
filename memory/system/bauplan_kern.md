@@ -75,6 +75,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `tastentabelle` | 1 | Format der Tastentabelle (welche Tasten eine App je Ansicht nimmt): Beschriftung → neutrale Tastennamen, prüfen, aus dem app.toml; geteilt von TUI (`tasten.py`, Bausteine) und `GET /api/tasten`, ohne Imports (seit 2026-10-11) |
 | `zugang` | 1 | Zugangsschlüssel des Backends: anlegen, laden, zeitkonstant vergleichen, Modus aus/melden/an, Keks und Browser-Link (Prüfung selbst: `ui/routen/zugang.py`) |
 | `werkzeug_gruppen` | 1 | Welche KI-Werkzeuge immer geladen sind, Gruppen und Schlagworte für die Werkzeug-Suche, die Vorauswahl des qwen-Profils, der Schalter `werkzeug_suche` (seit 2026-10-14) |
+| `werkzeug_beispiele` | 1 | Aufruf-Beispiele (`input_examples`) für wenige gross-Werkzeuge mit typischen Fehlgriffen, nur Anthropic-Weg, gegen das Schema geprüft (seit 2026-10-22, KI-Bibel W-05) |
 | `dateien` | 1 | Atomar schreiben (alte oder neue Fassung, nie eine halbe) — für alle Datendateien; Rechnername für Dateien pro Rechner |
 | `ai_config` | 1 | Kill-Switches und API-Keys aus `data/ai_config.json`, `setting()`-Rangfolge |
 | `providers` | 1 | Anbieter-Liste des Kerns (URL, Key, Dialekt, Modelle) |

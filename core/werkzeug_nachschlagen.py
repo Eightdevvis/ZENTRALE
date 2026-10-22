@@ -57,14 +57,14 @@ SUCHE = Werkzeug(
         "Sucht unter den Werkzeugen, die noch nicht geladen sind, und lädt die "
         "passenden samt ihrer Gruppe — danach rufst du sie direkt auf. Geladen "
         "sind anfangs nur read_calendar, web_search und fetch_url; alles andere "
-        "findest du hier: Termine eintragen, ändern, löschen; Routinen; Notizen "
-        "und Gedächtnis; frühere Gespräche; Skills (load_skill); Rückfragen mit "
-        "Knöpfen; Browser (LSF); Dateien, Ablage, PDF, Word, Excel; Mail und "
-        "News; Messreihen. Ruf es, sobald du ein Werkzeug brauchst, das du "
-        "nicht siehst, mit Stichworten zur Sache (z. B. 'Termin eintragen', "
-        "'Notiz merken', 'Excel Tabelle'). Es sucht Werkzeuge, keine Inhalte: "
-        "was in Kalender, Notizen oder Netz steht, liefern erst die gefundenen "
-        "Werkzeuge."
+        "findest du hier: Termine eintragen, ändern, löschen; Routinen; Uhrzeit; "
+        "Notizen und Gedächtnis; frühere Gespräche; Skills (load_skill); "
+        "Rückfragen mit Knöpfen; Browser (LSF); Dateien, Ablage, PDF, Word, "
+        "Excel; Mail und News; Messreihen. Ruf es, sobald du ein Werkzeug "
+        "brauchst, das du nicht siehst, mit Stichworten zur Sache (z. B. 'Termin "
+        "eintragen', 'Notiz merken', 'Excel Tabelle'); für Werkzeuge, die du "
+        "schon siehst, nicht. Es sucht Werkzeuge, keine Inhalte: was in "
+        "Kalender, Notizen oder Netz steht, liefern erst die gefundenen Werkzeuge."
     ),
     parameter={"type": "object", "properties": {
         "query": {"type": "string",

@@ -55,7 +55,7 @@ _GRUPPEN = list(kalender_kategorie.KATEGORIEN) + [kalender_kategorie.KEINE,
                                                     kalender_kategorie.CUSTOM]
 _GRUPPE = {
     "type": "string", "enum": _GRUPPEN,
-    "description": ("Gruppe. Im Normalfall 'keine'. 'uni'/'arbeit' NUR für Einträge, die in "
+    "description": ("Gruppe. Im Normalfall 'keine'. 'uni'/'arbeit' nur für Einträge, die in "
                     "der Monatsansicht zu einem Block zusammengefasst werden (Uni-"
                     "Veranstaltung, Arbeitsschicht); 'custom' + kategorie_name für einen "
                     "eigenen Namen."),
@@ -151,8 +151,8 @@ AKTIONEN = [
         art="anlegen", alltag="termine eintragen", worte=("Termin eingetragen", "Termin eintragen"),
         immer_erlaubbar=True,
         beweis="liest den Termin per Kennung nach: Tag, Zeit, Ende, Ort, Gruppe",
-        einfach="Trägt EINEN Termin ein. Nur Felder, die Sasha genannt hat; Ende und Ebene nie "
-                "erfinden.",
+        einfach="Trägt einen Einmal-Termin ein. Nur Felder, die Sasha genannt hat; Ende und Ebene "
+                "nicht erfinden.",
     ),
     _aktion(
         "add_calendar_routine",
@@ -176,7 +176,7 @@ AKTIONEN = [
     ),
     _aktion(
         "edit_calendar_routine",
-        "Ändert oder löscht EINE Routine per kennung aus read_calendar. Nur genannte Felder "
+        "Ändert oder löscht eine Routine per kennung aus read_calendar. Nur genannte Felder "
         "ändern sich — nie löschen und neu anlegen, nie add_calendar_routine dafür. Einzelne "
         "Tage: nur_am oder nur_von/nur_bis.",
         {
@@ -208,7 +208,7 @@ AKTIONEN = [
         "Ende unbekannt: bis weglassen — dann fällt nur der Tag von aus; frag nach dem Ende.",
         {
             "kennung": _KENNUNG,
-            "label": _s("Ohne kennung: GENAUER Titel der Routine (wie im Kalender)"),
+            "label": _s("Ohne kennung: genauer Titel der Routine (wie im Kalender)"),
             "von": _s(f"Start der Pause, {_DATUM} (inkl.)", fehlt="PFLICHTFELD"),
             "bis": _s(f"Ende der Pause, {_DATUM} (inkl.)"),
             "grund": _s("Optional kurzer Grund, z.B. 'Sommerferien', 'Feiertag'"),
@@ -220,7 +220,7 @@ AKTIONEN = [
     ),
     _aktion(
         "delete_calendar_entry",
-        "Löscht EINEN Einzeltermin per kennung (mehrtägige ganz). Routinen: "
+        "Löscht einen Einzeltermin per kennung (mehrtägige ganz). Routinen: "
         "edit_calendar_routine, Phasen: delete_calendar_phase.",
         {
             "kennung": _KENNUNG,
@@ -233,7 +233,7 @@ AKTIONEN = [
     ),
     _aktion(
         "edit_calendar_entry",
-        "Ändert EINEN Einzeltermin per kennung; nur die genannten Felder ändern sich.",
+        "Ändert einen Einzeltermin per kennung; nur die genannten Felder ändern sich.",
         {
             "kennung": _KENNUNG,
             "day": _s(f"Ohne kennung: bisheriger Tag {_DATUM}."),
@@ -275,7 +275,7 @@ AKTIONEN = [
     ),
     _aktion(
         "edit_calendar_phase",
-        "Ändert EINE Phase per kennung: ab jetzt, oder nur einzelne Tage (nur_am, "
+        "Ändert eine Phase per kennung: ab jetzt, oder nur einzelne Tage (nur_am, "
         "nur_von/nur_bis).",
         {
             "kennung": _KENNUNG_PFLICHT,
@@ -297,11 +297,11 @@ AKTIONEN = [
         pflicht=("kennung",),
         art="aendern", alltag="tagesrhythmus ändern", frage="die Phase",
         worte=("Phase geändert", "Phase ändern"),
-        einfach="Ändert EINE Phase per kennung; einzelne Tage mit nur_am oder nur_von+nur_bis.",
+        einfach="Ändert eine Phase per kennung; einzelne Tage mit nur_am oder nur_von+nur_bis.",
     ),
     _aktion(
         "delete_calendar_phase",
-        "Löscht EINE Phase des Tagesrhythmus per kennung.",
+        "Löscht eine Phase des Tagesrhythmus per kennung.",
         {"kennung": _KENNUNG_PFLICHT},
         pflicht=("kennung",),
         art="loeschen", alltag="tagesrhythmus löschen", frage="die Phase löschen",
@@ -309,7 +309,7 @@ AKTIONEN = [
     ),
     _aktion(
         "set_calendar_group",
-        "Setzt die Gruppe EINES Eintrags per kennung (fasst ihn in der Monatsansicht zu "
+        "Setzt die Gruppe eines Eintrags per kennung (fasst ihn in der Monatsansicht zu "
         "einem Block, z.B. Uni).",
         {"kennung": _KENNUNG_PFLICHT, "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME},
         pflicht=("kennung", "kategorie"),
@@ -318,7 +318,7 @@ AKTIONEN = [
     ),
     _aktion(
         "set_calendar_layer",
-        "Legt EINEN Eintrag per kennung auf fest (termine) oder vielleicht (uncommitted).",
+        "Legt einen Eintrag per kennung auf fest (termine) oder vielleicht (uncommitted).",
         {"kennung": _KENNUNG_PFLICHT,
          "ebene": {"type": "string",
                    "enum": [kalender_kennung.VERBINDLICH, kalender_kennung.UNVERBINDLICH],
@@ -334,7 +334,7 @@ AKTIONEN = [
     # daraus das CSS-Dict (stil.KASTEN) für kalender_kennung.stil_setzen.
     _aktion(
         "set_calendar_style",
-        "Rahmen, Farben, Muster EINES Eintrags per kennung; nur genannte Felder ändern sich.",
+        "Rahmen, Farben, Muster eines Eintrags per kennung; nur genannte Felder ändern sich.",
         {"kennung": _KENNUNG_PFLICHT,
          "rahmen": {"type": "string", "enum": [w for w, _ in stil.RAHMEN],
                     "description": "Rahmenart: " + ", ".join(f"{w}={t}" for w, t in stil.RAHMEN),
@@ -367,7 +367,7 @@ AKTIONEN = [
     ),
     _aktion(
         "set_calendar_source",
-        "Gibt EINEM Eintrag per kennung eine Quelle: sein Titel ist dann live der oberste "
+        "Gibt einem Eintrag per kennung eine Quelle: sein Titel ist dann live der oberste "
         "offene Punkt der Liste/des Projekts.",
         {"kennung": _KENNUNG_PFLICHT,
          "quelle_art": {**_QUELLE_ART, "description": "'liste' oder 'projekt'."},
@@ -380,7 +380,7 @@ AKTIONEN = [
     ),
     _aktion(
         "clear_calendar_source",
-        "Löst die Quelle EINES Eintrags per kennung.",
+        "Löst die Quelle eines Eintrags per kennung.",
         {"kennung": _KENNUNG_PFLICHT,
          "titel_uebernehmen": {"type": "boolean",
                                "description": "true = den jetzigen Punkt als festen Titel behalten.",

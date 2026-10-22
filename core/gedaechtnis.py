@@ -816,6 +816,9 @@ _REGELN = (
     "Gespräche). Relative Zeitangaben („morgen\") als festes Datum. Sagt Sasha, "
     "wie du etwas machen sollst: das Warum und wann es gilt mitschreiben.\n"
     "- Was nicht mehr stimmt: archive_note — nichts wird gelöscht.")
+# Werkzeug-Suche an: die Werkzeuge oben sind erst nach search_tools da.
+_REGELN_SUCHE = ("\n- read_note, write_note und archive_note holst du vorher mit "
+                 "search_tools (z. B. „Notiz“).")
 
 
 # Sasha, 2026-10-11: ab dieser Größe (Zeichen, ohne YAML-Kopf) kommt statt der
@@ -850,8 +853,11 @@ def _ziele_block() -> str:
             "Gespräch passen — nicht ungefragt in jede Antwort.\n" + z)
 
 
-def kopf_block() -> str:
+def kopf_block(suche: bool = False) -> str:
     """Hausregeln + Steckbrief + der Index. Sonst nichts.
+
+    suche (Werkzeug-Suche an, 2026-10-22): die Regeln sagen, dass read_note &
+    Co. erst über search_tools kommen. Aus: byte-gleich wie vorher.
 
     Bewusst nur der Index (wie Claudes MEMORY.md): sie soll SEHEN, dass es
     ein Spagat-Dossier gibt, und es lesen, wenn es um den Spagat geht. Byte-
@@ -880,7 +886,8 @@ def kopf_block() -> str:
     if zb:
         teile.append(zb)
     if index:
-        teile.append("## Was im Gedächtnis liegt\n" + index + "\n\n" + _REGELN)
+        teile.append("## Was im Gedächtnis liegt\n" + index + "\n\n"
+                     + _REGELN + (_REGELN_SUCHE if suche else ""))
     return "\n\n".join(teile)
 
 

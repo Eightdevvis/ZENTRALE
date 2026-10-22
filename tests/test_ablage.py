@@ -157,7 +157,7 @@ def test_save_from_sandbox_ist_gegatet_und_nur_auf_wunsch():
     ohne „immer", und die Beschreibung sagt es dem Modell."""
     assert werkzeug_register.braucht_erlaubnis("save_from_sandbox", {"lauf": "x", "datei": "a"})
     assert not werkzeug_register.immer_erlaubbar("save_from_sandbox")
-    assert "NUR wenn Sasha" in werkzeug_register.eintrag("save_from_sandbox").gross
+    assert "nur wenn Sasha" in werkzeug_register.eintrag("save_from_sandbox").gross
     frage = werkzeug_register.frage("save_from_sandbox", {"lauf": "x", "datei": "plot.png",
                                                           "titel": "Kurve"})
     assert "plot.png" in frage and "Kurve" in frage and "Ablage" in frage

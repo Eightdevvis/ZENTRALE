@@ -67,8 +67,9 @@ _KORB = {"type": "boolean", "description": "true: im Papierkorb suchen."}
 LIST_FILES_GROSS_TEXT = ("Listet Sashas Ablage (Titel, id, Art, von wem), neueste zuerst; "
                          "papierkorb=true: was im Papierkorb liegt.")
 LIST_FILES_GROSS_PARAMETER = {"type": "object", "properties": {"papierkorb": _KORB}}
-READ_FILE_GROSS_TEXT = ("Liest ein Dokument der Ablage per id oder genauem Titel. "
-                        "Finden: list_files, find_files.")
+READ_FILE_GROSS_TEXT = ("Liest ein Dokument der Ablage per id oder genauem Titel, auch "
+                        "PDF, Word und Excel als Text (bis 30.000 Zeichen). Finden: "
+                        "list_files, find_files.")
 READ_FILE_GROSS_PARAMETER = {
     "type": "object",
     "properties": {"path": {"type": "string",

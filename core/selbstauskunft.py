@@ -47,7 +47,7 @@ FELDER = {
     "erledigt": {
         "type": "array",
         "items": {"type": "string", "enum": list(BEREICHE)},
-        "description": "Bereiche, in denen deine Antwort meldet, dass in DIESEM Zug etwas "
+        "description": "Bereiche, in denen deine Antwort meldet, dass in diesem Zug etwas "
                        "geändert wurde. Leer, wenn nichts geändert wurde.",
     },
     "fragt_erlaubnis": {

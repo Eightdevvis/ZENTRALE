@@ -768,7 +768,27 @@ def _read_document(args: dict) -> str:
         return f'"{k.get("titel")}" ist eine Word-Datei — lies sie mit read_docx(quelle="{k["id"]}").'
     if d["inhalt"] is None:
         return f'"{k.get("titel")}" ist ein Bild ({d["bytes"]} Bytes) — lesen geht nur bei Text.'
-    return f'"{k.get("titel")}" ({k.get("art")}, Fassung {d["fassung"]}):\n' + d["inhalt"]
+    kopf = f'"{k.get("titel")}" ({k.get("art")}, Fassung {d["fassung"]})'
+    return kopf + _stueck(d["inhalt"], args.get("ab"), f'read_document(id="{k["id"]}"')
+
+
+# Werkzeug-Ergebnisse knapp (KI-Bibel W-06, 2026-10-22): ein langes Dokument
+# kam bei read_document ganz (bis 400.000 Zeichen). Jetzt in Stücken wie
+# read_project_file, mit Hinweis, wie es weitergeht.
+LESEN_STUECK = 30_000
+
+
+def _stueck(text: str, ab, aufruf: str) -> str:
+    try:
+        ab = max(0, int(ab or 0))
+    except (TypeError, ValueError):
+        ab = 0
+    if not ab and len(text) <= LESEN_STUECK:
+        return ":\n" + text
+    teil = text[ab:ab + LESEN_STUECK]
+    rest = (f"\n[… weiter mit {aufruf}, ab={ab + LESEN_STUECK})]"
+            if ab + LESEN_STUECK < len(text) else "")
+    return f", Zeichen {ab}–{ab + len(teil)} von {len(text)}:\n{teil}{rest}"
 
 
 @ausfuehrer("update_document")

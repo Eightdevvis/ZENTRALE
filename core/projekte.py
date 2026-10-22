@@ -376,11 +376,12 @@ def _groesse(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MB"
 
 
-def prompt_block(pid) -> str:
+def prompt_block(pid, suche: bool = False) -> str:
     """Der Projekt-Block für den FESTEN Teil des Cloud-Prompts.
 
     Byte-stabil, solange sich am Projekt nichts ändert: kein Datum, keine
-    Uhrzeit, Dateien nach Name sortiert. Unbekanntes Projekt → ""."""
+    Uhrzeit, Dateien nach Name sortiert. Unbekanntes Projekt → "".
+    suche (Werkzeug-Suche an): read_project_file kommt über search_tools."""
     if not gibt_es(pid):
         return ""
     k = _kopf_lesen(pid)
@@ -401,6 +402,8 @@ def prompt_block(pid) -> str:
         if len(wissen) > MAX_LISTE_PROMPT:
             zeilen.append(f"- … und {len(wissen) - MAX_LISTE_PROMPT} weitere")
         teile.append("### Wissen\nDateien des Projekts — Inhalt mit "
-                     "read_project_file(name), wenn es darum geht:\n"
+                     "read_project_file(name)"
+                     + (" (über search_tools)" if suche else "")
+                     + ", wenn es darum geht:\n"
                      + "\n".join(zeilen))
     return "\n\n".join(teile)

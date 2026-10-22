@@ -232,7 +232,7 @@ def _zug(client, monkeypatch, runden, wechsel=None):
         chat_stream = staticmethod(gen)
     monkeypatch.setattr(kern, "cloud_modul", lambda: Modul)
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
-    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda: "")
+    monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     return _events(client.post("/api/chat", json={"message": "ok"}))
 
 

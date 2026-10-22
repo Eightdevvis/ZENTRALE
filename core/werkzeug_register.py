@@ -133,17 +133,16 @@ WERKZEUGE = [
             "aus, lies nur ab was dasteht."
         ),
         gross=(
-            "Liest Kalender-Einträge: TERMINE und Routinen, also Verabredetes. "
-            "Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen, "
-            "nicht hier. Zeitraum bevorzugt über 'zeitraum', für krumme "
-            "Spannen start_date+end_date; 'suche' filtert auf ein Stichwort. "
-            "Jede Zeile beginnt mit einer Kennung (#t… Termin, #r… Routine), "
-            "darunter die Serien mit allen Feldern. Vor jedem Ändern lesen und "
-            "die Kennung nehmen. Warnungen: read_calendar_warnings. Bei "
-            "KONFLIKT (Termin in einer Reise) oder ABSAGEN (Pflicht-Absage in "
-            "einer Reise) einmal kurz rückversichern, dann deutlich warnen und "
-            "per ask_choice nachhaken, ob schon abgesagt wurde."
+            "Liest Termine und Routinen aus Sashas Kalender, also Verabredetes; "
+            "Zustände, Krankheiten oder Erlebtes stehen in seinen Notizen. Nimm "
+            "es für jede Frage nach Plänen, freien Zeiten, einem bestimmten "
+            "Termin oder Vergangenem und vor jedem Ändern: jede Zeile beginnt "
+            "mit der Kennung (#t… Termin, #r… Routine), darunter die Serien mit "
+            "allen Feldern. Für eine bestimmte Sache 'suche' setzen (ohne "
+            "zeitraum), sonst 'zeitraum'; krumme Spannen über start_date+end_date. "
+            "Liefert keine Warnungen (read_calendar_warnings) und ändert nichts."
         ),
+        mit_suche="read_calendar_warnings holst du vorher mit search_tools.",
         parameter={
             "type": "object",
             "properties": {
@@ -193,7 +192,8 @@ WERKZEUGE = [
         ),
         gross=(
             "Wie spät es jetzt ist, plus der nächste Termin mit Abstand in "
-            "Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie."
+            "Minuten. Du weißt die Uhrzeit nicht von selbst - rate sie nie. "
+            "Nur, wenn Sasha danach fragt oder sie für eine Entscheidung zählt."
         ),
         parameter={"type": "object", "properties": {}},
     ),
@@ -302,7 +302,7 @@ WERKZEUGE = [
             "sie sind."
         ),
         gross=(
-            "Ändert oder löscht EINE bestehende Routine, per 'kennung' aus "
+            "Ändert oder löscht eine bestehende Routine, per 'kennung' aus "
             "read_calendar (ein Titel geht nur, wenn er genau eine trifft). "
             "Nur die genannten Felder ändern sich — nie löschen und neu "
             "anlegen, nie add_calendar_routine dafür. Mit 'nur_am' nur dieses "
@@ -362,8 +362,8 @@ WERKZEUGE = [
         ),
         gross=(
             "Trägt eine Pause für eine Routine ein - in dem Zeitraum findet "
-            "sie NICHT statt (Ferien, Lehrerin im Urlaub). Am besten per "
-            "'kennung'; ein 'label' muss GENAU dem Routinen-Titel entsprechen. "
+            "sie nicht statt (Ferien, Lehrerin im Urlaub). Am besten per "
+            "'kennung'; ein 'label' muss genau dem Routinen-Titel entsprechen. "
             "Datum YYYY-MM-DD. Ende unbekannt (\"fällt jetzt aus\"): 'bis' "
             "weglassen — dann fällt nur der Tag 'von' aus, und du fragst nach "
             "dem Ende."
@@ -414,7 +414,7 @@ WERKZEUGE = [
             "Einmal-Termine, nicht auf Routinen oder Pausen."
         ),
         gross=(
-            "Löscht EINEN Einzeltermin, per 'kennung' (oder Tag + Titel, nur "
+            "Löscht einen Einzeltermin, per 'kennung' (oder Tag + Titel, nur "
             "bei genau einem Treffer). Mehrtägige werden ganz gelöscht. "
             "Routinen: edit_calendar_routine."
         ),
@@ -573,6 +573,7 @@ WERKZEUGE = [
             "Suchanfragen kurz (1–6 Wörter), erst breit, dann eingrenzen. Danach "
             "die besten Treffer mit fetch_url lesen: ein Vorschautext belegt nichts."
         ),
+        mit_suche="search_memory holst du vorher mit search_tools.",
         freigabe_im_text=True,
         parameter={
             "type": "object",
@@ -606,6 +607,7 @@ WERKZEUGE = [
             "Liefert nichts hinter einer Anmeldung und nichts, was erst ein "
             "Skript nachlädt; dafür gibt es browser_open."
         ),
+        mit_suche="browser_open holst du vorher mit search_tools.",
         freigabe_im_text=True,
         parameter={
             "type": "object",
@@ -618,20 +620,11 @@ WERKZEUGE = [
             "required": ["url"],
         },
     ),
-    # antwort: die finale Antwort an den User laeuft (auch) ueber diesen
-    # Tool-Kanal statt nur als Freitext. Im Kalender-Bench hob das die
-    # Korrektheit von qwen3.5:9b (+~6 pp, gestapelt mit Sampling auf 82 %).
-    # Mechanismus ist primaer die FRAMING-Wirkung: "liefere immer eine Antwort"
-    # killt die "ich pruefe..."-und-Stopp-Aussetzer. werkzeug_schleife.run_tool
-    # behandelt einen antwort-Call terminal (Text = finale Antwort). Das Modell
-    # darf weiterhin frei antworten - dann greift der Suffix-Effekt, nicht der
-    # Tool-Pfad.
-    # Seit 2026-10-10 auch auf gross, aus einem anderen Grund: die
-    # Selbstauskunft (core/selbstauskunft.py). Die Felder sagen sprachfrei,
-    # was die Antwort tut; der Prüfer vergleicht sie mit dem Werkzeug-
-    # Protokoll. Auf gross erledigt die Schleife den Aufruf selbst
-    # (werkzeug_schleife._abgabe), nicht run_tool. Das Schema dort: unten,
-    # gross_parameter.
+    # antwort: klein — die Antwort über den Tool-Kanal hob qwen3.5:9b im
+    # Kalender-Bench (+~6 pp; Framing gegen „ich pruefe…"-und-Stopp), terminal
+    # in werkzeug_schleife.run_tool. gross seit 2026-10-10: Selbstauskunft
+    # (core/selbstauskunft.py, Schema unten als gross_parameter), erledigt von
+    # werkzeug_schleife._abgabe; der Prüfer vergleicht die Felder mit dem Protokoll.
     Werkzeug(
         name="antwort",
         terminal=True,
@@ -644,10 +637,11 @@ WERKZEUGE = [
             "('ich schaue nach…'), immer die echte Antwort."
         ),
         gross=(
-            "Gib JEDE Antwort hierüber ab, als letzten Aufruf des Zugs und allein "
-            "(nach den Ergebnissen der anderen Werkzeuge). 'text' ist die Antwort; "
-            "die übrigen Felder sagen ehrlich, was sie tut — ZENTRALE vergleicht "
-            "sie mit den Werkzeug-Ergebnissen."
+            "Gibt jede Antwort an Sasha ab, als letzter Aufruf des Zugs und allein: "
+            "erst die anderen Werkzeuge, dann antworten, nicht ankündigen. 'text' "
+            "ist, was Sasha liest; die übrigen Felder sagen ehrlich, was die Antwort "
+            "tut — ZENTRALE vergleicht sie mit den Werkzeug-Ergebnissen. Holt und "
+            "ändert nichts."
         ),
         parameter={
             "type": "object",
@@ -658,12 +652,8 @@ WERKZEUGE = [
             "required": ["text"],
         },
     ),
-    # ask_choice: die KI löst SELBST einen Knopf-Dialog aus, wenn sie mitten
-    # in einer Aufgabe eine knappe, diskrete Entscheidung von Sasha braucht
-    # (statt auf eine freie Texteingabe zu warten). Teilt sich die
-    # Button-Leiste + den blockierenden state.wait_permission-Mechanismus mit
-    # dem Erlaubnis-Gate - nur der Auslöser ist hier das Modell selbst. Ohne
-    # 'optionen' = Ja/Nein. werkzeug_schleife.run_tool behandelt den Call.
+    # ask_choice: die KI löst selbst einen Knopf-Dialog aus (Button-Leiste und
+    # state.wait_permission wie beim Erlaubnis-Gate); werkzeug_schleife.run_tool.
     Werkzeug(
         name="ask_choice",
         klein_name="frage_knopf",
@@ -715,8 +705,10 @@ WERKZEUGE = [
         gross=(
             "Liest eine Gedaechtnis-Datei am Stueck. 'name' wie im Index "
             "('sport/spagat', oder nur 'spagat'), 'ziele', 'tagebuch' (heute) "
-            "bzw. 'tagebuch/JJJJ-MM', 'index'. Lies die Datei, BEVOR du ueber "
-            "die Sache redest oder planst — der Index nennt nur Namen und Haken."
+            "bzw. 'tagebuch/JJJJ-MM', 'index'. Lies die Datei, bevor du ueber "
+            "die Sache redest oder planst — der Index nennt nur Namen und Haken. "
+            "Sucht nicht (search_memory) und liest keine Dokumente der Ablage "
+            "(read_file)."
         ),
         parameter={
             "type": "object",
@@ -744,12 +736,13 @@ WERKZEUGE = [
             "Eintraege nach Schema und ersetzt gleichnamige). Neuer Name: "
             "Datei wird angelegt — dann 'thema', 'art' und 'beschreibung' "
             "mitgeben. name='tagebuch' fuer das, was gerade passiert ist "
-            "(in SEINEN Worten); name='hausregeln' fuer Sashas "
-            "Verhaltens-Ansagen an dich. Koennte es einen STATUS haben, also "
-            "etwas sein, das er TUN koennte? Dann Katalog-Eintrag, sonst "
-            "Notiz; beides zur selben Sache ist falsch. Du fragst dafuer "
-            "nicht um Erlaubnis, und du antwortest danach ganz normal weiter "
-            "— mitschreiben IST keine Antwort."
+            "(in seinen Worten); name='hausregeln' fuer Sashas "
+            "Verhaltens-Ansagen an dich. Koennte es einen Status haben, also "
+            "etwas sein, das er tun koennte? Dann Katalog-Eintrag, sonst "
+            "Notiz; beides zur selben Sache ist falsch. Ein Text, den Sasha "
+            "lesen oder mitnehmen will, ist keine Notiz: create_document. Du "
+            "fragst dafuer nicht um Erlaubnis, und du antwortest danach ganz "
+            "normal weiter — mitschreiben ist keine Antwort."
         ),
         parameter={
             "type": "object",
@@ -789,7 +782,9 @@ WERKZEUGE = [
             "Volltextsuche ueber das ganze Gedaechtnis. Fuer alles, was "
             "laenger her ist als das Gespraech: 'wie war Spanien', 'was "
             "hatte ich zum Umzug gesagt'. Stumpfe Wortsuche — nimm den "
-            "Begriff, den SASHA benutzt haette, nicht eine Umschreibung."
+            "Begriff, den Sasha benutzt haette, nicht eine Umschreibung. "
+            "Durchsucht nur Notizen: Gespraeche mit search_chats, Dokumente "
+            "der Ablage mit search_files."
         ),
         parameter={
             "type": "object",
@@ -811,7 +806,7 @@ WERKZEUGE = [
         alltag="dossiers neu schreiben",
         klein=None,
         gross=(
-            "Schreibt eine Gedaechtnis-Datei KOMPLETT neu — zum Aufraeumen, "
+            "Schreibt eine Gedaechtnis-Datei komplett neu — zum Aufraeumen, "
             "wenn aus vielen angehaengten Absaetzen ein sauberer Stand werden soll. "
             "Destruktiv, wird bestaetigt. Der bisherige Inhalt muss vorher "
             "mit read_note gelesen werden, sonst wirfst du weg, was du nicht "
@@ -841,12 +836,12 @@ WERKZEUGE = [
         alltag="dokumente holen und ablegen",
         klein=None,
         gross=(
-            "Holt etwas aus dem Netz ODER aus Input/ und LEGT ES AB — Modulhandbuch, "
+            "Holt etwas aus dem Netz oder aus Input/ und legt es ab — Modulhandbuch, "
             "Stundenplan, Datenblatt, Artikel. PDF wird automatisch zu "
             "Text, HTML entrumpelt, Binaeres als Datei mit Vermerk "
             "abgelegt (unter 'thema'). Danach lesbar mit read_note und durchsuchbar mit "
             "search_memory. Unterschied zu fetch_url: das liest etwas "
-            "JETZT und vergisst es; hier wird abgelegt, um es spaeter "
+            "jetzt und vergisst es; hier wird abgelegt, um es spaeter "
             "wiederzufinden. Gib einen sprechenden 'name' — daraus wird "
             "der Ablageort."
         ),
@@ -854,7 +849,7 @@ WERKZEUGE = [
             "type": "object",
             "properties": {
                 "url":  {"type": "string",
-                         "description": "http(s)-Adresse ODER ein "
+                         "description": "http(s)-Adresse oder ein "
                                         "Pfad in Input/ oder Output/."},
                 "name": {"type": "string",
                          "description": "Kurzer Titel, z.B. 'modulhandbuch'."},
@@ -935,7 +930,7 @@ WERKZEUGE = [
             "Fuehrt ein kleines Python- oder Shell-Programm abgeschottet "
             "aus; zurueck kommen Rueckgabewert, Ausgabe, Fehler und neue "
             "Dateien. Fuer genaues Rechnen, Daten umformen, Skripte "
-            "ausprobieren. KEIN Internet, KEIN Zugriff auf Sashas Dateien "
+            "ausprobieren. Kein Internet, kein Zugriff auf Sashas Dateien "
             "(nur ein leerer Arbeitsordner, jeder Lauf neu), Python mit "
             "Standardbibliothek plus PIL, bs4, lxml, yaml (kein numpy/pandas), "
             "Zeitlimit 30 s (bis 120; laenger bis 1800 nur nach Rueckfrage), "
@@ -991,7 +986,7 @@ WERKZEUGE = [
         alltag="neue anleitungen anlegen",
         klein=None,
         gross=(
-            "Schlaegt einen NEUEN Skill vor: eine Anleitung fuer eine Art "
+            "Schlaegt einen neuen Skill vor: eine Anleitung fuer eine Art "
             "Aufgabe, die sich mit Sasha bewaehrt hat. Wird bestaetigt; "
             "lehnt er ab, entsteht nichts. 'beschreibung': wann er passt "
             "(der Ausloeser). Inhalt knapp, in Schritten."
@@ -1045,7 +1040,8 @@ WERKZEUGE = [
             "Sucht in allen frueheren Gespraechen mit Sasha (auch "
             "archivierten und dem alten Verlauf): was er oder du gesagt "
             "habt. Alle Woerter muessen vorkommen; nimm seine Begriffe. "
-            "Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory."
+            "Treffer: Titel, id, Datum, Ausschnitt. Notizen: search_memory, "
+            "Dokumente: search_files."
         ),
         parameter={
             "type": "object",
@@ -1111,11 +1107,15 @@ WERKZEUGE = [
     Werkzeug(
         name="read_document",
         klein=None,
-        gross="Liest ein Dokument aus der Ablage (id steht im Verlauf).",
+        gross=("Liest ein Text-Dokument der Ablage per id, in Stücken (ab), z. B. um "
+               "es mit update_document neu zu fassen. PDF, Word, Excel oder per "
+               "Titel: read_file."),
         parameter={
             "type": "object",
             "properties": {
                 "id": {"type": "string", "description": "Dokument-id."},
+                "ab": {"type": "integer",
+                       "description": "Optional: ab diesem Zeichen weiterlesen."},
             },
             "required": ["id"],
         },
@@ -1126,8 +1126,9 @@ WERKZEUGE = [
         beweis="liest die neue Fassung aus der Ablage nach",
         klein=None,
         gross=(
-            "Neue Fassung eines Dokuments der Ablage; die alte bleibt. Vorher "
-            "mit read_document lesen, 'inhalt' ist der vollstaendige neue Text."
+            "Neue Fassung eines Text-Dokuments der Ablage; die alte bleibt "
+            "abrufbar. Vorher mit read_document lesen, 'inhalt' ist der ganze "
+            "neue Text. PDF oder Word: replace_document."
         ),
         parameter={
             "type": "object",
@@ -1152,7 +1153,7 @@ WERKZEUGE = [
         klein=None,
         gross=(
             "Legt eine Datei aus einem run_code-Lauf in Sashas Ablage (Text "
-            "oder Bild) — NUR wenn Sasha sie behalten will, nie von dir aus. "
+            "oder Bild), nur wenn Sasha sie behalten will, nie von dir aus. "
             "Wird bestaetigt. 'lauf' und 'datei' stehen im Ergebnis von run_code."
         ),
         parameter={
@@ -1202,7 +1203,7 @@ WERKZEUGE = [
         beweis="liest den Termin nach: Tag, Zeit, Ende, Ort",
         klein=None,
         gross=(
-            "Ändert EINEN Einzeltermin, per 'kennung' aus read_calendar (oder "
+            "Ändert einen Einzeltermin, per 'kennung' aus read_calendar (oder "
             "Tag + Titel, nur bei genau einem Treffer). Nur die genannten "
             "Felder ändern sich; bei mehrtägigen auch 'bis'."
         ),
@@ -1243,12 +1244,8 @@ WERKZEUGE = [
             "required": [],
         },
     ),
-    # Hinweis: ASCII-Bilder laufen NICHT über ein Werkzeug. Messung
-    # (scripts/bench_ascii.py, Baseline N=200) zeigte: als Tool feuerte die KI
-    # bei impliziten Prompts nur ~3 % - und tippte den Aufruf oft als Text-
-    # Marker [[zeige_ascii: name]] statt einen echten Tool-Call zu machen.
-    # Stattdessen ein Inline-Marker im Antworttext (profil/klein.py,
-    # _ASCII_MARKER_PROMPT; ki_antwort zieht ihn heraus).
+    # ASCII-Bilder: kein Werkzeug (scripts/bench_ascii.py: als Tool ~3 % Treffer),
+    # sondern ein Inline-Marker (profil/klein.py, _ASCII_MARKER_PROMPT).
 ]
 
 
@@ -1420,7 +1417,7 @@ def schema(schiene: str) -> list:
         "type": "function",
         "function": {
             "name":        w.name_auf(schiene),
-            "description": w.beschreibung(schiene),
+            "description": w.text_auf(schiene, werkzeug_gruppen.suche_an()),
             "parameters":  copy.deepcopy(w.parameter_auf(schiene)),
         },
     } for w in auf_schiene(schiene) if schalter_an(w.schalter)]
