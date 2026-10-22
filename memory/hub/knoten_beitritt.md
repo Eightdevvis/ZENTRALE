@@ -154,3 +154,106 @@ Produkt-Weg für jeden Kunden.
 - Welche Apps hat die Installation — braucht es dafür eine eigene Liste in
   den Daten, oder reicht der Besitz aus dem Shop (`/api/shop/besitz`)?
   Vorschlag: der Shop-Besitz, dann gibt es eine Wahrheit, nicht zwei.
+
+---
+
+# Bauplan v1 — Login, Cloud, installierbarer Hub (entschieden 2026-10-22)
+
+Sasha, 22.10. abends: *„eine installierbare quelle für den hub — begrüßung,
+wie man den zentrale befehl erhältlich macht, -h gut ausgeschmückt, programm
+leicht aufmachbar, per terminal oder TUI. login muss drin sein. der login
+zieht deine ganzen online daten und synced dich komplett."* Beim Einrichten:
+**alles übernehmen / einzeln an- und abwählen / clean slate**. Zielgruppe
+international.
+
+## Entscheidungen
+
+| Frage | Entscheidung |
+|---|---|
+| Cloud | **Cloudflare** Workers + D1 (Konten, Sitzungen, Codes, Kopf der Mitte) + R2 (verschlüsselte Dateien, Pakete). Weltweit, anfangs kostenlos, kein Server zu pflegen. Adresse vorerst `*.workers.dev`. |
+| Schutz | **Zero-Knowledge** (Bitwarden-Modell): der Server sieht nie Passwort, Schlüssel oder Klartext. |
+| Passwort weg | **Notfallschlüssel**, einmal gezeigt beim Konto-Anlegen. |
+| Download | **Nur mit Einladungscode** (private Beta). `install.sh` ist öffentlich, das Paket nicht. |
+| Sprache | **Englisch** für CLI, Begrüßung, Assistent; Texte in einer eigenen Datei, Deutsch später als zweite Sprache. |
+| Login | **optional.** Ohne Login läuft ZENTRALE rein lokal. |
+| Wählbare Einheiten | Bis es eine leere Hub-Fassung gibt: **Bereiche** der Daten (aus `core/abgleich_auswahl.py`) + echte Apps (Tutor). |
+| Besitz | gehört dem **Konto**, nicht dem Gerät: jedes eingeloggte Gerät sieht ihn. Installiert ist je Gerät (Knoten-Beschreibung). |
+| Sashas Konto | `jenny_wolff@hotmail.com`; Sasha legt es selbst an (Passwort nur bei Sasha). Echte Daten werden erst dann hochgeladen. |
+
+## Schlüssel (alles auf dem Gerät)
+
+```
+passwort ─Argon2id(salz, t=3, m=64 MiB, p=4)→ hauptschluessel (32 B)
+hauptschluessel ─HKDF-SHA256 info="zentrale/anmelden/v1"→ anmelde_schluessel → an den Server (base64url)
+hauptschluessel ─HKDF-SHA256 info="zentrale/verpacken/v1"→ verpack_schluessel (als Fernet-Schlüssel)
+konto_schluessel  = Fernet.generate_key()     ← verschlüsselt ALLE Daten (dasselbe Format wie die Mitte heute)
+verpackt_passwort = Fernet(verpack_schluessel).encrypt(konto_schluessel)
+notfall           = 32 zufällige Bytes, gezeigt als Base32 in Vierergruppen
+verpackt_notfall  = Fernet(HKDF(notfall, info="zentrale/notfall/v1")).encrypt(konto_schluessel)
+```
+
+- Der Server speichert: Mail (klein geschrieben), `salz`, KDF-Werte, einen
+  PBKDF2-SHA256-Hash (eigenes Server-Salz, 600 000 Runden) über den
+  `anmelde_schluessel`, `verpackt_passwort`, `verpackt_notfall`.
+- Passwort ändern = nur `verpackt_passwort` neu. Notfall = mit dem
+  Notfallschlüssel `konto_schluessel` auspacken, neues Passwort setzen.
+- Auf dem Gerät liegt nach dem Login: Sitzung + `konto_schluessel` in
+  `~/.config/zentrale/konto.json` (Rechte 600). Abmelden löscht beides.
+
+## Schnittstelle (`cloud/openapi.yaml`, OpenAPI 3.1, Präfix `/v1`)
+
+Antworten JSON; Fehler `{"fehler": "<code>", "text": "<english sentence>"}`.
+Sitzung als `Authorization: Bearer <token>`.
+
+| Route | Was |
+|---|---|
+| `GET /install.sh` | öffentlich; das Installationsskript |
+| `GET /v1/paket` | `?code=` oder Bearer → `{version, sha256, groesse}` der neuesten Fassung |
+| `GET /v1/paket/<version>.tar.gz` | `?code=` oder Bearer → das Paket |
+| `POST /v1/konto` | `{mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall}` → 201. Code wird verbraucht. |
+| `POST /v1/vorab` | `{mail}` → `{salz, kdf}`. Unbekannte Mail: erfundene, aber für diese Mail feste Werte (verrät nicht, ob es das Konto gibt). |
+| `POST /v1/sitzung` | `{mail, anmelde_schluessel, knoten}` → `{token, laeuft_ab, verpackt_passwort}`. Gedrosselt (5 Fehlversuche/15 min je Mail und IP). |
+| `DELETE /v1/sitzung` | abmelden |
+| `POST /v1/notfall` | `{mail, notfall_beweis}` → `{verpackt_notfall, token}` für das Neusetzen; danach `PUT /v1/konto/passwort` |
+| `PUT /v1/konto/passwort` | `{salz, kdf, anmelde_schluessel, verpackt_passwort}` |
+| `GET /v1/mitte` | `{kennung|null, namen: [...]}` |
+| `GET /v1/mitte/datei/<name>` | Bytes der Datei im aktuellen Stand |
+| `POST /v1/mitte/stand` | `{basis: kennung|null, schreiben: {name: base64}, loeschen: [...]}` → 200 `{kennung}` oder **409** `jemand_schneller` (Compare-and-Swap auf den Kopf in D1) |
+| `GET /v1/mitte/enthaelt/<kennung>` | `{enthaelt: bool}` |
+| `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben) |
+| `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob) |
+
+`<name>` in der Mitte sind die schon verschlüsselten Namen (`inhalt.enc`,
+`d/<hmac>.enc`, `knoten/<k>/<hmac>.enc`) — der Server sieht dasselbe, was
+heute GitHub sieht. Ein Stand = Liste (Name → R2-Objekt nach Prüfsumme);
+`vorbereiten` + `senden` der Mitte-Schnittstelle werden auf dem Gerät zu
+EINEM `POST /v1/mitte/stand` (die `HttpMitte` merkt sich die Änderung bis
+`senden`).
+
+## Das Programm (`zentrale`)
+
+- **Paket:** `pyproject.toml` mit Einstiegspunkt `zentrale`; das Paket baut
+  `scripts/paket_bauen.py` aus einer **Positivliste** (`deploy/paket.txt`,
+  wie `aussenposten.txt`): kein `data/`, keine Keys, kein `memory/`,
+  keine Tests.
+- **`install.sh`:** fragt den Einladungscode (oder nimmt ihn als Argument),
+  prüft Python ≥ 3.11 + venv, lädt das Paket, prüft sha256, legt es unter
+  `~/.local/share/zentrale/hub/<version>/` ab, venv mit
+  `requirements-basis.txt` (ohne Whisper/TTS/Ollama-Teile), verlinkt
+  `~/.local/bin/zentrale`, sagt, falls `~/.local/bin` nicht im PATH ist, wie
+  man es dazunimmt (bash/zsh/fish), dann die **Begrüßung**. Läuft auf
+  Debian/Ubuntu/Pop!_OS **und Arch/EndeavourOS** (nennt fehlende
+  Systempakete je Paketverwaltung, installiert nichts mit Root selbst).
+- **Befehle:** `zentrale` (TUI), `zentrale -h` (ausgeschmückt: Banner,
+  Gruppen, Beispiele), `zentrale welcome`, `zentrale setup` (Assistent:
+  Login ja/nein → alles / auswählen / clean slate → holen),
+  `zentrale login`, `zentrale logout`, `zentrale account create`,
+  `zentrale account recover`, `zentrale sync`, `zentrale status`,
+  `zentrale devices`, `zentrale update`, `zentrale version`.
+  Erster Aufruf ohne Einrichtung → Assistent.
+- **Abgleich:** `abgleich_mitte_art = "http"` → `HttpMitte` in
+  `core/abgleich_mitte.py` (dieselben vier Handgriffe). Schlüssel = der
+  `konto_schluessel`, nicht `abgleich.schluessel`.
+- **Sashas Entwickler-Checkout bleibt unberührt:** `~/.local/bin/zentrale`
+  auf dem Laptop wird nicht angefasst; rsync bleibt dort Vorgabe, bis Sasha
+  umstellt.
