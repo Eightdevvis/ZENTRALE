@@ -48,6 +48,7 @@
 import os
 
 import ai_config     # Einstellungen (Längen-Grenzen der Nachrichten)
+import erlaubnis     # Freigabestand im Werkzeug-Text (W-03, 2026-10-22)
 import ehrlichkeit   # Live-Prüfer: Tat gegen Wort, Kennungen, offene Zusagen
 import ki_prompt     # Prompt-Bausteine (Jetzt, Imprint, Alarme, Schalter)
 import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
@@ -608,6 +609,10 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tool-Set von der Schiene, nicht aus ai.TOOLS: dort haengt das
     # Set fuer KLEINE Modelle (siehe core/profil/).
     active_tools = tools if tools is not None else cloud_tools()
+    # Freigabestand (2026-10-22, KI-Bibel W-03): web_search/fetch_url sagen,
+    # ob Sasha gefragt wird — so wie es für den nächsten Aufruf wirklich gilt.
+    if tools is None:
+        active_tools = erlaubnis.mit_freigabe(active_tools)
     # projekt (Phase 6): das Projekt des Gesprächs — für den Kopf und für
     # read_project_file, das nur dieses eine Projekt lesen darf.
     active_exec  = (tool_executor if tool_executor is not None

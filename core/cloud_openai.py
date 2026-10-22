@@ -41,6 +41,7 @@ import json as _json
 import os
 
 import cloud      # geteilt: Graph-Pfad, System-Bloecke
+import erlaubnis    # Freigabestand im Werkzeug-Text (W-03, 2026-10-22)
 import ehrlichkeit  # Live-Prüfer (Tat gegen Wort, Kennungen, Zusagen)
 import graph
 import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
@@ -266,6 +267,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     if tools is None and cloud._suche_an(schiene_obj.TOOLS):
         alle_tools = schiene_obj.TOOLS
         active_tools = _anfangs_werkzeuge(schiene_obj, messages)
+    if tools is None:
+        # Freigabestand (2026-10-22, KI-Bibel W-03), wie in cloud.run.
+        active_tools = erlaubnis.mit_freigabe(active_tools)
+        if alle_tools is not None:
+            alle_tools = erlaubnis.mit_freigabe(alle_tools)
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
     store        = None if tutor_mode else cloud.CLOUD_GRAPH

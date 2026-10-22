@@ -36,6 +36,7 @@
 # Feiner (pro Befehl wie bei Claude Code) wäre bei frei geschriebenem Code
 # nicht sinnvoll prüfbar.
 
+import copy
 import threading
 
 import ai_config
@@ -201,3 +202,39 @@ def uebersicht() -> dict:
     return {"immer": [zeile(n) for n in immer_liste()],
             "gespraech": [zeile(n) for n in gespraech_liste()],
             "gespraech_id": _gespraech["id"]}
+
+
+# ── Der Freigabestand im Werkzeug-Text (2026-10-22, KI-Bibel W-03) ─────
+# web_search und fetch_url sagten auf gross „Jede Suche muss Sasha
+# bestätigen" — dabei standen beide bei Sasha auf „immer". Das Modell las
+# daraus „sparsam" und las keine Seite (Jeans-Gespräch 14.10.). Jetzt steht
+# der Satz nicht mehr fest im Register, sondern kommt beim Senden dazu, mit
+# dem Stand, der für den nächsten Aufruf gilt (vorab: „immer" oder „für
+# dieses Gespräch"). Nur auf gross (der gross-Name ist der kanonische; die
+# klein-Texte bleiben, wie gemessen). Ändert Sasha den Stand, ändert sich
+# der Text einmal — das kostet einmal den Prompt-Cache, nicht jeden Zug.
+
+FREIGEGEBEN = "Freigegeben: läuft ohne Rückfrage an Sasha."
+GEFRAGT = "Vor dem Aufruf fragt ZENTRALE Sasha selbst per Knopf; frag nicht vorher im Text."
+
+
+def freigabe_satz(name: str) -> str:
+    """Der Satz zum Freigabestand dieses Werkzeugs, wie er gerade gilt."""
+    return FREIGEGEBEN if vorab(name) else GEFRAGT
+
+
+def mit_freigabe(tools: list) -> list:
+    """Die Werkzeug-Liste (OpenAI-Form), bei Werkzeugen mit
+    freigabe_im_text um den Satz zum Freigabestand ergänzt. Kopien nur der
+    geänderten Einträge; die Liste der Schiene bleibt unberührt."""
+    raus = []
+    for t in tools or ():
+        fn = t.get("function", t)
+        w = werkzeug_register.eintrag(fn.get("name", ""))
+        if (w is not None and w.freigabe_im_text and w.gross is not None
+                and fn.get("name") == w.name_auf("gross")):
+            t = copy.deepcopy(t)
+            neu = t.get("function", t)
+            neu["description"] = f"{neu.get('description', '')} {freigabe_satz(w.name)}".strip()
+        raus.append(t)
+    return raus

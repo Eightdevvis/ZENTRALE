@@ -542,10 +542,10 @@ WERKZEUGE = [
     ),
     # ── Internet-Pipe (gegatet) ──
     # Zwei Werkzeuge, die bewusst nach draußen telefonieren (core/web.py). Vor
-    # JEDEM Aufruf kommt ein JA/NEIN-Dialog: ZENTRALE ist sonst offline, was
-    # das LAN verlässt, gibt Sasha bewusst frei. Der Traffic leuchtet
-    # zusätzlich im orangen Internet-Panel auf (net.py). Such-Quelle heute:
-    # DuckDuckGo keyless, in web._ddg_search gekapselt und später tauschbar.
+    # jedem Aufruf fragt das Gate, außer bei „für dieses Gespräch"/„immer"
+    # (core/erlaubnis.py): was das LAN verlässt, gibt Sasha bewusst frei.
+    # Der Traffic leuchtet im orangen Internet-Panel auf (net.py). Suche:
+    # SearXNG, Rückfall DuckDuckGo (web.suche).
     Werkzeug(
         name="web_search",
         klein_name="web_suche",
@@ -562,12 +562,18 @@ WERKZEUGE = [
             "Jede Suche muss Sasha bestätigen (Knopf-Dialog), also sparsam "
             "und gezielt einsetzen."
         ),
+        # gross seit 2026-10-22 (KI-Bibel R-01–R-06, W-01, W-03); Freigabe-Satz: erlaubnis.mit_freigabe
         gross=(
-            "Sucht im Internet und gibt Titel, URL und Snippet zurück. Für alles, "
-            "was weder in Sashas Notizen noch in den Projekt-Dateien steht. "
-            "Treffer sind Hinweise, nicht gelesen: Angaben daraus erst nach "
-            "fetch_url als Tatsache nennen. Jede Suche muss Sasha bestätigen."
+            "Sucht im Internet und liefert je Treffer Titel, Adresse und einen "
+            "kurzen Vorschautext, nicht den Inhalt der Seiten. Nimm es für alles, "
+            "was sich seit deinem Training geändert haben kann oder nicht in "
+            "Sashas Notizen und Dateien steht: Fakten, Preise, Regeln, Läden, "
+            "Produkte, Angebote. Nicht für Sashas Notizen (search_memory) und "
+            "nicht für eine Adresse, die du schon hast (dann fetch_url). "
+            "Suchanfragen kurz (1–6 Wörter), erst breit, dann eingrenzen. Danach "
+            "die besten Treffer mit fetch_url lesen: ein Vorschautext belegt nichts."
         ),
+        freigabe_im_text=True,
         parameter={
             "type": "object",
             "properties": {
@@ -592,10 +598,15 @@ WERKZEUGE = [
             "nicht nur den Suchschnipsel. Jeder Abruf muss Sasha bestätigen."
         ),
         gross=(
-            "Lädt eine konkrete Webseite und gibt ihren Text zurück (gekürzt). "
-            "Sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Muss Sasha "
-            "bestätigen."
+            "Lädt eine Webseite und gibt ihren Text samt Titel zurück (gekürzt); "
+            "sagt, wenn kaum Inhalt kam (Navigation, Anmeldung). Nimm es nach "
+            "web_search für die besten Treffer, mehrere auch gleichzeitig, und "
+            "immer, wenn Sasha eine Adresse nennt, statt über die Seite zu "
+            "mutmaßen. Nicht für Sashas Notizen oder Dokumente in der Ablage. "
+            "Liefert nichts hinter einer Anmeldung und nichts, was erst ein "
+            "Skript nachlädt; dafür gibt es browser_open."
         ),
+        freigabe_im_text=True,
         parameter={
             "type": "object",
             "properties": {

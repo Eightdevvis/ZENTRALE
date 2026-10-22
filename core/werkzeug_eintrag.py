@@ -81,6 +81,12 @@ class Werkzeug:
                     eigene Name).
     schalter        Name einer Einstellung (an|aus): nur wenn sie an ist,
                     steht das Werkzeug in schema() (search_tools).
+
+    Seit 2026-10-22 (KI-Bibel W-03):
+    freigabe_im_text  Die gross-Beschreibung bekommt beim Senden einen Satz
+                    zum ECHTEN Freigabestand angehängt (erlaubnis.
+                    mit_freigabe): freigegeben oder „fragt per Knopf".
+                    schema() bleibt ohne ihn, byte-gleich.
     """
     name: str
     parameter: dict
@@ -106,6 +112,7 @@ class Werkzeug:
     laden: str = "bedarf"
     gruppe: str | None = None
     schalter: str | None = None
+    freigabe_im_text: bool = False
 
     def beschreibung(self, schiene: str) -> str | None:
         return getattr(self, schiene)

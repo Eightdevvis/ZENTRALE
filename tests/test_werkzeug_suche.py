@@ -342,7 +342,10 @@ def test_openai_ohne_schalter_wie_bisher(o_fake):
     from profil import gross
     c = o_fake([o_text("ok")])
     list(cloud_openai.chat_stream([{"role": "user", "content": "hallo"}]))
-    assert c.calls[0]["tools"] is gross.TOOLS
+    # Seit 2026-10-22 mit dem Satz zum Freigabestand (erlaubnis.mit_freigabe,
+    # KI-Bibel W-03) — sonst dieselbe Liste.
+    import erlaubnis
+    assert c.calls[0]["tools"] == erlaubnis.mit_freigabe(gross.TOOLS)
 
 
 # ── Profil: Vorauswahl und Prüfer ──────────────────────────────────────

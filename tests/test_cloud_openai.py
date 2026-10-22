@@ -154,7 +154,10 @@ def test_tools_gehen_ohne_uebersetzung_raus(fake):
     from profil import gross
     c = fake([_text("ok")])
     _lauf(cloud_openai.chat_stream(_msgs()))
-    assert c.calls[0]["tools"] is gross.TOOLS
+    # Seit 2026-10-22 mit dem Satz zum Freigabestand (erlaubnis.mit_freigabe,
+    # KI-Bibel W-03) — sonst dieselbe Liste.
+    import erlaubnis
+    assert c.calls[0]["tools"] == erlaubnis.mit_freigabe(gross.TOOLS)
     assert c.calls[0]["messages"][0]["role"] == "system"
 
 

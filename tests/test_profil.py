@@ -139,7 +139,11 @@ def test_der_schnitt_haelt():
     # nicht hat (Antwortverhalten aus Anthropics Prompt, die Hausregel-
     # Mechanik) — ein Verhaeltnis misst dann das Falsche. Was zaehlt, ist
     # die absolute Groesse: der Kopf geht bei jedem Cache-Write mit raus.
-    assert len(gross.system()) < 5000, "der gecachte Kopf laeuft voll"
+    # 22.10.2026 von 5.000 auf 5.600: „## Recherche" (~700 Zeichen, KI-Bibel
+    # recherche.md). Ohne die Regel antwortete die KI aus Vorschautexten und
+    # verneinte ohne gelesene Seite (Jeans-Gespräch 14.10.). Das Gesamtbudget
+    # des festen Kopfs hält tests/test_prompt_budget.py (21.000).
+    assert len(gross.system()) < 5600, "der gecachte Kopf laeuft voll"
     # Beschreibungen der GEERBTEN Werkzeuge — das war der Schnitt von
     # damals (6.342 → ~2.200). Die eigenen Gedaechtnis-Werkzeuge kamen
     # spaeter dazu und werden getrennt gedeckelt: sie sind kein Ballast,
@@ -191,6 +195,8 @@ def test_der_schnitt_haelt():
     ablage_pflege = {"replace_document", "trash_document", "restore_document"}
     # 11.10.2026: Tabellen (Skill excel) — eigener Deckel unten.
     tabelle = {"read_xlsx", "create_xlsx", "edit_xlsx"}
+    # 22.10.2026: Internet (web_search, fetch_url) — eigener Deckel unten.
+    netz = {"web_search", "fetch_url"}
     eigen = {w.name for w in werkzeug_register.auf_schiene("gross")
              if w.klein is None and w.name != "run_code"} - skill - suche - ablage - projekt \
         - kalender - pdf_word - fehler - browser - datei_import - input_ - reihen \
@@ -198,7 +204,8 @@ def test_der_schnitt_haelt():
     besch = sum(len(t["function"]["description"]) for t in gross.TOOLS
                 if t["function"]["name"] not in
                 eigen | {"run_code"} | skill | suche | ablage | projekt | kalender | pdf_word
-                | fehler | browser | datei_import | input_ | reihen | selbst | ablage_pflege | tabelle)
+                | fehler | browser | datei_import | input_ | reihen | selbst | ablage_pflege | tabelle
+                | netz)
     # antwort (10.10.2026, Selbstauskunft): ~240 Zeichen. Deckel 300: der
     # Text sagt nur, DASS jede Antwort hierüber geht und allein; was die
     # Felder bedeuten, steht in den Feldern (zählen nicht).
@@ -216,7 +223,16 @@ def test_der_schnitt_haelt():
     # Ende einen falschen Kalender.
     # 08.10.2026 von 3.300 auf 1.600: der Kalender zählt jetzt getrennt
     # (darunter). Was übrig ist, lag bei ~1.480.
+    # 22.10.2026: web_search/fetch_url zählen getrennt (darunter), der Rest
+    # bleibt unter 1.600.
     assert besch < 1600
+    # Internet (22.10.2026, KI-Bibel W-01/R-01–R-06): je 3–4 Sätze — was,
+    # wann ja, wann nein, was es NICHT liefert. ~1.000 Zeichen; vorher ~380.
+    # Der Satz zum Freigabestand kommt erst beim Senden dazu (erlaubnis.
+    # mit_freigabe) und zählt hier nicht.
+    besch_netz = sum(len(t["function"]["description"]) for t in gross.TOOLS
+                     if t["function"]["name"] in netz)
+    assert 0 < besch_netz < 1100
     # Kalender (08.10.2026, „Kalender ohne Fallen" nach Sashas Testlauf):
     # neun Werkzeuge, ~2.300 Zeichen; vorher sieben, ~1.730. Dazu kamen
     # edit_calendar_entry (einen Termin ändern ging nur über Löschen + Neu —

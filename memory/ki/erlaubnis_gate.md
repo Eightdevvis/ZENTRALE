@@ -107,6 +107,14 @@ nein]`; j = erster Ja-Knopf, n/Esc = nein wie bisher). Logik in
 - Pro Werkzeug, nicht pro Argument („run_code immer" = jedes Programm bis
   2 Minuten). Erlaubt ohne Frage steht als `AI ✓ ERLAUBT (immer|gespraech)`
   im Log.
+- **Der Stand im Werkzeug-Text** (seit 2026-10-22, KI-Bibel W-03): Werkzeuge
+  mit `freigabe_im_text` (heute `web_search`, `fetch_url`) haben auf gross
+  keinen festen Satz zur Bestätigung mehr. `erlaubnis.mit_freigabe(tools)`
+  hängt beim Senden (`cloud.run`, `cloud_openai.chat_stream`) den Satz an,
+  der für den nächsten Aufruf gilt (`vorab`): „Freigegeben: läuft ohne
+  Rückfrage an Sasha." oder „Vor dem Aufruf fragt ZENTRALE Sasha selbst per
+  Knopf; frag nicht vorher im Text." `schema()` und der Schnappschuss bleiben
+  ohne ihn; klein behält „Jede Suche muss Sasha bestätigen" (gemessen).
 
 `save_memory` ist mit dem Legacy-Pfad rausgeflogen – der Graph-Extraktor
 läuft eh nach jedem Turn automatisch. Kalender-Tools (`read_calendar`,
