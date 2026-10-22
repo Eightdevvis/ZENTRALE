@@ -1,5 +1,5 @@
 // Accounts and sessions (zero-knowledge: the server only sees values the
-// client derived from the password; it stores PBKDF2 hashes of them).
+// client derived from the password; it stores salted HMAC-SHA256 of them).
 //
 //   POST   /v1/konto           create (uses up the invite code)
 //   POST   /v1/vorab           salt + kdf for a mail (fake but stable if unknown)
@@ -10,7 +10,7 @@
 
 import { drossel, erfolg, fehlschlag, ip, pruefen } from "./drossel";
 import { HttpFehler, KB, b64Lesen, b64u, json, jsonLesen, text, ungueltig } from "./hilfe";
-import { RUNDEN, gleich, hmac, neuerHash, neuesToken, pbkdf2, sha256Hex, zufall } from "./krypto";
+import { HASH_ART, gleich, hmac, neuerHash, neuesToken, schluesselHash, sha256Hex, zufall } from "./krypto";
 import { codeHash } from "./paket";
 
 export const SITZUNG_TAGE = 90;
@@ -30,13 +30,14 @@ export interface Sitzung {
 
 interface KontoZeile {
   id: string;
+  mail: string;
   salz: string;
   kdf: string;
   anmelde_hash: string;
   anmelde_salz: string;
   notfall_hash: string;
   notfall_salz: string;
-  runden: number;
+  hash_art: string;
   verpackt_passwort: string;
   verpackt_notfall: string;
 }
@@ -53,10 +54,11 @@ export function mailLesen(daten: Record<string, unknown>): string {
   return mail;
 }
 
-function schluesselLesen(daten: Record<string, unknown>, feld: string): string {
-  const wert = text(daten, feld, 128);
-  if (b64Lesen(wert).byteLength !== 32) throw ungueltig(`The field '${feld}' must be 32 bytes (base64url).`);
-  return wert;
+/** A 32-byte key from the client (base64url) → its bytes. */
+function schluesselLesen(daten: Record<string, unknown>, feld: string): Uint8Array {
+  const bytes = b64Lesen(text(daten, feld, 128));
+  if (bytes.byteLength !== 32) throw ungueltig(`The field '${feld}' must be 32 bytes (base64url).`);
+  return bytes;
 }
 
 function salzLesen(daten: Record<string, unknown>): string {
@@ -165,8 +167,7 @@ export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): P
   if (!frei) throw new HttpFehler(403, "code_ungueltig", "This invite code is not valid or was already used.");
 
   const ah = await neuerHash(anmelde);
-  const runden = ah.runden;
-  const nh = await neuerHashMit(beweis, runden);
+  const nh = await neuerHash(beweis);
   const id = crypto.randomUUID();
 
   // One transaction: the account only appears if the code is still free, and
@@ -176,10 +177,10 @@ export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): P
     ergebnis = await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO konten (id, mail, salz, kdf, anmelde_hash, anmelde_salz, notfall_hash, notfall_salz,
-                             runden, verpackt_passwort, verpackt_notfall, erstellt, geaendert)
+                             hash_art, verpackt_passwort, verpackt_notfall, erstellt, geaendert)
          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE EXISTS (SELECT 1 FROM codes WHERE code_hash = ? AND gesperrt = 0 AND verbraucht_von IS NULL)`,
-      ).bind(id, mail, salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, runden,
+      ).bind(id, mail, salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, HASH_ART,
         verpackt_passwort, verpackt_notfall, jetzt, jetzt, ch),
       env.DB.prepare(
         `UPDATE codes SET verbraucht_von = ?, verbraucht_am = ?
@@ -200,11 +201,6 @@ export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): P
   return json({ mail, erstellt: iso(jetzt) }, 201);
 }
 
-async function neuerHashMit(wert: string, runden: number) {
-  const salz = zufall(16);
-  return { hash: b64u(await pbkdf2(wert, salz, runden)), salz: b64u(salz), runden };
-}
-
 export async function vorab(env: Env, anfrage: Request): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
   const mail = mailLesen(d);
@@ -221,14 +217,20 @@ export async function vorab(env: Env, anfrage: Request): Promise<Response> {
 }
 
 /** Verify `wert` against the stored hash. Unknown account → same work, false. */
-async function pruefeHash(wert: string, hash: string | null, salz: string | null, runden: number): Promise<boolean> {
-  if (hash === null || salz === null) {
-    await pbkdf2(wert, zufall(16), runden);
+async function pruefeHash(wert: Uint8Array, k: { hash: string; salz: string; art: string } | null): Promise<boolean> {
+  if (k === null) {
+    await schluesselHash(wert, zufall(32));
     return false;
   }
-  const ist = await pbkdf2(wert, b64Lesen(salz), runden);
-  return gleich(ist, b64Lesen(hash));
+  if (k.art !== HASH_ART) throw new Error(`unknown hash_art ${k.art}`);
+  const ist = await schluesselHash(wert, b64Lesen(k.salz));
+  return gleich(ist, b64Lesen(k.hash));
 }
+
+const anmeldeHash = (k: KontoZeile | null) =>
+  k ? { hash: k.anmelde_hash, salz: k.anmelde_salz, art: k.hash_art } : null;
+const notfallHash = (k: KontoZeile | null) =>
+  k ? { hash: k.notfall_hash, salz: k.notfall_salz, art: k.hash_art } : null;
 
 export async function anmelden(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
@@ -239,7 +241,7 @@ export async function anmelden(env: Env, anfrage: Request, jetzt: number): Promi
   const dr = await drossel("sitzung", mail, ip(anfrage));
   await pruefen(env.DB, dr, jetzt);
   const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
-  const ok = await pruefeHash(anmelde, k?.anmelde_hash ?? null, k?.anmelde_salz ?? null, k?.runden ?? RUNDEN);
+  const ok = await pruefeHash(anmelde, anmeldeHash(k));
   if (!ok || !k) {
     await fehlschlag(env.DB, dr, jetzt);
     throw new HttpFehler(401, "falsche_anmeldung", "Wrong email or password.");
@@ -264,7 +266,7 @@ export async function notfall(env: Env, anfrage: Request, jetzt: number): Promis
   const dr = await drossel("notfall", mail, ip(anfrage));
   await pruefen(env.DB, dr, jetzt);
   const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
-  const ok = await pruefeHash(beweis, k?.notfall_hash ?? null, k?.notfall_salz ?? null, k?.runden ?? RUNDEN);
+  const ok = await pruefeHash(beweis, notfallHash(k));
   if (!ok || !k) {
     await fehlschlag(env.DB, dr, jetzt);
     throw new HttpFehler(401, "falscher_notfallschluessel", "This emergency key does not match this account.");
@@ -283,20 +285,33 @@ export async function passwortSetzen(env: Env, anfrage: Request, jetzt: number):
   const kdf = kdfLesen(d);
   const anmelde = schluesselLesen(d, "anmelde_schluessel");
   const verpackt_passwort = verpacktLesen(d, "verpackt_passwort");
-  const alt = await env.DB.prepare("SELECT runden FROM konten WHERE id = ?").bind(s.konto_id)
-    .first<{ runden: number }>();
-  if (!alt) throw NICHT_ANGEMELDET();
-  // Keep both hashes at the same iteration count (the notfall hash is unchanged).
-  const h = await neuerHashMit(anmelde, alt.runden);
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE id = ?").bind(s.konto_id).first<KontoZeile>();
+  if (!k) throw NICHT_ANGEMELDET();
+
+  // A normal session must prove the old password (a stolen session alone
+  // cannot lock the owner out). The 15-minute emergency session already
+  // proved the emergency key.
+  if (s.art === "normal") {
+    const alt = schluesselLesen(d, "altes_anmelde_schluessel");
+    const dr = await drossel("passwort", k.mail, ip(anfrage));
+    await pruefen(env.DB, dr, jetzt);
+    if (!(await pruefeHash(alt, anmeldeHash(k)))) {
+      await fehlschlag(env.DB, dr, jetzt);
+      throw new HttpFehler(401, "falsche_anmeldung", "The old password is wrong.");
+    }
+    await erfolg(env.DB, dr);
+  }
+  const h = await neuerHash(anmelde);
 
   // All other sessions end: whoever knew the old password is logged out.
   // After an emergency reset, the restricted session ends too.
   const behalten = s.art === "normal" ? s.token_hash : "";
   await env.DB.batch([
     env.DB.prepare(
-      `UPDATE konten SET salz = ?, kdf = ?, anmelde_hash = ?, anmelde_salz = ?, verpackt_passwort = ?, geaendert = ?
+      `UPDATE konten SET salz = ?, kdf = ?, anmelde_hash = ?, anmelde_salz = ?, hash_art = ?, verpackt_passwort = ?,
+                         geaendert = ?
         WHERE id = ?`,
-    ).bind(salz, JSON.stringify(kdf), h.hash, h.salz, verpackt_passwort, jetzt, s.konto_id),
+    ).bind(salz, JSON.stringify(kdf), h.hash, h.salz, HASH_ART, verpackt_passwort, jetzt, s.konto_id),
     env.DB.prepare("DELETE FROM sitzungen WHERE konto_id = ? AND token_hash != ?").bind(s.konto_id, behalten),
   ]);
   return json({ geaendert: iso(jetzt) });

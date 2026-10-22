@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anmelden, bytesText, jsonVon, kontoAnlegen, rufen } from "./hilfe";
+import { anmelden, blobHoch, bytesText, jsonVon, kontoAnlegen, rufen, shaHex } from "./hilfe";
 
 describe("Konten sind getrennt", () => {
   it("B sieht nichts von A", async () => {
@@ -24,5 +24,15 @@ describe("Konten sind getrennt", () => {
     expect((await jsonVon(await rufen("GET", "/v1/mitte", { token: a }))).kennung).toBe(kennungA);
     expect(await bytesText(await rufen("GET", "/v1/mitte/datei/inhalt.enc", { token: a }))).toBe("geheim-a");
     expect(await bytesText(await rufen("GET", "/v1/mitte/datei/inhalt.enc", { token: b }))).toBe("geheim-b");
+
+    // Blobs: A's Upload zählt für B nicht, B kann nicht darauf verweisen.
+    const blob = new TextEncoder().encode("blob-von-a");
+    const h = await shaHex(blob);
+    expect((await blobHoch(a, blob)).status).toBe(204);
+    expect((await jsonVon(await rufen("POST", "/v1/mitte/fehlende", { token: b, json: { sha256: [h] } }))).fehlen).toEqual([h]);
+    const kopfB = (await jsonVon(await rufen("GET", "/v1/mitte", { token: b }))).kennung;
+    const r2 = await rufen("POST", "/v1/mitte/stand", { token: b, json: { basis: kopfB, verweise: { "d/x.enc": h } } });
+    expect(r2.status).toBe(400);
+    expect((await jsonVon(r2)).fehler).toBe("blob_fehlt");
   });
 });

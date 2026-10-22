@@ -6,8 +6,9 @@ info:
   description: |
     Zero-knowledge (Bitwarden model): the server never sees the password, the
     account key or any plain content. The client derives everything; the
-    server stores PBKDF2-SHA256 hashes of `anmelde_schluessel` and
-    `notfall_beweis` with its own per-account salt.
+    server stores HMAC-SHA256(key = random 32-byte per-account salt) of
+    `anmelde_schluessel` and `notfall_beweis`. Both are 256-bit keys the
+    client derived with Argon2id/HKDF, so no slow hash is needed server-side.
 
     Key scheme and decisions: `memory/hub/knoten_beitritt.md` ("Bauplan v1").
 
@@ -40,6 +41,7 @@ components:
             Machine code, e.g. ungueltig, zu_gross, nicht_angemeldet, nur_passwort,
             falsche_anmeldung, falscher_notfallschluessel, zu_viele_versuche,
             code_ungueltig, code_noetig, mail_vergeben, jemand_schneller,
+            blob_fehlt (with `fehlen: [sha256…]`), pruefsumme, laenge_fehlt,
             fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
             nicht_eingerichtet, serverfehler.
         text: { type: string, description: English sentence for the user. }
@@ -51,6 +53,9 @@ components:
         t: { type: integer, minimum: 1, maximum: 20 }
         m: { type: integer, minimum: 19456, maximum: 4194304, description: KiB }
         p: { type: integer, minimum: 1, maximum: 16 }
+    Sha256:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
     B64u32:
       type: string
       description: 32 bytes, base64url (padding optional).
@@ -225,6 +230,10 @@ paths:
   /v1/konto/passwort:
     put:
       summary: Set a new password (only verpackt_passwort changes, the account key stays). Ends all other sessions; after an emergency reset also the emergency session.
+      description: |
+        With a normal session `altes_anmelde_schluessel` is required and checked
+        like a login (rate limited, 401 falsche_anmeldung / 429). With the
+        15-minute emergency token it is not needed.
       security: [{ sitzung: [] }]
       requestBody:
         required: true
@@ -238,12 +247,16 @@ paths:
                 kdf: { $ref: "#/components/schemas/Kdf" }
                 anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
                 verpackt_passwort: { $ref: "#/components/schemas/Fernet" }
+                altes_anmelde_schluessel:
+                  $ref: "#/components/schemas/B64u32"
+                  description: Required with a normal session; ignored with the emergency token.
       responses:
         "200":
           description: Changed
           content: { application/json: { schema: { type: object, properties: { geaendert: { type: string, format: date-time } } } } }
         "400": { $ref: "#/components/responses/Fehler" }
         "401": { $ref: "#/components/responses/Fehler" }
+        "429": { $ref: "#/components/responses/Fehler" }
   /v1/mitte:
     get:
       summary: The current stand of the Mitte (holen).
@@ -276,10 +289,57 @@ paths:
           content: { application/octet-stream: { schema: { type: string, format: binary } } }
         "401": { $ref: "#/components/responses/Fehler" }
         "404": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte/fehlende:
+    post:
+      summary: Which of these blobs does this account not have yet?
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sha256]
+              properties:
+                sha256: { type: array, maxItems: 20000, items: { $ref: "#/components/schemas/Sha256" } }
+      responses:
+        "200":
+          description: The missing ones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fehlen]
+                properties:
+                  fehlen: { type: array, items: { $ref: "#/components/schemas/Sha256" } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte/blob/{sha256}:
+    put:
+      summary: Upload one blob (already encrypted bytes). The server checks that the body matches the SHA-256 in the address.
+      description: Raw body, Content-Length required, max. 24 MiB. Already present → 204 without storing again.
+      security: [{ sitzung: [] }]
+      parameters:
+        - name: sha256
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Sha256" }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses:
+        "204": { description: Stored (or already there) }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "411": { $ref: "#/components/responses/Fehler" }
+        "413": { $ref: "#/components/responses/Fehler" }
   /v1/mitte/stand:
     post:
-      summary: New stand = basis + schreiben − loeschen (vorbereiten + senden). Compare-and-swap on the head.
-      description: Max. 24 MiB per request, 20 000 names.
+      summary: New stand = basis + schreiben + verweise − loeschen (vorbereiten + senden). Compare-and-swap on the head.
+      description: |
+        JSON body max. 4 MiB, 20 000 names. Big files: ask POST /v1/mitte/fehlende,
+        upload with PUT /v1/mitte/blob/{sha256}, then refer to them in `verweise`.
+        A name may appear only once across schreiben/verweise/loeschen.
       security: [{ sitzung: [] }]
       requestBody:
         required: true
@@ -292,7 +352,12 @@ paths:
                 basis: { type: [string, "null"], description: The head this stand builds on (null = empty Mitte). }
                 schreiben:
                   type: object
+                  description: Small files inline.
                   additionalProperties: { type: string, description: base64 (standard or URL-safe) }
+                verweise:
+                  type: object
+                  description: Files already uploaded as blobs, name → SHA-256.
+                  additionalProperties: { $ref: "#/components/schemas/Sha256" }
                 loeschen: { type: array, items: { type: string } }
       responses:
         "200":
@@ -300,7 +365,9 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [kennung], properties: { kennung: { type: string } } }
-        "400": { $ref: "#/components/responses/Fehler" }
+        "400":
+          description: "ungueltig, or blob_fehlt with `fehlen: [sha256…]`"
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
         "401": { $ref: "#/components/responses/Fehler" }
         "409":
           description: "jemand_schneller: the head is no longer `basis`. Fetch again and merge."

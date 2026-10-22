@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { anmelden, bytesText, jsonVon, kontoAnlegen, rufen } from "./hilfe";
+import { anmelden, blobHoch, bytesText, jsonVon, kontoAnlegen, rufen, shaHex } from "./hilfe";
 
 const b64 = (s: string) => btoa(s);
 
@@ -86,5 +86,64 @@ describe("Mitte", () => {
     expect((await stand(t, kopf, { "d/x.enc": "nicht base64!" })).status).toBe(400);
     expect((await stand(t, kopf, { "d/x.enc": b64("x") }, ["d/x.enc"])).status).toBe(400);
     expect((await rufen("GET", "/v1/mitte")).status).toBe(401);
+  });
+
+  it("große Dateien: fehlende fragen, Blobs hochladen, Stand verweist", async () => {
+    const k = await kontoAnlegen();
+    const t = await anmelden(k);
+    const gross = new Uint8Array(3 * 1024 * 1024).map((_, i) => i % 251);
+    const klein = new TextEncoder().encode("klein");
+    const hg = await shaHex(gross);
+    const hk = await shaHex(klein);
+
+    let r = await rufen("POST", "/v1/mitte/fehlende", { token: t, json: { sha256: [hg, hk, hg] } });
+    expect(r.status).toBe(200);
+    expect(((await jsonVon(r)).fehlen as string[]).sort()).toEqual([hg, hk].sort());
+
+    // Verweis auf etwas, das noch nicht oben ist → blob_fehlt mit Liste.
+    r = await rufen("POST", "/v1/mitte/stand", { token: t, json: { basis: null, verweise: { "d/gross.enc": hg } } });
+    expect(r.status).toBe(400);
+    expect(await jsonVon(r)).toMatchObject({ fehler: "blob_fehlt", fehlen: [hg] });
+
+    // Falsche Prüfsumme wird abgewiesen und nicht gespeichert.
+    r = await blobHoch(t, klein, hg);
+    expect(r.status).toBe(400);
+    expect((await jsonVon(r)).fehler).toBe("pruefsumme");
+    expect((await rufen("PUT", "/v1/mitte/blob/NICHTHEX", { token: t, body: klein })).status).toBe(400);
+    expect((await blobHoch("", klein)).status).toBe(401);
+
+    expect((await blobHoch(t, gross)).status).toBe(204);
+    expect((await blobHoch(t, gross)).status).toBe(204); // schon da: nichts zu tun
+    r = await rufen("POST", "/v1/mitte/fehlende", { token: t, json: { sha256: [hg, hk] } });
+    expect((await jsonVon(r)).fehlen).toEqual([hk]);
+
+    // Stand mit Verweis + kleinem Inline-Teil.
+    r = await rufen("POST", "/v1/mitte/stand", {
+      token: t, json: { basis: null, verweise: { "d/gross.enc": hg }, schreiben: { "inhalt.enc": b64("klein") } },
+    });
+    expect(r.status).toBe(200);
+    const k1 = (await jsonVon(r)).kennung;
+    expect((await holen(t)).namen).toEqual(["d/gross.enc", "inhalt.enc"]);
+    const zurueck = new Uint8Array(await (await rufen("GET", "/v1/mitte/datei/d/gross.enc", { token: t })).arrayBuffer());
+    expect(zurueck.byteLength).toBe(gross.byteLength);
+    expect(await shaHex(zurueck)).toBe(hg);
+    // Inline geschriebene Dateien zählen danach auch als vorhanden.
+    expect((await jsonVon(await rufen("POST", "/v1/mitte/fehlende", { token: t, json: { sha256: [hk] } }))).fehlen).toEqual([]);
+    // … und dürfen im nächsten Stand verwiesen werden.
+    r = await rufen("POST", "/v1/mitte/stand", { token: t, json: { basis: k1, verweise: { "d/kopie.enc": hk } } });
+    expect(r.status).toBe(200);
+
+    // Ein Name darf nur einmal vorkommen; der Stand-Body ist auf 4 MiB begrenzt.
+    const kopf = (await holen(t)).kennung;
+    r = await rufen("POST", "/v1/mitte/stand", { token: t, json: { basis: kopf, verweise: { "d/x.enc": hk }, schreiben: { "d/x.enc": b64("x") } } });
+    expect(r.status).toBe(400);
+    r = await rufen("POST", "/v1/mitte/stand", { token: t, json: { basis: kopf, schreiben: { "d/riesig.enc": "A".repeat(5 * 1024 * 1024) } } });
+    expect(r.status).toBe(413);
+    expect((await jsonVon(r)).fehler).toBe("zu_gross");
+    r = await rufen("POST", "/v1/mitte/stand", { token: t, json: { basis: kopf, schreiben: { "d/mittel.enc": "A".repeat(400 * 1024) } } });
+    expect(r.status).toBe(413);
+    expect((await jsonVon(r)).fehler).toBe("inline_zu_gross");
+    r = await rufen("POST", "/v1/mitte/fehlende", { token: t, json: { sha256: ["xyz"] } });
+    expect(r.status).toBe(400);
   });
 });

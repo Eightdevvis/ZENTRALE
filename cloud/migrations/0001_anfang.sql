@@ -2,19 +2,21 @@
 -- query filters on it: one account never sees another account's rows.
 -- Times are milliseconds since the epoch (UTC).
 
--- Accounts. The server never sees the password: it stores a PBKDF2 hash over
--- the client's anmelde_schluessel and over the notfall_beweis, each with its
--- own server salt. salz/kdf/verpackt_* are opaque client values.
+-- Accounts. The server never sees the password: it stores
+-- HMAC-SHA256(key = random 32-byte server salt, msg = value) of the client's
+-- anmelde_schluessel and of the notfall_beweis (both 256-bit keys the client
+-- derived with Argon2id/HKDF, so a fast hash is enough). hash_art names the
+-- scheme so rows could be upgraded later. salz/kdf/verpackt_* are opaque.
 CREATE TABLE konten (
   id                TEXT PRIMARY KEY,
   mail              TEXT NOT NULL UNIQUE,          -- lower case
   salz              TEXT NOT NULL,                 -- client salt (base64url)
   kdf               TEXT NOT NULL,                 -- JSON, e.g. {"name":"argon2id","t":3,"m":65536,"p":4}
-  anmelde_hash      TEXT NOT NULL,                 -- base64url PBKDF2-SHA256
-  anmelde_salz      TEXT NOT NULL,                 -- server salt (base64url)
+  anmelde_hash      TEXT NOT NULL,                 -- base64url HMAC-SHA256
+  anmelde_salz      TEXT NOT NULL,                 -- server salt, 32 bytes (base64url)
   notfall_hash      TEXT NOT NULL,
   notfall_salz      TEXT NOT NULL,
-  runden            INTEGER NOT NULL,              -- PBKDF2 iterations used for both hashes
+  hash_art          TEXT NOT NULL DEFAULT 'hmac-sha256',  -- scheme of both hashes
   verpackt_passwort TEXT NOT NULL,
   verpackt_notfall  TEXT NOT NULL,
   erstellt          INTEGER NOT NULL,
@@ -76,6 +78,16 @@ CREATE TABLE mitte_dateien (
   sha256   TEXT NOT NULL,                           -- R2 key mitte/<konto_id>/<sha256>
   groesse  INTEGER NOT NULL,
   PRIMARY KEY (konto_id, kennung, name)
+);
+
+-- Blobs this account has in R2 (mitte/<konto_id>/<sha256>), so "which are
+-- missing?" is one query instead of thousands of R2 lookups.
+CREATE TABLE mitte_blobs (
+  konto_id TEXT NOT NULL,
+  sha256   TEXT NOT NULL,
+  groesse  INTEGER NOT NULL,
+  erstellt INTEGER NOT NULL,
+  PRIMARY KEY (konto_id, sha256)
 );
 
 -- Device descriptions (plain metadata, no content), one per device name.

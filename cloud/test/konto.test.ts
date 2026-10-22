@@ -16,10 +16,12 @@ describe("Konto anlegen", () => {
     expect(r.status).toBe(201);
     expect((await jsonVon(r)).mail).toBe("jemand@example.org");
 
-    const row = await env.DB.prepare("SELECT mail, runden, anmelde_hash FROM konten WHERE mail = ?")
-      .bind("jemand@example.org").first<{ mail: string; runden: number; anmelde_hash: string }>();
-    expect(row?.runden).toBe(600_000);
+    const row = await env.DB.prepare("SELECT hash_art, anmelde_hash, anmelde_salz, notfall_hash FROM konten WHERE mail = ?")
+      .bind("jemand@example.org").first<{ hash_art: string; anmelde_hash: string; anmelde_salz: string; notfall_hash: string }>();
+    expect(row?.hash_art).toBe("hmac-sha256");
     expect(row?.anmelde_hash).not.toBe(body.anmelde_schluessel);
+    expect(row?.anmelde_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(row?.anmelde_salz).toMatch(/^[A-Za-z0-9_-]{43}$/); // 32 bytes
 
     // Code ist verbraucht.
     const zweit = await rufen("POST", "/v1/konto", { json: { ...body, mail: "anders@example.org" } });
@@ -198,15 +200,35 @@ describe("Notfall und Passwort", () => {
     expect(r.status).toBe(429);
   });
 
-  it("Passwort ändern mit normaler Sitzung: diese bleibt, andere enden", async () => {
+  it("Passwort ändern mit normaler Sitzung: altes nötig, diese bleibt, andere enden", async () => {
     const k = await kontoAnlegen();
     const andere = await anmelden(k, "pc");
     const diese = await anmelden(k, "laptop");
     const neu = { salz: b64u(zufall(16)), kdf: KDF, anmelde_schluessel: b64u(zufall()), verpackt_passwort: fernet() };
-    expect((await rufen("PUT", "/v1/konto/passwort", { token: diese, json: neu })).status).toBe(200);
+    // Ohne oder mit falschem altem Schlüssel geht nichts.
+    expect((await rufen("PUT", "/v1/konto/passwort", { token: diese, json: neu })).status).toBe(400);
+    const falsch = await rufen("PUT", "/v1/konto/passwort", { token: diese, json: { ...neu, altes_anmelde_schluessel: b64u(zufall()) } });
+    expect(falsch.status).toBe(401);
+    expect((await jsonVon(falsch)).fehler).toBe("falsche_anmeldung");
+    expect((await rufen("GET", "/v1/mitte", { token: andere })).status).toBe(200);
+
+    const ok = await rufen("PUT", "/v1/konto/passwort", { token: diese, json: { ...neu, altes_anmelde_schluessel: k.anmelde_schluessel } });
+    expect(ok.status).toBe(200);
     expect((await rufen("GET", "/v1/mitte", { token: diese })).status).toBe(200);
     expect((await rufen("GET", "/v1/mitte", { token: andere })).status).toBe(401);
     expect((await rufen("PUT", "/v1/konto/passwort", { json: neu })).status).toBe(401);
+  });
+
+  it("Passwort ändern wird gedrosselt", async () => {
+    const k = await kontoAnlegen();
+    const t = await anmelden(k);
+    const neu = { salz: b64u(zufall(16)), kdf: KDF, anmelde_schluessel: b64u(zufall()), verpackt_passwort: fernet() };
+    for (let i = 0; i < 5; i++) {
+      const r = await rufen("PUT", "/v1/konto/passwort", { token: t, ip: neueIp(), json: { ...neu, altes_anmelde_schluessel: b64u(zufall()) } });
+      expect(r.status).toBe(401);
+    }
+    const r = await rufen("PUT", "/v1/konto/passwort", { token: t, ip: neueIp(), json: { ...neu, altes_anmelde_schluessel: k.anmelde_schluessel } });
+    expect(r.status).toBe(429);
   });
 });
 

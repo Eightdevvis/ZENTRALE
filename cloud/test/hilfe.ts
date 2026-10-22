@@ -102,3 +102,14 @@ export async function anmelden(k: Konto, knoten = "laptop"): Promise<string> {
 export async function bytesText(r: Response): Promise<string> {
   return new TextDecoder().decode(await r.arrayBuffer());
 }
+
+export async function shaHex(bytes: Uint8Array): Promise<string> {
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function blobHoch(token: string, bytes: Uint8Array, sha?: string): Promise<Response> {
+  return rufen("PUT", `/v1/mitte/blob/${sha ?? (await shaHex(bytes))}`, {
+    token, body: bytes, kopf: { "Content-Type": "application/octet-stream" },
+  });
+}

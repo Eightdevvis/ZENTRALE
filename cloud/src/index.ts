@@ -6,7 +6,7 @@
 import { HttpFehler, fehlerAntwort, jetzt } from "./hilfe";
 import { abmelden, angemeldet, anmelden, kontoAnlegen, notfall, passwortSetzen, vorab } from "./konto";
 import { besitzHolen, besitzSetzen, knotenListe, knotenSetzen } from "./knoten";
-import { mitteDatei, mitteEnthaelt, mitteHolen, mitteStand } from "./mitte";
+import { mitteBlob, mitteDatei, mitteEnthaelt, mitteFehlende, mitteHolen, mitteStand } from "./mitte";
 import { installSh, paketDatei, paketInfo } from "./paket";
 
 type Handler = (env: Env, anfrage: Request, p: Record<string, string>, t: number) => Promise<Response>;
@@ -33,6 +33,8 @@ export const ROUTEN: Route[] = [
   { methode: "PUT", pfad: "/v1/konto/passwort", handler: (env, a, _p, t) => passwortSetzen(env, a, t) },
   { methode: "GET", pfad: "/v1/mitte", handler: auth((env, _a, s) => mitteHolen(env, s.konto_id)) },
   { methode: "GET", pfad: "/v1/mitte/datei/{name}", handler: auth((env, _a, s, p) => mitteDatei(env, s.konto_id, p.name)) },
+  { methode: "POST", pfad: "/v1/mitte/fehlende", handler: auth((env, a, s) => mitteFehlende(env, a, s.konto_id)) },
+  { methode: "PUT", pfad: "/v1/mitte/blob/{sha256}", handler: auth((env, a, s, p, t) => mitteBlob(env, a, s.konto_id, p.sha256, t)) },
   { methode: "POST", pfad: "/v1/mitte/stand", handler: auth((env, a, s, _p, t) => mitteStand(env, a, s.konto_id, t)) },
   { methode: "GET", pfad: "/v1/mitte/enthaelt/{kennung}", handler: auth((env, _a, s, p) => mitteEnthaelt(env, s.konto_id, p.kennung)) },
   { methode: "GET", pfad: "/v1/knoten", handler: auth((env, _a, s) => knotenListe(env, s)) },
@@ -45,10 +47,10 @@ export const ROUTEN: Route[] = [
 const MEHRTEILIG = new Set(["/v1/mitte/datei/{name}"]);
 
 const MUSTER = ROUTEN.map((r) => {
-  const teile = r.pfad.split(/(\{[a-z]+\})/);
+  const teile = r.pfad.split(/(\{[a-z0-9]+\})/);
   const namen: string[] = [];
   const quelle = teile.map((t) => {
-    const m = /^\{([a-z]+)\}$/.exec(t);
+    const m = /^\{([a-z0-9]+)\}$/.exec(t);
     if (!m) return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     namen.push(m[1]);
     return MEHRTEILIG.has(r.pfad) ? "(.+)" : "([^/]+)";

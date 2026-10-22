@@ -1,13 +1,16 @@
-// WebCrypto building blocks. PBKDF2-SHA256 over values the client already
+// WebCrypto building blocks: salted HMAC over values the client already
 // derived (anmelde_schluessel, notfall_beweis), constant-time comparison,
 // random tokens stored only as SHA-256.
+//
+// Why no slow hash on the server: the client runs Argon2id (64 MiB) on the
+// password and sends a 256-bit derived key. A dictionary attack has to go
+// through Argon2id anyway, and a 256-bit secret cannot be brute-forced, so a
+// fast salted HMAC is enough — and keeps every request far below 10 ms CPU.
 
 import { b64u, hex } from "./hilfe";
 
-/** OWASP 2023+ recommendation for PBKDF2-HMAC-SHA256. */
-export const RUNDEN = 600_000;
-/** Fallback if the runtime refuses RUNDEN (older Workers capped at 100k). */
-export const RUNDEN_NOTFALL = 100_000;
+/** Current scheme name, stored per account in konten.hash_art. */
+export const HASH_ART = "hmac-sha256";
 
 const enc = new TextEncoder();
 
@@ -32,25 +35,16 @@ export async function hmac(geheimnis: string, nachricht: string): Promise<Uint8A
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(nachricht)));
 }
 
-export async function pbkdf2(wert: string, salz: Uint8Array, runden: number): Promise<Uint8Array> {
-  const k = await crypto.subtle.importKey("raw", enc.encode(wert), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: salz, iterations: runden }, k, 256);
-  return new Uint8Array(bits);
+/** HMAC-SHA256(key = server salt, msg = the client's derived key bytes). */
+export async function schluesselHash(wert: Uint8Array, salz: Uint8Array): Promise<Uint8Array> {
+  const k = await crypto.subtle.importKey("raw", salz, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, wert));
 }
 
-/** A new hash with fresh server salt. → {hash, salz, runden} (base64url). */
-export async function neuerHash(wert: string): Promise<{ hash: string; salz: string; runden: number }> {
-  const salz = zufall(16);
-  let runden = RUNDEN;
-  let h: Uint8Array;
-  try {
-    h = await pbkdf2(wert, salz, runden);
-  } catch {
-    runden = RUNDEN_NOTFALL;
-    h = await pbkdf2(wert, salz, runden);
-  }
-  return { hash: b64u(h), salz: b64u(salz), runden };
+/** A new hash with a fresh 32-byte server salt. → {hash, salz} (base64url). */
+export async function neuerHash(wert: Uint8Array): Promise<{ hash: string; salz: string }> {
+  const salz = zufall(32);
+  return { hash: b64u(await schluesselHash(wert, salz)), salz: b64u(salz) };
 }
 
 export function gleich(a: Uint8Array, b: Uint8Array): boolean {

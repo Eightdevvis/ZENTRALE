@@ -7,6 +7,7 @@ export class HttpFehler extends Error {
     public code: string,
     public text: string,
     public kopf: Record<string, string> = {},
+    public extra: Record<string, unknown> = {},
   ) {
     super(code);
   }
@@ -34,7 +35,7 @@ export function roh(body: ReadableStream | ArrayBuffer | Uint8Array | string | n
 }
 
 export function fehlerAntwort(f: HttpFehler): Response {
-  return json({ fehler: f.code, text: f.text }, f.status, f.kopf);
+  return json({ ...f.extra, fehler: f.code, text: f.text }, f.status, f.kopf);
 }
 
 export const KB = 1024;

@@ -190,13 +190,19 @@ konto_schluessel  = Fernet.generate_key()     ← verschlüsselt ALLE Daten (das
 verpackt_passwort = Fernet(verpack_schluessel).encrypt(konto_schluessel)
 notfall           = 32 zufällige Bytes, gezeigt als Base32 in Vierergruppen
 verpackt_notfall  = Fernet(HKDF(notfall, info="zentrale/notfall/v1")).encrypt(konto_schluessel)
+notfall_beweis    = base64url(HKDF(notfall, info="zentrale/notfall-beweis/v1", 32 B)) → an den Server
 ```
 
-- Der Server speichert: Mail (klein geschrieben), `salz`, KDF-Werte, einen
-  PBKDF2-SHA256-Hash (eigenes Server-Salz, 600 000 Runden) über den
-  `anmelde_schluessel`, `verpackt_passwort`, `verpackt_notfall`.
-- Passwort ändern = nur `verpackt_passwort` neu. Notfall = mit dem
-  Notfallschlüssel `konto_schluessel` auspacken, neues Passwort setzen.
+- Der Server speichert: Mail (klein geschrieben), `salz`, KDF-Werte,
+  HMAC-SHA256 (Schlüssel = 32 zufällige Server-Bytes je Konto, Spalte
+  `hash_art`) über `anmelde_schluessel` und über `notfall_beweis`,
+  `verpackt_passwort`, `verpackt_notfall`. Kein langsamer Hash auf dem
+  Server (geändert 22.10.): Argon2id auf dem Gerät trägt die Last, ein
+  abgeleiteter 256-Bit-Schlüssel ist nicht durchprobierbar — so reicht der
+  Gratis-Plan von Cloudflare (10 ms CPU je Anfrage).
+- Passwort ändern = nur `verpackt_passwort` neu, mit dem alten
+  `anmelde_schluessel` als Beweis. Notfall = mit dem Notfallschlüssel
+  `konto_schluessel` auspacken, neues Passwort setzen (ohne altes).
 - Auf dem Gerät liegt nach dem Login: Sitzung + `konto_schluessel` in
   `~/.config/zentrale/konto.json` (Rechte 600). Abmelden löscht beides.
 
@@ -210,25 +216,30 @@ Sitzung als `Authorization: Bearer <token>`.
 | `GET /install.sh` | öffentlich; das Installationsskript |
 | `GET /v1/paket` | `?code=` oder Bearer → `{version, sha256, groesse}` der neuesten Fassung |
 | `GET /v1/paket/<version>.tar.gz` | `?code=` oder Bearer → das Paket |
-| `POST /v1/konto` | `{mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall}` → 201. Code wird verbraucht. |
+| `POST /v1/konto` | `{mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis}` → 201. Code wird verbraucht (der Download verbraucht ihn nicht). |
 | `POST /v1/vorab` | `{mail}` → `{salz, kdf}`. Unbekannte Mail: erfundene, aber für diese Mail feste Werte (verrät nicht, ob es das Konto gibt). |
 | `POST /v1/sitzung` | `{mail, anmelde_schluessel, knoten}` → `{token, laeuft_ab, verpackt_passwort}`. Gedrosselt (5 Fehlversuche/15 min je Mail und IP). |
 | `DELETE /v1/sitzung` | abmelden |
-| `POST /v1/notfall` | `{mail, notfall_beweis}` → `{verpackt_notfall, token}` für das Neusetzen; danach `PUT /v1/konto/passwort` |
-| `PUT /v1/konto/passwort` | `{salz, kdf, anmelde_schluessel, verpackt_passwort}` |
+| `POST /v1/notfall` | `{mail, notfall_beweis}` → `{verpackt_notfall, token, laeuft_ab}`; der Token gilt 15 min und nur für `PUT /v1/konto/passwort`. Gedrosselt wie die Sitzung. |
+| `PUT /v1/konto/passwort` | `{salz, kdf, anmelde_schluessel, verpackt_passwort, altes_anmelde_schluessel}` — `altes_…` Pflicht mit normaler Sitzung (gedrosselt), nicht mit dem Notfall-Token. Beendet alle anderen Sitzungen (nach Notfall: alle). |
 | `GET /v1/mitte` | `{kennung|null, namen: [...]}` |
 | `GET /v1/mitte/datei/<name>` | Bytes der Datei im aktuellen Stand |
-| `POST /v1/mitte/stand` | `{basis: kennung|null, schreiben: {name: base64}, loeschen: [...]}` → 200 `{kennung}` oder **409** `jemand_schneller` (Compare-and-Swap auf den Kopf in D1) |
+| `POST /v1/mitte/fehlende` | `{sha256: [hex, …]}` (bis 20 000) → `{fehlen: [...]}` — welche Blobs das Konto noch nicht hat |
+| `PUT /v1/mitte/blob/<sha256>` | rohe Bytes (bis 24 MiB) → 204; Prüfsumme falsch → 400 `pruefsumme` |
+| `POST /v1/mitte/stand` | `{basis: kennung|null, verweise: {name: sha256}, schreiben: {name: base64}, loeschen: [...]}` (JSON bis 4 MiB, `schreiben` zusammen bis 256 KiB) → 200 `{kennung}` oder **409** `jemand_schneller` (Compare-and-Swap auf den Kopf in D1); verwiesener Blob fehlt → 400 `blob_fehlt` mit `fehlen` |
 | `GET /v1/mitte/enthaelt/<kennung>` | `{enthaelt: bool}` |
-| `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben) |
-| `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob) |
+| `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben); schreiben nur der eigene Name der Sitzung; GET → `{knoten: [...]}` |
+| `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob): `{besitz: string|null, aktualisiert}` / PUT `{besitz: string}` |
 
 `<name>` in der Mitte sind die schon verschlüsselten Namen (`inhalt.enc`,
 `d/<hmac>.enc`, `knoten/<k>/<hmac>.enc`) — der Server sieht dasselbe, was
 heute GitHub sieht. Ein Stand = Liste (Name → R2-Objekt nach Prüfsumme);
 `vorbereiten` + `senden` der Mitte-Schnittstelle werden auf dem Gerät zu
-EINEM `POST /v1/mitte/stand` (die `HttpMitte` merkt sich die Änderung bis
-`senden`).
+`fehlende` → je fehlendem Blob ein `PUT /v1/mitte/blob/…` → EIN
+`POST /v1/mitte/stand` mit `verweise` (die `HttpMitte` merkt sich die
+Änderung bis `senden`). Blobs hochladen ist harmlos, wenn der Stand danach
+mit 409 scheitert — sie liegen nach Prüfsumme und werden beim nächsten
+Versuch wiederverwendet.
 
 ## Das Programm (`zentrale`)
 
