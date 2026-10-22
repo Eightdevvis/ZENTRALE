@@ -154,6 +154,11 @@ CODES = {
         "Eine Routine braucht ihren Zeitraum: von (erster Tag) und bis (letzter Tag).",
         "Sasha fragen, von wann bis wann es läuft (z. B. Semesteranfang und -ende). "
         "Nie ‚für immer' annehmen und kein Datum erfinden."),
+    # 2026-10-22: „Sprechstunde Jonas Schömer (Mo)" an einer Serie mittwochs (qwen).
+    "K-TITEL-WOCHENTAG": (
+        "Der Titel nennt einen Wochentag, an dem der Eintrag nicht stattfindet.",
+        "Den Titel so nehmen, wie Sasha die Sache nennt, ohne Wochentag — den Tag regeln "
+        "rrule bzw. day. Steht der Wochentag so in Sashas eigenem Titel, Sasha fragen."),
     "K-RRULE-MIT-ENDE": (
         "Die Regel (rrule) enthält UNTIL oder COUNT; das Ende der Serie geht nur über 'bis'.",
         "UNTIL/COUNT aus der rrule nehmen und den letzten Tag als bis angeben."),

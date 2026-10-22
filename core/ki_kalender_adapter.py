@@ -31,6 +31,7 @@ import kalender_rhythmus
 import ki_kalender as kk
 import stil
 import ki_kalender_aendern as ka
+import titel_wochentag
 import werkzeug_fragen
 from kalender_kennung import KalenderAbgelehnt
 from werkzeug_erzeuger import Ablehnung, Ergebnis
@@ -70,6 +71,24 @@ def _titel(args: dict, name) -> str:
     if not label:
         raise Ablehnung("K-TITEL-LEER", "label fehlt")
     return label
+
+
+def _wochentag_passt(label: str, tage) -> None:
+    """Nennt der Titel einen Wochentag, an dem der Eintrag nicht stattfindet,
+    bricht es ab, bevor etwas gespeichert ist (2026-10-22, Gespräch
+    20261022-111358-dd6127: „Sprechstunde Jonas Schömer (Mo)" an einer Serie
+    mittwochs). Erkannt wird nur Sicheres (core/titel_wochentag.py)."""
+    falsch = titel_wochentag.widerspruch(label, tage)
+    if falsch:
+        raise Ablehnung("K-TITEL-WOCHENTAG", f"Titel „{label}“ {falsch}. "
+                        f"{fehlercodes.CODES['K-TITEL-WOCHENTAG'][1]}")
+
+
+def _tag_von(tag: str):
+    try:
+        return date.fromisoformat(str(tag or "")[:10])
+    except ValueError:
+        return None
 
 
 def quelle_satz(x: dict) -> str:
@@ -295,6 +314,8 @@ def termin_eintragen(args: dict) -> Ergebnis:
     q, name = _quelle(args)
     label, ort = _titel(args, name), _text(args, "ort")
     tag = ka._tag("day", args.get("day"))
+    if _tag_von(tag):
+        _wochentag_passt(label, {_tag_von(tag).weekday()})
     t, e = ka._uhr("time", args.get("time")), ka._uhr("ende", args.get("ende"))
     ka._reihenfolge(t, e)
     k_gruppe, n_gruppe = _gruppe(args)
@@ -331,6 +352,8 @@ def termin_aendern(args: dict) -> Ergebnis:
     if not felder and not neu_tag and not typ:
         raise Ablehnung("K-NICHTS-ZU-AENDERN", "gib an, was neu ist")
     typ_verlangt = _typ_verlangt(typ, anlegen=False)
+    if "neuer_titel" in felder and _tag_von(neu_tag or s.day) and not s.bis:
+        _wochentag_passt(felder["neuer_titel"], {_tag_von(neu_tag or s.day).weekday()})
     if s.bis:
         if typ.get("typ") == kalender_deadline.TYP:     # vor der Uhrzeit: der genauere Grund
             raise KalenderAbgelehnt("DEADLINE-SPANNE")
@@ -384,6 +407,7 @@ def routine_eintragen(args: dict) -> Ergebnis:
     ka._ohne_regel_ende(rrule)
     von, bis = ka._zeitraum(args, pflicht=True)
     regel = kk.regel_mit_ende(rrule, bis)
+    _wochentag_passt(label, titel_wochentag.aus_regel(rrule, _tag_von(von)))
     k_gruppe, n_gruppe = _gruppe(args)
     typ = _typ(args)
     typ_verlangt = _typ_verlangt(typ, anlegen=True)
@@ -467,6 +491,9 @@ def _serie_aendern(s, neu: dict, t: str, e: str, typ: dict | None = None,
     regel, seit = ka._neue_regel(s, neu)
     if regel is not None and not kalender_regel.regel_gueltig(regel):
         raise Ablehnung("K-RRULE-UNGUELTIG", f"Regel {regel!r} ist ungültig")
+    if "neuer_titel" in neu:
+        _wochentag_passt(neu["neuer_titel"], titel_wochentag.aus_regel(
+            regel or s.rrule, _tag_von(seit or s.roh.get("seit"))))
     kalender_kennung.routine_aendern(
         s.uid, time=t if "time" in neu else None,
         ende=e if "ende" in neu or ende_weg else None,

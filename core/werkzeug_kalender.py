@@ -69,11 +69,23 @@ _QUELLE_ART = {"type": "string", "enum": list(kalender_quelle.ARTEN),
                                "Punkt. Mit quelle_id; die Auswahl liefert read_calendar_sources."),
                X: {"wort": "aus", "ungueltig": "QUELLE-ART-UNBEKANNT"}}
 _QUELLE_ID = _s("id aus read_calendar_sources (nie raten).", wort="Quelle")
-_ENDE = _s("Ende HH:MM (24h), wenn bekannt.")
+# 2026-10-22 (Gespräch 20261022-111358-dd6127, qwen im Budget-Rückfall):
+# Titel mit erfundenem Wochentag („(Mo)" an einer Serie mittwochs), Zeitraum
+# 26.10.–20.12. ohne Sashas Angabe. Die Regel „nur, was Sasha gesagt hat"
+# steht kurz in den Werkzeug-Texten (Kalender-Deckel), das Genaue hier in
+# den Feldern. Geprüft wird es danach in Python (core/ehrlichkeit_kalender.py,
+# Adapter: K-TITEL-WOCHENTAG).
+_TITEL_NEU = _s("Titel, wie Sasha die Sache nennt — ohne Wochentag, Uhrzeit oder Ort (dafür "
+                "gibt es eigene Felder). Mit quelle: Rückfall-Titel, darf fehlen.")
+_ENDE = _s("Ende HH:MM (24h), nur wenn Sasha es nennt (auch als Dauer). Sonst weglassen "
+           "und in der Antwort auch keins nennen.")
 _ORT = _s("Ort, wenn bekannt.")
-_ZEITRAUM_VON = _s(f"{_DATUM}: erster Tag der Serie (z. B. Semesteranfang).", fehlt="ZEITRAUM-FEHLT")
-_ZEITRAUM_BIS = _s(f"{_DATUM}: letzter Tag der Serie. Das Ende nur hier, nie UNTIL/COUNT in "
-                   "der rrule. Unbekannt? Sasha fragen, nie ‚für immer' annehmen.",
+_ZEITRAUM_VON = _s(f"{_DATUM}: erster Tag der Serie, aus Sashas Angabe (ein Datum oder z. B. "
+                   "‚ab nächster Woche'). Nennt er keinen Anfang: ab heute.",
+                   fehlt="ZEITRAUM-FEHLT")
+_ZEITRAUM_BIS = _s(f"{_DATUM}: letzter Tag der Serie, nur aus Sashas Angabe (ein Datum oder "
+                   "z. B. ‚bis Semesterende' — dann nachsehen). Nennt er keins: Sasha fragen, "
+                   "nie raten, nie ‚für immer'. Das Ende nur hier, nie UNTIL/COUNT in der rrule.",
                    fehlt="ZEITRAUM-FEHLT")
 _RRULE = _s("iCal RRULE ohne DTSTART und ohne Ende, z.B. 'FREQ=WEEKLY;BYDAY=TU' | "
             "'FREQ=WEEKLY;BYDAY=MO,WE,FR' | 'FREQ=MONTHLY;BYMONTHDAY=1' | "
@@ -123,12 +135,12 @@ AKTIONEN = [
     # ── die bisherigen (Namen und klein-Felder bleiben) ──
     _aktion(
         "add_calendar_entry",
-        "Trägt einen Einmal-Termin oder eine Frist (typ deadline) ein. Ende und Ort "
-        "mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.",
+        "Trägt einen Einmal-Termin oder eine Frist (typ deadline) ein. Füll nur Felder, die "
+        "Sasha genannt hat — kein Ende, keine Ebene erfinden.",
         {
             "layer": _EBENE_NEU,
             "day": _s(_DATUM),
-            "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
+            "label": _TITEL_NEU,
             "time": _s("Optional HH:MM (24h). Weglassen wenn ganztags."),
             "ende": _ENDE, "ort": _ORT,
             "kategorie": _GRUPPE, "kategorie_name": _GRUPPE_NAME,
@@ -139,15 +151,16 @@ AKTIONEN = [
         art="anlegen", alltag="termine eintragen", worte=("Termin eingetragen", "Termin eintragen"),
         immer_erlaubbar=True,
         beweis="liest den Termin per Kennung nach: Tag, Zeit, Ende, Ort, Gruppe",
-        einfach="Trägt EINEN Termin ein. Ende nur, wenn Sasha es nennt.",
+        einfach="Trägt EINEN Termin ein. Nur Felder, die Sasha genannt hat; Ende und Ebene nie "
+                "erfinden.",
     ),
     _aktion(
         "add_calendar_routine",
-        "Trägt eine Wiederholung (Routine) mit Zeitraum von/bis ein. Fehlt das Ende der "
-        "Uhrzeit, wird keins angenommen — frag nach, statt eins zu nennen.",
+        "Trägt eine Wiederholung (Routine) ein. Füll nur Felder, die Sasha genannt hat — "
+        "von/bis, Ende, Ebene nie erfinden; fehlt das Ende der Serie, frag nach.",
         {
             "layer": _EBENE_NEU,
-            "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
+            "label": _TITEL_NEU,
             "rrule": _RRULE,
             "time": _s("Optional HH:MM (24h)"),
             "ende": _ENDE, "ort": _ORT,
@@ -176,7 +189,8 @@ AKTIONEN = [
             "ende": _s("Neues Ende HH:MM (24h)"),
             "rrule": _s("Neue Wiederholung, z.B. 'FREQ=WEEKLY;BYDAY=MO' (ohne Ende)"),
             "ort": _s("Neuer Ort"),
-            "neuer_titel": _s("Neuer Titel, falls die Aktivität anders heißt"),
+            "neuer_titel": _s("Neuer Titel, falls die Aktivität anders heißt — wie Sasha sie "
+                              "nennt, ohne Wochentag oder Uhrzeit"),
             "nur_am": _NUR_AM, "nur_von": _NUR_VON, "nur_bis": _NUR_BIS,
             "von": _s(f"{_DATUM}: neuer erster Tag der ganzen Serie. Nur mitgeben, wenn sich "
                       "der Zeitraum der Serie ändern soll."),
@@ -228,7 +242,7 @@ AKTIONEN = [
             "time": _s("Neuer Beginn HH:MM"),
             "ende": _s("Neues Ende HH:MM"),
             "ort": _s("Neuer Ort"),
-            "neuer_titel": _s("Neuer Titel"),
+            "neuer_titel": _s("Neuer Titel, wie Sasha ihn nennt — ohne Wochentag oder Uhrzeit"),
             "bis": _s(f"Nur mehrtägig: neuer letzter Tag {_DATUM}"),
             "typ": _TYP_AENDERN, "vorwarnung": _VORWARNUNG,
         },

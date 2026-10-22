@@ -66,6 +66,7 @@ import re
 import ai_config
 import auftrag_abrechnung
 import ehrlichkeit_erkennen as erkennen
+import ehrlichkeit_kalender
 import klassifikator
 import klassifikator_beispiele
 import werkzeug_register
@@ -461,6 +462,10 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
     # sie, und bei mehreren Aufträgen gibt es eine Runde dafür.
     raus += auftrag_abrechnung.befunde(getattr(auskunft, "auftrag", None), protokoll,
                                        nutzer_text)
+    # Kalender-Nachprüfung (2026-10-22): Werte ohne Grundlage, Behauptungen
+    # gegen die echten Aufrufe (core/ehrlichkeit_kalender.py).
+    raus += ehrlichkeit_kalender.befunde(antwort, protokoll, nutzer_text=nutzer_text,
+                                         grundlage=bekannt_text)
     return raus
 
 
@@ -583,6 +588,8 @@ KEIN_WERKZEUG = ("Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf das Werkze
 
 
 def _befund_zeile(b: dict) -> str:
+    if b.get("zeile"):                 # bringt seinen Hinweis selbst mit (Kalender)
+        return b["zeile"]
     if b["art"] == "tat" and b.get("auftrag"):
         wer = b.get("werkzeug") or "dafür kein passendes Werkzeug"
         return (f"- Du rechnest „{b['satz']}“ in auftrag als erledigt ab — in diesem Zug lief "
@@ -681,6 +688,10 @@ def warnungen(befunde_: list, protokoll: list = ()) -> list:
         art = b.get("art")
         if art in WEICH:           # Zögern ist keine Unwahrheit — keine Warnung
             continue
+        if "warnung" in b:         # bringt seine Warnung selbst mit (Kalender)
+            if b["warnung"]:
+                raus.append(b["warnung"])
+            continue
         if art == "tat":
             wo = bereich_namen(b.get("bereiche"))
             folge = ("dafür wurde nichts geändert" if geschrieben
@@ -755,7 +766,8 @@ class Pruefer:
         self.befunde = b
         self._beispiel(text, b)
         # Weiche Befunde (Erlaubnis-Frage, Aufschub) nur EINE Runde je Zug.
-        b = [x for x in b if not (x["art"] in WEICH and x["art"] in self.gesehen)]
+        b = [x for x in b if not (x["art"] in WEICH + ehrlichkeit_kalender.EINMAL
+                                  and x["art"] in self.gesehen)]
         if (not b or self.modus != AN or letzte_runde
                 or self.korrekturen >= self.runden):
             return None
