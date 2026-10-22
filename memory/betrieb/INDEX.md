@@ -25,6 +25,7 @@ hier ist „Maschine", nicht „Feature".
 | **Zugang zum Backend:** von anderen Geräten nur mit Schlüssel; Stellungen aus/melden/an, Schlüssel anlegen, auf Pi und Handy bringen, Browser-Link | [zugang.md](zugang.md) |
 | Welche Dateien die KI lesen darf (Whitelist) und was nie in git gehört | [datei_zugriffe.md](datei_zugriffe.md) |
 | **Abgleich über die Mitte:** Rechner gleichen verschlüsselt über eine Mitte ab statt direkt; Zusammenführen pro Eintrag, Grabsteine, Schlüssel in KeePass, Umstellung vom rsync-Weg | [abgleich.md](abgleich.md) |
+| **Cloud** (Cloudflare Worker + D1 + R2): Login ohne Klartext, Mitte über HTTP mit Compare-and-Swap, Einladungscodes, Pakete, Ausrollen | [cloud.md](cloud.md) |
 | **Datensicherung** ins private Daten-Repo: Positivliste, Schlüssel-Scanner, ein Branch pro Rechner, täglicher Timer (wird vom Abgleich abgelöst) | [datensicherung.md](datensicherung.md) |
 
 **Zwei Dinge, die hart tabu bleiben:** `push --force` / History umschreiben,

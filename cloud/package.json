@@ -1,0 +1,21 @@
+{
+  "name": "zentrale-cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "types": "wrangler types",
+    "dev": "wrangler dev --local",
+    "code": "node scripts/code_anlegen.mjs",
+    "hochladen": "node scripts/paket_hochladen.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.7",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.152.0",
+    "yaml": "^2.9.1"
+  }
+}

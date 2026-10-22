@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // ZENTRALE cloud: accounts, sessions, the sync "Mitte", device list, packages.
+  // Contract: memory/hub/knoten_beitritt.md ("Bauplan v1"), cloud/openapi.yaml.
+  "name": "zentrale-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // Daily cleanup of expired sessions and old rate-limit counters.
+  "triggers": { "crons": ["17 3 * * *"] },
+  // No database_id / no bucket id: Wrangler provisions both on the first deploy.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "zentrale", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "R2", "bucket_name": "zentrale" }
+  ],
+  // Set with `npx wrangler secret put VORAB_GEHEIMNIS` — never in this file.
+  "secrets": { "required": ["VORAB_GEHEIMNIS"] }
+}

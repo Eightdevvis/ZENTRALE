@@ -1,0 +1,390 @@
+openapi: 3.1.0
+info:
+  title: ZENTRALE cloud
+  version: "1"
+  summary: Accounts, sessions, the encrypted sync "Mitte", devices and packages.
+  description: |
+    Zero-knowledge (Bitwarden model): the server never sees the password, the
+    account key or any plain content. The client derives everything; the
+    server stores PBKDF2-SHA256 hashes of `anmelde_schluessel` and
+    `notfall_beweis` with its own per-account salt.
+
+    Key scheme and decisions: `memory/hub/knoten_beitritt.md` ("Bauplan v1").
+
+    All answers are JSON unless stated. Errors:
+    `{"fehler": "<code>", "text": "<English sentence>"}`.
+    Session: `Authorization: Bearer <token>` (90 days, bound to the device name).
+    No CORS.
+servers:
+  - url: https://zentrale-cloud.example.workers.dev
+components:
+  securitySchemes:
+    sitzung:
+      type: http
+      scheme: bearer
+  parameters:
+    code:
+      name: code
+      in: query
+      required: false
+      description: Invite code. Not used up by downloads. Alternative to a session.
+      schema: { type: string, maxLength: 128 }
+  schemas:
+    Fehler:
+      type: object
+      required: [fehler, text]
+      properties:
+        fehler:
+          type: string
+          description: |
+            Machine code, e.g. ungueltig, zu_gross, nicht_angemeldet, nur_passwort,
+            falsche_anmeldung, falscher_notfallschluessel, zu_viele_versuche,
+            code_ungueltig, code_noetig, mail_vergeben, jemand_schneller,
+            fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
+            nicht_eingerichtet, serverfehler.
+        text: { type: string, description: English sentence for the user. }
+    Kdf:
+      type: object
+      required: [name, t, m, p]
+      properties:
+        name: { const: argon2id }
+        t: { type: integer, minimum: 1, maximum: 20 }
+        m: { type: integer, minimum: 19456, maximum: 4194304, description: KiB }
+        p: { type: integer, minimum: 1, maximum: 16 }
+    B64u32:
+      type: string
+      description: 32 bytes, base64url (padding optional).
+    Fernet:
+      type: string
+      pattern: "^[A-Za-z0-9_=-]+$"
+      maxLength: 2048
+    Paket:
+      type: object
+      required: [version, sha256, groesse]
+      properties:
+        version: { type: string }
+        sha256: { type: string }
+        groesse: { type: integer }
+  responses:
+    Fehler:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Fehler" }
+security: []
+paths:
+  /install.sh:
+    get:
+      summary: The installer script (public). A placeholder that exits 1 until one is uploaded.
+      responses:
+        "200":
+          description: Shell script
+          content: { text/plain: { schema: { type: string } } }
+  /v1/paket:
+    get:
+      summary: The newest package version.
+      parameters: [{ $ref: "#/components/parameters/code" }]
+      security: [{}, { sitzung: [] }]
+      responses:
+        "200":
+          description: Newest version
+          content: { application/json: { schema: { $ref: "#/components/schemas/Paket" } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+  /v1/paket/{version}.tar.gz:
+    get:
+      summary: Download a package.
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$" }
+        - { $ref: "#/components/parameters/code" }
+      security: [{}, { sitzung: [] }]
+      responses:
+        "200":
+          description: The package
+          content: { application/gzip: { schema: { type: string, format: binary } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+  /v1/konto:
+    post:
+      summary: Create an account. Uses up the invite code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis]
+              properties:
+                mail: { type: string, maxLength: 254, description: Stored lower case. }
+                code: { type: string }
+                salz: { type: string, description: 16–64 bytes base64url (client Argon2id salt). }
+                kdf: { $ref: "#/components/schemas/Kdf" }
+                anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
+                verpackt_passwort: { $ref: "#/components/schemas/Fernet" }
+                verpackt_notfall: { $ref: "#/components/schemas/Fernet" }
+                notfall_beweis:
+                  $ref: "#/components/schemas/B64u32"
+                  description: base64url(HKDF-SHA256(notfall, info="zentrale/notfall-beweis/v1", 32 bytes)).
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object, properties: { mail: { type: string }, erstellt: { type: string, format: date-time } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "409": { $ref: "#/components/responses/Fehler" }
+  /v1/vorab:
+    post:
+      summary: Salt and KDF values for a mail. Unknown mail → invented values that are stable for that mail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [mail], properties: { mail: { type: string } } }
+      responses:
+        "200":
+          description: Values for the client-side Argon2id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salz, kdf]
+                properties:
+                  salz: { type: string }
+                  kdf: { $ref: "#/components/schemas/Kdf" }
+        "400": { $ref: "#/components/responses/Fehler" }
+  /v1/sitzung:
+    post:
+      summary: Log in. Rate limited (5 failures / 15 min per mail and per IP).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mail, anmelde_schluessel, knoten]
+              properties:
+                mail: { type: string }
+                anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
+                knoten: { type: string, pattern: "^[\\p{L}\\p{N}@._-]{1,64}$", description: Device name; the session is bound to it. }
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, laeuft_ab, verpackt_passwort]
+                properties:
+                  token: { type: string }
+                  laeuft_ab: { type: string, format: date-time }
+                  verpackt_passwort: { $ref: "#/components/schemas/Fernet" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "429": { $ref: "#/components/responses/Fehler" }
+    delete:
+      summary: Log out (ends this session).
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Logged out
+          content: { application/json: { schema: { type: object, properties: { abgemeldet: { const: true } } } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+  /v1/notfall:
+    post:
+      summary: Emergency key. Returns verpackt_notfall and a 15-minute token that may only call PUT /v1/konto/passwort. Rate limited like /v1/sitzung.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mail, notfall_beweis]
+              properties:
+                mail: { type: string }
+                notfall_beweis: { $ref: "#/components/schemas/B64u32" }
+      responses:
+        "200":
+          description: Restricted session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verpackt_notfall, token]
+                properties:
+                  verpackt_notfall: { $ref: "#/components/schemas/Fernet" }
+                  token: { type: string }
+                  laeuft_ab: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "429": { $ref: "#/components/responses/Fehler" }
+  /v1/konto/passwort:
+    put:
+      summary: Set a new password (only verpackt_passwort changes, the account key stays). Ends all other sessions; after an emergency reset also the emergency session.
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [salz, kdf, anmelde_schluessel, verpackt_passwort]
+              properties:
+                salz: { type: string }
+                kdf: { $ref: "#/components/schemas/Kdf" }
+                anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
+                verpackt_passwort: { $ref: "#/components/schemas/Fernet" }
+      responses:
+        "200":
+          description: Changed
+          content: { application/json: { schema: { type: object, properties: { geaendert: { type: string, format: date-time } } } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte:
+    get:
+      summary: The current stand of the Mitte (holen).
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Head and file names
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kennung, namen]
+                properties:
+                  kennung: { type: [string, "null"] }
+                  namen: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte/datei/{name}:
+    get:
+      summary: Bytes of one file in the current stand. `name` may contain "/" (d/<hmac>.enc) — it spans the rest of the path.
+      security: [{ sitzung: [] }]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Opaque bytes
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte/stand:
+    post:
+      summary: New stand = basis + schreiben − loeschen (vorbereiten + senden). Compare-and-swap on the head.
+      description: Max. 24 MiB per request, 20 000 names.
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [basis]
+              properties:
+                basis: { type: [string, "null"], description: The head this stand builds on (null = empty Mitte). }
+                schreiben:
+                  type: object
+                  additionalProperties: { type: string, description: base64 (standard or URL-safe) }
+                loeschen: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: The new head
+          content:
+            application/json:
+              schema: { type: object, required: [kennung], properties: { kennung: { type: string } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "409":
+          description: "jemand_schneller: the head is no longer `basis`. Fetch again and merge."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
+        "413": { $ref: "#/components/responses/Fehler" }
+  /v1/mitte/enthaelt/{kennung}:
+    get:
+      summary: Was this stand ever the head of this account's Mitte?
+      security: [{ sitzung: [] }]
+      parameters:
+        - name: kennung
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Answer
+          content:
+            application/json:
+              schema: { type: object, required: [enthaelt], properties: { enthaelt: { type: boolean } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+  /v1/knoten:
+    get:
+      summary: All device descriptions of the account.
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [knoten]
+                properties:
+                  knoten: { type: array, items: { type: object, description: See core/knoten.schema.json. } }
+        "401": { $ref: "#/components/responses/Fehler" }
+  /v1/knoten/{name}:
+    put:
+      summary: Write this device's description (plain metadata, max. 16 KiB). Only the session's own device name.
+      security: [{ sitzung: [] }]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[\\p{L}\\p{N}@._-]{1,64}$" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema: { type: object, properties: { name: { type: string }, aktualisiert: { type: string, format: date-time } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+  /v1/besitz:
+    get:
+      summary: Ownership of the account (schema.org ItemList, encrypted as one opaque string).
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Ownership blob or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [besitz]
+                properties:
+                  besitz: { type: [string, "null"] }
+                  aktualisiert: { type: [string, "null"], format: date-time }
+        "401": { $ref: "#/components/responses/Fehler" }
+    put:
+      summary: Replace the ownership blob (max. 1 MiB).
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [besitz], properties: { besitz: { type: string } } }
+      responses:
+        "200":
+          description: Stored
+          content: { application/json: { schema: { type: object, properties: { aktualisiert: { type: string, format: date-time } } } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }

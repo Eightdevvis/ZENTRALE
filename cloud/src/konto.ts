@@ -1,0 +1,303 @@
+// Accounts and sessions (zero-knowledge: the server only sees values the
+// client derived from the password; it stores PBKDF2 hashes of them).
+//
+//   POST   /v1/konto           create (uses up the invite code)
+//   POST   /v1/vorab           salt + kdf for a mail (fake but stable if unknown)
+//   POST   /v1/sitzung         log in → token
+//   DELETE /v1/sitzung         log out
+//   POST   /v1/notfall         emergency key → verpackt_notfall + restricted token
+//   PUT    /v1/konto/passwort  new salt/kdf/anmelde_schluessel/verpackt_passwort
+
+import { drossel, erfolg, fehlschlag, ip, pruefen } from "./drossel";
+import { HttpFehler, KB, b64Lesen, b64u, json, jsonLesen, text, ungueltig } from "./hilfe";
+import { RUNDEN, gleich, hmac, neuerHash, neuesToken, pbkdf2, sha256Hex, zufall } from "./krypto";
+import { codeHash } from "./paket";
+
+export const SITZUNG_TAGE = 90;
+export const NOTFALL_MINUTEN = 15;
+const TAG_MS = 24 * 60 * 60 * 1000;
+const MAX_JSON = 16 * KB;
+
+export const KDF_VORGABE = { name: "argon2id", t: 3, m: 65536, p: 4 } as const;
+export type Kdf = { name: "argon2id"; t: number; m: number; p: number };
+
+export interface Sitzung {
+  token_hash: string;
+  konto_id: string;
+  knoten: string;
+  art: "normal" | "notfall";
+}
+
+interface KontoZeile {
+  id: string;
+  salz: string;
+  kdf: string;
+  anmelde_hash: string;
+  anmelde_salz: string;
+  notfall_hash: string;
+  notfall_salz: string;
+  runden: number;
+  verpackt_passwort: string;
+  verpackt_notfall: string;
+}
+
+// ── Field checks ─────────────────────────────────────────────────────────
+
+const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const FERNET = /^[A-Za-z0-9_=-]+$/;
+export const KNOTEN_NAME = /^[\p{L}\p{N}@._-]{1,64}$/u;
+
+export function mailLesen(daten: Record<string, unknown>): string {
+  const mail = text(daten, "mail", 254).toLowerCase();
+  if (!MAIL.test(mail)) throw ungueltig("The email address is not valid.");
+  return mail;
+}
+
+function schluesselLesen(daten: Record<string, unknown>, feld: string): string {
+  const wert = text(daten, feld, 128);
+  if (b64Lesen(wert).byteLength !== 32) throw ungueltig(`The field '${feld}' must be 32 bytes (base64url).`);
+  return wert;
+}
+
+function salzLesen(daten: Record<string, unknown>): string {
+  const wert = text(daten, "salz", 128);
+  const n = b64Lesen(wert).byteLength;
+  if (n < 16 || n > 64) throw ungueltig("The field 'salz' must be 16 to 64 bytes (base64url).");
+  return wert;
+}
+
+function verpacktLesen(daten: Record<string, unknown>, feld: string): string {
+  const wert = text(daten, feld, 2048);
+  if (!FERNET.test(wert)) throw ungueltig(`The field '${feld}' is not a Fernet token.`);
+  return wert;
+}
+
+function ganz(wert: unknown, min: number, max: number, feld: string): number {
+  if (typeof wert !== "number" || !Number.isInteger(wert) || wert < min || wert > max) {
+    throw ungueltig(`kdf.${feld} must be an integer from ${min} to ${max}.`);
+  }
+  return wert;
+}
+
+/** Argon2id only; lower bounds follow OWASP (m ≥ 19 MiB). */
+function kdfLesen(daten: Record<string, unknown>): Kdf {
+  const k = daten.kdf;
+  if (k === null || typeof k !== "object" || Array.isArray(k)) throw ungueltig("The field 'kdf' is missing.");
+  const o = k as Record<string, unknown>;
+  if (o.name !== "argon2id") throw ungueltig("kdf.name must be 'argon2id'.");
+  return {
+    name: "argon2id",
+    t: ganz(o.t, 1, 20, "t"),
+    m: ganz(o.m, 19456, 4194304, "m"),
+    p: ganz(o.p, 1, 16, "p"),
+  };
+}
+
+export function knotenLesen(daten: Record<string, unknown>): string {
+  const name = text(daten, "knoten", 64);
+  if (!KNOTEN_NAME.test(name)) throw ungueltig("The device name may only contain letters, digits, '@', '.', '_' and '-'.");
+  return name;
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────
+
+function bearer(anfrage: Request): string | null {
+  const kopf = anfrage.headers.get("Authorization") ?? "";
+  const m = /^Bearer ([A-Za-z0-9_-]{20,128})$/.exec(kopf.trim());
+  return m ? m[1] : null;
+}
+
+const NICHT_ANGEMELDET = () =>
+  new HttpFehler(401, "nicht_angemeldet", "You are not logged in (or the session has expired).",
+    { "WWW-Authenticate": "Bearer" });
+
+/** The session of this request, or null (no / unknown / expired token). */
+export async function sitzungFinden(db: D1Database, anfrage: Request, jetzt: number): Promise<Sitzung | null> {
+  const token = bearer(anfrage);
+  if (!token) return null;
+  const token_hash = await sha256Hex(token);
+  return db
+    .prepare("SELECT token_hash, konto_id, knoten, art FROM sitzungen WHERE token_hash = ? AND laeuft_ab > ?")
+    .bind(token_hash, jetzt)
+    .first<Sitzung>();
+}
+
+/** A full session (not the restricted emergency one), else 401/403. */
+export async function angemeldet(db: D1Database, anfrage: Request, jetzt: number): Promise<Sitzung> {
+  const s = await sitzungFinden(db, anfrage, jetzt);
+  if (!s) throw NICHT_ANGEMELDET();
+  if (s.art !== "normal") {
+    throw new HttpFehler(403, "nur_passwort", "This session may only set a new password.");
+  }
+  return s;
+}
+
+async function sitzungAnlegen(db: D1Database, konto_id: string, knoten: string, art: "normal" | "notfall",
+                              dauer: number, jetzt: number): Promise<{ token: string; laeuft_ab: number }> {
+  const token = neuesToken();
+  const laeuft_ab = jetzt + dauer;
+  await db
+    .prepare("INSERT INTO sitzungen (token_hash, konto_id, knoten, art, erstellt, laeuft_ab) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(await sha256Hex(token), konto_id, knoten, art, jetzt, laeuft_ab)
+    .run();
+  return { token, laeuft_ab };
+}
+
+const iso = (ms: number) => new Date(ms).toISOString();
+
+// ── Routes ───────────────────────────────────────────────────────────────
+
+export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
+  const d = await jsonLesen(anfrage, MAX_JSON);
+  const mail = mailLesen(d);
+  const code = text(d, "code", 128);
+  const salz = salzLesen(d);
+  const kdf = kdfLesen(d);
+  const anmelde = schluesselLesen(d, "anmelde_schluessel");
+  const beweis = schluesselLesen(d, "notfall_beweis");
+  const verpackt_passwort = verpacktLesen(d, "verpackt_passwort");
+  const verpackt_notfall = verpacktLesen(d, "verpackt_notfall");
+
+  const ch = await codeHash(code);
+  const frei = await env.DB
+    .prepare("SELECT 1 AS ok FROM codes WHERE code_hash = ? AND gesperrt = 0 AND verbraucht_von IS NULL")
+    .bind(ch).first();
+  if (!frei) throw new HttpFehler(403, "code_ungueltig", "This invite code is not valid or was already used.");
+
+  const ah = await neuerHash(anmelde);
+  const runden = ah.runden;
+  const nh = await neuerHashMit(beweis, runden);
+  const id = crypto.randomUUID();
+
+  // One transaction: the account only appears if the code is still free, and
+  // the code is used up by exactly this account.
+  let ergebnis: D1Result[];
+  try {
+    ergebnis = await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO konten (id, mail, salz, kdf, anmelde_hash, anmelde_salz, notfall_hash, notfall_salz,
+                             runden, verpackt_passwort, verpackt_notfall, erstellt, geaendert)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE EXISTS (SELECT 1 FROM codes WHERE code_hash = ? AND gesperrt = 0 AND verbraucht_von IS NULL)`,
+      ).bind(id, mail, salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, runden,
+        verpackt_passwort, verpackt_notfall, jetzt, jetzt, ch),
+      env.DB.prepare(
+        `UPDATE codes SET verbraucht_von = ?, verbraucht_am = ?
+          WHERE code_hash = ? AND verbraucht_von IS NULL AND EXISTS (SELECT 1 FROM konten WHERE id = ?)`,
+      ).bind(id, jetzt, ch, id),
+      env.DB.prepare("INSERT INTO mitte_kopf (konto_id, kennung) SELECT ?, NULL WHERE EXISTS (SELECT 1 FROM konten WHERE id = ?)")
+        .bind(id, id),
+    ]);
+  } catch (e) {
+    if (String(e).includes("UNIQUE")) {
+      throw new HttpFehler(409, "mail_vergeben", "An account with this email address already exists.");
+    }
+    throw e;
+  }
+  if (ergebnis[0].meta.changes !== 1) {
+    throw new HttpFehler(403, "code_ungueltig", "This invite code is not valid or was already used.");
+  }
+  return json({ mail, erstellt: iso(jetzt) }, 201);
+}
+
+async function neuerHashMit(wert: string, runden: number) {
+  const salz = zufall(16);
+  return { hash: b64u(await pbkdf2(wert, salz, runden)), salz: b64u(salz), runden };
+}
+
+export async function vorab(env: Env, anfrage: Request): Promise<Response> {
+  const d = await jsonLesen(anfrage, MAX_JSON);
+  const mail = mailLesen(d);
+  const k = await env.DB.prepare("SELECT salz, kdf FROM konten WHERE mail = ?").bind(mail)
+    .first<{ salz: string; kdf: string }>();
+  if (k) return json({ salz: k.salz, kdf: JSON.parse(k.kdf) });
+  // Unknown mail: invented values that stay the same for this mail, so the
+  // answer does not reveal whether the account exists.
+  if (!env.VORAB_GEHEIMNIS) {
+    throw new HttpFehler(503, "nicht_eingerichtet", "The server is not fully configured.");
+  }
+  const h = await hmac(env.VORAB_GEHEIMNIS, `zentrale/vorab/v1|${mail}`);
+  return json({ salz: b64u(h.slice(0, 16)), kdf: KDF_VORGABE });
+}
+
+/** Verify `wert` against the stored hash. Unknown account → same work, false. */
+async function pruefeHash(wert: string, hash: string | null, salz: string | null, runden: number): Promise<boolean> {
+  if (hash === null || salz === null) {
+    await pbkdf2(wert, zufall(16), runden);
+    return false;
+  }
+  const ist = await pbkdf2(wert, b64Lesen(salz), runden);
+  return gleich(ist, b64Lesen(hash));
+}
+
+export async function anmelden(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
+  const d = await jsonLesen(anfrage, MAX_JSON);
+  const mail = mailLesen(d);
+  const anmelde = schluesselLesen(d, "anmelde_schluessel");
+  const knoten = knotenLesen(d);
+
+  const dr = await drossel("sitzung", mail, ip(anfrage));
+  await pruefen(env.DB, dr, jetzt);
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
+  const ok = await pruefeHash(anmelde, k?.anmelde_hash ?? null, k?.anmelde_salz ?? null, k?.runden ?? RUNDEN);
+  if (!ok || !k) {
+    await fehlschlag(env.DB, dr, jetzt);
+    throw new HttpFehler(401, "falsche_anmeldung", "Wrong email or password.");
+  }
+  await erfolg(env.DB, dr);
+  const s = await sitzungAnlegen(env.DB, k.id, knoten, "normal", SITZUNG_TAGE * TAG_MS, jetzt);
+  return json({ token: s.token, laeuft_ab: iso(s.laeuft_ab), verpackt_passwort: k.verpackt_passwort });
+}
+
+export async function abmelden(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
+  const s = await sitzungFinden(env.DB, anfrage, jetzt);
+  if (!s) throw NICHT_ANGEMELDET();
+  await env.DB.prepare("DELETE FROM sitzungen WHERE token_hash = ?").bind(s.token_hash).run();
+  return json({ abgemeldet: true });
+}
+
+export async function notfall(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
+  const d = await jsonLesen(anfrage, MAX_JSON);
+  const mail = mailLesen(d);
+  const beweis = schluesselLesen(d, "notfall_beweis");
+
+  const dr = await drossel("notfall", mail, ip(anfrage));
+  await pruefen(env.DB, dr, jetzt);
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
+  const ok = await pruefeHash(beweis, k?.notfall_hash ?? null, k?.notfall_salz ?? null, k?.runden ?? RUNDEN);
+  if (!ok || !k) {
+    await fehlschlag(env.DB, dr, jetzt);
+    throw new HttpFehler(401, "falscher_notfallschluessel", "This emergency key does not match this account.");
+  }
+  await erfolg(env.DB, dr);
+  // Restricted session: may only set a new password, valid for 15 minutes.
+  const s = await sitzungAnlegen(env.DB, k.id, "notfall", "notfall", NOTFALL_MINUTEN * 60 * 1000, jetzt);
+  return json({ verpackt_notfall: k.verpackt_notfall, token: s.token, laeuft_ab: iso(s.laeuft_ab) });
+}
+
+export async function passwortSetzen(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
+  const s = await sitzungFinden(env.DB, anfrage, jetzt);
+  if (!s) throw NICHT_ANGEMELDET();
+  const d = await jsonLesen(anfrage, MAX_JSON);
+  const salz = salzLesen(d);
+  const kdf = kdfLesen(d);
+  const anmelde = schluesselLesen(d, "anmelde_schluessel");
+  const verpackt_passwort = verpacktLesen(d, "verpackt_passwort");
+  const alt = await env.DB.prepare("SELECT runden FROM konten WHERE id = ?").bind(s.konto_id)
+    .first<{ runden: number }>();
+  if (!alt) throw NICHT_ANGEMELDET();
+  // Keep both hashes at the same iteration count (the notfall hash is unchanged).
+  const h = await neuerHashMit(anmelde, alt.runden);
+
+  // All other sessions end: whoever knew the old password is logged out.
+  // After an emergency reset, the restricted session ends too.
+  const behalten = s.art === "normal" ? s.token_hash : "";
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE konten SET salz = ?, kdf = ?, anmelde_hash = ?, anmelde_salz = ?, verpackt_passwort = ?, geaendert = ?
+        WHERE id = ?`,
+    ).bind(salz, JSON.stringify(kdf), h.hash, h.salz, verpackt_passwort, jetzt, s.konto_id),
+    env.DB.prepare("DELETE FROM sitzungen WHERE konto_id = ? AND token_hash != ?").bind(s.konto_id, behalten),
+  ]);
+  return json({ geaendert: iso(jetzt) });
+}
