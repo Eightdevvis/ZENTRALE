@@ -166,5 +166,5 @@ def test_prompt_regel_gross_im_budget():
     from profil import gross, klein
     t = gross.system()
     assert "Aufträge setzt du sofort um, soweit sie sicher sind" in t
-    assert len(t) < 5000
+    assert len(t) < 5600   # Deckel seit 22.10.2026 wie tests/test_profil.py (## Recherche)
     assert "Aufträge setzt du sofort um" not in klein.system()      # klein bleibt

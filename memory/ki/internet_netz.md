@@ -42,6 +42,10 @@ diese eine Funktion tauschen, `suche()`/`hole()`/`ai.py` bleiben unangetastet.
 > `sudo` (Sasha nicht in der docker-Gruppe). Test:
 > `curl 'localhost:8888/search?q=test&format=json'`.
 
+**Recherche auf gross (seit 2026-10-22):** Werkzeug-Texte, Ergebnis-Kopf der
+Suche, Prompt-Abschnitt „## Recherche", Skill `recherche` und der Prüfer-
+Befund `ungelesen` folgen der KI-Bibel, [bibel/recherche.md](bibel/recherche.md).
+
 **Gating:** beide Tools stehen in `PERMISSION_REQUIRED_TOOLS` → **jeder**
 Call löst den JA/NEIN-Knopf-Dialog aus (Sasha sieht die Suchanfrage / die
 URL, bevor das Paket rausgeht). Konsequent zur Transparenz-Philosophie.
