@@ -28,7 +28,7 @@ dort, wo sie wohnt:
 
 | Schicht | Was | Woher | Für alle Knoten gleich? |
 |---|---|---|---|
-| **Programm** | Hub + Apps (Code) | Katalog: heute git-Tag aus `deploy/RELEASE`, später Sashas Server | ja |
+| **Programm** | Hub + Apps (Code) | Hub: einmal herunterladen (heute Repo-Fassung `deploy/RELEASE`); Apps: durch den Hub aus dem Katalog | ja |
 | **Daten** | Listen, Kalender, Gedächtnis, Gespräche … (`data/`) | die Mitte, verschlüsselt | ja |
 | **Gerät** | Name, Sorte, Hardware, Schlüssel, Dienste | entsteht **auf** dem Gerät beim Beitritt | nein — gehört nur ihm |
 
@@ -80,14 +80,18 @@ es gehört — aber nie den Schlüssel. Als Text oder QR-Code vom alten Gerät
 (Taste im Hub: „Gerät hinzufügen"). Später zeigt die Adresse auf Sashas
 Server statt auf GitHub.
 
-### 3. Programm holen — Katalog-Eintrag wie jede App
+### 3. Programm holen — der Hub einmal, alles andere durch ihn
 
-Der Hub selbst wird ein Stück im Katalog (schema.org `SoftwareApplication`,
-[shop.md](shop.md)), mit `softwareVersion` und `downloadUrl`. „Wie ein
-Programm anwählen und runterziehen" heißt: das Installations-Skript liest
-diesen Eintrag, holt genau diese Fassung und prüft die Prüfsumme. Heute
-zeigt `downloadUrl` auf das GitHub-Repo + Tag, später auf Sashas Server.
-Apps genauso — ein Knoten holt Apps aus dem **selben** Katalog.
+Den Hub lädt man **einmal** aus dem Internet (heute: das Repo in der Fassung
+aus `deploy/RELEASE`, später eine Download-Seite). Er ist kein Stück in
+seinem eigenen Katalog — er trägt selbst, wo seine Updates liegen. Apps holt
+er danach aus dem Katalog ([shop.md](shop.md)).
+
+**Achtung (2026-10-22): eine leere Hub-Fassung gibt es noch nicht.**
+Kalender, Listen, Graphen, Assistent stecken im Kern; nur der Tutor ist
+ausgezogen. Installation/Paket/Updates „fehlt ganz"
+([produkt_inventur.md](produkt_inventur.md)). Für den Mini-PC heißt das:
+er bekommt vorerst den ganzen Kern, wie Laptop und PC.
 
 ## Was eine Sorte bekommt
 
@@ -105,7 +109,7 @@ schläft), mit der KI über die Cloud, und gleicht über die Mitte ab.
 
 Auf dem neuen Gerät, einmal:
 
-1. **Programm holen** — kleines Startskript (aus dem Katalog) holt den Hub
+1. **Programm holen** — den Hub einmal herunterladen
    in der Fassung aus `deploy/RELEASE`, legt venv + Test-Riegel an.
 2. **Einladung lesen** — Adresse eingeben oder QR scannen.
 3. **Schlüssel** — aus KeePass eintippen. Prüfen: Mitte erreichbar und lesbar.
@@ -136,7 +140,7 @@ sein öffentlicher Schlüssel fliegt aus Router und `authorized_keys`.
 3. **Knoten-Beschreibung + Schema** (`core/knoten.py`, `knoten.schema.json`),
    Abgleich kennt den Ordner `knoten/<name>.json`.
 4. **`zentrale beitreten`** (Schritte oben), erst mit git als Quelle.
-5. **Hub als Katalog-Stück** und Startskript — „runterziehen wie ein Programm".
+5. **Leere Hub-Fassung** — Kern-Apps ausziehen (hub_bauplan.md Schritt 3–5), Download-Weg für den Hub.
 6. Später: Router/WireGuard eintragen, Sashas Server als Mitte und Katalog.
 
 Nach 1–4 ist der Mini-PC ein echter Knoten. 5–6 machen daraus den
@@ -144,7 +148,9 @@ Produkt-Weg für jeden Kunden.
 
 ## Offen
 
-- Läuft auf dem Mini-PC schon Linux, und welches? (Startskript hängt davon ab.)
+- Mini-PC läuft mit **EndeavourOS** (Arch). Die Setup-Doku kennt bisher nur
+  Debian/Pop!_OS — Systempakete und Python-Fassung (Arch ist meist neuer)
+  beim Beitritt eigens prüfen.
 - Welche Apps hat die Installation — braucht es dafür eine eigene Liste in
   den Daten, oder reicht der Besitz aus dem Shop (`/api/shop/besitz`)?
   Vorschlag: der Shop-Besitz, dann gibt es eine Wahrheit, nicht zwei.
