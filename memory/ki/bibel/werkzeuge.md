@@ -20,8 +20,10 @@ Legende und Pflegeregeln: [README.md](README.md).
   https://www.anthropic.com/engineering/writing-tools-for-agents — offiziell,
   erfasst 22.10.2026
 - **Gilt für:** alle
-- **Status:** teilweise — `core/werkzeug_register.py` (cb8c662); nicht jede
-  Beschreibung geprüft
+- **Status:** teilweise — `core/werkzeug_register.py` (cb8c662); web_search
+  und fetch_url seit 9cce25a mit was / wann ja / wann nein / was nicht (je
+  ~430–530 Zeichen, eigener Deckel in `tests/test_profil.py`); die übrigen
+  nicht geprüft
 - **Heute bei ZENTRALE:** Seit 14.10. die Leitlinie
   (`memory/ki/prompt_aufbau.md`, „Prompt-Budget und Werkzeug-Beschreibungen“).
   Ob alle 71 Werkzeuge sie erfüllen, ist nicht gezählt.
@@ -48,10 +50,18 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools
   (Beschreibung muss stimmen) — offiziell; Befund Sasha, 14.10.2026
 - **Gilt für:** alle
-- **Status:** offen — `core/werkzeug_register.py` ~562–597 (web_search,
-  fetch_url: „Jede Suche muss Sasha bestätigen“)
-- **Heute bei ZENTRALE:** Suche und Abruf sind freigegeben, die Texte sagen
-  trotzdem „bestätigen, also sparsam“. Das bremst die Recherche.
+- **Status:** teilweise — gross umgesetzt (9cce25a): Feld `freigabe_im_text`
+  (`core/werkzeug_eintrag.py`), `erlaubnis.mit_freigabe` hängt beim Senden
+  (`cloud.run`, `cloud_openai.chat_stream`) den Satz zum Stand an, der für den
+  nächsten Aufruf gilt (`erlaubnis.vorab`: „immer“ in `ai_config`
+  `immer_erlaubt` oder „für dieses Gespräch“): „Freigegeben: läuft ohne
+  Rückfrage an Sasha.“ bzw. „Vor dem Aufruf fragt ZENTRALE Sasha selbst per
+  Knopf; frag nicht vorher im Text.“ Offen: die klein-Texte (web_suche,
+  hole_url) sagen weiter „muss Sasha bestätigen“ (gemessener Kanon, nicht
+  angefasst); andere gegatete Werkzeuge nicht geprüft.
+- **Heute bei ZENTRALE:** Auf gross stimmt der Satz mit dem echten Stand
+  überein (Sasha: beide auf „immer“); ändert er den Stand, ändert sich der
+  Text einmal (kostet einmal den Prompt-Cache).
 
 ### W-04 Keine Werkzeuge, die sich überschneiden
 
@@ -213,3 +223,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — W-14 neu und umgesetzt (c3955c0); W-02 um K-TITEL-WOCHENTAG ergänzt.
+- **2026-10-22** — W-03 teilweise, W-01 ergänzt (9cce25a, Durchgang Recherche).

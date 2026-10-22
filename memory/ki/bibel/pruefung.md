@@ -57,9 +57,12 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Zitat:** —
 - **Quelle:** Sasha (Befund im Code), 14.10.2026
 - **Gilt für:** claude-gross
-- **Status:** offen — `core/ehrlichkeit.py`, `core/ehrlichkeit_erkennen.py`
-  (nur Kalender/Dateien)
-- **Heute bei ZENTRALE:** Satzmuster in Python; Recherche fällt durch.
+- **Status:** teilweise — Recherche: Befund `ungelesen` (`core/ehrlichkeit.py`
+  `ungelesen_befund`, ee018c2): ein „gibt es nicht“ nach Suchtreffern ohne
+  gelesene Seite. Offen: ob genug gelesen wurde, wenn die Antwort etwas
+  bejaht, und ob die Antwort zum Wunsch passt (Passung).
+- **Heute bei ZENTRALE:** Satzmuster in Python; die Pauschalverneinung nach
+  Suchtreffern fällt auf, der Rest der Recherche nicht.
 
 ### PR-05 Nicht jede Suche ist eine Tat
 
@@ -179,3 +182,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — PR-12, PR-13 neu und umgesetzt, PR-10 umgesetzt (Kalender), c3955c0.
+- **2026-10-22** — PR-04 teilweise (ee018c2, Durchgang Recherche).
