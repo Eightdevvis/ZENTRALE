@@ -5,7 +5,7 @@ hier ist „Maschine", nicht „Feature".
 
 | Was du wissen willst | Datei |
 |---|---|
-| **Einstieg.** Setup & Installation: venv, Modelle, Abhängigkeiten | [setup.md](setup.md) |
+| **Einstieg.** Setup & Installation: venv, Modelle, Abhängigkeiten; neues Gerät per `install.sh` (apt/pacman, EndeavourOS), `zentrale update`, Paket bauen | [setup.md](setup.md) |
 | Starten: welche Prozesse, welche Env-Vars, welche Reihenfolge | [starten.md](starten.md) |
 | **Wachplan:** PC = Gehirn; feste Schlafenszeiten, Pi aus → PC schläft, Wecken per Router/VPN, Hochfahren vor dem Heimkommen; Schlüssel später | [wachplan.md](wachplan.md) |
 | **Systemeinheit:** Autostart als Dienst, Cmd+z-Scratchpad, Desktop-Meldungen | [systemeinheit.md](systemeinheit.md) |
@@ -24,7 +24,7 @@ hier ist „Maschine", nicht „Feature".
 | Bedrohungsmodell, LUKS, Evil-Maid, was verschlüsselt ist | [sicherheit.md](sicherheit.md) |
 | **Zugang zum Backend:** von anderen Geräten nur mit Schlüssel; Stellungen aus/melden/an, Schlüssel anlegen, auf Pi und Handy bringen, Browser-Link | [zugang.md](zugang.md) |
 | Welche Dateien die KI lesen darf (Whitelist) und was nie in git gehört | [datei_zugriffe.md](datei_zugriffe.md) |
-| **Abgleich über die Mitte:** Rechner gleichen verschlüsselt über eine Mitte ab statt direkt; Zusammenführen pro Eintrag, Grabsteine, Schlüssel in KeePass, Umstellung vom rsync-Weg | [abgleich.md](abgleich.md) |
+| **Abgleich über die Mitte:** Rechner gleichen verschlüsselt über eine Mitte ab statt direkt; Zusammenführen pro Eintrag, Grabsteine, Schlüssel in KeePass, Umstellung vom rsync-Weg; Mitte als Cloud (`HttpMitte`, Kontoschlüssel), Bereiche je Gerät | [abgleich.md](abgleich.md) |
 | **Cloud** (Cloudflare Worker + D1 + R2): Login ohne Klartext, Mitte über HTTP mit Compare-and-Swap, Einladungscodes, Pakete, Ausrollen | [cloud.md](cloud.md) |
 | **Datensicherung** ins private Daten-Repo: Positivliste, Schlüssel-Scanner, ein Branch pro Rechner, täglicher Timer (wird vom Abgleich abgelöst) | [datensicherung.md](datensicherung.md) |
 

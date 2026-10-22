@@ -75,9 +75,52 @@ Der Abgleich kennt die Mitte nur über vier Handgriffe (`core/abgleich_mitte.py`
   `~/.local/share/zentrale/abgleich/mitte/`, Zweig `abgleich`. „Nur wenn noch
   derselbe Stand" erledigt git von selbst: ein normaler Push wird abgelehnt,
   wenn die Mitte weitergelaufen ist. **Nie `--force`.**
-- **Später: der PC als Server** (HTTP). Dieselben vier Handgriffe als Routen.
-  Umstellen über die Einstellungen `abgleich_mitte_art` (`git` | `http`) und
-  `abgleich_mitte` (Adresse). Der Rest des Abgleichs ändert sich nicht.
+- **Seit 2026-10-22: die ZENTRALE-Cloud** (`HttpMitte`, Art `http`,
+  [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md) „Bauplan v1").
+  Umstellen über `abgleich_mitte_art` = `http` (macht `zentrale setup`).
+  Der Rest des Abgleichs ändert sich nicht — unten „Die Mitte als Cloud".
+  Der git-Weg verhält sich wie vorher.
+
+### Die Mitte als Cloud (`HttpMitte`)
+
+| Handgriff | Route |
+|---|---|
+| `holen()` | `GET /v1/mitte` → `{kennung|null, namen}`; die Dateien erst beim Lesen, je `GET /v1/mitte/datei/<name>` |
+| `vorbereiten(...)` | nur im Speicher; gibt eine **vorläufige** Kennung zurück: `vorlaeufig-` + Prüfwert des neuen `inhalt.enc` |
+| `senden(kennung)` | **ein** `POST /v1/mitte/stand` `{basis, schreiben: {name: base64}, loeschen}` → `{kennung}`; **409** = jemand war schneller → `False` |
+| `enthaelt(kennung)` | `GET /v1/mitte/enthaelt/<kennung>`; eine vorläufige Kennung (Absturz nach dem Senden) erkennt sie daran, dass genau dieses `inhalt.enc` in der Mitte liegt — Fernet würfelt, also stammt es dann von uns |
+
+- **Schlüssel:** bei `http` der `konto_schluessel` aus `~/.config/zentrale/konto.json`
+  (`abgleich.schluessel_laden()`), nicht `abgleich.schluessel`. Dasselbe
+  Fernet-Format, dieselben versteckten Namen. Abgemeldet → klarer Fehler,
+  nichts gesendet.
+- **Echte Kennung:** erst der Server vergibt sie. Nach dem Senden trägt der
+  Abgleich sie ins Vorhaben ein (`_vorhaben_kennung`), die Basis merkt sich den
+  Stand des Servers.
+- **Mitten im Lesen weitergelaufen:** die Dateien kommen einzeln und immer aus
+  dem aktuellen Stand. Fehlt eine, die das Inhaltsverzeichnis nennt, prüft
+  `HttpMitte` den Kopf; hat er sich bewegt → `MitteBewegt`, der Abgleich holt
+  neu. Gemischt Gelesenes scheitert beim Senden am 409 und wird ebenso neu
+  geholt.
+- Prüfstein: `tests/test_abgleich_http.py` (zwei gespielte Geräte gegen
+  `tests/_falsche_cloud.py`).
+
+### Bereiche je Gerät (seit 2026-10-22)
+
+`core/abgleich_bereiche.py` gruppiert die Positivliste in wählbare Einheiten:
+lists, notes, calendar (nur `kalender_neben.json`), graphs, memory,
+conversations (Gespräche, Transkripte, Rückmeldungen, Kontextpaket, Kosten),
+documents (Ablage), desk, apps (eigene Apps + Schaufenster), mail (Regeln),
+music, und die App tutor. Jedes Muster gehört zu genau einem Bereich (Test).
+
+- Die Wahl steht je Gerät in der Einstellung `abgleich_bereiche`
+  (`data/ai_config.json`, wandert nie). **Nicht gesetzt = alles** — so bleibt
+  Sashas git-Weg, wie er war. `[]` = clean slate.
+- Ein abgewählter Bereich wird hier **weder geholt noch gesendet**; in der
+  Mitte bleibt er unberührt (sein Eintrag im Inhaltsverzeichnis bleibt stehen).
+  Auch die Basis wird darauf zugeschnitten — sonst sähe ein abgewählter
+  Bereich aus wie „überall gelöscht". Später wieder anwählen: die Mitte kommt
+  dazu wie bei einem neuen Gerät.
 
 ## Verschlüsselt — was auf GitHub liegt
 
@@ -479,7 +522,10 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | Name | Vorgabe | Was |
 |---|---|---|
 | `abgleich_weg` | `rsync` | `rsync` = alter Weg, `mitte` = dieser |
-| `abgleich_mitte_art` | `git` | später `http` (PC als Server) |
+| `abgleich_mitte_art` | `git` | `http` = die ZENTRALE-Cloud (Adresse und Sitzung aus dem Konto) |
+| `abgleich_bereiche` | (nicht gesetzt = alles) | Bereiche, die dieses Gerät abgleicht; `[]` = nichts |
+| `cloud` | `core/cloud_api.py` `VORGABE` | Adresse der Cloud (Env `ZENTRALE_CLOUD`) |
+| `konto_datei` | `~/.config/zentrale/konto.json` | Sitzung + Kontoschlüssel (600) |
 | `abgleich_mitte` | `git@github.com:Eightdevvis/data.git` | Adresse der Mitte |
 | `abgleich_dir` | `~/.local/share/zentrale/abgleich` | Basis, Klon, Hinweise, Beiseite |
 | `abgleich_schluessel` | `~/.config/zentrale/abgleich.schluessel` | wo der Schlüssel liegt |
@@ -491,7 +537,9 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_auswahl.py` | die Positivliste (auch für die Datensicherung) |
 | `core/abgleich_schluessel.py` | Schlüssel anlegen, laden, ver-/entschlüsseln, versteckte Namen |
 | `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes |
-| `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git |
+| `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git und http (`HttpMitte`) |
+| `core/abgleich_bereiche.py` | Bereiche und die Wahl je Gerät |
+| `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |
 | `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten, Vorhaben, Hinweise, Zustand |
 | `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |
 | `scripts/abgleich.py` | der Befehl |

@@ -241,30 +241,87 @@ heute GitHub sieht. Ein Stand = Liste (Name → R2-Objekt nach Prüfsumme);
 mit 409 scheitert — sie liegen nach Prüfsumme und werden beim nächsten
 Versuch wiederverwendet.
 
-## Das Programm (`zentrale`)
+## Das Programm (`zentrale`) — gebaut 2026-10-22 (Client-Seite)
 
-- **Paket:** `pyproject.toml` mit Einstiegspunkt `zentrale`; das Paket baut
-  `scripts/paket_bauen.py` aus einer **Positivliste** (`deploy/paket.txt`,
-  wie `aussenposten.txt`): kein `data/`, keine Keys, kein `memory/`,
-  keine Tests.
-- **`install.sh`:** fragt den Einladungscode (oder nimmt ihn als Argument),
-  prüft Python ≥ 3.11 + venv, lädt das Paket, prüft sha256, legt es unter
-  `~/.local/share/zentrale/hub/<version>/` ab, venv mit
-  `requirements-basis.txt` (ohne Whisper/TTS/Ollama-Teile), verlinkt
-  `~/.local/bin/zentrale`, sagt, falls `~/.local/bin` nicht im PATH ist, wie
-  man es dazunimmt (bash/zsh/fish), dann die **Begrüßung**. Läuft auf
-  Debian/Ubuntu/Pop!_OS **und Arch/EndeavourOS** (nennt fehlende
-  Systempakete je Paketverwaltung, installiert nichts mit Root selbst).
-- **Befehle:** `zentrale` (TUI), `zentrale -h` (ausgeschmückt: Banner,
-  Gruppen, Beispiele), `zentrale welcome`, `zentrale setup` (Assistent:
-  Login ja/nein → alles / auswählen / clean slate → holen),
-  `zentrale login`, `zentrale logout`, `zentrale account create`,
-  `zentrale account recover`, `zentrale sync`, `zentrale status`,
-  `zentrale devices`, `zentrale update`, `zentrale version`.
-  Erster Aufruf ohne Einrichtung → Assistent.
-- **Abgleich:** `abgleich_mitte_art = "http"` → `HttpMitte` in
-  `core/abgleich_mitte.py` (dieselben vier Handgriffe). Schlüssel = der
-  `konto_schluessel`, nicht `abgleich.schluessel`.
+Was es wirklich gibt (Branch `cloud-client`; der Server entsteht getrennt
+gegen dieselbe Schnittstelle):
+
+| Teil | Wo |
+|---|---|
+| Schlüssel-Schema, nur Rechnen | `core/konto_schluessel.py` |
+| Draht zur Cloud (urllib, Fehler als englischer Satz) | `core/cloud_api.py` — Adresse an EINER Stelle: `VORGABE`, Env `ZENTRALE_CLOUD` |
+| Konto: anlegen, anmelden, abmelden, Notfall, Passwort ändern | `core/konto.py` → `~/.config/zentrale/konto.json` (600) |
+| Mitte über die Cloud | `HttpMitte` in `core/abgleich_mitte.py` ([../betrieb/abgleich.md](../betrieb/abgleich.md)) |
+| Bereiche je Gerät | `core/abgleich_bereiche.py` |
+| Knoten-Beschreibung, Hardware erkannt | `core/knoten.py` |
+| Der Befehl | `zentrale_cli/` (Front, Tür im Kern-Bauplan), Starter `bin/zentrale`, `pyproject.toml` (Einstiegspunkt für `pip install -e .`) |
+| Alle Texte (Englisch) | `zentrale_cli/texte.py` — Deutsch = zweites Wörterbuch mit denselben Schlüsseln |
+| Paket | `deploy/paket.txt` + `scripts/paket_bauen.py` → `dist/` |
+| Installieren | `deploy/install.sh`, Ablauf in [../betrieb/setup.md](../betrieb/setup.md) |
+| Grundlage ohne lokale KI | `requirements-basis.txt` |
+
+- **Befehle:** `zentrale` (TUI über `scripts/start_tui.sh`; beim allerersten
+  Start ohne Einrichtung erst der Assistent — nicht im Entwickler-Checkout mit
+  `.git`), `-h` (Banner, Gruppen, Beispiele; Farbe nur am Terminal und ohne
+  `NO_COLOR`), `welcome`, `setup`, `login`, `logout`, `account create`,
+  `account recover`, `account password` (dazugekommen), `sync`, `status`,
+  `devices`, `update`, `version`.
+- **`account create`** rechnet alles auf dem Gerät (`konto.Entwurf`), zeigt
+  den Notfallschlüssel EINMAL mit Warnung und legt das Konto erst an, wenn
+  bestätigt ist, dass er gesichert ist (sonst bleibt der Code unverbraucht).
+- **`setup`:** abgemeldet → anmelden / Konto anlegen / lokal bleiben; dann
+  alles / einzeln (Pfeiltasten + Leertaste, über ssh; ohne Terminal über
+  Nummern) / clean slate (`[]`, nichts abgleichen). Danach
+  `abgleich_mitte_art=http`, `abgleich_weg=mitte`, Gerät melden, abgleichen.
+- **`devices`:** meldet zuerst die eigene Beschreibung (`PUT /v1/knoten/<hostname>`,
+  Sorte `vollknoten`, Hardware gpu/bildschirm/mikro/lautsprecher erkannt),
+  dann `GET /v1/knoten`.
+- **Ohne Terminal im Kern:** `konto`, `HttpMitte`, `knoten` fragen nichts und
+  drucken nichts; Handy, Browser, Tablet, Pi, AR rufen dieselben Abläufe.
+
+### Festlegungen, die die Schnittstelle offen ließ
+
+| Frage | Festgelegt |
+|---|---|
+| HKDF-Salz | keins (RFC 5869: 32 Null-Bytes), Länge 32, SHA-256 |
+| Kodierung von `salz`, `anmelde_schluessel`, `notfall_beweis` | base64url **ohne** `=` |
+| Fernet-Schlüssel (`verpack`, `notfall`, `konto_schluessel`) | base64url **mit** `=` (Fernet-Format) |
+| Passwort-Bytes | UTF-8 nach Unicode-NFC |
+| `kdf` | `{"name": "argon2id", "t": 3, "m": 65536, "p": 4}`, `m` in KiB; der Client liest auch `iterations`/`memory`/`parallelism` |
+| `salz` | 16 zufällige Bytes |
+| Notfallschlüssel als Text | Base32 (RFC 4648) ohne `=`, 52 Zeichen, 13 Vierergruppen mit `-`; beim Eingeben egal: Groß/klein, Leerzeichen, `0/1/8` → `O/I/B` |
+| `knoten` in `POST /v1/sitzung` | Hostname als Text |
+| `schreiben` in `POST /v1/mitte/stand` | Standard-Base64 mit `=` |
+| `GET /v1/knoten` | Liste oder `{knoten: [...]}` — beides wird gelesen |
+| Notfall | `POST /v1/notfall` → `{verpackt_notfall, token}`; mit diesem Token `PUT /v1/konto/passwort`, danach normal anmelden |
+| Passwort ändern | erst `POST /v1/sitzung` mit dem alten (prüft es), dann `PUT /v1/konto/passwort` |
+| Mindestlänge Passwort | 10 Zeichen (nur Client) |
+| Fehler 401 | Client sagt „Wrong email or password." bzw. „Not logged in" |
+
+### Testvektoren für andere Oberflächen
+
+`tests/daten/konto_testvektoren.json`: festes Passwort, Salz und KDF-Werte →
+`hauptschluessel`, `anmelde_schluessel`, `verpack_schluessel`; feste
+Notfall-Bytes → Base32-Text, `notfall_schluessel`, `notfall_beweis`; dazu
+`verpackt_passwort`/`verpackt_notfall` mit fester Zeit und festem IV (nur zum
+Nachprüfen — echte Clients würfeln den IV). Wer das Schema nachbaut (Dart,
+WebCrypto + argon2-wasm, der Cloudflare-Server), prüft sich Byte für Byte
+daran. `tests/test_konto_schluessel.py` friert die Werte ein und rechnet HKDF
+unabhängig aus HMAC nach. Eine Änderung am Schema = neue `…/v2`-Infos und
+neue Vektoren, nie still.
+
+### Offen
+
+- Die echte Cloud-Adresse eintragen (`core/cloud_api.py` `VORGABE`,
+  `deploy/install.sh` `CLOUD_VORGABE`).
+- `GET/PUT /v1/besitz` nutzt der Client noch nicht.
+- Dateien der Mitte kommen ohne Stand-Angabe („aktueller Stand"); ein
+  optionales `?stand=<kennung>` an `GET /v1/mitte/datei/<name>` machte das
+  Lesen exakt statt „neu holen, wenn es sich bewegt".
+- Erste Befüllung schickt alles in EINEM `POST` (Base64) — bei großen Daten
+  an die Grenzen des Workers denken (Anfragegröße).
+- Ein ganzer Lauf von `install.sh` auf einem frischen EndeavourOS steht aus
+  (geprüft: Syntax, shellcheck, Schutz des vorhandenen Befehls).
 - **Sashas Entwickler-Checkout bleibt unberührt:** `~/.local/bin/zentrale`
-  auf dem Laptop wird nicht angefasst; rsync bleibt dort Vorgabe, bis Sasha
-  umstellt.
+  auf dem Laptop wird nicht angefasst (install.sh bricht ab); rsync bleibt
+  dort Vorgabe, bis Sasha umstellt.

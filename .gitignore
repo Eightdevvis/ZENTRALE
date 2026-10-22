@@ -119,3 +119,4 @@ tutor/assets/ugly-form.zip
 # Schlüssel-Dateien (Zugang, Abgleich) liegen unter ~/.config/zentrale/,
 # nie im Repo. Falls doch mal eine hier landet (Kopie, Test): nie committen.
 *.schluessel
+dist/

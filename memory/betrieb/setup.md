@@ -1,5 +1,9 @@
 # Setup & Installation
 
+**Neues Gerät ohne Checkout (seit 2026-10-22):** `deploy/install.sh`, unten
+„Installieren mit install.sh". Der Rest dieser Datei gilt für Sashas
+Entwickler-Checkouts (Laptop, PC).
+
 **Stand 2026-09-18:** Ein Backend-Knoten (der PC) braucht venv +
 `requirements.txt` + Test-Riegel (`scripts/zentrale-venv-guard`), Ollama mit
 `qwen3.5:9b`, Whisper (lädt sich beim ersten Start selbst) und die TTS-Modelle
@@ -9,7 +13,63 @@ Piper-Voice) unter
 `memory/betrieb/deployment.md`). Der Riegel hängt sich beim TUI-Start selbst
 ein, falls er fehlt.
 
-## Python-Umgebung
+## Installieren mit install.sh (Vollknoten, seit 2026-10-22)
+
+Für ein neues Gerät ohne Git-Checkout (Mini-PC mit **EndeavourOS**, später
+jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md),
+„Bauplan v1". Sasha tippt die Befehle selbst; hier in Worten:
+
+1. `install.sh` von der Cloud laden (öffentlich, `<cloud>/install.sh`) und mit
+   bash ausführen, den **Einladungscode** als Argument oder auf Nachfrage.
+2. Das Skript prüft Python ≥ 3.11, das venv-Modul und curl. Fehlt etwas,
+   nennt es die Pakete je Paketverwaltung und hört auf — es installiert nie
+   etwas mit Root:
+
+   | Familie | erkannt an | fehlt typischerweise |
+   |---|---|---|
+   | apt | Debian, Ubuntu, Pop!_OS | `python3-venv`; optional `libportaudio2` (Ton) |
+   | pacman | Arch, **EndeavourOS**, Manjaro | nichts (Python bringt venv mit); optional `portaudio` |
+   | sonst | — | allgemeiner Hinweis |
+
+3. Es holt `GET /v1/paket?code=…`, lädt das Paket, **prüft sha256**, entpackt
+   nach `~/.local/share/zentrale/hub/<fassung>/`, baut dort ein venv mit
+   `requirements-basis.txt` (ohne Whisper/TTS/sherpa/Piper/pygame), dreht
+   `hub/aktuell` auf die Fassung und verlinkt `~/.local/bin/zentrale`.
+4. Ist `~/.local/bin` nicht im PATH, sagt es, wie es für bash, zsh und fish
+   dazukommt. Dann `zentrale welcome`; danach `zentrale setup`.
+
+**Aufbau auf dem Gerät:**
+
+```
+~/.local/share/zentrale/
+  data/                  die Daten — überleben jede neue Fassung
+  hub/<fassung>/         Programm + venv; data → ../../data
+  hub/aktuell            Verweis auf die laufende Fassung
+  abgleich/              Basis, Vorhaben, Hinweise (wie bisher)
+~/.local/bin/zentrale    → hub/aktuell/bin/zentrale
+~/.config/zentrale/konto.json   Sitzung + Kontoschlüssel (600), nur nach Login
+```
+
+- **Schutz für Sashas Laptop:** Liegt in `~/.local/bin/zentrale` schon etwas,
+  das KEIN Verweis nach `~/.local/share/zentrale` ist, bricht das Skript ab
+  und fasst es nicht an.
+- **Updates:** `zentrale update` holt die neue Fassung daneben, prüft sha256,
+  baut ihr venv und dreht erst dann `hub/aktuell` um. Die alte bleibt bis zum
+  nächsten Update liegen (Rückweg: den Verweis zurückdrehen). Im
+  Entwickler-Checkout weigert sich `update` (dort gilt git).
+- **Die Cloud-Adresse** steht an je einer Stelle: `CLOUD_VORGABE` oben in
+  `deploy/install.sh` und `VORGABE` in `core/cloud_api.py`; beide überstimmt
+  die Env `ZENTRALE_CLOUD`.
+- **Paket bauen:** `scripts/paket_bauen.py` aus der Positivliste
+  `deploy/paket.txt` (nur eingecheckte Dateien) → `dist/zentrale-<fassung>.tar.gz`
+  + `dist/neueste.json` (`{version, sha256, groesse}` wie `GET /v1/paket`).
+  Fassung aus `deploy/RELEASE`. Hochladen in die Cloud macht der Server-Teil.
+- **Ohne lokale KI geprüft (22.10.):** Backend (`core/main.py`, `ui/app.py`
+  mit allen Routen) und TUI importieren sauber, wenn faster-whisper,
+  sherpa-onnx, piper, webrtcvad, keyboard und pygame fehlen. Ein ganzer Lauf
+  auf einem frischen Gerät steht noch aus.
+
+## Python-Umgebung (Entwickler-Checkout)
 
 ```bash
 python3 -m venv venv

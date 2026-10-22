@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Startet den Befehl `zentrale` aus genau diesem Hub-Ordner (memory/betrieb/setup.md).
+# ~/.local/bin/zentrale zeigt auf ~/.local/share/zentrale/hub/aktuell/bin/zentrale;
+# der Verweis wird hier aufgelöst, damit das venv der richtigen Fassung greift.
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+PY="$ROOT/venv/bin/python"
+[[ -x "$PY" ]] || PY="$(command -v python3)"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PY" -m zentrale_cli "$@"

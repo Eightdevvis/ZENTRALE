@@ -109,6 +109,14 @@ os.environ.setdefault("ZENTRALE_ABGLEICH_DIR", os.path.join(_DATEN_TMP, "abgleic
 os.environ.setdefault("ZENTRALE_ABGLEICH_SCHLUESSEL", os.path.join(_DATEN_TMP, "abgleich.schluessel"))
 os.environ.setdefault("ZENTRALE_ABGLEICH_MITTE", os.path.join(_DATEN_TMP, "keine-mitte.git"))
 os.environ.pop("ZENTRALE_ABGLEICH_WEG", None)
+os.environ.pop("ZENTRALE_ABGLEICH_MITTE_ART", None)
+os.environ.pop("ZENTRALE_ABGLEICH_BEREICHE", None)
+# Konto und Cloud (core/konto.py, Bauplan v1, 2026-10-22): nie die echte
+# konto.json, nie die echte Cloud (die Adresse zeigt ins Leere; Tests mit
+# tests/_falsche_cloud.py setzen ihre eigene), nie der echte Hub-Ordner.
+os.environ.setdefault("ZENTRALE_KONTO_DATEI", os.path.join(_DATEN_TMP, "konto.json"))
+os.environ.setdefault("ZENTRALE_CLOUD", "http://127.0.0.1:9")
+os.environ.setdefault("ZENTRALE_HEIM", os.path.join(_DATEN_TMP, "heim"))
 # Zugangsschlüssel des Backends (core/zugang.py, 2026-10-08): nie der echte —
 # weder liest ein Test ihn, noch schickt eine Test-TUI ihn mit, noch legt
 # ein Test einen neuen über den echten. Den Modus bestimmt kein Rest aus der
@@ -354,6 +362,15 @@ def _desk_frisch(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _anbindungen_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_ANBINDUNGEN_DIR", str(_frisch(_test_ordner, "anbindungen")))
+    yield
+
+
+# 7e1b. Jedes Gerät eines Tests hat seine eigene konto.json (core/konto.py,
+# 2026-10-22): sonst wäre ein Test noch „angemeldet", weil der vorige es war.
+# Nur ein Pfad, kein Ordner — kostet nichts.
+@pytest.fixture(autouse=True)
+def _konto_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_KONTO_DATEI", str(_test_ordner / "konto.json"))
     yield
 
 

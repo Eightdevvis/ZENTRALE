@@ -120,16 +120,26 @@ def auswahl(root, muster=SICHERN):
     (dazu, was nach AUSSEN gezogen ist)."""
     raus = []
     aussen = _aussen(root)
-    for wurzel, dirs, files in os.walk(root):
-        rel_w = os.path.relpath(wurzel, root)
-        if rel_w.startswith((".git", ".claude", "venv")) or "__pycache__" in rel_w \
-                or rel_w.replace(os.sep, "/") in aussen:
-            dirs[:] = []
-            continue
-        for f in files:
-            rel = os.path.normpath(os.path.join(rel_w, f)).replace(os.sep, "/")
-            if passt(rel, muster):
-                raus.append(rel)
+    # Ein installierter Hub (deploy/install.sh, 2026-10-22) hat data/ als
+    # Verweis auf ~/.local/share/zentrale/data — die Daten überleben so jede
+    # neue Programm-Fassung. os.walk folgt Verweisen nicht; die obersten
+    # Datenordner deshalb ausdrücklich dazunehmen.
+    starts = [root]
+    for oben in ("data", "tutor"):
+        p = os.path.join(root, oben)
+        if os.path.islink(p) and os.path.isdir(p):
+            starts.append(p)
+    for start in starts:
+        for wurzel, dirs, files in os.walk(start):
+            rel_w = os.path.relpath(wurzel, root)
+            if rel_w.startswith((".git", ".claude", "venv")) or "__pycache__" in rel_w \
+                    or rel_w.replace(os.sep, "/") in aussen:
+                dirs[:] = []
+                continue
+            for f in files:
+                rel = os.path.normpath(os.path.join(rel_w, f)).replace(os.sep, "/")
+                if passt(rel, muster):
+                    raus.append(rel)
     for vorsatz, ort in aussen.items():
         for wurzel, dirs, files in os.walk(ort):
             for f in files:

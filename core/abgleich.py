@@ -35,11 +35,13 @@ import shutil
 import time
 
 import abgleich_auswahl as auswahl
+import abgleich_bereiche as bereiche
 import abgleich_mitte
 import abgleich_schluessel as schluessel
 import abgleich_zusammenfuehren as regeln
 import ai_config
 import dateien
+import konto
 
 VORGABE_DIR = "~/.local/share/zentrale/abgleich"
 VORGABE_MITTE = "git@github.com:Eightdevvis/data.git"
@@ -85,11 +87,34 @@ def weg() -> str:
     return w if w in WEGE else "rsync"
 
 
+def mitte_art() -> str:
+    return (ai_config.setting("abgleich_mitte_art") or "git").strip().lower()
+
+
 def mitte_oeffnen():
+    if mitte_art() == "http":
+        # Die Cloud: Adresse und Sitzung kommen vom Konto (core/konto.py).
+        c = konto.client()
+        return abgleich_mitte.oeffnen("http", c.basis, "", token=c.token)
     return abgleich_mitte.oeffnen(
-        (ai_config.setting("abgleich_mitte_art") or "git").strip().lower(),
+        mitte_art(),
         ai_config.setting("abgleich_mitte") or VORGABE_MITTE,
         os.path.join(ordner(), "mitte"))
+
+
+def schluessel_laden() -> bytes:
+    """Der Schlüssel der Mitte. Über die Cloud (`http`) ist es der
+    konto_schluessel aus konto.json, sonst abgleich.schluessel (KeePass)."""
+    if mitte_art() == "http":
+        try:
+            return konto.konto_schluessel()
+        except konto.KontoFehler as e:
+            raise schluessel.SchluesselFehler(str(e)) from None
+    return schluessel.laden()
+
+
+def schluessel_da() -> bool:
+    return konto.angemeldet() if mitte_art() == "http" else schluessel.vorhanden()
 
 
 def _sha(b):
@@ -165,8 +190,9 @@ def _leeres_inhalt():
     return {"format": 1, "dateien": {}, "geloescht": {}}
 
 
-def _mitte_lesen(tresor, stand, lesen, basis):
-    """→ (inhalt, {rel: klartext}) für alle Dateien auf unserer Liste."""
+def _mitte_lesen(tresor, stand, lesen, basis, muster=auswahl.ABGLEICH):
+    """→ (inhalt, {rel: klartext}) für alle Dateien auf unserer Liste
+    (`muster` = was dieses Gerät abgleicht, abgleich_bereiche)."""
     if stand is None:
         return _leeres_inhalt(), {}
     roh = lesen(INHALT)
@@ -175,7 +201,7 @@ def _mitte_lesen(tresor, stand, lesen, basis):
     inhalt = json.loads(tresor.auf(roh))
     raus = {}
     for rel, e in inhalt.get("dateien", {}).items():
-        if not auswahl.passt(rel, auswahl.ABGLEICH):
+        if not auswahl.passt(rel, muster):
             continue   # nicht auf unserer Liste: bleibt in der Mitte unberührt
         if _sha(basis.get(rel)) == e["sha"]:
             raus[rel] = basis[rel]       # unverändert seit der Basis — nicht entschlüsseln
@@ -216,7 +242,7 @@ def _vorschlag(rel: str) -> bool:
             and teile[2][:1] not in ("_", ".") and teile[3] == "kopf.json")
 
 
-def _eingang_lesen(tresor, namen, lesen, rechner, bericht):
+def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEICH):
     """→ (fremd {rel: bytes}, vorschlaege {rel: bytes}). Was nicht passt
     (falscher Pfad, kaputt, fremde Datei), wird übergangen — mit Hinweis."""
     fremd, vorschlaege = {}, {}
@@ -237,6 +263,8 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht):
             continue
         if not auswahl.passt(rel, auswahl.ABGLEICH) or teile[2] != tresor.name(rel) + ".enc":
             bericht.hinweise.append(f"Eingang {knoten}: {rel!r} gehört nicht dorthin — übergangen")
+        elif not auswahl.passt(rel, muster):
+            continue          # Bereich auf diesem Gerät abgewählt
         elif eigene_datei(rel, knoten):
             fremd[rel] = inhalt
         elif _vorschlag(rel):
@@ -318,6 +346,20 @@ def _vorhaben_schreiben(kennung, erg, lokal, basis, aufheben):
                            {"kennung": kennung, "zeit": _jetzt(), "eintraege": eintraege})
 
 
+def _vorhaben_kennung(mitte):
+    """HttpMitte vergibt die echte Kennung erst beim Senden; im Vorhaben
+    steht bis dahin die vorläufige. Danach die echte eintragen, damit die
+    Basis sich den Stand des Servers merkt. (GitMitte: nichts zu tun.)"""
+    echt = getattr(mitte, "echte_kennung", None)
+    pfad = os.path.join(_vorhaben_dir(), "vorhaben.json")
+    if echt is None or not os.path.exists(pfad):
+        return
+    kopf = json.loads(_lesen(pfad))
+    if echt(kopf["kennung"]) != kopf["kennung"]:
+        kopf["kennung"] = echt(kopf["kennung"])
+        dateien.json_schreiben(pfad, kopf)
+
+
 def _vorhaben_abschliessen(wurzel, bericht=None):
     """Das abgelegte Vorhaben auf dem Rechner zu Ende bringen und die neue
     Basis merken. Derselbe Weg im normalen Lauf und nach einem Absturz."""
@@ -373,6 +415,7 @@ def _vorhaben_nachholen(wurzel, mitte):
         return
     kopf = json.loads(_lesen(os.path.join(_vorhaben_dir(), "vorhaben.json")))
     if mitte.enthaelt(kopf["kennung"]):
+        _vorhaben_kennung(mitte)
         _vorhaben_abschliessen(wurzel)
     else:
         shutil.rmtree(_vorhaben_dir(), ignore_errors=True)
@@ -412,23 +455,32 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
     bericht.trocken = trocken
     try:
         with _sperre(warten):
-            tresor = schluessel.Tresor(schluessel.laden())
+            tresor = schluessel.Tresor(schluessel_laden())
             mitte = mitte_oeffnen()
             rechner = dateien.knoten()
+            muster = bereiche.muster()
             if not trocken:
                 _vorhaben_nachholen(wurzel, mitte)
             for _versuch in range(4):
                 stand, lesen, namen = mitte.holen()
                 basis_stand, basis = _basis_lesen()
-                inhalt, m = _mitte_lesen(tresor, stand, lesen, basis)
-                bericht.hinweise, bericht.geholt, bericht.beiseite = [], [], []
-                fremd, vorschlaege = _eingang_lesen(tresor, namen, lesen, rechner, bericht)
+                # Abgewählte Bereiche: weder holen noch senden — auch nicht
+                # über die Basis (sonst sähe ein abgewählter Bereich aus wie
+                # „überall gelöscht").
+                basis = {rel: b for rel, b in basis.items() if auswahl.passt(rel, muster)}
+                try:
+                    inhalt, m = _mitte_lesen(tresor, stand, lesen, basis, muster)
+                    bericht.hinweise, bericht.geholt, bericht.beiseite = [], [], []
+                    fremd, vorschlaege = _eingang_lesen(tresor, namen, lesen, rechner,
+                                                        bericht, muster)
+                except abgleich_mitte.MitteBewegt:
+                    continue                  # mitten im Lesen weitergelaufen: neu holen
                 sicht = dict(m)                 # was die Mitte insgesamt sagt
                 sicht.update(fremd)
                 for rel, c in vorschlaege.items():
                     sicht.setdefault(rel, c)
                 lokal = {rel: _lesen(auswahl.pfad(wurzel, rel))
-                         for rel in auswahl.auswahl(wurzel, auswahl.ABGLEICH)}
+                         for rel in auswahl.auswahl(wurzel, muster)}
                 bericht.art = ("erstbefuellung" if stand is None else
                                "erstabgleich" if basis_stand is None else "")
                 if bericht.art == "erstbefuellung":
@@ -450,6 +502,8 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 if kennung != stand and not mitte.senden(kennung):
                     shutil.rmtree(_vorhaben_dir(), ignore_errors=True)
                     continue              # jemand war schneller: neu holen
+                _vorhaben_kennung(mitte)
+                kennung = getattr(mitte, "echte_kennung", lambda k: k)(kennung)
                 _vorhaben_abschliessen(wurzel, bericht)
                 _zustand_erfolg(bericht, kennung)
                 return bericht
@@ -498,7 +552,8 @@ def zustand() -> dict:
     Fehler, Hinweise (neueste zuletzt)."""
     z = _zustand_lesen()
     return {"weg": weg(), "rechner": dateien.knoten(),
-            "schluessel_da": schluessel.vorhanden(),
+            "schluessel_da": schluessel_da(),
+            "mitte_art": mitte_art(), "bereiche": bereiche.gewaehlt(),
             "letzter_versuch": z.get("letzter_versuch"),
             "letzter_erfolg": z.get("letzter_erfolg"),
             "fehler": z.get("fehler"),
@@ -513,7 +568,7 @@ def umstellen(neuer_weg: str) -> str:
     if neuer_weg not in WEGE:
         raise ValueError(f"Weg „{neuer_weg}“ gibt es nicht — nur rsync oder mitte.")
     if neuer_weg == "mitte":
-        if not schluessel.vorhanden():
+        if not schluessel_da():
             raise schluessel.SchluesselFehler(
                 "Erst einen Schlüssel anlegen oder eingeben, dann umstellen.")
         if not _zustand_lesen().get("letzter_erfolg"):

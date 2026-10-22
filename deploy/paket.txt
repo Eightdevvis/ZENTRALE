@@ -1,0 +1,50 @@
+# Was im Paket des installierbaren Hubs steckt — die Positivliste
+# (memory/hub/knoten_beitritt.md, „Bauplan v1 — Das Programm").
+#
+# Wie deploy/aussenposten.txt: was nicht hier steht, kommt nicht ins Paket.
+# Gelesen von scripts/paket_bauen.py → dist/zentrale-<fassung>.tar.gz.
+#
+# Format: eine Zeile = ein Pfad relativ zur Projektwurzel (Ordner rekursiv).
+# `quelle => ziel` legt die Quelle im Paket unter einem anderen Namen ab.
+# '#' und Leerzeilen werden übergangen. __pycache__/*.pyc fliegen immer raus.
+#
+# NIE im Paket (scripts/paket_bauen.py verweigert es, der Test prüft es):
+# data/, memory/, tests/, venv, *.enc, ai_config.json, *.schluessel,
+# Bench-/Notizdateien, Bilder und Zips aus der Repo-Wurzel.
+
+# ── Der Befehl `zentrale` ───────────────────────────────────────────────
+bin/zentrale
+zentrale_cli/
+pyproject.toml
+
+# ── Kern, Routen, TUI (Vollknoten: alles außer Modelle) ─────────────────
+core/
+ui/
+tui/
+prompts/
+openapi.yaml
+
+# ── Start und Abgleich ──────────────────────────────────────────────────
+scripts/start_tui.sh
+scripts/abgleich.py
+scripts/kalender_sync.py
+deploy/zentrale-abgleich.service
+deploy/zentrale-abgleich.timer
+
+# ── Einrichtung, Updates ────────────────────────────────────────────────
+deploy/install.sh
+deploy/paket.txt
+deploy/RELEASE
+requirements-basis.txt
+requirements.txt
+
+# ── Mitgelieferte Daten-Vorlagen ────────────────────────────────────────
+# Die ASCII-Bilder der KI (core/ascii_lib.py) liegen im Repo unter data/ascii.
+# data/ ist im Paket tabu (es ist ein Verweis auf die Daten des Geräts);
+# install.sh und `zentrale update` legen sie von hier nach data/ascii, wenn
+# dort noch nichts liegt.
+data/ascii/ => mitgeliefert/ascii/
+
+# ── NICHT dabei (bewusst) ───────────────────────────────────────────────
+# services/ (Whisper/TTS, lokale Modelle), scripts/ außer oben (Bench, Probe,
+# Pi), mobile/, nvim/, bat/, memory/, tests/, data/.

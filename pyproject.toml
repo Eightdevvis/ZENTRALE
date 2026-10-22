@@ -1,0 +1,26 @@
+# Der Befehl `zentrale` als Python-Paket (memory/hub/knoten_beitritt.md,
+# „Bauplan v1 — Das Programm").
+#
+# Ein installierter Hub braucht das hier NICHT: deploy/install.sh entpackt das
+# Paket und verlinkt bin/zentrale. Diese Datei ist für den Entwickler-Weg
+# (`pip install -e .` in einem venv dieses Checkouts) — der Einstiegspunkt
+# findet den Kern (core/) neben zentrale_cli/, deshalb nur editierbar.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zentrale"
+dynamic = ["version"]
+description = "ZENTRALE hub: lists, calendar, notes, memory and an assistant on every device"
+requires-python = ">=3.11"
+dependencies = ["cryptography>=42"]
+
+[project.scripts]
+zentrale = "zentrale_cli.haupt:main"
+
+[tool.setuptools]
+packages = ["zentrale_cli"]
+
+[tool.setuptools.dynamic]
+version = {file = "deploy/RELEASE"}

@@ -8,15 +8,28 @@
 #
 # Die Mitte sieht nur, was ihr gegeben wird: verschlüsselte Bytes unter
 # versteckten Namen. Verschlüsseln ist Sache von core/abgleich.py.
+#
+# Seit 2026-10-22 zwei Arten: `git` (GitHub, Sashas Weg bis heute) und
+# `http` (die ZENTRALE-Cloud, memory/hub/knoten_beitritt.md „Bauplan v1").
 
+import base64
+import hashlib
 import os
 import subprocess
+import urllib.parse
+
+import cloud_api
 
 ZWEIG = "abgleich"
 
 
 class MitteFehler(Exception):
     """Mitte nicht erreichbar oder kaputt — für Sasha lesbar."""
+
+
+class MitteBewegt(MitteFehler):
+    """Die Mitte hat sich mitten im Lesen geändert (nur HttpMitte: die Dateien
+    werden einzeln geholt). Der Abgleich holt dann einfach neu."""
 
 
 class GitMitte:
@@ -135,9 +148,123 @@ class GitMitte:
         return r.returncode == 0
 
 
-def oeffnen(art: str, adresse: str, klon: str):
-    """Die Mitte nach Einstellung. Später: art 'http' = der PC als Server
-    mit denselben vier Handgriffen als Routen."""
+VORLAEUFIG = "vorlaeufig-"
+
+
+class HttpMitte:
+    """Die Mitte als HTTP-Dienst (die ZENTRALE-Cloud). Dieselben vier
+    Handgriffe, als Routen:
+
+        holen       GET  /v1/mitte  (+ GET /v1/mitte/datei/<name> je Datei, erst bei Bedarf)
+        vorbereiten nur im Speicher; → vorläufige Kennung
+        senden      POST /v1/mitte/stand {basis, schreiben, loeschen} → True, 409 → False
+        enthaelt    GET  /v1/mitte/enthaelt/<kennung>
+
+    „Nur senden, wenn die Mitte noch auf meinem Stand ist" macht der Server
+    (Compare-and-Swap auf den Kopf). Die echte Kennung kennt erst der Server;
+    `vorbereiten` gibt eine vorläufige zurück: „vorlaeufig-" + Prüfwert des
+    vorbereiteten inhalt.enc. Fernet würfelt jedes Mal neu, also steht genau
+    dieses inhalt.enc nur dann in der Mitte, wenn WIR es gesendet haben — so
+    beantwortet `enthaelt` auch nach einem Absturz die vorläufige Kennung.
+    Nach dem Senden liefert `echte_kennung` die des Servers."""
+
+    INHALT = "inhalt.enc"
+
+    def __init__(self, client):
+        self.client = client
+        self._basis = None
+        self._vorrat = {}          # vorläufige Kennung → (schreiben, loeschen)
+        self._echt = {}            # vorläufige Kennung → Kennung des Servers
+
+    def _rufen(self, fn, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except cloud_api.CloudFehler as e:
+            raise MitteFehler(str(e)) from None
+
+    def _datei(self, name):
+        try:
+            return self.client.bytes_holen("/v1/mitte/datei/" + urllib.parse.quote(name, safe="/"))
+        except cloud_api.CloudFehler as e:
+            if e.status == 404:
+                return None
+            raise MitteFehler(str(e)) from None
+
+    def holen(self):
+        """→ (kennung oder None, lesen(name) -> bytes|None, namen)."""
+        d = self._rufen(self.client.get, "/v1/mitte")
+        self._basis = d.get("kennung")
+        namen = list(d.get("namen") or [])
+        if self._basis is None:
+            return None, (lambda name: None), []
+        vorhanden, zwischen, stand = set(namen), {}, self._basis
+
+        def lesen(name):
+            # Die Dateien kommen einzeln und immer aus dem AKTUELLEN Stand.
+            # Fehlt eine, die das (womöglich neuere) Inhaltsverzeichnis nennt,
+            # ist die Mitte weitergelaufen → MitteBewegt, der Abgleich holt neu.
+            # Liest er sonst gemischt, scheitert sein Senden ohnehin am
+            # Compare-and-Swap (409) und er holt ebenso neu.
+            if name not in zwischen:
+                zwischen[name] = self._datei(name) if name in vorhanden else None
+                if zwischen[name] is None and self._rufen(
+                        self.client.get, "/v1/mitte").get("kennung") != stand:
+                    raise MitteBewegt("The data in the cloud changed while reading — retrying.")
+            return zwischen[name]
+        return self._basis, lesen, namen
+
+    def vorbereiten(self, schreiben: dict, loeschen, nachricht: str = "") -> str:
+        """Den neuen Stand nur merken (gesendet wird alles in EINEM Aufruf).
+        `nachricht` braucht der Server nicht."""
+        inhalt = schreiben.get(self.INHALT, b"")
+        kennung = VORLAEUFIG + hashlib.sha256(inhalt).hexdigest()[:32]
+        self._vorrat[kennung] = (dict(schreiben), list(loeschen))
+        return kennung
+
+    def senden(self, kennung: str) -> bool:
+        """In die Mitte stellen. False = jemand war schneller (neu holen)."""
+        schreiben, loeschen = self._vorrat[kennung]
+        daten = {"basis": self._basis,
+                 "schreiben": {n: base64.b64encode(b).decode("ascii") for n, b in schreiben.items()},
+                 "loeschen": loeschen}
+        try:
+            d = self.client.post("/v1/mitte/stand", daten)
+        except cloud_api.CloudFehler as e:
+            if e.status == 409:
+                return False
+            raise MitteFehler("Sending to the cloud failed: " + str(e)) from None
+        echt = d.get("kennung")
+        if not echt:
+            raise MitteFehler("The cloud accepted the data but sent no version id.")
+        self._echt[kennung] = echt
+        self._basis = echt
+        del self._vorrat[kennung]
+        return True
+
+    def echte_kennung(self, kennung: str) -> str:
+        return self._echt.get(kennung, kennung)
+
+    def enthaelt(self, kennung: str) -> bool:
+        """Ist dieser Stand in der Mitte angekommen?"""
+        kennung = self.echte_kennung(kennung)
+        if kennung.startswith(VORLAEUFIG):
+            d = self._rufen(self.client.get, "/v1/mitte")
+            if d.get("kennung") is None or self.INHALT not in (d.get("namen") or []):
+                return False
+            inhalt = self._datei(self.INHALT) or b""
+            if VORLAEUFIG + hashlib.sha256(inhalt).hexdigest()[:32] != kennung:
+                return False
+            self._echt[kennung] = d["kennung"]
+            return True
+        d = self._rufen(self.client.get, "/v1/mitte/enthaelt/" + urllib.parse.quote(kennung, safe=""))
+        return bool(d.get("enthaelt"))
+
+
+def oeffnen(art: str, adresse: str, klon: str, token: str = None):
+    """Die Mitte nach Einstellung: 'git' (adresse = Repo, klon = Zwischenlager)
+    oder 'http' (adresse = die Cloud, token = Sitzung des Kontos)."""
     if art == "git":
         return GitMitte(adresse, klon)
-    raise MitteFehler(f"Eine Mitte der Art „{art}“ gibt es noch nicht (nur git).")
+    if art == "http":
+        return HttpMitte(cloud_api.Client(adresse, token=token))
+    raise MitteFehler(f"Eine Mitte der Art „{art}“ gibt es nicht (nur git oder http).")

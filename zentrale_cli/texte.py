@@ -1,0 +1,192 @@
+"""Alle Texte des Befehls `zentrale` an einer Stelle.
+
+Englisch (Bauplan v1: Zielgruppe international). Deutsch kommt später als
+zweite Sprache dazu: ein zweites Wörterbuch DE mit denselben Schlüsseln und
+`SPRACHE` nach Einstellung — der Code fasst keinen Text selbst an.
+"""
+
+EN = {
+    # ── Banner und Hilfe ────────────────────────────────────────────
+    "banner": (
+        "╺━┓┏━╸┏┓╻╺┳╸┏━┓┏━┓╻  ┏━╸\n"
+        "┏━┛┣╸ ┃┗┫ ┃ ┣┳┛┣━┫┃  ┣╸ \n"
+        "┗━╸┗━╸╹ ╹ ╹ ╹┗╸╹ ╹┗━╸┗━╸"),
+    "tagline": "your own hub: lists, calendar, notes, memory and an assistant — on every device",
+    "usage": "Usage",
+    "usage_line": "zentrale [command]",
+    "usage_none": "Without a command, ZENTRALE opens in the terminal (TUI).",
+    "group_start": "Start",
+    "group_account": "Account",
+    "group_sync": "Sync",
+    "group_program": "Program",
+    "examples": "Examples",
+    "more_help": "Data stays on your devices; the cloud only ever sees encrypted bytes.",
+    "cmd_tui": ("(no command)", "open ZENTRALE in this terminal"),
+    "cmd_welcome": ("welcome", "a short tour: what ZENTRALE is and what to do first"),
+    "cmd_setup": ("setup", "set up this device: log in, choose what to sync"),
+    "cmd_login": ("login", "log in to your account on this device"),
+    "cmd_logout": ("logout", "log out and remove the account key from this device"),
+    "cmd_account_create": ("account create", "create an account (needs an invite code)"),
+    "cmd_account_recover": ("account recover", "set a new password with your emergency key"),
+    "cmd_account_password": ("account password", "change your password"),
+    "cmd_sync": ("sync", "sync now with your account"),
+    "cmd_status": ("status", "account, device, last sync, what is synced"),
+    "cmd_devices": ("devices", "list all devices of your account"),
+    "cmd_update": ("update", "download and install the newest version"),
+    "cmd_version": ("version", "show the installed version"),
+    "cmd_help": ("-h, --help", "this help"),
+    "ex": [
+        ("zentrale", "open the dashboard"),
+        ("zentrale setup", "first steps on a new device"),
+        ("zentrale sync && zentrale status", "sync, then see what happened"),
+    ],
+    "unknown_command": "Unknown command '{cmd}'. See 'zentrale --help'.",
+
+    # ── Begrüßung ───────────────────────────────────────────────────
+    "welcome_title": "Welcome to ZENTRALE",
+    "welcome_body": (
+        "ZENTRALE is one hub for your everyday life: lists, calendar, notes, graphs,\n"
+        "a memory and an assistant that knows them. It runs on your own devices.\n"
+        "\n"
+        "With an account, all your devices share the same data. Everything is\n"
+        "encrypted on the device before it leaves; the server never sees your\n"
+        "password, your key or your content. Without an account ZENTRALE works\n"
+        "purely locally."),
+    "welcome_next": "Next steps",
+    "welcome_steps": [
+        ("zentrale setup", "log in (or stay local) and choose what to sync"),
+        ("zentrale", "open the dashboard in this terminal"),
+        ("zentrale --help", "all commands"),
+    ],
+
+    # ── Eingaben ────────────────────────────────────────────────────
+    "ask_mail": "Email: ",
+    "ask_password": "Password: ",
+    "ask_password_new": "New password (at least {n} characters): ",
+    "ask_password_again": "Repeat the password: ",
+    "ask_password_old": "Current password: ",
+    "ask_code": "Invite code: ",
+    "ask_emergency": "Emergency key: ",
+    "passwords_differ": "The passwords do not match. Please try again.",
+    "yes_no": " [y/n] ",
+    "yes_no_default_yes": " [Y/n] ",
+    "cancelled": "Cancelled. Nothing was changed.",
+    "working_key": "Deriving your key (this takes a moment) …",
+
+    # ── Konto ───────────────────────────────────────────────────────
+    "login_ok": "Logged in as {mail} on device '{device}'.",
+    "login_already": "Already logged in as {mail}. Log out first to switch accounts.",
+    "logout_ok": "Logged out. The account key was removed from this device.",
+    "logout_none": "Nobody was logged in on this device.",
+    "create_intro": ("Creating a ZENTRALE account. Your password never leaves this\n"
+                     "device; only a derived login key does."),
+    "emergency_title": "YOUR EMERGENCY KEY — shown only once",
+    "emergency_warning": (
+        "Write it down or store it in your password manager NOW.\n"
+        "If you forget your password, this key is the ONLY way back to your data.\n"
+        "Nobody — not even the ZENTRALE team — can recover your data without it."),
+    "emergency_confirm": "Have you saved the emergency key somewhere safe?",
+    "emergency_not_saved": "Account not created. Run 'zentrale account create' again when you are ready.",
+    "create_ok": "Account created and logged in as {mail}.",
+    "recover_intro": "Set a new password with your emergency key. Your data stays as it is.",
+    "recover_ok": "New password set. Logged in as {mail}.",
+    "password_ok": "Password changed. Your data and other devices are not affected; log in there with the new password.",
+    "not_logged_in": "Not logged in. Run 'zentrale login' first (or 'zentrale setup').",
+
+    # ── Einrichtung ─────────────────────────────────────────────────
+    "setup_title": "Set up this device",
+    "setup_first_run": "This is the first start on this device — let's set it up.",
+    "setup_account_q": "How do you want to use ZENTRALE on this device?",
+    "setup_account_opts": [
+        ("login", "Log in to my account (sync with my other devices)"),
+        ("create", "Create a new account (needs an invite code)"),
+        ("local", "Stay local (no account, nothing leaves this device)"),
+    ],
+    "setup_choose_q": "What should this device sync?",
+    "setup_choose_opts": [
+        ("all", "Everything"),
+        ("pick", "Let me choose"),
+        ("none", "Clean slate (nothing for now; change later with 'zentrale setup')"),
+    ],
+    "setup_pick_title": "Choose what this device syncs",
+    "setup_pick_help": "↑/↓ move · space toggle · a all · n none · enter confirm · q cancel",
+    "setup_pick_fallback": "Numbers to toggle (e.g. '1 4'), 'a' all, 'n' none, Enter to confirm: ",
+    "setup_local_ok": "Done. ZENTRALE runs locally on this device. Open it with 'zentrale'.",
+    "setup_sync_now": "Syncing now …",
+    "setup_done": "Done. Open ZENTRALE with 'zentrale'.",
+    "setup_choice_saved": "This device syncs: {liste}.",
+    "setup_choice_none": "This device syncs nothing for now (clean slate).",
+    "number_choice": "Choose 1–{n}: ",
+
+    # ── Bereiche (core/abgleich_bereiche.py) ────────────────────────
+    "area": {
+        "lists": ("Lists", "to-dos, checklists, projects"),
+        "notes": ("Notes", "block notes"),
+        "calendar": ("Calendar extras", "travel times, buffers, layers (events sync with your calendar provider)"),
+        "graphs": ("Graphs", "measurements like sleep, mood, habits"),
+        "memory": ("Memory", "what the assistant knows about you"),
+        "conversations": ("Conversations", "chats with the assistant, transcripts, feedback, costs"),
+        "documents": ("Documents", "files the assistant made or you attached"),
+        "desk": ("Desk", "your canvases"),
+        "apps": ("Apps", "apps you built and got from the shop"),
+        "mail": ("Mail rules", "how mail is sorted (never passwords)"),
+        "music": ("Melodies", "the piano"),
+        "tutor": ("Tutor (app)", "language tutor progress"),
+    },
+
+    # ── Abgleich ────────────────────────────────────────────────────
+    "sync_first_fill": "Your account was empty — it is now filled from this device.",
+    "sync_first_join": "First sync of this device: the account's data wins; differing local versions are kept aside.",
+    "sync_result": "Fetched {geholt} · sent {gesendet} · moved aside {beiseite}",
+    "sync_note": "  Note: {text}",
+    "sync_busy": "Another sync is running right now. Try again in a moment.",
+    "sync_conflicts_dir": "Kept versions: {ordner}",
+
+    # ── Status ──────────────────────────────────────────────────────
+    "st_account": "Account",
+    "st_account_none": "not logged in (local only)",
+    "st_server": "Cloud",
+    "st_device": "Device",
+    "st_version": "Version",
+    "st_sync": "Last sync",
+    "st_sync_never": "never",
+    "st_sync_error": "Last error",
+    "st_areas": "Syncs",
+    "st_areas_all": "everything",
+    "st_areas_none": "nothing (clean slate)",
+    "st_way": "Sync way",
+    "st_notes": "Notes",
+
+    # ── Geräte ──────────────────────────────────────────────────────
+    "dev_title": "Devices of {mail}",
+    "dev_none": "No devices yet.",
+    "dev_registered": "This device is registered as '{name}'.",
+    "dev_this": "(this device)",
+    "hw": {"gpu": "GPU", "bildschirm": "display", "mikro": "mic", "lautsprecher": "speaker"},
+    "dev_seen": "last seen {zeit}",
+
+    # ── Programm ────────────────────────────────────────────────────
+    "version_line": "ZENTRALE {fassung}",
+    "upd_check": "Checking for a new version …",
+    "upd_current": "You have the newest version ({fassung}).",
+    "upd_found": "New version {neu} (you have {alt}), {groesse}.",
+    "upd_download": "Downloading …",
+    "upd_bad_sha": "The download is damaged (checksum mismatch). Nothing was installed.",
+    "upd_venv": "Installing Python packages (this may take a few minutes) …",
+    "upd_ok": "Updated to {neu}. The old version stays in {alt_ordner} until the next update.",
+    "upd_dev": ("This is a developer checkout ({wurzel}), not an installed hub.\n"
+                "Update it with git instead."),
+    "upd_need_login": "Log in first ('zentrale login') — downloads need your account or an invite code.",
+    "tui_missing": "The terminal view could not be started: {grund}",
+
+    # ── Fehler ──────────────────────────────────────────────────────
+    "error": "Error: {text}",
+    "interrupted": "\nInterrupted.",
+}
+
+SPRACHE = EN
+
+
+def t(schluessel, **werte):
+    text = SPRACHE[schluessel]
+    return text.format(**werte) if werte and isinstance(text, str) else text

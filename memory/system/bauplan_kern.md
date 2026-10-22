@@ -61,7 +61,12 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `abgleich_auswahl` | 1 | Positivliste: was den Rechner verlassen darf (Datensicherung und Abgleich) |
 | `abgleich_schluessel` | 1 | Der Schlüssel der Mitte: anlegen, laden, ablegen, Fernet, versteckte Dateinamen |
 | `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
-| `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git |
+| `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git und (seit 2026-10-22) http = die ZENTRALE-Cloud (`HttpMitte`) |
+| `abgleich_bereiche` | 1 | Wählbare Einheiten des Abgleichs (Bereiche aus der Positivliste + Apps) und die Wahl je Gerät (Einstellung `abgleich_bereiche`) (seit 2026-10-22) |
+| `konto_schluessel` | 1 | Schlüssel-Schema des Kontos, nur Rechnen: Argon2id, HKDF-Infos, Fernet-Verpackung, Notfallschlüssel als Base32 — nachbaubar aus der Doku, Prüfstein `tests/daten/konto_testvektoren.json` (seit 2026-10-22) |
+| `cloud_api` | 1 | Der Draht zur ZENTRALE-Cloud: urllib, Bearer, Fehler als `CloudFehler` mit englischem Satz; Adresse an einer Stelle (`VORGABE`, Env `ZENTRALE_CLOUD`) (seit 2026-10-22) |
+| `konto` | 1 | Das Konto: anlegen (Entwurf → Notfallschlüssel zeigen → anlegen), anmelden, abmelden, Notfall, Passwort ändern; Sitzung + `konto_schluessel` in `~/.config/zentrale/konto.json` (600) — ohne Terminal, jede Oberfläche ruft es (seit 2026-10-22) |
+| `knoten` | 1 | Knoten-Beschreibung dieses Geräts: Name, Sorte, erkannte Hardware (GPU, Bildschirm, Mikro, Lautsprecher aus /proc und /sys), Programm-Fassung (seit 2026-10-22) |
 | `kachel_form` | 1 | Form einer Kachel-Antwort ohne Fachwissen: Fehler (ungültig, weg, zu klein), kürzen auf w×h, `stand` als Fingerabdruck (seit 2026-10-10) |
 | `kachel_parameter` | 1 | Parameter einer Kachel-Art im Katalog als JSON Schema 2020-12 (seit 2026-10-10, vorher eigene `felder`): Werte aus der Adresse typen, gegen das Schema prüfen (Paket `jsonschema`), Fehler als ein deutscher Satz; Auswahl/Vorgaben zur Fragezeit eintragen |
 | `adressen` | 1 | „Ein Objekt, eine Adresse": `zentrale://<app>/<pfad>?…` bauen, lesen, kanonisch machen (nur `urllib.parse`); alter Kachel-Verweis → Adresse (seit 2026-10-10) |
@@ -289,6 +294,7 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
 | `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `listen_bild`, `graph_reihen`, `stil`, `tastentabelle`, `uhr` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `listen_bild` seit 2026-10-11: Ansicht und Kachel zeigen dasselbe Bild einer Liste; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; `tastentabelle` seit 2026-10-11: TUI und Hub lesen Tastentabellen gleich; `uhr` seit 2026-10-20: dieselbe Uhr und derselbe Tageswechsel wie das Backend; alle stehen in `deploy/aussenposten.txt`. |
+| `zentrale_cli/` | `abgleich`, `abgleich_bereiche`, `abgleich_mitte`, `abgleich_schluessel`, `ai_config`, `cloud_api`, `dateien`, `knoten`, `konto` | Der Befehl `zentrale` (seit 2026-10-22) ist eine Front wie `scripts/abgleich.py`: er bedient Konto, Abgleich und Gerät direkt, ohne laufendes Backend (er läuft auch, bevor es eines gibt). Rechnen und Netz bleiben im Kern; hier stehen nur Fragen, Ausgabe und Texte (`zentrale_cli/texte.py`). |
 
 Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
 liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).

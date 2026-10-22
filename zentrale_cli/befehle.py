@@ -1,0 +1,245 @@
+"""Die Befehle von `zentrale`. Jeder nimmt ein Terminal und gibt einen
+Rückgabewert (0 = gut). Gerechnet wird im Kern; hier wird nur gefragt und
+gezeigt."""
+
+import os
+
+from zentrale_cli import WURZEL
+from zentrale_cli.ausgabe import banner
+from zentrale_cli.texte import t
+
+import abgleich            # noqa: E402  (Kern, über zentrale_cli/__init__ im Pfad)
+import abgleich_mitte      # noqa: E402
+import abgleich_schluessel  # noqa: E402
+import ai_config           # noqa: E402
+import cloud_api           # noqa: E402
+import dateien             # noqa: E402
+import knoten              # noqa: E402
+import konto               # noqa: E402
+
+EINRICHTUNG = "einrichtung"   # Einstellung: wann dieses Gerät eingerichtet wurde
+
+
+def eingerichtet() -> bool:
+    return bool(ai_config.setting(EINRICHTUNG))
+
+
+def einrichtung_merken():
+    import datetime
+    ai_config.set_override(EINRICHTUNG, datetime.date.today().isoformat(), persist=True)
+
+
+# ── Begrüßung, Fassung ─────────────────────────────────────────────────
+
+def welcome(term):
+    banner(term)
+    term.sag()
+    term.sag(t("welcome_title"), "fett")
+    term.sag(t("welcome_body"))
+    term.sag()
+    term.sag(t("welcome_next"), "fett")
+    breite = max(len(b) for b, _w in t("welcome_steps")) + 2
+    for befehl, was in t("welcome_steps"):
+        term.sag("  " + term.f(befehl.ljust(breite), "akzent") + was)
+    return 0
+
+
+def version(term):
+    term.sag(t("version_line", fassung=knoten.fassung(WURZEL)))
+    return 0
+
+
+# ── Konto ──────────────────────────────────────────────────────────────
+
+def _neues_passwort(term, frage_key="ask_password_new"):
+    while True:
+        p1 = term.geheim(t(frage_key, n=konto.MIN_PASSWORT))
+        try:
+            konto.passwort_pruefen(p1)
+        except konto.KontoFehler as e:
+            term.sag(str(e), "warn")
+            continue
+        if term.geheim(t("ask_password_again")) == p1:
+            return p1
+        term.sag(t("passwords_differ"), "warn")
+
+
+def login(term):
+    d = konto.lesen() if konto.angemeldet() else None
+    if d:
+        term.sag(t("login_already", mail=d["mail"]))
+        return 0
+    mail = term.frage(t("ask_mail"))
+    pw = term.geheim(t("ask_password"))
+    term.sag(t("working_key"), "blass")
+    d = konto.anmelden(mail, pw)
+    term.sag(t("login_ok", mail=d["mail"], device=d["knoten"]), "gut")
+    return 0
+
+
+def logout(term):
+    term.sag(t("logout_ok") if konto.abmelden() else t("logout_none"))
+    return 0
+
+
+def account_create(term):
+    if konto.angemeldet():
+        term.sag(t("login_already", mail=konto.lesen()["mail"]))
+        return 1
+    term.sag(t("create_intro"))
+    term.sag()
+    code = term.frage(t("ask_code")).strip()
+    mail = term.frage(t("ask_mail")).strip()
+    pw = _neues_passwort(term)
+    term.sag(t("working_key"), "blass")
+    entwurf = konto.Entwurf(pw)
+    term.sag()
+    term.sag("  " + t("emergency_title"), "warn", "fett")
+    term.sag()
+    term.sag("      " + entwurf.notfall_text, "fett")
+    term.sag()
+    for zeile in t("emergency_warning").splitlines():
+        term.sag("  " + zeile, "warn")
+    term.sag()
+    if not term.ja(t("emergency_confirm")):
+        term.sag(t("emergency_not_saved"))
+        return 1
+    term.sag(t("working_key"), "blass")
+    d = konto.anlegen(entwurf, mail, code, pw)
+    term.sag(t("create_ok", mail=d["mail"]), "gut")
+    return 0
+
+
+def account_recover(term):
+    term.sag(t("recover_intro"))
+    mail = term.frage(t("ask_mail")).strip()
+    notfall = term.geheim(t("ask_emergency"))
+    pw = _neues_passwort(term)
+    term.sag(t("working_key"), "blass")
+    d = konto.wiederherstellen(mail, notfall, pw)
+    term.sag(t("recover_ok", mail=d["mail"]), "gut")
+    return 0
+
+
+def account_password(term):
+    if not konto.angemeldet():
+        term.sag(t("not_logged_in"))
+        return 1
+    alt = term.geheim(t("ask_password_old"))
+    neu = _neues_passwort(term)
+    term.sag(t("working_key"), "blass")
+    konto.passwort_aendern(alt, neu)
+    term.sag(t("password_ok"), "gut")
+    return 0
+
+
+# ── Abgleich ───────────────────────────────────────────────────────────
+
+def sync(term):
+    if abgleich.mitte_art() == "http" and not konto.angemeldet():
+        term.sag(t("not_logged_in"))
+        return 1
+    try:
+        b = abgleich.abgleichen(WURZEL)
+    except abgleich.Besetzt:
+        term.sag(t("sync_busy"))
+        return 1
+    if b.art == "erstbefuellung":
+        term.sag(t("sync_first_fill"))
+    elif b.art == "erstabgleich":
+        term.sag(t("sync_first_join"))
+    term.sag(t("sync_result", geholt=len(b.geholt), gesendet=len(b.gesendet),
+               beiseite=len(b.beiseite)), "gut")
+    for h in b.hinweise:
+        term.sag(t("sync_note", text=h), "warn")
+    return 0
+
+
+def _bereiche_text(ids):
+    if ids is None:
+        return t("st_areas_all")
+    if not ids:
+        return t("st_areas_none")
+    return ", ".join(t("area")[i][0] for i in ids)
+
+
+def status(term):
+    d = None
+    try:
+        d = konto.lesen()
+    except konto.KontoFehler as e:
+        term.sag(str(e), "warn")
+    z = abgleich.zustand()
+    zeilen = [
+        (t("st_account"), d["mail"] if d else t("st_account_none")),
+        (t("st_server"), (d or {}).get("server") or cloud_api.adresse()),
+        (t("st_device"), dateien.knoten()),
+        (t("st_version"), knoten.fassung(WURZEL)),
+        (t("st_way"), f"{z['weg']} / {z['mitte_art']}"),
+        (t("st_areas"), _bereiche_text(z["bereiche"])),
+        (t("st_sync"), (z["letzter_erfolg"] or t("st_sync_never")).replace("T", " ")),
+    ]
+    if z["fehler"]:
+        zeilen.append((t("st_sync_error"), z["fehler"]))
+    breite = max(len(k) for k, _v in zeilen) + 2
+    for k, v in zeilen:
+        term.sag("  " + term.f(k.ljust(breite), "blass") + str(v))
+    if z["hinweise"]:
+        term.sag()
+        term.sag(t("st_notes"), "fett")
+        for h in z["hinweise"][-10:]:
+            term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
+        term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
+    return 0
+
+
+# ── Geräte ─────────────────────────────────────────────────────────────
+
+def geraet_melden(sorte="vollknoten") -> dict:
+    """Die eigene Beschreibung in die Cloud (PUT /v1/knoten/<name>)."""
+    b = knoten.beschreibung(sorte, wurzel=WURZEL)
+    try:
+        konto.client().put("/v1/knoten/" + b["name"], b)
+    except cloud_api.CloudFehler as e:
+        raise konto.KontoFehler(str(e)) from None
+    return b
+
+
+def devices(term):
+    if not konto.angemeldet():
+        term.sag(t("not_logged_in"))
+        return 1
+    ich = geraet_melden()
+    try:
+        antwort = konto.client().get("/v1/knoten")
+    except cloud_api.CloudFehler as e:
+        raise konto.KontoFehler(str(e)) from None
+    liste = antwort.get("knoten", []) if isinstance(antwort, dict) else antwort
+    term.sag(t("dev_title", mail=konto.lesen()["mail"]), "fett")
+    if not liste:
+        term.sag("  " + t("dev_none"))
+    for k in sorted(liste or [], key=lambda k: str(k.get("name"))):
+        hw = k.get("hardware") or {}
+        hat = ", ".join(t("hw")[n] for n in ("gpu", "bildschirm", "mikro", "lautsprecher")
+                        if hw.get(n)) or "—"
+        selbst = " " + term.f(t("dev_this"), "gut") if k.get("name") == ich["name"] else ""
+        term.sag(f"  {term.f(str(k.get('name')), 'akzent')}{selbst}")
+        term.sag(f"     {k.get('sorte', '?')} · {hat} · {k.get('programm', '?')} · "
+                 + t("dev_seen", zeit=str(k.get("zuletzt_gesehen", "?"))[:16].replace("T", " ")),
+                 "blass")
+    return 0
+
+
+# ── TUI ────────────────────────────────────────────────────────────────
+
+def tui(term):
+    skript = os.path.join(WURZEL, "scripts", "start_tui.sh")
+    try:
+        os.execv("/bin/bash", ["bash", skript])
+    except OSError as e:
+        term.sag(t("tui_missing", grund=e), "fehler")
+        return 1
+
+
+FEHLER = (konto.KontoFehler, cloud_api.CloudFehler, abgleich_mitte.MitteFehler,
+          abgleich_schluessel.SchluesselFehler, ValueError)

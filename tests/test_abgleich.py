@@ -507,8 +507,8 @@ def test_umstellen_nur_nach_einem_abgleich(welt):
 
 
 def test_unbekannte_mitte_art_klarer_fehler(welt, monkeypatch):
-    monkeypatch.setenv("ZENTRALE_ABGLEICH_MITTE_ART", "http")
-    with pytest.raises(abgleich_mitte.MitteFehler, match="gibt es noch nicht"):
+    monkeypatch.setenv("ZENTRALE_ABGLEICH_MITTE_ART", "ftp")
+    with pytest.raises(abgleich_mitte.MitteFehler, match="gibt es nicht"):
         welt.rechner("laptop").abgleichen()
 
 

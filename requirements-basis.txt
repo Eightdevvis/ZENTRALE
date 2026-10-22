@@ -1,0 +1,30 @@
+# ZENTRALE – Abhängigkeiten eines Vollknotens OHNE lokale KI
+# (memory/hub/knoten_beitritt.md, „Bauplan v1"; deploy/install.sh nimmt diese
+# Datei). Die KI läuft über die Cloud; Spracherkennung und Stimme laufen als
+# eigene Dienste (services/) auf dem Gehirn (PC) und fehlen hier ganz.
+#
+# Bewusst NICHT dabei (stehen in requirements.txt):
+#   faster-whisper, sherpa-onnx, piper-tts   lokale Modelle (STT/TTS)
+#   webrtcvad-wheels                          Immer-Zuhören (Tutor-Zimmer)
+#   keyboard                                  Sensor-Simulation, braucht Root
+#   pygame                                    nur das Karten-Fenster (scripts/map_window.py)
+# Backend und TUI starten ohne sie (core/sensors.py fängt keyboard ab, Ton
+# und Karte melden sich ab, wenn ihr Paket fehlt).
+
+flask
+requests
+pypdf>=6,<7
+openpyxl>=3.1,<4
+Pillow>=12.3,<13
+jsonschema>=4.18,<5
+python-dateutil
+icalendar>=7.3
+cryptography>=42
+secretstorage
+jeepney
+openai
+fsrs
+# Ton fürs TUI-Klavier (core/tone.py): ohne libportaudio still aus.
+numpy
+sounddevice
+soundfile
