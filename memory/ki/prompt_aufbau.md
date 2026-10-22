@@ -7,6 +7,8 @@ aus `klein` abgeleitet, eigene Meta-Regeln). Reihenfolge: erst alles Statische
 offene Zusagen) im Umschlag `<kontext_automatisch>` hinten an der neuesten
 Nachricht. Der Nutzer steht als Platzhalter im Prompt (`nutzer_name`,
 `nutzer_pronomen`). Prompt ansehen: `scripts/prompt_zeigen.py`.
+Wonach der Prompt gebaut werden soll (Länge, Aufbau, Ton): KI-Bibel
+[bibel/prompt.md](bibel/prompt.md).
 
 **Warum:** Cache-Treffer kosten 10 % — der größte Kostenhebel; die Uhrzeit vorn
 hatte den ganzen Verlauf ungecacht gemacht. Ein Prompt für 9B und Frontier war

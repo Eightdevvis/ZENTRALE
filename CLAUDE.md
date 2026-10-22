@@ -94,6 +94,11 @@ Statt das ganze README/diese Datei zu lesen: über den Index gezielt
 das Thema öffnen, das gerade gebraucht wird – das spart Tokens und
 hält die Antworten fokussiert.
 
+**KI-Bibel — vor jeder Arbeit an der KI lesen.** Wer am Prompt, an
+Werkzeugen, Schienen oder Prüfern baut, liest vorher die betroffenen Einträge
+(Einstieg `memory/ki/bibel/README.md`) und stellt danach deren Status um, mit
+Commit-Hash.
+
 ## Schnell-Zeiger nach Bereich
 
 Die Doku hat seit 2026-08-15 **zwei Ebenen**: `memory/INDEX.md` nennt nur die
@@ -103,6 +108,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 | Bereich | Was drinsteht | Index |
 |---|---|---|
 | KI | denkt: lokal + Cloud, Datei-Gedächtnis (Graph seit 18.08. aus), Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
+| KI-Bibel | wonach die KI gebaut wird: Regeln mit Quelle und Status (vor KI-Arbeit lesen) | `memory/ki/bibel/README.md` |
 | Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
 | System | gebaut (Kern): Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | `memory/system/INDEX.md` |
 | Hub | Plattform: Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt | `memory/hub/INDEX.md` |

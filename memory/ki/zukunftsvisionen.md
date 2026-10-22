@@ -3,7 +3,9 @@
 Ideen von Sasha für später. Nichts davon ist gebaut oder geplant. Hier steht
 nur, WAS gewünscht ist, damit es nicht verloren geht. Wird etwas davon
 angegangen, bekommt es eine eigene Themendatei, und hier bleibt nur der
-Verweis.
+Verweis. Klassifikator-Ideen für die KI selbst (Werkzeuge vorab einlegen,
+Fokus-Prüfkette, Modell als Richter): KI-Bibel
+[bibel/klassifikatoren.md](bibel/klassifikatoren.md).
 
 ## Was mache ich gerade? (Klassifikator, 11.10.2026)
 

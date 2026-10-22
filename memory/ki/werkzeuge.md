@@ -7,6 +7,8 @@ Werkzeuge laufen **immer lokal**, nur die Entscheidung wandert in die Cloud.
 Jedes Ergebnis beginnt mit `[ergebnis: ok|fehlgeschlagen|keine_antwort|abgelehnt]`;
 schreibende Werkzeuge lesen nach und geben den echten Stand als Beleg zurück.
 Neue Werkzeuge nur auf `gross`, hinten ans Register.
+Wonach Werkzeuge gebaut werden (Beschreibungen, Fehlertexte, Ergebnisse):
+KI-Bibel [bibel/werkzeuge.md](bibel/werkzeuge.md).
 
 **Warum:** Ehrlichkeit war eine Bitte im Prompt und ist jetzt Bauweise
 („Belegt oder gesagt"); ein Register statt verstreuter Listen, damit Schiene,

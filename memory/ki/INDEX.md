@@ -6,6 +6,7 @@ Messungen dazu existiert.
 
 | Was du wissen willst | Datei |
 |---|---|
+| **KI-Bibel — vor jeder Arbeit an der KI lesen.** Wonach die KI gebaut wird: alle Regeln und Tipps (Anthropic, inoffiziell, Sasha) mit Kennung, Quelle und Status; Prompt, Werkzeuge, Recherche, Handeln, Skills, Kontext, Denken, Prüfung, Klassifikatoren, Baustellen | [bibel/README.md](bibel/README.md) |
 | **Einstieg.** Überblick: wie der Chat läuft (lokal und Cloud), Architektur-Bild, wo welches Thema steht | [ki_system.md](ki_system.md) |
 | Anbieter und Modelle: Cloud-Kern, zweiter Dialekt, Backend-Wahl, Lokal-Regel, Isolations-Invariante, Modell-Parameter, **Fallen der API**, gestoppt = geschätzt gebucht, lokales Modell, Warmup | [anbieter_modelle.md](anbieter_modelle.md) |
 | System-Prompt-Reihenfolge, zwei Schienen `klein`/`gross`, Prompt-Cache (statisch vorn, Wechselndes hinten), **Prompt-Budget** (21.000 Zeichen, Wächter-Test), Werkzeug-Beschreibungen als wichtigster Hebel, Nutzer im Prompt | [prompt_aufbau.md](prompt_aufbau.md) |

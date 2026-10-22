@@ -5,6 +5,8 @@
 gelaufen ist. Einschalten: Einstellung `werkzeug_suche = an` (oder Env
 `ZENTRALE_WERKZEUG_SUCHE=an`). Weil `profil.gross.TOOLS` beim Import entsteht,
 gilt ein Umschalten erst nach einem Neustart des Servers.
+Regeln und offene Punkte dazu (W-07 bis W-09): KI-Bibel
+[bibel/werkzeuge.md](bibel/werkzeuge.md).
 
 ## Warum
 
