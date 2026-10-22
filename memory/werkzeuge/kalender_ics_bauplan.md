@@ -83,14 +83,33 @@ getrennt angucken". Umsetzung:
   Kollisions-Rückfrage, keine Abwesenheit durch eine Vielleicht-Reise; die KI
   sieht `[uncommitted · vielleicht]` und soll es höchstens als Möglichkeit
   nennen.
-- TUI: immer in A/B/C über den Terminen; Taste `u` schaltet, im Formular
+- TUI: in A/B über den Terminen, in C darunter (s. u.); Taste `u` schaltet, im Formular
   Advanced → Status (neu und bearbeiten; bis 11.10.2026 Feld „Verbindlich"). Seit dem Abend als **Glas** (Sasha: „es
   sieht nicht transparent aus da der hintergrund nicht durchscheint"):
   Flächen in B und C liegen als Scheibe über allem — Punktlinien und feste
   Termine bleiben sichtbar, nur ihr Grund wird mit der Kursfarbe gemischt
   (`Leinwand.glas`, `kalender.py _glas_attr`, `farben.DECKKRAFT["glas"]`).
-  In C teilen sich uncommitted keine Bahnen mit festen. Nur die Schrift in A
-  und in den Textzeilen von B bleibt blass (`k_…_blass`). Tags landet jede
+  Nur die Schrift in A und in den Textzeilen von B bleibt blass (`k_…_blass`).
+- **uncommitted liegt immer UNTER festen Terminen (C, 22.10.2026).** Das Glas
+  über festen ließ „Allgemeine Chemie (fest)" mit „Tutorium Jäger
+  (uncommitted)" zusammenkleben, Chemie wirkte uncommitted, und unter dem
+  festen Block war unklar, was gewählt ist (Sasha schaltete so versehentlich
+  feste auf uncommitted). Sasha: „warum soll ein anderer termin uncommitted
+  aussehen, nur weil ein uncommitted drüber liegt?? uncommitted liegt IMMER
+  klar unten drunter!" Regel in `_c_achse` (Bahnen/Rechtecke:
+  `tui/ansichten/kalender_ebenen.py`): feste rechnen Bahnen nur unter sich,
+  uncommitted unter sich über die volle Spalte; gezeichnet erst uncommitted
+  (Glas nur über Punktlinien/Phasen = leise Fläche, Titel ≥ 3:1), dann die
+  festen deckend darüber — ein fester sieht nie anders aus. Der Titel steht
+  nur in Zeilen, die kein fester Block belegt (rutscht in die erste freie,
+  sonst entfällt er). Ganz verdeckt (keine freie Zeile): in der Randspalte
+  rechts neben der Tagesspalte `◌` auf der Startzeile und `┊` über die Dauer,
+  leise in seiner Kursfarbe (Regler `UNC_VERDECKT_ZEICHEN`/`_STRICH`, "" =
+  aus). Gewählt (↑↓) kommt er obenauf in Akzentfläche. Ganztags-Zone: feste
+  zuerst, uncommitted danach. Zwischenstand „daneben" (eigene Bahn neben
+  festen) wurde am selben Tag verworfen. Glas bleibt für B (Flächen,
+  Ganztags/Spannen) und in C über leerem Grund; Glas über festen gibt es
+  nicht mehr. Tags landet jede
   Mischung mit Weiß wieder auf dem Pastell; wo sie auf dem Grund darunter
   landen würde, wird kräftiger gemischt, damit die Scheibe sichtbar bleibt.
   Seit 19.10.2026 „kaum sichtbar" (Sasha: „nen dicken ticken

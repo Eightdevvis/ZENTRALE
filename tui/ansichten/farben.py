@@ -204,8 +204,9 @@ KAL = {
 # gemischt, als läge sie zu einem Teil durchsichtig darüber, und auf die
 # nächste der 256 Farben gerundet. DECKKRAFT: wie viel von der Farbe bleibt.
 # Seit 10.10.2026 abends ist es Glas (Leinwand.glas, kalender.py _glas_attr):
-# „glas" mischt den Grund JEDER Zelle darunter — Punktlinien, feste Termine —
-# mit der Kursfarbe; „flaeche"/„schrift" bleiben der Rückfall (blasse Fläche,
+# „glas" mischt den Grund JEDER Zelle darunter — Punktlinien, Phasen; feste
+# Termine seit 22.10.2026 nicht mehr (in C liegt uncommitted darunter) — mit
+# der Kursfarbe; „flaeche"/„schrift" bleiben der Rückfall (blasse Fläche,
 # blasse Schrift in A und B).
 # Seit 19.10.2026 „kaum sichtbar" (Sasha: „nen dicken ticken transparenter"):
 # Flächen und Glas runden im 256er-Modus auf die nächste der 256 MIT

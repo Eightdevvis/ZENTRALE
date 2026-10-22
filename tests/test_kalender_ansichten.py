@@ -446,23 +446,84 @@ def _unv(d, *labels):
     return d
 
 
-def test_c_uncommitted_nimmt_keine_bahn_der_festen():
-    """Zahnarzt (uncommitted) liegt über Arbeit: Arbeit behält die volle
-    Spalte, Zahnarzt ist Glas darüber statt einer Bahn daneben."""
-    d = _unv(daten("week"), "Zahnarzt")
-    zeilen = ka.ansicht_c(d, 110, 34)
+def _ohne(d, label):
+    for liste in d["days"].values():
+        liste[:] = [e for e in liste if e.get("label") != label]
+    return d
+
+
+def _tagspalte(zeilen, a, b):
+    return [zellen(z)[a:b] for z in zeilen]
+
+
+# ── uncommitted liegt UNTER den festen (Sasha, 22.10.2026) ─────────────
+def test_c_fest_sieht_nie_anders_aus_wegen_uncommitted_darunter():
+    """Zahnarzt (uncommitted, 14–15) liegt ganz unter Arbeit (fest,
+    13:30–16): Arbeit sieht Zelle für Zelle aus wie ohne Zahnarzt, kein Glas,
+    keine eigene Bahn; Zahnarzt ist verdeckt → Zeichen in der Randspalte."""
     a, b = _spalte(110, 0)
-    ar = [i for i, z in enumerate(zeilen) if "Arbeit" in text(z)[a:b + 1]]
-    za = [i for i, z in enumerate(zeilen) if "Zahna" in text(z)[a:b + 1]]
-    assert ar and za
-    # ohne uncommitted läge Zahnarzt in einer zweiten Bahn rechts daneben
-    assert text(zeilen[ar[0]]).index("Arbeit") == text(zeilen[za[0]]).index("Zahna") == a
-    # Glas: Arbeit scheint unter dem Zahnarzt durch (Rolle kombiniert)
-    zza = zellen(zeilen[za[0]])
-    assert all(ka.GLAS in r for _ch, r in zza[a:b])
-    darunter = {r.split(ka.GLAS)[0].removesuffix(ka.LEISE) for _ch, r in zza[a:b]}
-    arbeit = ka.titel_rolle("Arbeit") + ka.INV
-    assert arbeit in darunter
+    mit = ka.ansicht_c(_unv(daten("week"), "Zahnarzt"), 110, 34)
+    ohne = ka.ansicht_c(_ohne(daten("week"), "Zahnarzt"), 110, 34)
+    assert _tagspalte(mit, a, b) == _tagspalte(ohne, a, b)
+    assert not any("Zahna" in text(z) for z in mit)
+    rand = [(i, zellen(z)[b]) for i, z in enumerate(mit)
+            if zellen(z)[b][0] == ka.UNC_VERDECKT_ZEICHEN]
+    assert len(rand) == 1 and ka.GLAS in rand[0][1][1]    # blass, in der Kursfarbe
+    i = rand[0][0]
+    assert "14" in text(mit[i])[:a]                       # auf der Startzeile 14:00
+    assert zellen(mit[i + 1])[b][0] == ka.UNC_VERDECKT_STRICH   # 14:30 noch drunter
+    assert zellen(mit[i + 2])[b][0] != ka.UNC_VERDECKT_STRICH   # 15:00 vorbei
+
+
+def test_c_uncommitted_um_den_festen_herum_sichtbar():
+    """Tutorium (uncommitted, 14–16) unter Chemie (fest, 14:15–15:45) im
+    15-min-Raster: Chemie unverändert; vom Tutorium bleiben 14:00 und 15:45
+    sichtbar, blass (Glas nur über leerem Grund), der Titel auf 14:00."""
+    termine = [{"day": "2026-10-05", "label": "Chemie", "time": "14:15", "ende": "15:45"},
+               {"day": "2026-10-05", "label": "Tutorium", "time": "14:00", "ende": "16:00"}]
+    a, b = _spalte(110, 0)
+    mit = ka.ansicht_c(_unv(daten("week", termine=termine, routinen=[]), "Tutorium"), 110, 66)
+    ohne = ka.ansicht_c(daten("week", termine=termine[:1], routinen=[]), 110, 66)
+    ch = [i for i, z in enumerate(mit) if "Chemie" in text(z)]
+    tu = [i for i, z in enumerate(mit) if "Tutorium" in text(z)]
+    assert ch and tu and tu[0] == ch[0] - 1
+    assert text(mit[tu[0]]).index("Tutorium") == text(mit[ch[0]]).index("Chemie") == a
+    for i, z in enumerate(mit):              # Chemie-Zeilen: Zelle für Zelle wie ohne
+        if any(ka.GLAS not in r and r.startswith("k_t") for _c, r in zellen(z)[a:b]):
+            assert zellen(z)[a:b] == zellen(ohne[i])[a:b]
+    glas = [i for i, z in enumerate(mit) if any(ka.GLAS in r for _c, r in zellen(z)[a:b])]
+    assert glas == [tu[0], tu[0] + 7], glas   # 14:00 und 15:45, darüber deckend Chemie
+    assert all(ka.GLAS in r for _c, r in zellen(mit[tu[0]])[a:b - 1])
+    assert not any(zellen(z)[b][0] == ka.UNC_VERDECKT_ZEICHEN for z in mit)
+
+
+def test_c_uncommitted_titel_rutscht_in_die_erste_freie_zeile():
+    termine = [{"day": "2026-10-05", "label": "Fest", "time": "10:00", "ende": "11:00"},
+               {"day": "2026-10-05", "label": "Vielleicht", "time": "10:00", "ende": "12:00"}]
+    zeilen = ka.ansicht_c(_unv(daten("week", termine=termine, routinen=[]), "Vielleicht"),
+                          110, 34)
+    f = finde(zeilen, "Fest")
+    v = finde(zeilen, "Vielleic")
+    assert f and v and v[0] == f[0] + 2      # 30-min-Takt: Fest belegt 10:00 und 10:30
+
+
+def test_c_gewaehlter_verdeckter_uncommitted_kommt_obenauf():
+    d = _unv(daten("week"), "Zahnarzt")
+    sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
+    zeilen = ka.ansicht_c(d, 110, 34, auswahl={"tag": "2026-10-05", "roh": sel})
+    z = next(z for z in zeilen if "Zahna" in text(z))
+    assert any(r == ka.ROLLE["a_akzent"] + ka.INV and "Zahna" in t for t, r in z)
+    assert "Arbeit" in "".join(text(z) for z in zeilen)
+
+
+def test_c_ganztags_fest_vor_uncommitted():
+    termine = [{"day": "2026-10-05", "label": "Vielleicht"},
+               {"day": "2026-10-05", "label": "Feiertag"}]
+    zeilen = ka.ansicht_c(_unv(daten("week", termine=termine, routinen=[]), "Vielleicht"),
+                          110, 34)
+    assert finde(zeilen, "Feiertag")[0] < finde(zeilen, "Vielleicht")[0]
+    v = zeilen[finde(zeilen, "Vielleicht")[0]]
+    assert any("Vielleicht" in t and ka.GLAS in r for t, r in v)
 
 
 def test_c_uncommitted_untereinander_eigene_bahnen():
@@ -539,7 +600,7 @@ def test_c_sprechstunden_woche_nebeneinander():
     """Nachgebaut aus Sashas Woche (22.10.2026): feste Veranstaltung mit einem
     festen Termin, der in Minuten nach ihr beginnt, aber auf ihrer letzten
     Rasterzeile liegt; dazu zwei uncommitted Sprechstunden, die sich ebenso
-    berühren. Je Ebene nebeneinander, uncommitted als Glas darüber."""
+    berühren. Je Ebene nebeneinander (die Ebenen getrennt, 22.10.2026)."""
     termine = [{"day": "2026-10-05", "label": "Saalübung", "time": "14:15", "ende": "16:10"},
                {"day": "2026-10-05", "label": "Drive", "time": "16:10", "ende": "17:00"},
                {"day": "2026-10-05", "label": "SA", "time": "18:00", "ende": "18:40"},
@@ -567,14 +628,6 @@ def test_c_freier_termin_behaelt_volle_breite_neben_ueberlappung():
     e = next(z for z in zeilen if "Eins" in text(z))
     zw = next(z for z in zeilen if "Zwei" in text(z))
     assert text(e).index("Eins") == a and a < text(zw).index("Zwei") < b
-
-
-def test_c_gewaehlter_uncommitted_ist_deckend():
-    d = _unv(daten("week"), "Zahnarzt")
-    sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
-    zeilen = ka.ansicht_c(d, 110, 34, auswahl={"tag": "2026-10-05", "roh": sel})
-    z = next(z for z in zeilen if "Zahna" in text(z))
-    assert any(r == ka.ROLLE["a_akzent"] + ka.INV and "Zahna" in t for t, r in z)
 
 
 def test_b_uncommitted_ganztags_und_spanne_als_glas():

@@ -69,7 +69,7 @@ Listen-Sidebar heraus).
   Über die Woche hinaus: `▶` / `◀`. Wird es eng, wird zuerst der Titel gekürzt,
   von und bis bleiben.
 - **C — Woche als Zeitachse** (Wochendaten): Flächen nach Dauer, Spannentage ohne Uhrzeit als volle Säule, Spannen reihum gefärbt. Überschneidungen
-  nebeneinander, Bahnen je Überlappungs-Gruppe (`_c_bahnen`, 22.10.2026), gemessen in GEZEICHNETEN Rasterzeilen, nicht Minuten (sonst übermalt
+  nebeneinander, Bahnen je Überlappungs-Gruppe (`kalender_ebenen.bahnen`, 22.10.2026), gemessen in GEZEICHNETEN Rasterzeilen, nicht Minuten (sonst übermalt
   10:15–11:00 bei 30-min-Takt 10:00–10:15); ohne Überschneidung volle Spalte, sonst Dehnung nur in Nachbarbahnen, die über die ganze Höhe frei
   sind. 08–22 Uhr, erweitert um jede echte Uhrzeit; ist Höhe übrig, beginnt die Achse früher.
 
@@ -115,8 +115,8 @@ Listen-Sidebar heraus).
   `kalender.py` (`_glas_attr`) mischt den Grund der Rolle darunter mit der
   Kursfläche (`farben.DECKKRAFT[…]["glas"]`, gerundet über `pixel.bunt`) und
   holt das Paar über `z.pix_attr`; ohne 256 Farben oder bei vollen Paaren die
-  alte blasse Fläche (`k_…_blass_inv`). In C bekommen uncommitted eigene Bahnen
-  über die volle Spalte, nach den festen gezeichnet; der gewählte bleibt deckend.
+  alte blasse Fläche (`k_…_blass_inv`). In C seit 22.10.2026 UNTER den festen
+  (eigene Bahnen, zuerst gezeichnet, Verdeckt-Zeichen ◌┊; kalender_ics_bauplan.md).
 - **Tagesrhythmus (Phasen, 10.10.2026).** Sasha: „fürs coming down ein paar
   sterne, wolken usw eingemalt wie ein nachthimmel, ab 10 uhr ein par z z z …
   eine leichte hintergrund ebene". Phasen (Ebene `rhythmus`, Feld `motiv`,

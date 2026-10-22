@@ -27,7 +27,7 @@ import unicodedata
 import zlib
 from datetime import date, timedelta
 
-from . import kalender_deadline, kalender_gruppen, kalender_jetzt, kalender_motive, kalender_stil
+from . import kalender_deadline, kalender_ebenen, kalender_gruppen, kalender_jetzt, kalender_motive, kalender_stil
 
 # ── Ansichten und Taste v ──────────────────────────────────────────────
 ANSICHTEN = ("A", "B", "C")
@@ -475,7 +475,7 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         # Aussehen des Kastens aus der Stylebox (kalender_stil.py); {} = wie immer
         "stil": kalender_stil.von(e),
         "routine": bool(e.get("recurring")), "aus": aus,
-        # Ebene „uncommitted": liegt durchscheinend über den Terminen
+        # Ebene „uncommitted": blass; in C UNTER den festen (22.10.2026)
         "unv": e.get("layer") == UNVERBINDLICH,
         "ausfall": bool(e.get("ausfall")),
         "deadline": deadline,
@@ -544,8 +544,9 @@ UNVERBINDLICH = "uncommitted"
 def blass(rolle: str, t: dict) -> str:
     """Kalenderfarbe → ihre blasse Schrift, wenn `t` uncommitted ist
     (C["k_…_blass"]; tui/ansichten/kontext.py). Nur noch für Zeilen, unter
-    denen nichts liegt (A, Textzeilen in B). Wo uncommitted ÜBER etwas liegt
-    (Flächen in B und C), zeichnet Leinwand.glas."""
+    denen nichts liegt (A, Textzeilen in B, das Verdeckt-Zeichen in C). Flächen
+    (B, C) zeichnet Leinwand.glas — in C nur über Punktlinien/Phasen, nie über
+    festen Terminen."""
     return rolle + "_blass" if t.get("unv") and rolle.startswith("k_") else rolle
 
 
@@ -560,7 +561,7 @@ def _rolle(t: dict) -> str:
 
 
 def _glasrolle(t: dict) -> str:
-    """Die Farbe, in der ein uncommitted-Eintrag als Glas über allem liegt."""
+    """Die Farbe, in der ein uncommitted-Eintrag als Glas liegt."""
     if t.get("gruppe"):
         return gruppe_rolle(t["roh"])
     return ROLLE["spanne"] if t["spanne"] else kurs_rolle(t)
@@ -1152,6 +1153,15 @@ _STANDARD_DAUER = 60      # Termin ohne Ende: eine Stunde Fläche
 # meisten Ganztägigen (über die Woche einheitlich), die Zeitachse rückt darunter.
 GANZTAGS_ZEILEN = 4
 GANZTAGS_ACHSE_MIN = 6    # so viele Zeilen behält die Zeitachse mindestens
+# Ebene „uncommitted" liegt UNTER den festen Terminen (Sasha, 22.10.2026:
+# „uncommitted liegt IMMER klar unten drunter!"). Ist ein uncommitted Block so
+# verdeckt, dass keine seiner Zeilen frei bleibt (sein Titel hätte keinen
+# Platz), steht dieses Zeichen blass in der Randspalte rechts der Tagesspalte
+# auf seiner Startzeile, darunter über seine Dauer ein gestrichelter Strich
+# (gestrichelt = nicht fest, wie die uncommitted-Deadline ╍) — in seiner
+# Kursfarbe, leise, ≥ 3:1. So bleibt er auffindbar. "" = kein Zeichen/Strich.
+UNC_VERDECKT_ZEICHEN = "◌"
+UNC_VERDECKT_STRICH = "┊"
 
 
 def _c_bloecke(daten, tag: date, erledigte):
@@ -1180,60 +1190,8 @@ def _c_bloecke(daten, tag: date, erledigte):
     return bloecke, ganz, deadlines
 
 
-def _c_bahnen(bloecke, raster=None):
-    """Überschneidungen nebeneinander, wie im Google-/Apple-Kalender: Bahnen
-    gelten je Überlappungs-Gruppe (zusammenhängende Kette sich schneidender
-    Blöcke), nicht für den ganzen Tag (Sasha, 22.10.2026: sonst werden alle
-    Termine gequetscht, obwohl sie Platz hätten). In der Gruppe bekommt
-    jeder Block die erste freie Bahn (Greedy) und dehnt sich nach rechts in
-    Nachbarbahnen aus, in denen nichts mit ihm kollidiert.
-
-    Ob sich zwei Blöcke schneiden, entscheiden die GEZEICHNETEN Zeilen, nicht
-    die Minuten: raster=(lo, takt) rechnet jeden Block auf die Rasterzeilen um,
-    die _c_achse ihm gibt (10:00–10:15 und 10:15–11:00 liegen bei 30-min-Takt
-    beide auf der 10:00-Zeile). Sonst bekämen beide die volle Spalte und der
-    zweite übermalte den ersten (Sasha, 22.10.2026: „überdecken sich nun
-    einfach nur"). Ohne raster gelten die Minuten.
-    -> [(bahn, bis_bahn, bahnen_der_gruppe, s, e, t)]; ein Block ohne
-    Überschneidung ist (0, 0, 1, …) = volle Spalte."""
-    def spanne(s, e):
-        if raster is None:
-            return s, e
-        lo, m = raster
-        k0 = (s - lo) // m
-        return k0, max(k0 + 1, -(-(e - lo) // m))   # wie k0/k1 in _c_achse
-
-    out: list = []
-    gruppe: list = []
-    ende_je_bahn: list = []
-    gruppen_ende = None
-
-    def abschliessen():
-        ng = max(1, len(ende_je_bahn))
-        for bi, a, b, s, e, t in gruppe:
-            bis = bi
-            while bis + 1 < ng and not any(
-                    g[0] == bis + 1 and g[1] < b and a < g[2] for g in gruppe):
-                bis += 1
-            out.append((bi, bis, ng, s, e, t))
-
-    zeilen = [spanne(s, e) + (s, e, t) for s, e, t in bloecke]
-    for a, b, s, e, t in sorted(zeilen, key=lambda z: (z[0], z[2], -z[1], -z[3])):
-        if gruppen_ende is not None and a >= gruppen_ende:
-            abschliessen()
-            gruppe, ende_je_bahn, gruppen_ende = [], [], None
-        for i, be in enumerate(ende_je_bahn):
-            if a >= be:
-                ende_je_bahn[i] = b
-                break
-        else:
-            i = len(ende_je_bahn)
-            ende_je_bahn.append(b)
-        gruppe.append((i, a, b, s, e, t))
-        gruppen_ende = b if gruppen_ende is None else max(gruppen_ende, b)
-    if gruppe:
-        abschliessen()
-    return out
+# Bahnen und Rechtecke der Blöcke: kalender_ebenen.py
+_c_bahnen, _c_lagen = kalender_ebenen.bahnen, kalender_ebenen.lagen
 
 
 def _c_zeit(t: dict, s: int, e: int) -> str:
@@ -1323,7 +1281,8 @@ def _c_ganztags(lw, y0, hoehe, x0, g, colw, tage, sel) -> int:
     meisten, höchstens GANZTAGS_ZEILEN (die Zeitachse behält
     GANZTAGS_ACHSE_MIN); passt ein Tag nicht hinein, steht in der letzten
     Zeile „+n" — außer der gewählte Eintrag läge dahinter, dann steht er
-    dort. Uncommitted liegt als Glas in seiner eigenen Zeile. -> Zeilen."""
+    dort. Feste stehen oben, uncommitted danach, blass (Glas über leerem
+    Grund) in eigener Zeile — nie über einem festen (22.10.2026). -> Zeilen."""
     meiste = max((len(ganz) for _b, ganz, _d in tage), default=0)
     if not meiste:
         return 0
@@ -1333,6 +1292,7 @@ def _c_ganztags(lw, y0, hoehe, x0, g, colw, tage, sel) -> int:
     pw = colw - 1
     for i, (_b, ganz, _d) in enumerate(tage):
         xx = x0 + i * colw
+        ganz = sorted(ganz, key=lambda t: bool(t["unv"]))   # fest zuerst, uncommitted danach
         gew = next((t for t in ganz if sel is not None and t["roh"] is sel), None)
         zeige = ganz if len(ganz) <= zeilen else ganz[:max(1, zeilen - 1)]
         if gew is not None and not any(t is gew for t in zeige):
@@ -1355,6 +1315,68 @@ def _c_ganztags(lw, y0, hoehe, x0, g, colw, tage, sel) -> int:
         if mehr and zeilen > 1:
             lw.setze(y0 + zeilen - 1, xx, kuerzen("+%d mehr" % mehr, pw), ROLLE["leer"])
     return zeilen
+
+
+def _c_kursrolle(t, farbe) -> str:
+    """Farbe eines Blocks in C: Spannen reihum, sonst die Kursfarbe."""
+    if t["spanne"]:
+        return farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
+    return kurs_rolle(t)
+
+
+def _c_block(lw, y0, lage, sel, farbe):
+    """Ein Block deckend (fest, deaktiviert, mit Stil oder gewählt)."""
+    t, s, e, bx, bw, k0, k1 = lage
+    r = _c_kursrolle(t, farbe)
+    gewaehlt = sel is not None and t["roh"] is sel
+    if t["aus"]:
+        r = ROLLE["aus"]
+    if gewaehlt:                            # gewählter Termin: Akzent, deckend
+        r = _a_rolle("a_akzent")
+    texte = _c_zeilen(t, s, e, bw, k1 - k0 + 1)
+    if t["stil"] and not t["aus"]:          # Stylebox: Rahmen, Fläche, Muster
+        kalender_stil.c_block(lw, y0 + k0, bx, bw, k1 - k0 + 1, texte, r + INV,
+                              t["stil"], leise_basis=r + INV + LEISE, gewaehlt=gewaehlt)
+        return
+    for k in range(k0, k1 + 1):
+        txt = texte[k - k0] if k - k0 < len(texte) else ""
+        if k == k0:                         # Titel: Schrift der Fläche
+            lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)), r + INV)
+        elif t["aus"]:
+            lw.setze(y0 + k, bx, txt + "░" * (bw - text_breite(txt)), r)
+        else:                               # Körper = dieselbe Fläche, Schrift leise
+            lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)),
+                     r + INV + (LEISE if txt else ""))
+
+
+def _c_unv_block(lw, y0, lage, fest, rand_x, farbe):
+    """Ein uncommitted Block UNTER den festen: blass (Leinwand.glas über dem,
+    was darunter liegt — Punktlinien, Phasen — also eine leise Fläche in der
+    Kursfarbe, Titel ≥ 3:1). Die festen kommen danach deckend darüber.
+
+    Beschriftet werden nur Zeilen, die kein fester Block (der dieselben
+    Spalten trifft) belegt: der Titel rutscht in die erste freie Zeile, der
+    Rest folgt; ohne freie Zeile entfällt er, und in der Randspalte rand_x
+    (rechts neben der Tagesspalte) steht UNC_VERDECKT_ZEICHEN auf der
+    Startzeile, UNC_VERDECKT_STRICH über die übrigen Zeilen."""
+    t, s, e, bx, bw, k0, k1 = lage
+    r = _c_kursrolle(t, farbe)
+
+    def belegt(k):
+        return any(f[5] <= k <= f[6] and f[3] < bx + bw and bx < f[3] + f[4] for f in fest)
+
+    frei = [k for k in range(k0, k1 + 1) if not belegt(k)]
+    texte = _c_zeilen(t, s, e, bw, len(frei)) if frei else []
+    zu_text = dict(zip(frei, texte))
+    for k in range(k0, k1 + 1):
+        txt = zu_text.get(k, "")
+        lw.glas(y0 + k, bx, bw, r, txt,
+                schrift=None if frei and k == frei[0] else ROLLE["leer"])
+    if not frei:
+        for k in range(k0, k1 + 1):
+            zeichen = UNC_VERDECKT_ZEICHEN if k == k0 else UNC_VERDECKT_STRICH
+            if zeichen:
+                lw.glas(y0 + k, rand_x, 1, r, zeichen)
 
 
 def _punktlinie_um_muster(lw, y, x, n):
@@ -1421,62 +1443,34 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
                 lw.setze(y0 + k, x0, "·" * (7 * colw), ROLLE["rahmen"])
     pw = colw - 1
     for i, (bloecke, _g, _d) in enumerate(tage):
-        # Sasha, 10.10.2026: „immer den uncommitted kalender AUF den normalen
-        # drüberpacken". Darum teilen sich uncommitted-Blöcke KEINE Bahnen mit
-        # festen: die festen rechnen ihre Bahnen unter sich, uncommitted
-        # bekommen eigene über die volle Spalte und liegen als Glas darüber.
-        alle = []
-        for ebene in ([b for b in bloecke if not b[2]["unv"]],
-                      [b for b in bloecke if b[2]["unv"]]):
-            bahnen = _c_bahnen(ebene, (lo, m))
-            alle += bahnen
-            for bi, bis, nb, s, e, t in bahnen:
-                if e <= lo or s >= sicht_ende:
-                    continue
-                teil = max(1, (pw - (nb - 1)) // nb)
-                bx = x0 + i * colw + bi * (teil + 1)
-                rand = (x0 + i * colw + pw if bis >= nb - 1
-                        else x0 + i * colw + bis * (teil + 1) + teil)
-                bw = max(1, rand - bx)
-                if bx >= x0 + i * colw + pw:
-                    continue
-                k0 = (max(s, lo) - lo) // m
-                k1 = max(k0, math.ceil((min(e, sicht_ende) - lo) / m) - 1)
-                if t["spanne"]:
-                    r = farbe.setdefault(t["key"], SPANNEN_FARBEN[len(farbe) % len(SPANNEN_FARBEN)])
-                else:
-                    r = kurs_rolle(t)
-                gewaehlt = sel is not None and t["roh"] is sel
-                if t["aus"]:
-                    r = ROLLE["aus"]
-                if gewaehlt:                    # gewählter Termin: Akzent, deckend
-                    r = _a_rolle("a_akzent")
-                texte = _c_zeilen(t, s, e, bw, k1 - k0 + 1)
-                if t["stil"] and not t["aus"]:  # Stylebox: Rahmen, Fläche, Muster
-                    kalender_stil.c_block(lw, y0 + k0, bx, bw, k1 - k0 + 1, texte, r + INV,
-                                          t["stil"], leise_basis=r + INV + LEISE,
-                                          gewaehlt=gewaehlt)
-                    continue
-                if t["unv"] and not gewaehlt and not t["aus"]:
-                    for k in range(k0, k1 + 1):
-                        txt = texte[k - k0] if k - k0 < len(texte) else ""
-                        lw.glas(y0 + k, bx, bw, r, txt,
-                                schrift=None if k == k0 else ROLLE["leer"])
-                    continue
-                for k in range(k0, k1 + 1):
-                    txt = texte[k - k0] if k - k0 < len(texte) else ""
-                    if k == k0:                 # Titel: Schrift der Fläche
-                        lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)), r + INV)
-                    elif t["aus"]:
-                        lw.setze(y0 + k, bx, txt + "░" * (bw - text_breite(txt)), r)
-                    else:                       # Körper = dieselbe Fläche, Schrift leise
-                        lw.setze(y0 + k, bx, txt + " " * (bw - text_breite(txt)),
-                                 r + INV + (LEISE if txt else ""))
+        # Zwei Ebenen (Sasha, 22.10.2026: „warum soll ein anderer termin
+        # uncommitted aussehen, nur weil ein uncommitted drüber liegt??
+        # uncommitted liegt IMMER klar unten drunter!"): feste Termine rechnen
+        # ihre Bahnen nur unter sich, uncommitted unter sich über die volle
+        # Spalte. Gezeichnet wird erst uncommitted (blass), dann die festen
+        # deckend darüber — ein fester Termin sieht nie anders aus, weil
+        # darunter etwas liegt. Nur der GEWÄHLTE uncommitted kommt obenauf.
+        xs = x0 + i * colw
+        fest = _c_lagen(_c_bahnen([b for b in bloecke if not b[2]["unv"]], (lo, m)),
+                        xs, pw, lo, m, sicht_ende)
+        unv = _c_lagen(_c_bahnen([b for b in bloecke if b[2]["unv"]], (lo, m)),
+                       xs, pw, lo, m, sicht_ende)
+        oben = []
+        for lg in unv:
+            t = lg[0]
+            if sel is not None and t["roh"] is sel:
+                oben.append(lg)
+            elif t["aus"] or t["stil"]:
+                _c_block(lw, y0, lg, sel, farbe)
+            else:
+                _c_unv_block(lw, y0, lg, fest, xs + pw, farbe)
+        for lg in fest + oben:
+            _c_block(lw, y0, lg, sel, farbe)
         # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
         rechts = x0 + i * colw + max(0, colw - 2)
-        if any(b[4] <= lo for b in alle):
+        if any(e <= lo for _s, e, _t in bloecke):
             lw.setze(y0, rechts, "▲", _a_rolle("a_akzent"))
-        if any(b[3] >= sicht_ende for b in alle):
+        if any(s >= sicht_ende for s, _e, _t in bloecke):
             lw.setze(y0 + n - 1, rechts, "▼", _a_rolle("a_akzent"))
     # Deadlines zuletzt: eine hingemalte Linie ÜBER allem (kalender_deadline)
     for i, (_b, _g, dls) in enumerate(tage):
