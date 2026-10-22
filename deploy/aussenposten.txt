@@ -69,6 +69,8 @@ app:tutor/tutor/gelenke.py
 app:tutor/tutor/schablone.py
 app:tutor/tutor/assets/figuren/
 scripts/open_tutor_room.py
+# Seine Handgriffe Starten/Lebt/Abräumen teilt er mit dem Hub (2026-10-22, stdlib-only).
+core/app_prozess.py
 # Die Handschrift fuer das Vokabelwort auf der Karte. Muss mitgeliefert
 # werden — sie ist nirgends installiert, und ohne sie faellt das Zimmer still
 # auf die normale Schrift zurueck.

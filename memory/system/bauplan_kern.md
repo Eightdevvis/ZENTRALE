@@ -99,6 +99,7 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `categories` | 1 | Data-Collection-Kategorien |
 | `host_metrics` | 1 | CPU/GPU/VRAM/Temp/RAM des PCs |
 | `aussenposten` | 1 | Pakete für Knoten ohne Backend (auch Dateien von Apps, `app:<name>/…`) |
+| `app_prozess` | 1 | Eine Prozess-App starten, „lebt sie?" (`/hub/gesund`), anhalten; Python und Befehl aus dem Manifest — stdlib-only, geteilt vom Hub (`app_verwaltung`) und dem Zimmer-Starter `scripts/open_tutor_room.py` (seit 2026-10-22, steht in `deploy/aussenposten.txt`) |
 | `apps` | 1 | Installierte Apps (Hub-Bauplan): Ordner (`app_pfad_<name>`), Manifest `app.toml`, Abonnenten eines Ereignisses; seit 2026-10-10 auch die selbst gebauten (`apps_ordner`, Standard `data/apps/*/app.toml`) — liest nur, importiert nie App-Code |
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
@@ -185,6 +186,9 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz, umbenennen, löschen (seit 2026-10-10); Fremdes in der Datei bleibt stehen |
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `werkstatt` | 2 | Werkstatt (seit 2026-10-10): selbst gebaute Apps aus Vorlagen — `<apps_ordner>/<slug>/app.toml` (dasselbe Manifest wie Prozess-Apps, ohne `start`, mit `vorlage`/`desk`) + `icon.png` aus einem Bild in Input/ (über `bild_vorschau`); anlegen, umbenennen, Symbol ändern, löschen; Kurzname prüfen (reserviert, vergeben); Desks umbenennen/löschen mit Blick auf Apps, die auf sie zeigen |
+| `app_verwaltung` | 2 | Prozess-Apps des Hubs (seit 2026-10-22): Liste für `GET /api/apps` (läuft?), starten, nur Eigenes stoppen (Marken im Laufzeit-Ordner überleben den Hot Reload), Autostart mit dem Backend (`autostart = true`, Einstellung `apps_autostart`) |
+| `app_weiterleitung` | 2 | Routen-Weiterleitung (seit 2026-10-22): Pfad → App laut `routen` im `app.toml`, Anfrage unverändert an ihre `adresse`, Antwort unverändert zurück; aus → 503 `aus` |
+| `kachel_http` | 2 | Kachel-Quelle hinter HTTP (seit 2026-10-22): Katalog aus `[kachel.<art>]` im `app.toml`, Fragen an `/hub/kachel*` der App mit 0,5 s Budget — dieselbe Schnittstelle wie eine Quelle im Prozess |
 | `kacheln` | 2 | Hub für Kacheln (seit 2026-10-10): Anfrage prüfen, Recht `<app>:lesen`, Quelle aus `QUELLEN` fragen (im Prozess, Anfrage/Antwort durch JSON wie über HTTP), kürzen, `stand`/`ttl`, zu klein/weg/aus; Aktion „oeffnen“ → `zeige` |
 | `kachel_kalender` | 2 | Kachel-Quelle `kalender`/`ausschnitt`: Bereich fest oder mitlaufend (≤ 31 Tage), Woche bis 7 Tage, sonst Monatsraster; liest nur über `kalender.month_view`, schreibt nie; Spanne zwischen zwei Daten (≤ 31 Tage, „bis" nicht vor „von") in `pruefen()`, weil JSON Schema sie nicht ausdrücken kann |
 | `kachel_fokus` | 2 | Kachel-Quelle `fokus`/`liste` (seit 2026-10-10): oberste Ebene einer Liste, gezeichnet NUR über `listen_bild` (kein eigener Look, seit 2026-10-11), blättern mit `oben`; `erledigte` = die abgeschlossenen zeigen, `tiefe` veraltet; Liste im Katalog frisch zur Wahl (`parameter_jetzt`); liest nur über `lists.read_lists`, schreibt nie |
@@ -280,6 +284,7 @@ egal woran, ging durch dieselbe Datei.
 | `abgleich` | Zustand des Abgleichs über die Mitte (letzter Lauf, Fehler, Hinweise) |
 | `desk` | Desk View: Desks auflisten, anlegen, laden, ganz speichern (409 bei Änderung von woanders), umbenennen, löschen (über `werkstatt`, 2026-10-10) |
 | `kachel` | Kacheln: Inhalt einer Kachel holen, Aktion weiterreichen (über `core/kacheln.py`, seit 2026-10-10) |
+| `hub_apps` | Apps des Hubs (seit 2026-10-22): `GET /api/apps`, Start/Stopp, und die Weiterleitung der Pfade, die eine App laut `routen` besitzt (über `core/app_verwaltung.py`, `core/app_weiterleitung.py`; hängt direkt nach `zugang` ein) |
 | `shop` | Schaufenster: Katalog, Kategorien/Themen, ein Stück, holen, Besitz (über `core/shop.py`, seit 2026-10-10) |
 | `werkstatt` | Werkstatt: eigene Apps auflisten, Namen prüfen, bauen, ändern, löschen; Vorlagen, Bilder fürs Symbol (über `core/werkstatt.py`, seit 2026-10-10) |
 
@@ -296,8 +301,28 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 | `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `listen_bild`, `graph_reihen`, `stil`, `tastentabelle`, `uhr` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `listen_bild` seit 2026-10-11: Ansicht und Kachel zeigen dasselbe Bild einer Liste; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; `tastentabelle` seit 2026-10-11: TUI und Hub lesen Tastentabellen gleich; `uhr` seit 2026-10-20: dieselbe Uhr und derselbe Tageswechsel wie das Backend; alle stehen in `deploy/aussenposten.txt`. |
 | `zentrale_cli/` | `abgleich`, `abgleich_bereiche`, `abgleich_mitte`, `abgleich_schluessel`, `ai_config`, `cloud_api`, `dateien`, `knoten`, `konto` | Der Befehl `zentrale` (seit 2026-10-22) ist eine Front wie `scripts/abgleich.py`: er bedient Konto, Abgleich und Gerät direkt, ohne laufendes Backend (er läuft auch, bevor es eines gibt). Rechnen und Netz bleiben im Kern; hier stehen nur Fragen, Ausgabe und Texte (`zentrale_cli/texte.py`). |
 
-Mit Apps redet der Hub nur über HTTP: starten (`scripts/open_tutor_room.py`
-liest `app.toml`), Ereignisse schicken (`core/hub_ereignisse.py`).
+Mit Apps redet der Hub nur über HTTP: starten und stoppen
+(`core/app_verwaltung.py`, `POST /api/apps/<name>/start|stop`, Autostart mit
+dem Backend; das Zimmer des Tutors über `scripts/open_tutor_room.py`, beide
+mit den Handgriffen aus `core/app_prozess.py`), Routen weiterreichen
+(`core/app_weiterleitung.py`, `routen` im `app.toml`), Kacheln holen
+(`core/kachel_http.py`), Ereignisse schicken (`core/hub_ereignisse.py`).
+
+Die Tür der TUI **wächst nicht mehr** (Wächter E2 seit 2026-10-22,
+`TUI_TUER_HOECHSTENS` im Test): jedes Modul darin muss von `tui/` benutzt
+werden, keins darf einer ausgezogenen App gehören, und ein neues kommt nicht
+dazu — die TUI holt Fach-Bild und -Zahl über HTTP
+([kern_auszug_inventur.md](../hub/kern_auszug_inventur.md) E2).
+
+### Ausgezogene Apps
+
+Module dieser Namen importiert in `core/`, `ui/`, `tui/`, `scripts/`
+**niemand** (Wächter E1, `tests/test_kern_bauplan.py`), und in `core/` gibt
+es sie nicht mehr. Eine App zieht aus → Zeile hier, im selben Commit.
+
+| Modulname | Repo | seit |
+|---|---|---|
+| `tutor` | `language-tutor` | 2026-10-09 |
 
 ## Altlasten
 

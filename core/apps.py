@@ -23,6 +23,7 @@ import os
 import tomllib
 
 import ai_config
+import app_prozess
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -101,19 +102,38 @@ def abonnenten(ereignis: str) -> list:
 
 def python_fuer(m: dict) -> str:
     """Der Python der App: ihr eigenes venv, sonst das von ZENTRALE."""
-    for ordner in (m["_pfad"], _ROOT):
-        for name in ("venv", ".venv"):
-            kandidat = os.path.join(ordner, name, "bin", "python")
-            if os.path.exists(kandidat):
-                return kandidat
-    import sys
-    return sys.executable
+    return app_prozess.python_fuer(m["_pfad"], _ROOT)
 
 
 def befehl(m: dict, start: str) -> list:
     """Ein Start-Befehl aus dem Manifest („python …") als Liste, mit dem
     Python der App."""
-    teile = str(start).split()
-    if teile and teile[0] == "python":
-        teile[0] = python_fuer(m)
-    return teile
+    return app_prozess.befehl(m["_pfad"], start, _ROOT)
+
+
+def ist_prozess(m: dict) -> bool:
+    """Eine Prozess-App (eigener Server: `start` + `adresse`) — im Gegensatz
+    zu einer selbst gebauten Vorlage-App."""
+    return bool(m.get("start")) and bool(m.get("adresse"))
+
+
+def routen(m: dict) -> list:
+    """Pfad-Anfänge, die der Hub an diese App weiterreicht (`routen` im
+    Manifest, z. B. ["/api/map"]). Nur Prozess-Apps; ungültige Einträge
+    (kein führendes /, Leerzeichen, ..) fallen still weg."""
+    if not ist_prozess(m):
+        return []
+    raus = []
+    for r in m.get("routen") or []:
+        r = str(r).rstrip("/")
+        if r.startswith("/") and len(r) > 1 and " " not in r and ".." not in r:
+            raus.append(r)
+    return raus
+
+
+def kachel_arten(m: dict) -> list:
+    """Kachel-Arten, die die App liefert (`liefert = ["kachel:<art>"]`)."""
+    if not ist_prozess(m):
+        return []
+    return [str(x)[len("kachel:"):] for x in (m.get("liefert") or [])
+            if str(x).startswith("kachel:") and len(str(x)) > len("kachel:")]

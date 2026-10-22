@@ -507,6 +507,20 @@ in welcher Ansicht nimmt (aus `[tasten]` im app.toml). Genau in `openapi.yaml`
 |---|---|---|
 | `/api/tasten` | GET | `[{app, tasten: {ansicht: [{taste, aktion, text?}]}}]` — nur Apps mit gültiger Tabelle. |
 
+## Apps des Hubs (seit 2026-10-22)
+
+`core/app_verwaltung.py` und `core/app_weiterleitung.py` über
+`ui/routen/hub_apps.py`. Genau in `openapi.yaml` (Tag `apps`, Schema `App`;
+die Seite der Apps unter `/hub/…`, Tag `app-seite`). Regeln:
+[hub_bauplan.md](../hub/hub_bauplan.md) „Apps starten, stoppen, weiterreichen".
+
+| Endpoint | Methode | Beschreibung |
+|---|---|---|
+| `/api/apps` | GET | `[{name, titel, version, art: prozess\|vorlage, adresse, laeuft, gestartet_vom_hub, autostart, ansichten, rechte, liefert, routen}]` |
+| `/api/apps/<name>/start` | POST | `{name, laeuft, gestartet}`; `404 unbekannt`, `400 kein_prozess`, `503 aus` |
+| `/api/apps/<name>/stop` | POST | `{name, gestoppt}` — nur, was der Hub gestartet hat; sonst `409 fremd` |
+| *Pfade laut `routen` einer App* | alle | unverändert an die App weitergereicht (z. B. `/api/map/*` → App `karte`); App aus → `503 {"fehler": "aus"}` |
+
 ## Kacheln (seit 2026-10-10)
 
 `core/kacheln.py` über `ui/routen/kachel.py` — der Hub, durch den jede

@@ -79,6 +79,10 @@ os.environ.setdefault("ZENTRALE_ABLAGE_DIR", os.path.join(_DATEN_TMP, "ablage"))
 # kein Testlauf schickt Ereignisse an einen laufenden Tutor-Server.
 os.environ.setdefault("ZENTRALE_APP_PFAD_TUTOR",
                       os.path.join(ROOT, "tests", "fixtures", "app_tutor"))
+# Was der Hub selbst gestartet hat (core/app_verwaltung.py, 2026-10-22): seine
+# Marken nie im echten Laufzeit-Ordner; kein Testlauf startet Apps von selbst.
+os.environ.setdefault("ZENTRALE_APP_LAUF_ORDNER", os.path.join(_DATEN_TMP, "app_lauf"))
+os.environ.setdefault("ZENTRALE_APPS_AUTOSTART", "aus")
 # Bewertungen der Antworten (core/rueckmeldungen.py, 2026-10-08). Dazu unten
 # pro Test ein eigener Ordner.
 # Sashas Nutzerordner (core/nutzer_ordner.py, 2026-10-09: Input/ und Output/,

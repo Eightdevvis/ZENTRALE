@@ -7,6 +7,12 @@ AR/StardustXR …). Daraus zwei Regeln ([hub_bauplan.md](hub_bauplan.md)
 Schnittstelle (HTTP), die TUI ruft nur; (2) der Kern wird leer, die Module
 ziehen als Apps aus — wie der Tutor.
 
+**Stand der Umsetzung:** D Schritt 1 (Hub-Grundlagen) gebaut 2026-10-22 —
+`GET /api/apps`, Start/Stopp/Autostart, Routen-Weiterleitung, Kachel-Quelle
+über HTTP, Wächter E1, E2, E4 ([hub_bauplan.md](hub_bauplan.md) „Apps
+starten, stoppen, weiterreichen"). Die Zahlen unten sind der Stand VOR dem
+Umbau.
+
 **Gemessen, nicht geschätzt:** Import-Graph per AST über `core/ ui/ tui/
 scripts/ tests/` (Importe in Funktionen mitgezählt), dazu grep auf
 Datei-Zugriffe, Prozesse und `/api/`-Aufrufe. Nicht gezählt: was die Sitzungen

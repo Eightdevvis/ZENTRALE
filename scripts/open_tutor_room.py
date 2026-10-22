@@ -16,9 +16,11 @@
 # Warum Dienste beim Öffnen hoch und beim Schließen wieder runter: 0RAMMachine
 # (Laptop) hat kaum RAM; die Modelle dürfen dort nicht ab Boot mitlaufen.
 #
-# Läuft auch auf dem Pi (Aussenposten): dort gibt es kein core/, das Zimmer
+# Läuft auch auf dem Pi (Aussenposten): dort gibt es kein Backend, das Zimmer
 # kommt im Paket unter apps/tutor/ mit, und Server + Dienste laufen am PC.
-# Darum nur Standardbibliothek und kein Import aus core/.
+# Darum nur Standardbibliothek und aus core/ nur core/app_prozess.py (stdlib,
+# im Paket dabei): die Handgriffe Starten/Lebt/Abräumen, die der Hub für den
+# Autostart genauso benutzt (seit 2026-10-22, vorher hier doppelt).
 #
 # Aufruf:
 #   open_tutor_room.py [--url <tutor-server>] [--hub <zentrale>] [--pruefen] [Zimmer-Argumente …]
@@ -36,8 +38,6 @@ import os
 import socket
 import subprocess
 import sys
-import time
-import urllib.request
 from urllib.parse import urlparse
 
 try:
@@ -46,6 +46,9 @@ except ImportError:          # Python < 3.11 (alter Pi): Manifest-Standardwerte
     tomllib = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "core"))
+
+import app_prozess  # noqa: E402  – stdlib-only, auch im Aussenposten-Paket
 
 # (port, service-datei, label, zusatz-env) — die zwei Stimm-Dienste des Hubs.
 SERVICES = [
@@ -63,12 +66,7 @@ MANIFEST_STANDARD = {"name": "tutor", "start": "python -m tutor.server",
 def _python(ordner):
     """venv der App, sonst das von ZENTRALE (PC/Laptop 'venv', Pi '.venv'),
     sonst dieser Python."""
-    for basis in (ordner, ROOT):
-        for name in ("venv", ".venv"):
-            kandidat = os.path.join(basis, name, "bin", "python")
-            if os.path.exists(kandidat):
-                return kandidat
-    return sys.executable
+    return app_prozess.python_fuer(ordner, ROOT)
 
 
 def app_ordner():
@@ -76,7 +74,6 @@ def app_ordner():
     core/ da ist), Aussenposten-Paket (apps/tutor), Nachbar-Repo."""
     kandidaten = [os.environ.get("ZENTRALE_APP_PFAD_TUTOR")]
     try:
-        sys.path.insert(0, os.path.join(ROOT, "core"))
         import apps                                   # nur am PC/Laptop da
         kandidaten.append(apps.pfad("tutor"))
     except Exception:
@@ -98,10 +95,7 @@ def manifest(ordner):
 
 
 def _befehl(ordner, start):
-    teile = str(start).split()
-    if teile and teile[0] == "python":
-        teile[0] = _python(ordner)
-    return teile
+    return app_prozess.befehl(ordner, start, ROOT)
 
 
 def _lokal(url):
@@ -115,11 +109,7 @@ def _port_open(port, host="127.0.0.1"):
 
 
 def _lebt(url):
-    try:
-        urllib.request.urlopen(url.rstrip("/") + "/hub/gesund", timeout=1.5).read()
-        return True
-    except Exception:
-        return False
+    return app_prozess.lebt(url, 1.5)
 
 
 def server_url(m, hub, gegeben):
@@ -157,14 +147,10 @@ def _start_server(ordner, m, url):
     """Tutor-Server starten, falls er auf dieser Adresse nicht schon lebt."""
     if _lebt(url):
         return []
-    logf = open("/tmp/language-tutor-server.log", "a", encoding="utf-8")
     print("[tutor] starte den Tutor-Server ...", flush=True)
-    proc = subprocess.Popen(_befehl(ordner, m.get("start") or MANIFEST_STANDARD["start"]),
-                            cwd=ordner, stdout=logf, stderr=subprocess.STDOUT)
-    for _ in range(40):                      # bis zu ~10 s auf den Server warten
-        if _lebt(url) or proc.poll() is not None:
-            break
-        time.sleep(0.25)
+    proc, logf = app_prozess.starten(               # wartet bis zu ~10 s auf ihn
+        ordner, _befehl(ordner, m.get("start") or MANIFEST_STANDARD["start"]),
+        "/tmp/language-tutor-server.log", adresse=url)
     return [(proc, 0, "tutor-server", logf)]
 
 
@@ -172,17 +158,9 @@ def _abraeumen(started):
     for proc, _port, label, _logf in started:
         if proc.poll() is None:
             print(f"[{label}] stoppe — Zimmer zu", flush=True)
-            proc.terminate()
-    frist = time.time() + 5
+            proc.terminate()               # erst allen Bescheid, dann warten
     for proc, _port, _label, logf in started:
-        try:
-            proc.wait(timeout=max(0.1, frist - time.time()))
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        try:
-            logf.close()
-        except Exception:
-            pass
+        app_prozess.anhalten(proc, logf)
 
 
 def _argumente(argv):

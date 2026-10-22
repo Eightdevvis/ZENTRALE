@@ -22,7 +22,7 @@ import kacheln
 import lists
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten")   # /api/kachel* deckt /api/kacheln mit
+PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten", "/api/apps")   # /api/kachel* deckt /api/kacheln mit
 METHODEN = {"get", "put", "post", "delete", "patch"}
 
 
@@ -61,7 +61,9 @@ def _routen():
 
 
 def test_jede_route_steht_in_der_datei_und_umgekehrt(spec):
-    beschrieben = {(p, m) for p, ops in spec["paths"].items() for m in ops if m in METHODEN}
+    # /hub/… ist die Seite der Apps (eigener servers-Eintrag), keine Route des Hubs
+    beschrieben = {(p, m) for p, ops in spec["paths"].items() for m in ops
+                   if m in METHODEN and not p.startswith("/hub/")}
     routen = _routen()
     assert routen, "keine Routen gefunden — Präfixe falsch?"
     assert routen - beschrieben == set(), "Route ohne Beschreibung in openapi.yaml"
@@ -256,3 +258,23 @@ def test_tastentabellen_passen(spec, client, monkeypatch):
     assert not [e.message for e in v.iter_errors(antwort)]
     from tui.ansichten import notizen
     passt(spec, "Tastentabelle", notizen.Notizen.TASTEN.daten())
+
+
+def test_app_antworten_passen(spec, client):
+    """GET /api/apps (2026-10-22): Prozess-App (die Test-App, aus) und eine
+    selbst gebaute passen zum Schema; Fehler von Start/Stopp auch."""
+    import werkstatt
+    werkstatt.anlegen("Geige", {"motiv": "klavier"})
+    r = client.get("/api/apps")
+    assert r.status_code == 200 and {a["art"] for a in r.get_json()} == {"prozess", "vorlage"}
+    for a in r.get_json():
+        passt(spec, "App", a)
+    for pfad, status in (("/api/apps/gibtsnicht/start", "404"), ("/api/apps/tutor/stop", "409"),
+                         ("/api/apps/geige/start", "400")):
+        r = client.post(pfad)
+        assert str(r.status_code) == status, pfad
+        methode = spec["paths"][pfad.replace(pfad.split("/")[3], "{name}")]["post"]
+        assert status in methode["responses"]
+        antwort = spec["components"]["responses"]["AppFehler"]["content"]["application/json"]["schema"]
+        v = Draft202012Validator(antwort)
+        assert not [e.message for e in v.iter_errors(r.get_json())]

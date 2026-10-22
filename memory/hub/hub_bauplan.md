@@ -154,6 +154,69 @@ Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
   liegen noch am alten Ort `ZENTRALE/tutor/data`, der Tutor findet sie dort),
   Sashas Server für Ziel `hub`.
 
+## Apps starten, stoppen, weiterreichen (gebaut 2026-10-22)
+
+Hub-Grundlagen aus der Kern-Inventur ([kern_auszug_inventur.md](kern_auszug_inventur.md)
+D Schritt 1): was jede ausziehende App vom Hub braucht. Alles über HTTP,
+genaue Form in `openapi.yaml` (Tag `apps`; was die App selbst beantwortet:
+Tag `app-seite`, Pfade `/hub/…`).
+
+**Manifest, neue Schlüssel** (Prozess-Apps = `start` + `adresse`):
+
+```toml
+autostart = true                 # startet mit dem Backend
+routen    = ["/api/map"]         # diese Pfade (und alles darunter) gehören der App
+liefert   = ["kachel:liste"]     # Kachel-Quelle über HTTP, dazu:
+[kachel.liste]                   # derselbe Eintrag wie ARTEN einer Quelle im Prozess
+titel = "liste"
+min = [12, 7]
+ttl = 30
+parameter = "kachel/liste.schema.json"    # JSON Schema (Datei im App-Ordner oder Tabelle)
+kann = ["aktion", "parameter_jetzt", "pruefen", "bevorzugt"]   # optionale Fragen
+```
+
+- **Liste** `GET /api/apps`: alle installierten Apps aus ihren Manifesten
+  (Prozess- und selbst gebaute), je `laeuft` (parallel `GET
+  <adresse>/hub/gesund`, kurz), `gestartet_vom_hub`, `routen` …
+- **Start/Stopp** `POST /api/apps/<name>/start|stop` (`core/app_verwaltung.py`).
+  Start: läuft sie schon — egal, wer sie gestartet hat —, passiert nichts;
+  sonst `start` im App-Ordner, Python der App, Log `/tmp/zentrale-app-<name>.log`,
+  bis 15 s auf `/hub/gesund` warten. Stopp **nur, was der Hub gestartet hat**
+  (sonst 409 `fremd`). Damit der Hot Reload (exec) seine Apps nicht vergisst,
+  liegt je gestarteter App eine Marke (Prozessnummer + Startzeit) im
+  Laufzeit-Ordner (`$XDG_RUNTIME_DIR/zentrale-apps-<uid>/`, Einstellung
+  `app_lauf_ordner`). **Autostart:** `core/main.py` startet beim Hochfahren
+  jede App mit `autostart = true` im Hintergrund und räumt beim Ende nur das
+  Eigene ab; Einstellung `apps_autostart` (Standard an; `aus` z. B. am
+  Laptop). Die Handgriffe (Python, Befehl, lebt, anhalten) teilt der Hub mit
+  dem Zimmer-Starter des Tutors: `core/app_prozess.py` (stdlib, auch im
+  Pi-Paket).
+- **Weiterleitung** (`core/app_weiterleitung.py`, eingehängt in
+  `ui/routen/hub_apps.py` direkt nach der Tür `zugang`): gehört ein Pfad laut
+  `routen` einer App (nur an Abschnittsgrenzen: `/api/map` besitzt
+  `/api/map/base`, nicht `/api/mapx`), reicht der Hub Methode, Pfad, rohe
+  Abfrage, Körper und Inhalts-Köpfe (`Content-Type`, `Accept` …) unverändert
+  an die `adresse`; Status, Inhalts-Köpfe und Körper kommen byte-gleich
+  zurück. Nie mit: `Authorization`, `Cookie`, `Set-Cookie`, `Host`,
+  Verbindungs-Köpfe. Umleitungen der App gehen an den Aufrufer (der Hub folgt
+  nicht). App aus / nicht erreichbar / 30 s still → 503 `{"fehler": "aus"}`.
+  Die App lauscht nur auf 127.0.0.1 — wer sie will, geht durch die Tür des
+  Hubs. Die alten Pfade bleiben so für TUI, Browser und Pi gleich. Die
+  Routen-Tabelle wird 2 s gepuffert; ein neues `routen` greift ohne Neustart.
+- **Kachel-Quelle über HTTP** (`core/kachel_http.py`): eine App mit
+  `liefert = ["kachel:<art>"]` hängt `core/kacheln.py` als Quelle ein —
+  dieselbe Schnittstelle wie im Prozess, Fragen an `POST <adresse>/hub/kachel`
+  (und `/aktion`, `/parameter`, `/pruefen`, `/bevorzugt`, je nach `kann`), je
+  höchstens **0,5 s**, sonst „aus". Heißt die App wie eine Quelle im Prozess,
+  gewinnt die App (so zieht `fokus` später aus, ohne dass eine Oberfläche es
+  merkt). Ein Test zeigt: dieselbe Quelle im Prozess und hinter HTTP gibt
+  byte-gleiche Antworten (`tests/test_hub_grundlagen.py`).
+- **Wächter** (Inventur E1–E4): E1 ausgezogene Apps importiert niemand
+  (`bauplan_kern.md` „Ausgezogene Apps"), E2 die TUI-Tür schrumpft nur, E3 je
+  App im App-Repo (Grenz-Test, Vorlage `language-tutor/tests/test_tutor_grenze.py`),
+  E4 jede Route der TUI steht in `openapi.yaml` oder gehört einer App
+  (Altlasten: [routen_altlast.md](routen_altlast.md)).
+
 ## Selbst gebaute Apps: Manifest ohne Prozess (2026-10-10)
 
 Die Werkstatt ([werkstatt.md](werkstatt.md)) baut Apps ohne Code aus einer
@@ -213,10 +276,10 @@ Routen `POST /api/kachel` und `POST /api/kachel/aktion`
 dem Puffer. **Neutral gemacht 2026-10-10** (die Schnittstelle kennt keine
 Oberfläche mehr): Adressen, Katalog und Farbrollen — die drei Abschnitte
 unten, alle gebaut. **Listen (`fokus`) und Graphen (`graph`) gebaut
-2026-10-10** (Abschnitt „Quellen: Listen und Graphen" unten). Noch nicht:
-Manifest-Einträge `liefert`/`[kachel.<art>]` (die eingebauten Quellen
-tragen `ARTEN` und `RECHTE` selbst), Abbruch nach 0,5 s (erst für Apps
-hinter HTTP; im Prozess wird gemessen und geloggt).
+2026-10-10** (Abschnitt „Quellen: Listen und Graphen" unten). Seit 2026-10-22
+auch über HTTP: Manifest-Einträge `liefert`/`[kachel.<art>]` und Abbruch nach
+0,5 s (oben „Apps starten, stoppen, weiterreichen"); die eingebauten Quellen
+im Prozess tragen `ARTEN` und `RECHTE` weiter selbst (gemessen und geloggt).
 
 - **Begriff:** Eine Kachel ist ein **Verweis** auf ein Objekt einer anderen
   App — seit 2026-10-10 seine **Adresse** `zentrale://<app>/<art>?<parameter>`

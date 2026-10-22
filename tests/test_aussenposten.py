@@ -58,6 +58,7 @@ def test_paket_bleibt_klein_und_ohne_backend():
     # Telemetrie, und (seit 2026-10-10) die reinen Helfer, die TUI-Ansichten
     # und Kacheln teilen (stdlib-only, ohne Kern-Imports)
     assert sorted(r for r in drin if r.startswith("core/")) == [
+        "core/app_prozess.py",          # Starter-Handgriffe, mit dem Hub geteilt (2026-10-22)
         "core/graph_reihen.py", "core/host_metrics.py", "core/listen_baum.py",
         "core/listen_bild.py", "core/stil.py", "core/tastentabelle.py",
         "core/uhr.py"]                  # die eine Uhr (2026-10-20)

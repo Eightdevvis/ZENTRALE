@@ -61,6 +61,16 @@ def main():
     ui_thread = threading.Thread(target=start_ui, daemon=True)
     ui_thread.start()
 
+    # Apps mit `autostart = true` im app.toml hochfahren (z. B. die Karte,
+    # deren Routen der Hub weiterreicht) — im Hintergrund, das Backend wartet
+    # nie auf eine App. Beim Ende nur abräumen, was der Hub selbst gestartet
+    # hat (core/app_verwaltung.py; der Hot Reload erkennt seine Apps wieder).
+    import atexit
+    import app_verwaltung
+    threading.Thread(target=app_verwaltung.autostart, daemon=True,
+                     name="apps-autostart").start()
+    atexit.register(app_verwaltung.eigene_stoppen)
+
     # ── Lokale KI nur dort hochfahren, wo sie hingehört ────────────────
     # Ein Knoten ohne lokale KI (ZENTRALE_LOKALE_KI=aus, der Laptop) bootet
     # KEINE KI: kein Warmup, kein News-Fetcher -> Ollama wird NIE angesprochen

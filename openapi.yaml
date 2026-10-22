@@ -6,8 +6,15 @@
 # in memory/system/api_endpoints.md zeigt nur hierher. Schemas sind JSON
 # Schema 2020-12 — derselbe Dialekt wie `parameter` im Katalog.
 # tests/test_openapi.py hält Routen und Datei gleich (jede Route unter
-# /api/kachel*, /api/kacheln, /api/desk*, /api/shop*, /api/werkstatt* steht
-# hier und umgekehrt), prüft die Datei selbst und echte Antworten gegen ihre Schemas.
+# /api/kachel*, /api/kacheln, /api/desk*, /api/shop*, /api/werkstatt*,
+# /api/tasten, /api/apps* steht hier und umgekehrt), prüft die Datei selbst und
+# echte Antworten gegen ihre Schemas.
+#
+# Seit 2026-10-22 auch die Seite der APPS (Pfade unter /hub/, eigener
+# `servers`-Eintrag = die `adresse` im app.toml): was eine Prozess-App dem Hub
+# beantwortet — lebt sie, Ereignisse, Kacheln. Pfade, die eine App laut
+# `routen` im app.toml besitzt (z. B. /api/map → App karte), reicht der Hub
+# unverändert weiter; beschrieben stehen sie im Repo der App.
 openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
@@ -35,6 +42,18 @@ tags:
     description: Schaufenster — Katalog, holen, Besitz (core/shop.py)
   - name: tasten
     description: Tastentabellen der Apps — welche Tasten in welcher Ansicht (core/tastentabelle.py)
+  - name: apps
+    description: >
+      Installierte Apps, Start/Stopp, Weiterleitung (core/app_verwaltung.py,
+      core/app_weiterleitung.py). Jede Anfrage auf einen Pfad, den eine App
+      laut `routen` im app.toml besitzt, reicht der Hub unverändert an ihre
+      `adresse` weiter (Methode, Pfad, Abfrage, Körper, Inhalts-Köpfe hin;
+      Status, Inhalts-Köpfe, Körper zurück; nie Authorization/Cookie). App
+      aus, nicht erreichbar oder länger als 30 s → 503 `{"fehler": "aus"}`.
+  - name: app-seite
+    description: >
+      Was eine Prozess-App selbst beantwortet (unter ihrer `adresse`, nur auf
+      127.0.0.1). Der Hub fragt; eine Oberfläche nie direkt.
 
 paths:
   /api/kacheln:
@@ -632,6 +651,261 @@ paths:
                     tasten: {$ref: "#/components/schemas/Tastentabelle"}
                   additionalProperties: false
 
+  /api/apps:
+    get:
+      tags: [apps]
+      operationId: appsListe
+      summary: Installierte Apps aus ihren Manifesten
+      description: >
+        Prozess-Apps (eigener Server, `start` + `adresse`) und selbst gebaute
+        Vorlage-Apps (Werkstatt). Ob eine Prozess-App läuft, fragt der Hub
+        parallel und kurz über `GET <adresse>/hub/gesund`.
+      responses:
+        "200":
+          description: Die Apps
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/App"}
+
+  /api/apps/{name}/start:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
+    post:
+      tags: [apps]
+      operationId: appStarten
+      summary: Prozess-App starten
+      description: >
+        Läuft sie schon (egal, wer sie gestartet hat), passiert nichts
+        (`gestartet: false`). Sonst startet der Hub `start` aus dem app.toml
+        im Ordner der App und wartet bis zu 15 s auf `/hub/gesund`.
+      responses:
+        "200":
+          description: "Läuft (oder fährt noch hoch, `laeuft: false`)"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, laeuft, gestartet]
+                additionalProperties: false
+                properties:
+                  name: {type: string}
+                  laeuft: {type: boolean}
+                  gestartet: {type: boolean, description: von diesem Aufruf gestartet}
+        "400": {$ref: "#/components/responses/AppFehler"}
+        "404": {$ref: "#/components/responses/AppFehler"}
+        "503": {$ref: "#/components/responses/AppFehler"}
+
+  /api/apps/{name}/stop:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
+    post:
+      tags: [apps]
+      operationId: appStoppen
+      summary: Prozess-App stoppen — nur, was der Hub selbst gestartet hat
+      description: >
+        Eine App, die jemand anderes gestartet hat (systemd, Terminal, das
+        Zimmer des Tutors), lässt der Hub in Ruhe → 409 `fremd`.
+      responses:
+        "200":
+          description: Gestoppt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, gestoppt]
+                additionalProperties: false
+                properties:
+                  name: {type: string}
+                  gestoppt: {const: true}
+        "404": {$ref: "#/components/responses/AppFehler"}
+        "409": {$ref: "#/components/responses/AppFehler"}
+
+  /hub/gesund:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    get:
+      tags: [app-seite]
+      operationId: appGesund
+      summary: Lebt die App?
+      description: Jede Prozess-App hat diese Route. Der Hub fragt sie für `laeuft` und beim Start.
+      responses:
+        "200":
+          description: Ja
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {const: true}
+                  name: {type: string}
+
+  /hub/ereignis:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appEreignis
+      summary: Ein abonniertes Ereignis (Recht `ereignis:<name>`)
+      description: >
+        Ziel aus `[ereignisse] ziel` im app.toml (Standard /hub/ereignis). Der
+        Hub schickt im Hintergrund und vergisst Fehler (core/hub_ereignisse.py).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, daten]
+              properties:
+                name: {type: string, examples: [anwesenheit]}
+                daten: {type: object}
+      responses:
+        "200": {description: Angekommen}
+
+  /hub/kachel:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appKachel
+      summary: Inhalt einer Kachel (die App ist Quelle, `liefert = ["kachel:<art>"]`)
+      description: >
+        Der Hub hat Adresse und Werte schon gegen `[kachel.<art>] parameter`
+        geprüft und getypt (`ref`). Die App kürzt selbst auf w×h. Antwortet sie
+        nicht in 0,5 s, heißt die Kachel „aus" (core/kachel_http.py). Den
+        Katalog-Eintrag (titel, min, bevorzugt, max, ttl, parameter) und welche
+        optionalen Fragen sie beantwortet (`kann`: aktion, parameter_jetzt,
+        pruefen, bevorzugt) sagt die App in `[kachel.<art>]` im app.toml.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AppKachelFrage"}
+      responses:
+        "200":
+          description: Inhalt oder zu klein
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [zeilen, text]
+                    properties:
+                      zeilen: {type: array, items: {$ref: "#/components/schemas/Zeile"}}
+                      text: {type: string}
+                      oben: {type: integer, minimum: 0}
+                      oben_max: {type: integer, minimum: 0}
+                  - type: object
+                    required: [zu_klein]
+                    properties:
+                      zu_klein: {$ref: "#/components/schemas/Groesse"}
+        "400": {$ref: "#/components/responses/Ungueltig"}
+        "404": {$ref: "#/components/responses/Weg"}
+
+  /hub/kachel/aktion:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appKachelAktion
+      summary: Aktion einer Kachel (`kann` enthält aktion)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [art, ref, aktion]
+              properties:
+                art: {type: string}
+                ref: {type: object}
+                aktion: {type: string, enum: [oeffnen]}
+      responses:
+        "200":
+          description: Wohin
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AktionAntwort"}
+        "400": {$ref: "#/components/responses/Ungueltig"}
+        "404": {$ref: "#/components/responses/Weg"}
+
+  /hub/kachel/parameter:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appKachelParameter
+      summary: Schema mit der Auswahl von jetzt (`kann` enthält parameter_jetzt)
+      description: null = es gibt nichts zu wählen, der Katalog-Eintrag fehlt dann.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [art, schema]
+              properties:
+                art: {type: string}
+                schema: {type: object}
+      responses:
+        "200":
+          description: Das Schema
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema]
+                properties:
+                  schema: {type: [object, "null"]}
+
+  /hub/kachel/pruefen:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appKachelPruefen
+      summary: Was JSON Schema nicht sagen kann (`kann` enthält pruefen)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [art, ref]
+              properties:
+                art: {type: string}
+                ref: {type: object}
+      responses:
+        "200": {description: In Ordnung}
+        "400": {$ref: "#/components/responses/Ungueltig"}
+
+  /hub/kachel/bevorzugt:
+    servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
+               variables: {port: {default: "5070"}}}]
+    post:
+      tags: [app-seite]
+      operationId: appKachelBevorzugt
+      summary: Bevorzugte Größe für genau diesen Bezug (`kann` enthält bevorzugt)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [art, ref]
+              properties:
+                art: {type: string}
+                ref: {type: object}
+      responses:
+        "200":
+          description: Größe in Zellen
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Groesse"}
+
 components:
   responses:
     Ungueltig:
@@ -670,6 +944,19 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/DeskFehler"}
+    AppFehler:
+      description: >
+        App unbekannt (404 `unbekannt`), keine Prozess-App (400 `kein_prozess`),
+        startet nicht (503 `aus`), nicht vom Hub gestartet (409 `fremd`)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fehler, text]
+            additionalProperties: false
+            properties:
+              fehler: {type: string, enum: [unbekannt, kein_prozess, aus, fremd]}
+              text: {type: string}
     Ok:
       description: Erledigt
       content:
@@ -681,6 +968,39 @@ components:
               ok: {const: true}
 
   schemas:
+    App:
+      type: object
+      required: [name, titel, version, art, adresse, laeuft, gestartet_vom_hub, autostart,
+                 ansichten, rechte, liefert, routen]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: Name (Prozess-App) bzw. Kurzname (selbst gebaut)}
+        titel: {type: string}
+        version: {type: string}
+        art: {type: string, enum: [prozess, vorlage]}
+        adresse: {type: [string, "null"], description: "http://127.0.0.1:<port> der App; null bei Vorlage-Apps"}
+        laeuft: {type: [boolean, "null"], description: antwortet auf /hub/gesund; null bei Vorlage-Apps}
+        gestartet_vom_hub: {type: boolean, description: nur dann stoppt der Hub sie}
+        autostart: {type: boolean, description: startet mit dem Backend (Einstellung apps_autostart)}
+        ansichten: {type: array, items: {type: string}, examples: [[terminal, fenster]]}
+        rechte: {type: array, items: {type: string}, examples: [["ereignis:anwesenheit"]]}
+        liefert: {type: array, items: {type: string}, examples: [["kachel:liste"]]}
+        routen:
+          type: array
+          items: {type: string}
+          description: Pfad-Anfänge, die der Hub an die App weiterreicht
+          examples: [["/api/map"]]
+
+    AppKachelFrage:
+      type: object
+      required: [art, ref, w, h, oben]
+      properties:
+        art: {type: string}
+        ref: {type: object, description: Abfrage der Adresse, vom Hub geprüft und getypt}
+        w: {type: integer, minimum: 0, maximum: 400}
+        h: {type: integer, minimum: 0, maximum: 400}
+        oben: {type: integer, minimum: 0}
+
     Adresse:
       type: string
       format: uri

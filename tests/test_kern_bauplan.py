@@ -86,6 +86,15 @@ def bauplan_tueren():
     return {_code(z[0])[0]: set(_code(z[1])) for z in _zeilen(_abschnitt("Türen"))}
 
 
+def ausgezogene_apps():
+    """Modulnamen ausgezogener Apps (Abschnitt „Ausgezogene Apps", erste
+    Spalte) — die importiert im Hub niemand (Wächter E1, 2026-10-22)."""
+    raus = set()
+    for z in _zeilen(_abschnitt("Ausgezogene Apps")):
+        raus |= set(_code(z[0]))
+    return raus
+
+
 def altlast_kreise():
     raus = set()
     for z in _zeilen(_abschnitt("Altlast: Kreis-Kanten")):
@@ -293,12 +302,14 @@ def _tuer_verstoesse():
     erlaubt = bauplan_tueren()
     raus = set()
     # Apps (seit 2026-10-09 der Tutor, eigenes Repo) importiert hier
-    # niemand — der Hub redet mit ihnen nur per HTTP (hub_bauplan.md).
+    # niemand — der Hub redet mit ihnen nur per HTTP (hub_bauplan.md). Welche
+    # ausgezogen sind, steht im Bauplan („Ausgezogene Apps", Wächter E1).
+    ausgezogen = ausgezogene_apps()
     for bereich in ("core", "ui", "tui", "scripts"):
         for pfad in _py_dateien(bereich):
             rel = os.path.relpath(pfad, ROOT)
-            if "tutor" in _importierte_namen(pfad):
-                raus.add((rel, "tutor"))
+            for name in _importierte_namen(pfad) & ausgezogen:
+                raus.add((rel, name))
     # Fronten und Addon: nur die freigegebenen Kern-Module.
     for bereich, frei in erlaubt.items():
         for pfad in _py_dateien(bereich.rstrip("/")):
@@ -389,3 +400,53 @@ def test_jeder_routen_bereich_ist_eingehaengt():
     assert not fehlt, (
         f"Diese Routen-Module werden nie eingehängt: {fehlt}. Trag sie in "
         f"ui/routen/__init__.py unter BEREICHE (und im Import) ein.")
+
+
+# ── 7. Kern-Auszug: Grenz-Wächter E1 und E2 ───────────────────────────
+# memory/hub/kern_auszug_inventur.md Abschnitt E (2026-10-22). E1 steckt in
+# _tuer_verstoesse oben (ausgezogene Apps importiert niemand); hier, dass die
+# Liste selbst taugt, und E2: die Tür der TUI schrumpft nur.
+
+# Die Tür der TUI am 2026-10-22. Darf nur SCHRUMPFEN: steht im Bauplan ein
+# Modul, das hier fehlt, ist es neu — und neu darf keins dazukommen (die TUI
+# holt Fach-Bild und -Zahl über HTTP). Fliegt eins raus, hier mit streichen.
+TUI_TUER_HOECHSTENS = {"theme", "tone", "pc_status", "listen_baum", "listen_bild",
+                       "graph_reihen", "stil", "tastentabelle", "uhr"}
+
+
+def test_ausgezogene_apps_gibt_es_im_kern_nicht_mehr():
+    ausgezogen = ausgezogene_apps()
+    assert "tutor" in ausgezogen
+    noch_da = sorted(ausgezogen & set(kern_module()))
+    assert not noch_da, (
+        f"Als ausgezogen eingetragen, aber noch in core/: {noch_da}. Erst "
+        f"ausziehen (eigenes Repo, HTTP), dann eintragen.")
+
+
+def test_tui_tuer_schrumpft_nur():
+    tuer = bauplan_tueren()["tui/"]
+    neu = sorted(tuer - TUI_TUER_HOECHSTENS)
+    assert not neu, (
+        f"Neu in der Tür der TUI: {neu}. Die Tür wächst nicht mehr (Leitlinie "
+        f"überall deploybar, 2026-10-22): die TUI holt es per HTTP.")
+    weg = sorted(TUI_TUER_HOECHSTENS - tuer)
+    assert not weg, (
+        f"Gut gemacht — {weg} ist aus der Tür. Auch in "
+        f"tests/test_kern_bauplan.py TUI_TUER_HOECHSTENS streichen.")
+
+
+def test_jedes_modul_der_tui_tuer_wird_gebraucht():
+    """Jede Zeile der Tür braucht einen Grund: ein Modul, das die TUI nicht
+    mehr importiert, fliegt raus (und aus deploy/aussenposten.txt)."""
+    benutzt = set()
+    for pfad in _py_dateien("tui"):
+        benutzt |= _importierte_namen(pfad)
+    unbenutzt = sorted(bauplan_tueren()["tui/"] - benutzt)
+    assert not unbenutzt, (
+        f"In der Tür, aber von tui/ nicht importiert: {unbenutzt}. Streichen "
+        f"(Bauplan, TUI_TUER_HOECHSTENS, deploy/aussenposten.txt).")
+
+
+def test_tuer_traegt_keinen_app_code():
+    drin = sorted(bauplan_tueren()["tui/"] & ausgezogene_apps())
+    assert not drin, f"Modul einer ausgezogenen App in der Tür der TUI: {drin}"

@@ -18,6 +18,11 @@
 # der Katalog kommt aus dem Manifest (`app.toml`, `[kachel.<art>]` mit
 # denselben Schlüsseln wie ARTEN unten) statt aus dem Modul.
 #
+# Gebaut 2026-10-22 (core/kachel_http.py): jede installierte Prozess-App mit
+# `liefert = ["kachel:<art>"]` wird als Quelle über HTTP eingehängt
+# (_quellen()). Heißt sie wie eine Quelle im Prozess, gewinnt die App — so
+# zieht eine Quelle aus, ohne dass sich für eine Oberfläche etwas ändert.
+#
 # Eine Quelle (Modul) hat:
 #   APP                       Name der App („kalender")
 #   ARTEN                     {art: {titel, min: (w, h), bevorzugt?: (w, h),
@@ -53,6 +58,8 @@ import json
 import time
 
 import adressen
+import apps
+import kachel_http
 import kachel_fokus
 import kachel_graph
 import kachel_kalender
@@ -83,11 +90,35 @@ registrieren(kachel_fokus)
 registrieren(kachel_graph)
 
 
-def _recht(app, recht="lesen"):
+_http_quellen = {}               # name → (manifest-fingerabdruck, Quelle)
+
+
+def _quellen():
+    """Alle Quellen: die im Prozess (QUELLEN) und die Apps, die Kacheln über
+    HTTP liefern (app.toml). Ein kaputtes Manifest kostet nur diese App."""
+    raus = dict(QUELLEN)
+    for m in apps.installiert():
+        if not apps.kachel_arten(m):
+            continue
+        name = str(m.get("name") or "")
+        finger = json.dumps(m, sort_keys=True, default=str)
+        alt = _http_quellen.get(name)
+        if alt is None or alt[0] != finger:
+            try:
+                alt = (finger, kachel_http.Quelle(m))
+            except Exception as e:
+                state.push_log("KACHEL ✗  %s: manifest: %s" % (name, e))
+                continue
+            _http_quellen[name] = alt
+        raus[name] = alt[1]
+    return raus
+
+
+def _recht(app, recht="lesen", quellen=None):
     """Prüfpunkt `<app>:lesen` (hub_bauplan.md „Rechte"). Eingebaute Quellen
     bringen ihre Rechte selbst mit; ausgezogene Apps später aus dem
     Manifest. Hier bleibt die Stelle, an der geprüft wird."""
-    q = QUELLEN.get(app)
+    q = (quellen if quellen is not None else _quellen()).get(app)
     return q is not None and recht in getattr(q, "RECHTE", ())
 
 
@@ -157,10 +188,11 @@ def katalog():
     nur Apps mit `<app>:lesen`. Heute aus ARTEN der Quellen im Prozess,
     später aus dem Manifest der App."""
     raus = []
-    for app in sorted(QUELLEN):
-        if not _recht(app, "lesen"):
+    quellen = _quellen()
+    for app in sorted(quellen):
+        if not _recht(app, "lesen", quellen):
             continue
-        q = QUELLEN[app]
+        q = quellen[app]
         for art, info in getattr(q, "ARTEN", {}).items():
             e = _eintrag(q, art, info)
             if e is not None:
@@ -200,10 +232,11 @@ def _anfrage_lesen(anfrage):
     if not isinstance(anfrage, dict):
         raise _Abgelehnt(400, {"fehler": "ungueltig", "text": "anfrage fehlt"})
     app, art, roh = _verweis(anfrage)
-    q = QUELLEN.get(app)
+    quellen = _quellen()
+    q = quellen.get(app)
     if q is None:
         raise _Abgelehnt(503, {"fehler": "aus", "text": "app „%s\" ist nicht da" % app})
-    if not _recht(app, "lesen"):
+    if not _recht(app, "lesen", quellen):
         raise _Abgelehnt(403, {"fehler": "recht", "text": "%s:lesen fehlt" % app})
     if art not in getattr(q, "ARTEN", {}):
         raise _Abgelehnt(400, {"fehler": "ungueltig",
@@ -217,6 +250,8 @@ def _anfrage_lesen(anfrage):
         raise _Abgelehnt(400, {"fehler": "ungueltig", "text": str(e)})
     except kachel_parameter.OhnePruefer as e:
         raise _Abgelehnt(503, {"fehler": "aus", "text": str(e)})
+    except Exception as e:                       # pruefen einer App: weg / aus
+        raise _Abgelehnt(*_fehler(e, app))
     return q, app, art, ref
 
 
