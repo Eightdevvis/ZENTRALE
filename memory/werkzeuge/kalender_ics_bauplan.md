@@ -41,6 +41,10 @@ Anlass: die KI änderte per Titel BEIDE gleichnamigen Geigenstunde-Serien.
   mit); alte Pausen ohne sie über den Titel, beim Umbenennen werden sie fest
   angebunden. `kalender_ics.pause_gehoert` ist die eine Regel.
 - **Alarme** (`open_alarms`) tragen `tag`, wo sie an einem Tag hängen.
+- **Alarm „Wochentag"** (seit 2026-10-22): Titel nennt einen Wochentag, an
+  dem der Eintrag nicht stattfindet („Titel nennt Montag, die Serie läuft
+  mittwochs: …"; Erkennung `core/titel_wochentag.py`). Je Eintrag im Horizont
+  ein Alarm, auch uncommitted/Deadline; nicht Phasen, Spannen, monatlich.
 - Konflikt-/Alarm-Rechnung ist nach `core/kalender_konflikte.py` gezogen
   (kalender.py stand bei 1.499/1.500 Zeilen); `kalender.<name>` gilt weiter.
 - **Ohne Import-Kreise:** `CODES`/`KalenderAbgelehnt`/Zeitprüfung stehen in

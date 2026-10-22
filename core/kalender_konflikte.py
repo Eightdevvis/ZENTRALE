@@ -19,6 +19,7 @@ import kalender_kategorie
 import kalender_quelle
 import kalender_rhythmus
 import nutzer_angaben
+import titel_wochentag
 import uhr  # die eine Uhr (core/uhr.py)
 
 # Kein `import kalender` (das wäre ein Import-Kreis, kalender reicht dieses
@@ -729,6 +730,56 @@ def conflicts_for_proposed(layer: str, day: str, label: str,
     return day_warnings(entries) + _conflict_lines(d, entries, away)
 
 
+# Titel nennt einen falschen Wochentag (22.10.2026, Wunsch der KI-Session):
+# qwen hatte „Sprechstunde Jonas Schömer (Mo)" als Serie mit BYDAY=WE
+# gespeichert. Die Adapter-Prüfung (K-TITEL-WOCHENTAG) fängt das künftig beim
+# Speichern; dieser Alarm findet, was schon im Kalender steht. Geprüft wird
+# jeder Eintrag, der im Alarm-Horizont vorkommt — auch uncommitted, Ausfall
+# und Deadlines (der Titel ist trotzdem falsch), nicht Phasen und nicht
+# mehrtägige Spannen. Höchstens EIN Alarm je Eintrag, nicht je Vorkommen.
+_TAG_NAME = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
+             "Samstag", "Sonntag")
+
+
+def _tage_text(tage, adverb: bool = False) -> str:
+    namen = [_TAG_NAME[t].lower() + "s" if adverb else _TAG_NAME[t] for t in sorted(tage)]
+    return namen[0] if len(namen) == 1 else ", ".join(namen[:-1]) + " und " + namen[-1]
+
+
+def _wochentag_alarme(im_horizont: dict) -> list[tuple]:
+    raus: list[tuple] = []
+    gesehen: set = set()
+    for day_iso, entries in im_horizont.items():
+        d = date.fromisoformat(day_iso)
+        for e in entries:
+            if e.get("layer") == RHYTHMUS or e.get("spanning"):
+                continue
+            label = e.get("label") or ""
+            if e.get("recurring"):
+                schluessel = e.get("kennung") or (e.get("layer"), label, e.get("rrule"))
+                # Erstes Vorkommen als Start: legt bei FREQ=WEEKLY ohne BYDAY
+                # den Wochentag fest (wie DTSTART der Serie).
+                tage = titel_wochentag.aus_regel(e.get("rrule"), d)
+            else:
+                schluessel = e.get("kennung") or (e.get("layer"), day_iso, label, e.get("time"))
+                tage = {d.weekday()}
+            if schluessel in gesehen:
+                continue
+            gesehen.add(schluessel)
+            if not titel_wochentag.widerspruch(label, tage):
+                continue
+            falsch = titel_wochentag.im_titel(label) - set(tage)
+            if e.get("recurring"):
+                text = (f"Titel nennt {_tage_text(falsch)}, die Serie läuft "
+                        f"{_tage_text(tage, adverb=True)}: {label}")
+                raus.append(("Wochentag", text, None))
+            else:
+                text = (f"Titel nennt {_tage_text(falsch)}, der Termin ist am "
+                        f"{_TAG_NAME[d.weekday()]}, {d.strftime('%d.%m.')}: {label}")
+                raus.append(("Wochentag", text, day_iso))
+    return raus
+
+
 def open_alarms(horizon_days: int = 30) -> list[dict]:
     """
     Berechnet das KOMPLETTE Set offener Kalender-Alarme von heute über den
@@ -759,7 +810,8 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
     for line in _absage_alarms(away_blocks):
         raw.append(("ABSAGEN", line, None))
     jetzt = uhr.jetzt()
-    for day_iso, entries in entries_in_range(today, end).items():
+    im_horizont = entries_in_range(today, end)
+    for day_iso, entries in im_horizont.items():
         d = date.fromisoformat(day_iso)
         entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted/Ausfall: kein Alarm
         # Deadline im Vorwarn-Fenster (20.10.2026): EIN Hinweis, dessen Text
@@ -773,6 +825,7 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
             # kind aus dem Zeilenkopf ableiten (Kollision/Teil-Überlappung/Knapp)
             kind = line.split(":", 1)[0].replace("⚠", "").strip() or "Warnung"
             raw.append((kind, line, day_iso))
+    raw.extend(_wochentag_alarme(im_horizont))
 
     # "tag" (ISO) seit 09.10.2026, wo der Alarm an einem Tag hängt (Wunsch
     # der KI-Werkzeuge: Tages-Kollisionen kamen ohne Datum). Die id bleibt
