@@ -28,7 +28,8 @@ sind **JSON Schema** (2020-12), HTTP-Schnittstellen **OpenAPI 3.1**
 
 *„zentrale muss im kern barebone sein und überall drauf gemorpht werden
 können — android mit app, browser app, tablet app, raspberry pi full view, AR
-stardust XR environment usw."* Jede Oberfläche ist nur ein weiterer **Knoten**
+stardust XR environment usw."* Nachtrag: auf **jedem nur erdenklichen
+Format** — die genannten sind Beispiele, keine Grenze. Jede Oberfläche ist nur ein weiterer **Knoten**
 ([knoten_beitritt.md](knoten_beitritt.md)). Darum: Protokolle (Cloud, Mitte,
 Kacheln) nur HTTP + JSON + Standard-Krypto, beschrieben in OpenAPI/JSON
 Schema und mit **Testvektoren**, damit eine Dart-, JS- oder Rust-Fassung sie
