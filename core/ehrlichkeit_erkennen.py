@@ -200,6 +200,27 @@ def nicht_gefunden(text: str) -> list:
             if not s.frage and not _FALLS.search(s.klein) and _NICHT_GEFUNDEN.search(s.klein)]
 
 
+# „Gibt es nicht" über die Welt (2026-10-22, KI-Bibel R-14): nach einer
+# Web-Suche ohne gelesene Seite. Anlass: Jeans-Gespräch 14.10. — „gibt es
+# wohl nicht" nach vier Suchen. Ohne Datei-Wort (anders als nicht_da) und
+# ohne die Vermutungs-Ausnahme von _BEDINGT: „gibt es vermutlich nicht" ist
+# genau die Pauschalverneinung, um die es geht. Nur Fragen und echtes
+# Bedingtes („falls …", „ob …") zählen nicht.
+_VERNEINT_ZUSATZ = re.compile(r"\bnirgend(?:s|wo)\b|\bnicht zu geben\b|\bnicht (?:mehr )?(?:erhältlich|lieferbar|verfügbar)\b")
+
+
+def verneint(text: str) -> list:
+    """Sätze, die sagen, etwas gebe es nicht / sei nicht zu finden."""
+    raus = []
+    for s in saetze(text):
+        if s.frage or _FALLS.search(s.klein):
+            continue
+        if (_NICHT_GEFUNDEN.search(s.klein) or _NICHT_DA.search(s.klein)
+                or _VERNEINT_ZUSATZ.search(s.klein)):
+            raus.append(s.text)
+    return raus
+
+
 # ── Zusagen ─────────────────────────────────────────────────────────────
 
 # Erste Person Präsens der Verben, mit denen die KI etwas zusagt. Bewusst

@@ -426,6 +426,38 @@ def aufschub_befund(antwort: str, protokoll: list, nutzer_text: str) -> dict | N
     return None
 
 
+# ── Gesucht, nichts gelesen (2026-10-22, KI-Bibel R-14, PR-04) ───────────
+# Verneint die Antwort etwas („gibt es nicht", „nichts gefunden"), und in
+# diesem Zug lieferte web_search Treffer, aber keine Seite wurde gelesen,
+# dann steht das Nein auf Vorschautexten. Anlass: Jeans-Gespräch 14.10. —
+# vier Suchen, keine Seite, „gibt es wohl nicht". Wie „stichwort": eine
+# Korrekturrunde, bleibt es dabei, sieht Sasha eine Warnung. Eine Suche ohne
+# Treffer (oder eine, die nicht lief) löst nichts aus: dann gab es nichts zu
+# lesen.
+_WEB_TREFFER = re.compile(r"^Web-Suche '.*' - [1-9]\d* Treffer:", re.M)  # Kopf aus web.suche
+_SEITE_LESEN = TATEN["seite"][0]
+
+
+def nur_gesucht(protokoll: list) -> bool:
+    """Lieferte web_search in diesem Zug Treffer, ohne dass eine Seite
+    gelesen wurde (fetch_url, fetch_document, Browser)?"""
+    treffer = any(s.name == "web_search" and _WEB_TREFFER.search(s.text) for s in protokoll)
+    return treffer and not any(s.name in _SEITE_LESEN for s in protokoll)
+
+
+def ungelesen_befund(antwort: str, protokoll: list, auskunft=None) -> dict | None:
+    """Verneint die Antwort etwas, obwohl nur Suchtreffer angesehen wurden?
+    Über antwort sagt es das Feld `nicht_gefunden`, sonst die Satzmuster."""
+    if not nur_gesucht(protokoll):
+        return None
+    feld = list(getattr(auskunft, "nicht_gefunden", None) or [])
+    saetze_ = erkennen.verneint(antwort)
+    if not (feld or saetze_):
+        return None
+    return {"art": "ungelesen", "satz": saetze_[0] if saetze_ else feld[0],
+            "quelle": "beide" if feld and saetze_ else ("auskunft" if feld else "wortliste")}
+
+
 def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
             frueher: list = (), nutzer_text: str = "", auskunft=None) -> list:
     """Was an einer Antwort nicht gedeckt ist. -> [{art, satz|kennung}]
@@ -458,6 +490,9 @@ def befunde(antwort: str, protokoll: list, *, bekannt_text: str = "",
     stich = stichwort_befund(antwort, protokoll, auskunft)
     if stich:
         raus.append(stich)
+    ungelesen = ungelesen_befund(antwort, protokoll, auskunft)
+    if ungelesen:
+        raus.append(ungelesen)
     # Auftrags-Abrechnung (2026-10-10): auch bei freiem Text — dann fehlt
     # sie, und bei mehreren Aufträgen gibt es eine Runde dafür.
     raus += auftrag_abrechnung.befunde(getattr(auskunft, "auftrag", None), protokoll,
@@ -580,9 +615,14 @@ _WIEDER = {
                "oder lies sie mit dem Werkzeug nach.",
     "stichwort": "Lies den Zeitraum jetzt mit read_calendar OHNE 'suche' ODER frag nach dem "
                  "Namen.",
+    "ungelesen": "Lies jetzt die besten Treffer mit fetch_url, oder sag, dass du nur "
+                 "Suchtreffer gesehen und keine Seite gelesen hast.",
 }
 STICHWORT = ("Eine Stichwortsuche ohne Treffer heißt nicht ‚gibt es nicht' — lies den "
              "Zeitraum ohne Suchwort oder frag nach dem Namen.")
+UNGELESEN = ("Suchtreffer sind Vorschautexte, kein Beleg für ‚gibt es nicht'. Lies die "
+             "1–3 besten Treffer mit fetch_url, such bei Bedarf mit anderen Wörtern weiter, "
+             "und sag dann, was du gelesen hast und was daraus folgt.")
 KEIN_WERKZEUG = ("Du hast in diesem Zug KEIN Werkzeug aufgerufen. Ruf das Werkzeug jetzt "
                  "auf ODER schreib, dass nichts geändert wurde.")
 
@@ -604,6 +644,8 @@ def _befund_zeile(b: dict) -> str:
                 "weggelassen. Was sicher geht, tu jetzt; frag nur nach dem Fehlenden.")
     if b["art"] == "stichwort":
         return f"- Du sagst „{b['satz']}“. {STICHWORT}"
+    if b["art"] == "ungelesen":
+        return f"- Du sagst „{b['satz']}“, hast aber keine Seite gelesen. {UNGELESEN}"
     if b["art"] == "tat" and not b.get("satz"):
         return (f"- Du meldest im Feld erledigt eine Änderung "
                 f"({', '.join(b.get('bereiche') or ())}) — in diesem Zug lief dafür kein "
@@ -709,6 +751,9 @@ def warnungen(befunde_: list, protokoll: list = ()) -> list:
         elif art == "stichwort":
             raus.append(f"⚠ ‚Nicht gefunden' nach nur einer Stichwortsuche: "
                         f"„{_kurz(b.get('satz'))}“ — es kann unter anderem Namen dastehen.")
+        elif art == "ungelesen":
+            raus.append(f"⚠ ‚Gibt es nicht' ohne gelesene Seite: „{_kurz(b.get('satz'))}“ — "
+                        f"nur Suchtreffer angesehen.")
         elif art == "kennung":
             kennungen.append(str(b.get("kennung")))
         else:

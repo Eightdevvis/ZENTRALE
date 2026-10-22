@@ -510,6 +510,23 @@ diesem Zug ein Kalender-Werkzeug ok geschrieben hat:
 
 Tests: `tests/test_kalender_nachpruefung.py`. Bibel: PR-10, PR-12, PR-13.
 
+## „Gibt es nicht" nach nur Suchtreffern (seit 2026-10-22)
+
+Jeans-Gespräch 14.10.: vier Websuchen, keine Seite gelesen, dann „gibt es
+wohl nicht". `ehrlichkeit.ungelesen_befund` (KI-Bibel R-14, PR-04):
+
+- Bedingung: in diesem Zug lieferte `web_search` Treffer (Kopf „Web-Suche
+  '…' - N Treffer:", N ≥ 1), aber keine Seite wurde abgerufen (`fetch_url`,
+  `fetch_document`, Browser — jeder Versuch zählt, auch ein gescheiterter).
+- Erkannt über das Feld `nicht_gefunden` an `antwort` oder die Satzmuster
+  `erkennen.verneint` („nichts gefunden", „gibt es (wohl) nicht",
+  „nirgends", „scheint es nicht zu geben", „nicht lieferbar"; ohne Fragen
+  und „falls/wenn/ob", aber MIT „vermutlich/wahrscheinlich").
+- Befund `ungelesen`, hart wie `stichwort`: Korrekturrunde „Suchtreffer sind
+  Vorschautexte, kein Beleg für ‚gibt es nicht' …", danach Warnung „⚠ ‚Gibt
+  es nicht' ohne gelesene Seite …". Nur gross (wie der ganze Prüfer).
+- Nicht gemessen (Prüfstand kostet Geld); Falschtreffer-Quote offen.
+
 ## Klassifikator bei Zweifel (seit 2026-10-10, Standard aus)
 
 `core/klassifikator.py`: `satzarten(text, sprache) -> [{satz, art, sicher}]`
