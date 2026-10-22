@@ -186,6 +186,16 @@ def _searxng_search(query: str, max_results: int):
 SUCHE_HINWEIS = ("Treffer = Hinweise, NICHT gelesen. Daten daraus erst nach "
                  "fetch_url als Tatsache nennen, sonst als 'laut Suchtreffer, "
                  "nicht nachgelesen' kennzeichnen.")
+# Für gross (2026-10-22, KI-Bibel R-01/R-06): statt eines Auswegs („laut
+# Suchtreffer, nicht nachgelesen") der nächste Schritt. Im Jeans-Gespräch
+# (14.10.) kamen vier Suchen, keine Seite gelesen, dann „gibt es wohl nicht".
+# klein behält SUCHE_HINWEIS, darauf ist das lokale qwen gemessen.
+SUCHE_HINWEIS_GROSS = ("Das sind nur Vorschautexte, keine gelesenen Seiten. Nächster "
+                       "Schritt: die 1–3 besten Treffer mit fetch_url lesen, bevor du "
+                       "antwortest oder etwas verneinst. Passt keiner, such mit anderen "
+                       "Wörtern weiter.")
+KEINE_TREFFER_GROSS = (" Versuch es kürzer oder mit anderen Wörtern, bevor du "
+                       "daraus schließt, dass es das nicht gibt.")
 
 # Unter so vielen Wörtern bzw. so wenigen ganzen Sätzen ist eine geladene
 # Seite kein Inhalt, sondern Gerüst: Navigation, Menü, Cookie-Hinweis,
@@ -243,7 +253,7 @@ def _suche_aus(grund: str, neu: bool = True) -> Befund:
         f"Ausweichsuche lieferte nichts) [{grund}]", "nichts gesucht")
 
 
-def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
+def suche(query: str, max_results: int = _DEFAULT_RESULTS, *, gross: bool = False) -> str:
     """
     Web-Suche für das KI-Tool `web_suche`. Gibt ein menschen-/modell-lesbares
     Trefferlisting als String zurück (wird als tool-Result an die KI geschickt).
@@ -254,6 +264,9 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
     Quelle: primär SearXNG (lokal). Läuft der Container nicht, fällt die Suche
     auf das alte DuckDuckGo-Scraping zurück – dann ist wenigstens nichts
     komplett tot, solange DDG uns nicht blockt.
+
+    gross (2026-10-22): der Kopf sagt den nächsten Schritt (die besten
+    Treffer lesen) statt des Auswegs der klein-Schiene.
     """
     query = (query or "").strip()
     if not query:
@@ -276,14 +289,15 @@ def suche(query: str, max_results: int = _DEFAULT_RESULTS) -> str:
             # (2026-10-11, Sasha: ganz oder gar nicht).
             return _suche_aus(f"SearXNG: {e_searx}; Ausweichsuche: leer")
     if not results:
-        return f"Keine Treffer für '{query}'."
+        return f"Keine Treffer für '{query}'." + (KEINE_TREFFER_GROSS if gross else "")
 
     # Erste Zeile seit 2026-10-08 (Sashas Kalender-Testlauf): die KI nannte
     # das Ferienende „bis 16.10." als Suchergebnis — die Suche hatte nur
     # Links geliefert, gelesen hatte sie keine Seite. Das Datum stimmte
     # zufällig, kam aber aus ihrem Vorwissen. Das schlimmste daran laut
     # Sasha: dass sie so tat, als hätte sie es aus dem Netz.
-    lines = [SUCHE_HINWEIS, f"Web-Suche '{query}' - {len(results)} Treffer:"]
+    lines = [SUCHE_HINWEIS_GROSS if gross else SUCHE_HINWEIS,
+             f"Web-Suche '{query}' - {len(results)} Treffer:"]
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['title']}\n   {r['url']}\n   {r['snippet']}")
     return "\n".join(lines)

@@ -141,7 +141,10 @@ komm ich nicht tiefer" (geraten) und „die Warnungen sollten verschwinden"
   geklickt; gefunden und behoben wurde dabei ein echtes Rennen in der TUI:
   `ai_answer_perm` löschte nach dem POST `AI["perm"]` — auch wenn dort schon
   die NÄCHSTE Frage stand. Jetzt nur noch die beantwortete.
-- **Websuche** beginnt mit „Treffer = Hinweise, NICHT gelesen …";
+- **Websuche** beginnt auf klein mit „Treffer = Hinweise, NICHT gelesen …",
+  auf gross (seit 2026-10-22, KI-Bibel R-01) mit dem nächsten Schritt: „Das
+  sind nur Vorschautexte … die 1–3 besten Treffer mit fetch_url lesen, bevor
+  du antwortest oder etwas verneinst" (`web.SUCHE_HINWEIS_GROSS`);
   **fetch_url** warnt (Status `ok`), wenn eine Seite kaum Inhalt hatte
   (unter 80 Wörtern oder 3 ganzen Sätzen: Navigation, Menü, Anmeldung) und
   sagt nur, was zu sehen war.

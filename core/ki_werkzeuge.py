@@ -219,7 +219,9 @@ def _edit_calendar_entry(args: dict) -> str:
 
 @ausfuehrer("web_search")
 def _web_search(args: dict) -> str:
-    return web.suche(args.get("query", ""))
+    # gross (2026-10-22): das Ergebnis nennt den nächsten Schritt (lesen);
+    # klein behält den gemessenen Kopf (core/web.py, SUCHE_HINWEIS).
+    return web.suche(args.get("query", ""), gross=schiene() == "gross")
 
 
 @ausfuehrer("fetch_url")
