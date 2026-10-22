@@ -45,6 +45,8 @@ die umgeschriebenen SSH-Config-Blöcke fallen weg.
 | Sorte | Wer | Wie er ans Gehirn kommt |
 |---|---|---|
 | **Vollknoten** | Laptop, Mini-PC mit AR-Brille | LAN oder VPN → SSH, Moonlight (ganzer Desktop), TUI direkt gegen das Backend. Beide gleichwertig. |
+
+Wie ein neues Gerät zum Knoten wird (beitreten statt kopieren): [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md).
 | **Außenposten** | Pi mit ZENTRALE/Tutor | LAN; holt sich sein Paket selbst (`topologie.md` → Aussenposten) |
 | **Medienknoten** | Lautsprecher-Pi, weitere | LAN; der PC streamt hin (Audio übers Netz, auch mehrere Räume synchron) |
 

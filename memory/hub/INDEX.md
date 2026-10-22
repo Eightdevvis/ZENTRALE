@@ -13,6 +13,7 @@ Topologie): [../system/INDEX.md](../system/INDEX.md).
 | **Schaufenster (Shop)** — Katalog als schema.org-ItemList, Kategorien, holen, Besitz je Rechner, später bezahlen | [shop.md](shop.md) |
 | **Desk View** — der Canvas-Baustein: Fläche je Desk, Zettel, Schnüre, Bilder, Kacheln, Format JSON Canvas, Tasten | [desk_view.md](desk_view.md) |
 | **Farbwähler und Stylebox** — Bausteine für jede Ansicht: Farbkreis, Stil als CSS-dict mit Angebot als JSON Schema, Aufruf, Tasten | [bausteine_farbe_stil.md](bausteine_farbe_stil.md) |
+| **Knoten beitreten (Plan)** — neues Gerät (Mini-PC) tritt der Installation bei statt kopiert zu werden: drei Schichten (Programm/Daten/Gerät), Knoten-Beschreibung als JSON + Schema, Einladung als `zentrale://`-Adresse, Hub als Katalog-Stück | [knoten_beitritt.md](knoten_beitritt.md) |
 | **Produkt-Inventur** — welche App/welcher Hub-Teil wie weit ist, Lizenz-Ecke, was vor dem Verkauf fehlt | [produkt_inventur.md](produkt_inventur.md) |
 
 Routen-Überblick (Kachel, Desk, Shop, Werkstatt):
