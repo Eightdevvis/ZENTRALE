@@ -96,6 +96,20 @@ ein Kreis wäre.
 5. Schnappschuss neu ziehen (`venv/bin/python tests/test_werkzeug_schnappschuss.py --neu`)
    und den Diff ansehen: nur das neue Werkzeug darf dazukommen.
    `tests/test_werkzeug_register.py` meldet Waisen in beide Richtungen.
+6. Die gross-Beschreibung nach der KI-Bibel ([bibel/werkzeuge.md](bibel/werkzeuge.md)):
+   3–4 Sätze — was, wann ja, wann nein, was es nicht liefert; normale
+   Schreibung statt Großbuchstaben (`tests/test_werkzeug_texte.py` prüft
+   das). Nennt sie ein Werkzeug, das nicht in `IMMER` steht, und ist das
+   Werkzeug selbst in `IMMER`: Feld `mit_suche` mit einem Satz „… holst du
+   vorher mit search_tools" (hängt nur mit eingeschalteter Werkzeug-Suche an).
+
+**Seit 2026-10-22** (KI-Bibel W-05, W-08): Feld `mit_suche` (siehe 6.) und
+Aufruf-Beispiele `input_examples` für wenige Werkzeuge mit typischen
+Fehlgriffen in `core/werkzeug_beispiele.py` (read_calendar,
+add_calendar_routine, edit_calendar_routine). Sie gehen nur auf gross über
+den Anthropic-Weg mit (`cloud._to_anthropic_tools(beispiele=True)`), nur an
+Werkzeuge ohne `defer_loading` und nur, wenn sie gegen das Schema des
+laufenden Prozesses bestehen; OpenAI-kompatible Wege bekommen sie nicht.
 
 ### Belegt oder gesagt — Status und Belege (seit 2026-10-08)
 
@@ -271,7 +285,7 @@ Phase 5 des [Claude-Web-Plans](claude_web_plan.md), ausführlich in
 | Werkzeug | Was | Gate |
 |---|---|---|
 | `create_document(titel, inhalt, art?, sprache?)` | neues Dokument (markdown/text/code/csv) | nein |
-| `read_document(id)` | Inhalt lesen | nein |
+| `read_document(id, ab?)` | Text-Inhalt lesen, lange Texte in Stücken zu 30.000 Zeichen (seit 2026-10-22) | nein |
 | `update_document(id, inhalt)` | neue Fassung, alte bleibt | nein |
 | `save_from_sandbox(lauf, datei, titel?)` | Datei aus einem `run_code`-Lauf dieses Gesprächs — nur auf Sashas Wunsch | **ja** (seit 2026-10-07, ohne „immer") |
 
@@ -282,7 +296,9 @@ Dokument über **`core/zug.py`** (der laufende Zug, Schicht 1): die Chat-Route
 Meldungen ab und schickt sie als SSE `ablage`; so musste die Schleife nicht
 umgebaut werden. Über denselben Zug bekommt `run_code` die Gesprächs-id für
 seinen Arbeitsordner (`<gespräch>--<zeit>-<hex>`). Text-Budget der vier
-Beschreibungen: eigener Deckel < 650 Zeichen in `tests/test_profil.py`.
+Beschreibungen: eigener Deckel < 780 Zeichen in `tests/test_profil.py` (seit
+2026-10-22; vorher 650 — read_document und update_document grenzen sich jetzt
+gegen read_file und replace_document ab).
 
 **Anhänge** gehen als eigene Blöcke an die Cloud (Anthropic: `image`
 base64 + `text`; OpenAI-kompatibel: Inhalt als Liste mit `image_url`); im
@@ -311,3 +327,5 @@ Ausführlich: [pdf_word.md](pdf_word.md).
 - **2026-10-09** — zwei Ausgänge mit festen Fehlercodes; Ehrlichkeit live.
 - **2026-10-10** — Werkzeuge aus dem Schema; Selbstauskunft über `antwort`.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
+- **2026-10-22** — Texte nach der KI-Bibel (W-01/W-04/W-11), `mit_suche`,
+  `input_examples`, read_document in Stücken.

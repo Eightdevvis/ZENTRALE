@@ -103,22 +103,43 @@ eintragen ([werkzeuge.md](werkzeuge.md), „Ein neues Werkzeug anlegen").
 
 ## Offen
 
-- **Schritt 9:** ein Satz im gross-Prompt zu search_tools und ein Merkmal
-  in `MERKMALE` — nicht gebaut (am Prompt-Text arbeitete parallel ein
-  anderer Agent). Bis dahin erklärt nur die Werkzeug-Beschreibung die Suche.
-  Dazu die Stellen, die zurückgestellte Werkzeuge beim Namen nennen
-  (Prompt-Text, Gedächtnis-Kopf, Beschreibungen der Kern-Werkzeuge) — sie
-  stimmen weiter, das Werkzeug ist nur erst nach einer Suche da; Liste im
-  Abschnitt unten.
+- **Schritt 9:** gebaut am 22.10.2026 (Abschnitt „Schritt 9: die Suche im
+  Prompt" unten), greift nur mit eingeschaltetem Schalter.
 - **Schritt 10:** Prüfstand A/B (Schalter aus/an, dieselben Fälle), erst
   danach Standard an. Schätzung: ≈ 1,75 € je Durchgang mit Sonnet-Richter
   ([pruefstand.md](pruefstand.md)), zwei Durchgänge ≈ 3,50 €; mit
   Haiku-Richter ≈ 2,50 €. Die Suche kostet je Fund eine Runde mehr, spart
   dafür ~30.000 Zeichen gelesenes Schema je Runde.
 
-## Stellen, die zurückgestellte Werkzeuge beim Namen nennen (für Schritt 9)
+## Schritt 9: die Suche im Prompt (seit 2026-10-22)
 
-Stand 14.10.2026, nicht angefasst (Prompt-Text gehört Schritt 9):
+Alles nur mit Schalter an und nur auf einer Schiene mit
+`MERKMALE["werkzeug_suche"]` (gross, also auch qwen über das Profil);
+Entscheidung in `cloud._suche_im_prompt`. Aus bleibt jeder Text byte-gleich
+(Schnappschüsse `tests/test_prompt_nutzer.py`, `tests/test_werkzeug_schnappschuss.py`;
+`tests/test_werkzeug_texte.py`).
+
+- **Absatz „## Werkzeuge laden"** (`profil.gross.SUCHE`, ~430 Zeichen),
+  direkt hinter den Meta-Regeln (`cloud._static_system`): welche fünf
+  geladen sind (aus `werkzeug_gruppen.IMMER`), dass jedes andere Werkzeug
+  über search_tools kommt, auch die, die der Prompt beim Namen nennt, und
+  eine Zeile Kategorien. Damit sind die Meta-Regeln 1, 3, 4, 6, 7 abgedeckt,
+  ohne ihren Text zu ändern.
+- **Gedächtnis-Kopf:** eine Zeile mehr unter den Regeln (`gedaechtnis._REGELN_SUCHE`).
+- **Jetzt-Block:** „ruf read_time (über search_tools)" (`ki_prompt._now_prompt(suche=True)`).
+- **Projekt-Block:** „read_project_file(name) (über search_tools)".
+- **Skill-Liste:** war schon da (`skills._KOPF_KURZ`).
+- **Beschreibungen der Kern-Werkzeuge:** Feld `mit_suche` hängt einen Satz an
+  read_calendar (read_calendar_warnings), web_search (search_memory) und
+  fetch_url (browser_open). read_calendar nennt ask_choice nicht mehr; die
+  Absage-Nachfrage steht im Alarm-Block.
+
+Mit Schalter an wächst der feste Kopf um ~440 Zeichen (Testumgebung: 8.832 →
+9.275; mit Schalter aus 12.486, unverändert).
+
+### Die Stellen vom 14.10.2026 (Ausgangsliste)
+
+Stand 14.10.2026, erledigt am 22.10.2026 wie oben:
 
 | Stelle | nennt |
 |---|---|

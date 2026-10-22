@@ -170,11 +170,17 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Gilt für:** claude-gross, qwen
 - **Status:** umgesetzt — `core/titel_wochentag.py`,
   `core/ki_kalender_adapter.py` `_wochentag_passt` (~76; Anlegen und
-  neuer_titel), Code `K-TITEL-WOCHENTAG` in `core/fehlercodes.py`; c3955c0
-- **Heute bei ZENTRALE:** Abbruch vor dem Speichern mit „Was tun“. Eine
-  Warnung des Kalender-Kerns für schon gespeicherte Einträge (z. B. wenn eine
-  Serie den Tag wechselt und der Titel bleibt) fehlt noch — Wunsch an die
-  Kalender-Session.
+  neuer_titel), Code `K-TITEL-WOCHENTAG` in `core/fehlercodes.py`; c3955c0.
+  Für schon gespeicherte Einträge der Kern-Alarm der Kalender-Session:
+  `core/kalender_konflikte.py` `_wochentag_alarme` (Alarm-Art „Wochentag“ in
+  `open_alarms`), 3e2c9aa
+- **Heute bei ZENTRALE:** Beim Schreiben: Abbruch vor dem Speichern mit „Was
+  tun“. Für Gespeichertes: ein Alarm, wenn ein Titel einen Wochentag nennt,
+  an dem der Eintrag nicht stattfindet („Titel nennt Montag, die Serie läuft
+  mittwochs: …“) — Routinen über ihre Regel, Einzeltermine und Deadlines
+  über ihr Datum, auch uncommitted; nicht Phasen, Spannen und Regeln ohne
+  festen Wochentag. Je Eintrag höchstens ein Alarm im 30-Tage-Horizont,
+  stabile id. Die KI sieht ihn im Alarm-Block und in read_calendar_warnings.
 
 ---
 
@@ -183,3 +189,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — PR-12, PR-13 neu und umgesetzt, PR-10 umgesetzt (Kalender), c3955c0.
 - **2026-10-22** — PR-04 teilweise (ee018c2, Durchgang Recherche).
+- **2026-10-22** — PR-13 um den Kern-Alarm „Wochentag“ ergänzt (3e2c9aa).

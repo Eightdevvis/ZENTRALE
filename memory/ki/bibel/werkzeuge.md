@@ -1,10 +1,10 @@
 # KI-Bibel — Werkzeuge: Beschreibungen, Suche, Ergebnisse
 
-**Stand 2026-10-22:** Vierzehn Einträge (W-01 bis W-14). W-14 (Kalender-Felder
-nur aus Sashas Angaben) ist umgesetzt. Die Werkzeug-Suche
-ist gebaut, aber ausgeschaltet; Beschreibungen und Fehlertexte sind teilweise
-umgestellt. Offen sind vor allem Beispiele, knappe Ergebnisse, Schritt 9 und
-10 der Suche und die Großbuchstaben. Wie die Werkzeuge heute gebaut sind:
+**Stand 2026-10-22 (spät):** Vierzehn Einträge (W-01 bis W-14). Umgesetzt:
+W-08 (Suche im Prompt, hinter dem Schalter), W-11 (Großbuchstaben), W-14.
+Die Werkzeug-Suche ist gebaut, aber ausgeschaltet; der Prüfstand (W-09) steht
+aus. Beschreibungen, Abgrenzung, Beispiele und knappe Ergebnisse sind
+teilweise umgestellt (Durchgang Werkzeuge, 0446ae5). Wie die Werkzeuge heute gebaut sind:
 `memory/ki/werkzeuge.md`, die Suche: `memory/ki/werkzeug_suche.md`.
 Legende und Pflegeregeln: [README.md](README.md).
 
@@ -22,11 +22,17 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Gilt für:** alle
 - **Status:** teilweise — `core/werkzeug_register.py` (cb8c662); web_search
   und fetch_url seit 9cce25a mit was / wann ja / wann nein / was nicht (je
-  ~430–530 Zeichen, eigener Deckel in `tests/test_profil.py`); die übrigen
-  nicht geprüft
+  ~430–530 Zeichen, eigener Deckel in `tests/test_profil.py`). Seit 0446ae5 auch
+  die übrigen Kern-Werkzeuge: read_calendar (~530), antwort (~295, Deckel 300),
+  search_tools (`core/werkzeug_nachschlagen.py`), dazu read_time, read_note,
+  search_memory, search_chats, write_note, read_document, update_document,
+  read_file. Offen: die übrigen ~55 Werkzeuge (meist ein, zwei Sätze) und die
+  Skill-Werkzeuge, deren Deckel (600) keinen Platz lässt.
 - **Heute bei ZENTRALE:** Seit 14.10. die Leitlinie
   (`memory/ki/prompt_aufbau.md`, „Prompt-Budget und Werkzeug-Beschreibungen“).
-  Ob alle 71 Werkzeuge sie erfüllen, ist nicht gezählt.
+  Die fünf immer geladenen erfüllen sie; Beschreibungen gesamt auf gross
+  12.706 → 13.198 Zeichen. Die Konflikt-Regel stand in read_calendar, das
+  keine Warnungen zeigt; sie steht jetzt im Alarm-Block.
 
 ### W-02 Fehlermeldungen sagen, was als Nächstes zu tun ist
 
@@ -57,8 +63,12 @@ Legende und Pflegeregeln: [README.md](README.md).
   `immer_erlaubt` oder „für dieses Gespräch“): „Freigegeben: läuft ohne
   Rückfrage an Sasha.“ bzw. „Vor dem Aufruf fragt ZENTRALE Sasha selbst per
   Knopf; frag nicht vorher im Text.“ Offen: die klein-Texte (web_suche,
-  hole_url) sagen weiter „muss Sasha bestätigen“ (gemessener Kanon, nicht
-  angefasst); andere gegatete Werkzeuge nicht geprüft.
+  hole_url) sagen weiter „muss Sasha bestätigen“ — bewusst so gelassen
+  (22.10., Durchgang Werkzeuge): klein ist gemessener Kanon und bleibt
+  byte-gleich, ändern erst mit einer Nachmessung gegen das lokale qwen.
+  Andere gegatete Werkzeuge auf gross sagen „Wird bestätigt“ fest im Text
+  (create_series, run_code, rewrite_note, PDF/Word …) — stimmt, solange sie
+  nicht auf „immer“ stehen; nicht an den Freigabestand gehängt.
 - **Heute bei ZENTRALE:** Auf gross stimmt der Satz mit dem echten Stand
   überein (Sasha: beide auf „immer“); ändert er den Stand, ändert sich der
   Text einmal (kostet einmal den Prompt-Cache).
@@ -72,9 +82,28 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents —
   offiziell, erfasst 22.10.2026
 - **Gilt für:** alle
-- **Status:** offen
-- **Heute bei ZENTRALE:** 71 Werkzeuge auf gross; eine Prüfung auf
-  Überschneidung gab es nicht.
+- **Status:** teilweise — Paare benannt und Beschreibungen geschärft (0446ae5,
+  `core/werkzeug_register.py`, `core/werkzeug_dateien.py`); nichts gelöscht
+  oder zusammengelegt.
+- **Heute bei ZENTRALE:** Paare, bei denen ein Mensch nicht sicher sagen
+  konnte, welches passt (Stand 22.10.):
+  1. read_file / read_document — beide lesen ein Ablage-Dokument. Jetzt:
+     read_file liest jedes (auch PDF/Word/Excel, per Titel), read_document
+     Text per id in Stücken, zum Neufassen mit update_document.
+  2. update_document / replace_document — beide machen eine neue Fassung.
+     Jetzt: update für Text (alte Fassung bleibt), replace für PDF/Word.
+  3. write_note / create_document — „halt das fest“ gegen „leg mir das an“.
+     write_note sagt jetzt: Text zum Lesen oder Mitnehmen ist create_document.
+  4. search_memory / search_chats / search_files — drei Suchen, drei
+     Speicher; jede nennt jetzt die beiden anderen.
+  5. add_calendar_pause / edit_calendar_routine (loeschen + nur_am) — beides
+     lässt einen Tag einer Serie ausfallen. Noch nicht geschärft
+     (Kalender-Deckel).
+  6. fetch_url / fetch_document / browser_open — war schon abgegrenzt.
+  Vorschläge zum Zusammenlegen (nicht gebaut, Sasha entscheidet):
+  read_document in read_file aufgehen lassen; update_document und
+  replace_document zu einem Werkzeug „neue Fassung“; einen Tag absagen nur
+  noch über edit_calendar_routine (nur_am), Pause nur für Zeiträume.
 
 ### W-05 Beispiele in den Werkzeugen
 
@@ -84,9 +113,19 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://www.anthropic.com/engineering/advanced-tool-use —
   offiziell, nur aus einem Extrakt (Trefferquote 72 % → 90 %), erfasst 22.10.2026
 - **Gilt für:** alle
-- **Status:** offen — kein `input_examples` im Code
-- **Heute bei ZENTRALE:** Beispiele stehen, wenn überhaupt, als Fließtext in
-  der Beschreibung. Siehe auch [P-04](prompt.md#p-04-wenige-typische-beispiele-statt-sonderfall-listen).
+- **Status:** teilweise — `core/werkzeug_beispiele.py`, eingehängt in
+  `cloud._to_anthropic_tools(beispiele=True)`; 0446ae5. Je zwei Beispiele für
+  read_calendar, add_calendar_routine, edit_calendar_routine.
+- **Heute bei ZENTRALE:** Anthropic nimmt `input_examples` ohne Beta-Header
+  (Doku define-tools, abgerufen 22.10.2026); jedes Beispiel muss zum
+  input_schema passen, sonst 400. Deshalb prüft der Code jedes Beispiel mit
+  jsonschema gegen das Schema des laufenden Prozesses und lässt unpassende
+  weg. Nur gross, nur Anthropic, nur an Werkzeugen ohne `defer_loading`
+  (ob beides zusammen geht, sagt die Doku nicht). Die OpenAI-Seite (qwen)
+  bekommt das Feld nicht: das Funktions-Schema dort kennt es nicht, und ob
+  DashScope ein unbekanntes Feld ablehnt, ist ungeprüft. Gegen echte API
+  nicht gelaufen (kostet). Weitere Werkzeuge erst nach dem Prüfstand.
+  Siehe auch [P-04](prompt.md#p-04-wenige-typische-beispiele-statt-sonderfall-listen).
 
 ### W-06 Werkzeug-Antworten knapp halten
 
@@ -97,10 +136,18 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://www.anthropic.com/engineering/writing-tools-for-agents —
   offiziell, erfasst 22.10.2026
 - **Gilt für:** alle
-- **Status:** offen — `cloud.kappen()` kürzt nur Verlauf-Nachrichten, keine
-  einheitliche Grenze für Werkzeug-Ergebnisse gefunden
-- **Heute bei ZENTRALE:** Einzelne Werkzeuge kürzen selbst, eine gemeinsame
-  Regel gibt es nicht.
+- **Status:** teilweise — read_document liest lange Texte in Stücken zu
+  30.000 Zeichen mit „weiter mit … ab=“ (`core/ki_werkzeuge.py`
+  `_stueck`, 0446ae5); vorher ging ein Dokument bis 400.000 Zeichen am Stück
+  zurück. Eine gemeinsame Grenze gibt es weiter nicht.
+- **Heute bei ZENTRALE:** Geprüft am 22.10.: gekürzt bzw. in Seiten sind
+  fetch_url, read_file (30.000), read_project_file (20.000, ab), run_code
+  (20.000 je Strom), find_files/search_files/list_files (Trefferzahl),
+  search_chats (8), search_memory (12), read_chat (≤ 40 Nachrichten),
+  read_xlsx (Bereich), read_docx/read_pdf (ab bzw. Seiten). Offen: read_note
+  liest eine Datei ganz (Dossiers ab 20.000 Zeichen werden nur beim
+  Schreiben gewarnt), read_calendar mit langem Zeitraum, read_chat mit sehr
+  langen Nachrichten.
 
 ### W-07 Werkzeug-Suche: höchstens fünf geladen, der Rest auf Bedarf
 
@@ -130,10 +177,15 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool
   (Kategorien im Prompt nennen) — offiziell, erfasst 22.10.2026
 - **Gilt für:** claude-gross
-- **Status:** offen — Liste der Stellen in `memory/ki/werkzeug_suche.md`
-  („Stellen, die zurückgestellte Werkzeuge beim Namen nennen“)
-- **Heute bei ZENTRALE:** Nur die Werkzeug-Beschreibung von search_tools
-  erklärt die Suche.
+- **Status:** umgesetzt (hinter dem Schalter, Standard aus) — 0446ae5:
+  `profil.gross.SUCHE` + `MERKMALE["werkzeug_suche"]`,
+  `cloud._suche_im_prompt`/`_static_system`, `gedaechtnis._REGELN_SUCHE`,
+  `ki_prompt._now_prompt(suche=)`, `projekte.prompt_block(suche=)`, Feld
+  `mit_suche` (`core/werkzeug_eintrag.py`); Tests `tests/test_werkzeug_texte.py`
+- **Heute bei ZENTRALE:** Mit Schalter an steht hinter den Meta-Regeln
+  „## Werkzeuge laden“ (Kern, search_tools, Kategorien), und jede Stelle,
+  die ein zurückgestelltes Werkzeug nennt, sagt „über search_tools“. Aus:
+  alles byte-gleich. Einzelheiten: `memory/ki/werkzeug_suche.md`, „Schritt 9“.
 
 ### W-09 Prüfstand A/B für die Werkzeug-Suche (Schritt 10)
 
@@ -145,8 +197,10 @@ Legende und Pflegeregeln: [README.md](README.md).
   `memory/ki/werkzeug_suche.md`, Stand 14.10.2026
 - **Gilt für:** claude-gross
 - **Status:** offen — braucht Sashas Okay für die Kosten (~3,50 € mit
-  Sonnet-Richter, ~2,50 € mit Haiku-Richter)
-- **Heute bei ZENTRALE:** Nicht gelaufen.
+  Sonnet-Richter, ~2,50 € mit Haiku-Richter). Schritt 9 ist seit 0446ae5 gebaut,
+  der Prüfstand kann also laufen.
+- **Heute bei ZENTRALE:** Nicht gelaufen. Wie: `memory/ki/pruefstand.md`;
+  für qwen dieselben Fälle mit `ZENTRALE_WERKZEUG_SUCHE=aus` und `=an`.
 
 ### W-10 Werkzeug-Texte nennen Sashas Wörter
 
@@ -168,10 +222,18 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices —
   offiziell, erfasst 22.10.2026
 - **Gilt für:** claude-gross
-- **Status:** offen — `core/werkzeug_register.py` (antwort ~636 „JEDE
-  Antwort“, run_code, save_from_sandbox, Kalender-Phasen/-Routinen ~298–365)
-- **Heute bei ZENTRALE:** Die Texte sind mit klein geteilt oder noch nicht
-  umgeschrieben.
+- **Status:** umgesetzt — 0446ae5: `core/werkzeug_register.py` (antwort, run_code,
+  save_from_sandbox, read_note, write_note, search_memory, rewrite_note,
+  fetch_document, propose_skill, Kalender-Rückfall-Texte),
+  `core/werkzeug_kalender.py` (Routinen, Phasen, Gruppe, Ebene, Stil,
+  Quelle, Feld kategorie/label, qwen-Kurztexte `einfach`),
+  `core/werkzeug_pdf_word.py` (edit_docx), `core/selbstauskunft.py` (Feld
+  erledigt). Wächter: `tests/test_werkzeug_texte.py`
+  (`test_keine_grossbuchstaben_befehle_in_den_gross_texten`).
+- **Heute bei ZENTRALE:** Alle gross-Texte und -Felder in normaler
+  Schreibung; groß bleiben nur Formate und Namen (RRULE, PDF, LSF …). qwen
+  bekommt dieselben Texte (der Zuschnitt erhält sie; „erfinden“ bleibt drin,
+  `tests/test_kalender_nachpruefung.py`). klein unverändert.
 
 ### W-12 Programmatic Tool Calling
 
@@ -224,3 +286,5 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — W-14 neu und umgesetzt (c3955c0); W-02 um K-TITEL-WOCHENTAG ergänzt.
 - **2026-10-22** — W-03 teilweise, W-01 ergänzt (9cce25a, Durchgang Recherche).
+- **2026-10-22** — Durchgang Werkzeuge (0446ae5): W-08, W-11 umgesetzt; W-04,
+  W-05, W-06 teilweise; W-01, W-03, W-09 ergänzt.

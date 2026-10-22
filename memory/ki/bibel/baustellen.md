@@ -1,6 +1,6 @@
 # KI-Bibel — Baustellen
 
-**Stand 2026-10-22:** Fünf Punkte (B-01 bis B-05, B-05 teilweise), die keine Regel von
+**Stand 2026-10-22:** Fünf Punkte (B-01 bis B-05; B-03 umgesetzt, B-05 teilweise), die keine Regel von
 außen sind, sondern Widersprüche und Reste im eigenen Bau. Legende und
 Pflegeregeln: [README.md](README.md).
 
@@ -35,8 +35,14 @@ Pflegeregeln: [README.md](README.md).
 - **Zitat:** —
 - **Quelle:** Sasha (Befund im Code), 14.10.2026; Ton: P-02 in [prompt.md](prompt.md)
 - **Gilt für:** claude-gross
-- **Status:** offen — `core/ki_prompt.py` `_alarm_prompt` (~161–177, geteilt mit klein)
-- **Heute bei ZENTRALE:** Unverändert.
+- **Status:** umgesetzt — `core/ki_prompt.py` `_alarm_prompt(gross=True)` →
+  `_alarm_gross` (`_ALARM_GROSS`), gerufen aus `cloud._volatile_text`; 0446ae5.
+  klein byte-gleich (Schnappschuss `tests/test_prompt_nutzer.py`).
+- **Heute bei ZENTRALE:** Auf gross: „## Offene Erinnerungen“, die Liste und
+  ein Absatz in normaler Schreibung — einmal ansprechen, wenn es passt; bei
+  einem Termin in einer Reise oder einer nötigen Absage rückversichern,
+  warnen und per ask_choice nachhaken. Kein Dashboard, kein [[bild: alarm]].
+  Die Absage-Regel stand vorher auch in read_calendar; dort ist sie raus.
 
 ### B-04 Ausweichweg ohne erzeugte Werkzeuge fällt weg
 
@@ -73,3 +79,4 @@ Pflegeregeln: [README.md](README.md).
 
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — B-05 auf teilweise (Kalender-Nachprüfung, c3955c0).
+- **2026-10-22** — B-03 umgesetzt (Durchgang Werkzeuge, 0446ae5).

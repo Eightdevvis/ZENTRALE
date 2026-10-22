@@ -32,12 +32,15 @@ Legende und Pflegeregeln: [README.md](README.md).
   offiziell, erfasst 22.10.2026
 - **Gilt für:** claude-gross (klein bleibt in Großbuchstaben, so ist das
   lokale qwen gemessen)
-- **Status:** teilweise — Prompt der Schiene gross umgestellt (cb8c662).
-  Offen: Werkzeug-Beschreibungen (siehe [W-11](werkzeuge.md#w-11-großbuchstaben-raus-aus-den-werkzeug-beschreibungen))
-  und Alarm-Block `ki_prompt._alarm_prompt` (siehe [B-03](baustellen.md#b-03-alarm-block-passt-nicht-zu-gross)).
-- **Heute bei ZENTRALE:** Persona, Meta-Regeln, Imprint und Umschlag auf
-  gross sind normal geschrieben. In den Werkzeug-Texten und im Alarm-Block
-  stehen noch JEDE, NICHT, EINMAL.
+- **Status:** teilweise — Prompt der Schiene gross umgestellt (cb8c662);
+  Werkzeug-Texte ([W-11](werkzeuge.md#w-11-großbuchstaben-raus-aus-den-werkzeug-beschreibungen))
+  und Alarm-Block auf gross ([B-03](baustellen.md#b-03-alarm-block-passt-nicht-zu-gross))
+  seit 0446ae5. Offen: der Jetzt-Block `ki_prompt._now_prompt` (NICHT, UHRZEIT,
+  „NICHT im Kopf“), geteilt mit klein; für gross bräuchte er eine eigene
+  Fassung wie der Alarm-Block (hängt mit [P-06](#p-06-keine-kalender-schlagseite) zusammen).
+- **Heute bei ZENTRALE:** Persona, Meta-Regeln, Imprint, Umschlag, Werkzeug-
+  Texte und Alarm-Block auf gross sind normal geschrieben. Großbuchstaben
+  stehen noch im Jetzt-Block.
 
 ### P-03 Richtige Flughöhe, klare Abschnitte, knapp anfangen
 
@@ -98,3 +101,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-22** — P-02 nachgezogen (Durchgang Werkzeuge, 0446ae5).
