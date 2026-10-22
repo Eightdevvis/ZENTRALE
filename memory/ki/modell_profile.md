@@ -192,8 +192,9 @@ Tests: `tests/test_modell_profile.py`. Fälle: `tests/pruefstand/faelle_modelle/
 
 Werkzeuge aus dem Schema ([werkzeug_erzeuger.md](werkzeug_erzeuger.md))
 bringen ihren Zuschnitt für schwache Modelle mit; `qwen.werkzeuge` wendet
-ihn vor den eigenen Zusätzen an (Felder `layer`, `kategorie_name` und
-seltene Phasen-Felder weg, kürzere Texte). Die neuen Werkzeuge stehen in
+ihn vor den eigenen Zusätzen an (Felder `kategorie_name` und seltene
+Phasen-Felder weg, kürzere Texte; `layer` an `add_calendar_*` bleibt seit
+2026-10-22 drin, siehe [ki_kalender.md](ki_kalender.md)). Die neuen Werkzeuge stehen in
 zwei Gruppen der Auswahl: `rhythmus` (Schlaf, Bett, Phase …) und `gruppe`
-(Gruppe, Uni, vielleicht, fest …), dazu `quelle` (Liste, Todo, Projekt …)
+(Gruppe, Uni, vielleicht, uncommitted, fest …), dazu `quelle` (Liste, Todo, Projekt …)
 für Termine mit Titel aus einer Liste.

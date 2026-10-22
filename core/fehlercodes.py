@@ -65,7 +65,7 @@ CODES = {
         "Mit einer gültigen aktion erneut aufrufen."),
     "K-EBENE-UNBEKANNT": (
         "Diese Kalender-Ebene gibt es nicht.",
-        "Ohne layer aufrufen (Standard: termine)."),
+        "layer 'uncommitted' (vielleicht) oder weglassen (fest, termine)."),
     "K-SPANNE-UHRZEIT": (
         "Uhrzeiten einzelner Tage eines mehrtägigen Termins ändert das Werkzeug nicht.",
         "Sasha sagen, dass das in der Kalender-Ansicht geht."),

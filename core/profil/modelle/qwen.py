@@ -119,8 +119,10 @@ def werkzeuge(tools: list) -> list:
     """Die Werkzeug-Liste für qwen: Kopien, gross bleibt unberührt.
     Erzeugte Werkzeuge (2026-10-10, core/werkzeug_erzeuger/) bringen ihren
     Zuschnitt für schwache Modelle selbst mit (Felder weg, einfachere Texte)
-    — ungemessen, deshalb nur wenig: seltene Felder (layer,
-    kategorie_name …) und kürzere Texte für die neuen Werkzeuge."""
+    — ungemessen, deshalb nur wenig: seltene Felder (kategorie_name …)
+    und kürzere Texte für die neuen Werkzeuge. `layer` an add_calendar_*
+    bleibt seit 2026-10-22 drin: ohne das Feld trug qwen „uncommitted"
+    gewünschte Termine fest ein (Gespräch 20261022-111358)."""
     import copy
     import werkzeug_erzeuger
     import werkzeug_register

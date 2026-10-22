@@ -251,6 +251,55 @@ def test_phase_kann_nicht_vielleicht_werden():
     assert _stand() == vorher
 
 
+# Ebene gleich beim Anlegen (2026-10-22, Gespräch 20261022-111358: Sasha
+# wollte Sprechstunden „uncommitted", qwen trug sie fest ein).
+
+def test_termin_gleich_vielleicht_anlegen():
+    r = tun("add_calendar_entry", day=MO.isoformat(), label="Kino", time="20:00",
+            layer="uncommitted", kategorie="keine")
+    assert r.status == "ok" and "als vielleicht (uncommitted)" in r, r
+    assert [e["layer"] for e in _tag(MO)] == ["uncommitted"]
+
+
+def test_routine_gleich_vielleicht_anlegen():
+    r = tun("add_calendar_routine", label="Sprechstunde", rrule="FREQ=WEEKLY;BYDAY=MO",
+            time="13:00", ende="14:30", von=MO.isoformat(),
+            bis=(MO + timedelta(days=28)).isoformat(), layer="uncommitted", kategorie="uni")
+    assert r.status == "ok" and "als vielleicht (uncommitted)" in r, r
+    uid = ki_kalender.finden(kennung(r))[0].uid
+    assert kalender_kennung.eintrag(uid)["layer"] == "uncommitted"
+    assert [e["layer"] for e in _tag(MO)] == ["uncommitted"]
+
+
+def test_ohne_ebene_bleibt_fest():
+    r = tun("add_calendar_entry", day=MO.isoformat(), label="Kino", time="20:00",
+            kategorie="keine")
+    assert r.status == "ok" and "vielleicht" not in r, r
+    r = tun("add_calendar_routine", label="Geige", rrule="FREQ=WEEKLY;BYDAY=MO",
+            time="18:00", von=MO.isoformat(), bis=(MO + timedelta(days=28)).isoformat(),
+            kategorie="keine")
+    assert r.status == "ok" and "vielleicht" not in r, r
+    assert sorted(e["layer"] for e in _tag(MO)) == ["termine", "termine"]
+
+
+def test_anlegen_nur_fest_oder_vielleicht():
+    vorher = _stand()
+    for ebene in ("rhythmus", "vielleicht"):
+        r = tun("add_calendar_entry", day=MO.isoformat(), label="Kino", layer=ebene,
+                kategorie="keine")
+        assert r.code == "K-EBENE-UNBEKANNT", (ebene, r)
+    assert _stand() == vorher
+
+
+def test_frage_nennt_vielleicht():
+    import ki_kalender_adapter
+    f = ki_kalender_adapter._frage("add_calendar_routine", {
+        "label": "Sprechstunde", "rrule": "FREQ=WEEKLY;BYDAY=MO", "time": "13:00",
+        "von": MO.isoformat(), "bis": (MO + timedelta(days=28)).isoformat(),
+        "layer": "uncommitted", "kategorie": "keine"})
+    assert "als vielleicht (uncommitted)" in f, f
+
+
 # ── Fragen an Sasha, Register ──────────────────────────────────────────
 
 def test_fragen_nennen_was_passiert():
@@ -319,7 +368,9 @@ def test_qwen_zuschnitt():
     from profil.modelle import qwen
     tools = {t["function"]["name"]: t for t in qwen.werkzeuge(werkzeug_register.schema("gross"))}
     add = tools["add_calendar_entry"]["function"]
-    assert "layer" not in add["parameters"]["properties"]
+    # Seit 2026-10-22 sieht qwen die Ebene beim Anlegen (Sashas „uncommitted").
+    assert "layer" in add["parameters"]["properties"]
+    assert "kategorie_name" not in add["parameters"]["properties"]
     assert "kategorie" in add["parameters"]["required"]
     assert tools["set_calendar_phase"]["function"]["description"].startswith(
         "Trägt eine Phase des Tagesrhythmus ein (z.B. Schlaf")

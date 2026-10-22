@@ -225,6 +225,8 @@ def _frage(name: str, args: dict):
                                          "kategorie_name": _text(args, "kategorie_name")})
     if gruppe:
         extra.append(f"Gruppe {gruppe}")
+    if name.startswith("add_") and ka._layer(args) == kalender_kennung.UNVERBINDLICH:
+        extra.append("als vielleicht (uncommitted)")
     if _text(args, "nur_von") or _text(args, "nur_bis"):
         extra.append(f"nur vom {_text(args, 'nur_von') or '?'} bis {_text(args, 'nur_bis') or '?'}")
     typ, vw = _text(args, "typ").lower(), _text(args, "vorwarnung")
@@ -271,8 +273,25 @@ def _was(name: str, args: dict) -> str:
 
 # ── Termine ────────────────────────────────────────────────────────────
 
+def _ebene(args: dict) -> str:
+    """Ebene beim Anlegen: termine (fest) oder uncommitted (vielleicht). Das
+    Feld ist Text (wie auf klein); andere Ebenen (rhythmus …) gehen hier
+    nicht — eine Phase legt set_calendar_phase an."""
+    layer = ka._layer(args)
+    if layer not in (kalender_kennung.VERBINDLICH, kalender_kennung.UNVERBINDLICH):
+        raise Ablehnung("K-EBENE-UNBEKANNT", f"Ebene {layer!r} gibt es hier nicht — "
+                        f"'uncommitted' (vielleicht) oder weglassen (fest)")
+    return layer
+
+
+def ebene_satz(x: dict) -> str:
+    """' als vielleicht (uncommitted)' — aus dem Nachgelesenen; fest: nichts."""
+    return " als vielleicht (uncommitted)" if x.get("layer") == kalender_kennung.UNVERBINDLICH \
+        else ""
+
+
 def termin_eintragen(args: dict) -> Ergebnis:
-    layer = _text(args, "layer") or "termine"
+    layer = _ebene(args)
     q, name = _quelle(args)
     label, ort = _titel(args, name), _text(args, "ort")
     tag = ka._tag("day", args.get("day"))
@@ -295,9 +314,10 @@ def termin_eintragen(args: dict) -> Ergebnis:
 
     def nachsatz(x):
         n = kk.termine_am(x.get("tag") or tag)
-        return f"{quelle_satz(x)}. Der Tag hat {n} {'Eintrag' if n == 1 else 'Einträge'}"
+        return (f"{ebene_satz(x)}{quelle_satz(x)}. Der Tag hat {n} "
+                f"{'Eintrag' if n == 1 else 'Einträge'}")
     return Ergebnis(kennung=k, verlangt={"label": label, "tag": tag, "time": t, "ende": e,
-                                         "ort": ort, "quelle": q, **typ_verlangt,
+                                         "ort": ort, "quelle": q, "layer": layer, **typ_verlangt,
                                          **_gruppe_verlangt(k_gruppe, n_gruppe)},
                     nachsatz=nachsatz, zusatz=ka._hinweise)
 
@@ -355,7 +375,7 @@ def termin_loeschen(args: dict) -> Ergebnis:
 
 def routine_eintragen(args: dict) -> Ergebnis:
     q, name = _quelle(args)
-    layer, label = ka._layer(args), _titel(args, name)
+    layer, label = _ebene(args), _titel(args, name)
     rrule, ort = _text(args, "rrule"), _text(args, "ort")
     t, e = ka._uhr("time", args.get("time")), ka._uhr("ende", args.get("ende"))
     ka._reihenfolge(t, e)
@@ -381,9 +401,9 @@ def routine_eintragen(args: dict) -> Ergebnis:
         raise Ablehnung("W-NICHT-GESPEICHERT", "nachgelesen steht die Routine nicht im Kalender")
     return Ergebnis(
         kennung=k, verlangt={"label": label, "rrule": regel, "time": t, "ende": e, "ort": ort,
-                             "seit": von, "quelle": q, **typ_verlangt,
+                             "seit": von, "quelle": q, "layer": layer, **typ_verlangt,
                              **_gruppe_verlangt(k_gruppe, n_gruppe)},
-        nachsatz=lambda x: f"{quelle_satz(x)}, {kk.naechstes(kk.stueck_von(k))}",
+        nachsatz=lambda x: f"{ebene_satz(x)}{quelle_satz(x)}, {kk.naechstes(kk.stueck_von(k))}",
         zusatz=lambda x: _doppelt_hinweis(x, label))
 
 

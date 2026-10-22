@@ -107,6 +107,36 @@ im Text „Frist (typ deadline)".
 
 Tests: `tests/test_ki_kalender_deadline.py`.
 
+## Vielleicht gleich beim Anlegen (seit 2026-10-22)
+
+**Anlass:** Gespräch `20261022-111358` — Sasha bat qwen, Sprechstunden
+„regelmäßig uncommitted" einzutragen; sie landeten fest. qwen sah keinen Weg:
+das Feld `layer` an `add_calendar_*` war für schwache Modelle ausgeblendet
+(`schwach=False`), und `set_calendar_layer` kam auf „uncommitted" nicht in die
+Vorauswahl (das Muster kannte nur vielleicht/unverbindlich/fest). Das Modell
+behauptete trotzdem „alle mit uncommitted".
+
+- **Feld `layer`** an `add_calendar_entry` und `add_calendar_routine` sehen jetzt
+  alle Schienen mit Werkzeug-Erzeuger (gross, qwen). Text (`_EBENE_NEU` in
+  `core/werkzeug_kalender.py`): „'uncommitted', wenn Sasha es uncommitted,
+  vielleicht, unverbindlich oder noch nicht fest eintragen will. Sonst
+  weglassen: dann steht es fest im Kalender (termine)." Typ bleibt Text ohne
+  enum (das klein-Feld heißt genauso, `tests/test_profil.py`).
+- **Adapter** (`ki_kalender_adapter._ebene`): nur `termine`/`uncommitted`
+  (altes `routinen` → termine); alles andere → `K-EBENE-UNBEKANNT`, nichts
+  gespeichert (vorher ging z. B. `rhythmus` durch). Nachgelesen wird auch die
+  Ebene (`verlangt["layer"]`); Beleg und Gate-Frage sagen
+  „als vielleicht (uncommitted)".
+- **Umlegen** eines bestehenden Eintrags bleibt `set_calendar_layer`
+  (`kalender_kennung.ebene_wechseln`); die qwen-Vorauswahl `gruppe` greift jetzt
+  auch auf „uncommitted" (`core/werkzeug_gruppen.py`).
+- Werkzeug-Beschreibungen unverändert (Kalender-Deckel); die Erklärung steht im Feld.
+- `klein` unverändert (gemessen; war hier nicht beteiligt).
+
+Tests: `tests/test_werkzeug_kalender_erzeugt.py` (Einmal, Routine, normal
+bleibt fest, nur fest/vielleicht, Frage), `tests/test_modell_profile.py`
+(`test_qwen_sieht_die_ebene_bei_uncommitted`).
+
 ## Historie
 
 - **2026-10-08** — Kennungen, genau ein Eintrag, nur genannte Felder, `bis` bei
@@ -115,3 +145,4 @@ Tests: `tests/test_ki_kalender_deadline.py`.
   mit Zeitraum, Pausen fest an einer Routine, was beim Löschen verloren geht.
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
 - **2026-10-20** — Deadlines über die Werkzeuge (`typ`, `vorwarnung`).
+- **2026-10-22** — vielleicht (uncommitted) gleich beim Anlegen, auch für qwen.

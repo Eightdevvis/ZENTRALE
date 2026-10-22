@@ -395,6 +395,25 @@ def test_qwen_auswahl_kern_immer_gruppen_nach_worten(mit_qwen_profil):
     assert lsf <= spaeter
 
 
+def test_qwen_sieht_die_ebene_bei_uncommitted(mit_qwen_profil):
+    """2026-10-22, Gespräch 20261022-111358: „termine … regelmäßig uncommitted
+    an" — qwen sah weder das Feld layer noch set_calendar_layer und trug
+    fest ein. Jetzt hat add_calendar_* das Feld, und die Wörter bringen das
+    Umlegen-Werkzeug mit; ein gewöhnlicher Termin bekommt es nicht."""
+    s = profil.fuer_backend("cloud", modell="qwen-plus")
+    for satz in ("leg die sprechstunden regelmäßig uncommitted an",
+                 "trag das kino vielleicht am freitag ein",
+                 "das ist noch unverbindlich"):
+        tools = {t["function"]["name"]: t["function"]
+                 for t in s.werkzeuge_fuer([{"role": "user", "content": satz}])}
+        assert "set_calendar_layer" in tools, satz
+        for name in ("add_calendar_entry", "add_calendar_routine"):
+            feld = tools[name]["parameters"]["properties"].get("layer")
+            assert feld and "uncommitted" in feld["description"], (satz, name)
+    normal = _namen(s.werkzeuge_fuer([{"role": "user", "content": "trag zahnarzt am montag ein"}]))
+    assert "set_calendar_layer" not in normal
+
+
 def test_qwen_gruppen_nennen_nur_echte_werkzeuge(mit_qwen_profil):
     s = profil.fuer_backend("cloud", modell="qwen-plus")
     assert modelle.qwen._IN_GRUPPE <= _namen(s.TOOLS)

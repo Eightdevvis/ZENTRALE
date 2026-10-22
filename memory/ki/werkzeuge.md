@@ -192,7 +192,9 @@ Schemas (MCP-Form, `core/werkzeug_kalender.py`) ERZEUGT; Schutzschicht
 Satzform) einmal im Erzeuger, Fach im Adapter (`core/ki_kalender_adapter.py`).
 Neu: Phasen (`set/edit/delete_calendar_phase`), `set_calendar_group`,
 `set_calendar_layer`, Gruppe Pflicht beim Anlegen, `nur_von`/`nur_bis` an
-`edit_calendar_routine`. Eintrag-Felder `gross_ausfuehrer`, `erzeugt`,
+`edit_calendar_routine`. Seit 2026-10-22 nimmt `add_calendar_entry`/`_routine`
+die Ebene direkt (`layer` 'uncommitted' = vielleicht), auch auf qwen
+([ki_kalender.md](ki_kalender.md)). Eintrag-Felder `gross_ausfuehrer`, `erzeugt`,
 `bereich`, `worte`, `zuschnitt` (`core/werkzeug_eintrag.py`);
 `ki_werkzeuge._verteilen` nimmt auf gross den `gross_ausfuehrer`.
 Einstellung `werkzeuge_erzeugt` (an|aus). Alles Weitere:

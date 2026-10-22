@@ -69,11 +69,13 @@ VORAUSWAHL = {
                ("propose_skill", "edit_skill")),
     # Tagesrhythmus, Gruppe, fest/vielleicht (2026-10-10, erzeugte
     # Kalender-Werkzeuge): selten gebraucht, also erst auf ein passendes Wort.
+    # 2026-10-22: „uncommitted" dazu — Sashas Wort (Gespräch 20261022-111358),
+    # vorher kam set_calendar_layer darauf nicht mit.
     "rhythmus": (r"schlaf|bett|aufsteh|aufwach|rhythmus|phase|hungrig|essen|"
                  r"mittag|fokus|runterkommen",
                  ("set_calendar_phase", "edit_calendar_phase", "delete_calendar_phase")),
     "gruppe": (r"gruppe|kategorie|block|\buni\b|arbeit|schicht|vielleicht|"
-               r"unverbindlich|\bfest\b|zugesagt|monatsansicht",
+               r"unverbindlich|uncommitted|\bfest\b|zugesagt|monatsansicht",
                ("set_calendar_group", "set_calendar_layer")),
     # 2026-10-11: Aussehen eines Eintrags — selten, also nur auf ein passendes Wort.
     "stil": (r"farb|einfärb|rahmen|muster|aussehen|stil|markier|hervorheb|bunt",
@@ -158,7 +160,7 @@ SCHLAGWORTE = {
     "routinen": "routine serie wöchentlich regelmäßig jeden verschieben pause ausfallen "
                 "ferien wiederholung",
     "rhythmus": "schlaf aufstehen tagesrhythmus phase essen fokus",
-    "gruppe": "kategorie gruppe fest vielleicht unverbindlich zugesagt",
+    "gruppe": "kategorie gruppe fest vielleicht unverbindlich uncommitted zugesagt",
     "stil": "farbe einfärben stil markieren aussehen",
     "quelle": "liste todo aufgabe quelle blocken",
 }

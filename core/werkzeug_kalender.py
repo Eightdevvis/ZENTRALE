@@ -98,6 +98,17 @@ _VORWARNUNG = _s("Nur bei deadline: wie lange vorher sie rot leuchtet und erinne
                  "'3d', '12h', '1d12h' (Standard 3d, höchstens 366d).",
                  wort="Vorwarnung", ungueltig="VORWARNUNG-UNGUELTIG")
 
+# Ebene beim Anlegen (2026-10-22): Sasha ließ qwen Sprechstunden „uncommitted"
+# eintragen — sie landeten fest, weil qwen das Feld nicht sah (es war für
+# schwache Modelle ausgeblendet) und set_calendar_layer nicht in seiner
+# Vorauswahl war. Jetzt sehen alle Schienen das Feld; der Text nennt die
+# Wörter, die Sasha benutzt. Typ bleibt Text ohne enum: das klein-Feld
+# heißt genauso (tests/test_profil.py, gross darf nur ergänzen) — welche
+# Werte gehen, prüft der Adapter (K-EBENE-UNBEKANNT).
+_EBENE_NEU = _s("'uncommitted', wenn Sasha es uncommitted, vielleicht, unverbindlich oder "
+                "noch nicht fest eintragen will. Sonst weglassen: dann steht es fest im "
+                "Kalender (termine).")
+
 
 def _aktion(name, beschreibung, felder, pflicht=(), **x) -> dict:
     return {"name": name, "description": beschreibung,
@@ -115,8 +126,7 @@ AKTIONEN = [
         "Trägt einen Einmal-Termin oder eine Frist (typ deadline) ein. Ende und Ort "
         "mitgeben, wenn bekannt — fehlt das Ende, wird keins angenommen; nenn dann auch keins.",
         {
-            "layer": _s("Ebene: 'termine' (Standard, fest zugesagt) oder 'uncommitted' "
-                        "(vielleicht).", schwach=False),
+            "layer": _EBENE_NEU,
             "day": _s(_DATUM),
             "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
             "time": _s("Optional HH:MM (24h). Weglassen wenn ganztags."),
@@ -136,7 +146,7 @@ AKTIONEN = [
         "Trägt eine Wiederholung (Routine) mit Zeitraum von/bis ein. Fehlt das Ende der "
         "Uhrzeit, wird keins angenommen — frag nach, statt eins zu nennen.",
         {
-            "layer": _s("Ebene, im Zweifel weglassen (termine).", schwach=False),
+            "layer": _EBENE_NEU,
             "label": _s("Kurzer Titel, ohne Ort (mit quelle: Rückfall-Titel, darf fehlen)"),
             "rrule": _RRULE,
             "time": _s("Optional HH:MM (24h)"),
