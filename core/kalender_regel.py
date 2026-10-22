@@ -63,6 +63,24 @@ def vorkommen(r: dict, start: date, end: date) -> list[datetime]:
     return raus
 
 
+def erstes_vorkommen(r: dict, ab: date, horizont_tage: int = 3700) -> date | None:
+    """Der erste Tag ab `ab` (inklusive), an dem die Regel von `r` wirklich
+    trifft — None, wenn es keinen gibt (Regel vorher zu Ende) oder nichts
+    innerhalb von `horizont_tage` (reicht für jährlich am 29. Februar).
+
+    Ein Regel-Anfang zählt hier (dateutil) nur, wenn die Regel ihn trifft;
+    nach RFC 5545 ist DTSTART dagegen IMMER ein Vorkommen. Wer eine Routine
+    nach .ics schreibt, legt DTSTART deshalb auf diesen Tag."""
+    rule = rrulestr(f"DTSTART:{_dtstart_text(ab)}\nRRULE:{r['rrule']}")
+    grenze = ab.toordinal() + horizont_tage
+    for occ in rule:
+        if occ.date().toordinal() > grenze:
+            return None
+        if occ.date() >= ab:
+            return occ.date()
+    return None
+
+
 def regel_gueltig(rule_str: str) -> bool:
     """Lässt sich die Regel überhaupt rechnen? (Dieselbe Prüfung, mit der
     add_routine ungültige Regeln abweist.)"""

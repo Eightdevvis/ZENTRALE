@@ -377,7 +377,13 @@ technischen DTSTART (erster echter Termin ab dem Anker: bei der Migration der
 früheste Tag der alten Daten, sonst der Tag des Anlegens) plus
 `X-ZENTRALE-OHNE-ANFANG:TRUE`; ZENTRALE rechnet sie weiter wie vorher, Google
 zeigt sie ab dem Anker. Routinen, die von außen kommen, haben einen echten
-Anfang (`seit`) und werden ab dort gerechnet. Neu im Daten-Dict (nur von
+Anfang (`seit`) und werden ab dort gerechnet. **DTSTART = erstes echtes
+Vorkommen ab `seit`** (seit 22.10.2026): liegt `seit` auf keinem Regel-Tag
+(Do bei BYDAY=MO), steht `seit` zusätzlich in `X-ZENTRALE-SEIT` — sonst zeigte
+Google am Starttag einen Phantom-Termin (RFC 5545 zählt DTSTART immer mit,
+dateutil in ZENTRALE nicht). Gelesen gilt `X-ZENTRALE-SEIT` nur, solange sein
+erstes Vorkommen noch DTSTART ist (außerhalb verschoben → DTSTART). Siehe
+`memory/system/gefahrzonen.md` §3. Neu im Daten-Dict (nur von
 außen gelesen): `seit`, `enden` (Ende pro Tag einer Spanne) und
 `abweichungen` (am Handy verschobene/abgesagte Einzeltermine einer Routine,
 RECURRENCE-ID).
@@ -560,3 +566,6 @@ Auffällig: sechs Termine haben Uhrzeiten ohne Minuten oder führende Null
 
 - **2026-10-06** — Plan, Bau der Schicht, Migration geprüft an einer Kopie
   der echten Daten; Umschalter bleibt auf `json`.
+- **2026-10-22** — DTSTART von Routinen auf das erste echte Vorkommen
+  (`X-ZENTRALE-SEIT`), 16 Serien im Bestand einmalig neu geschrieben
+  (Phantom-Termine bei Google am Starttag).

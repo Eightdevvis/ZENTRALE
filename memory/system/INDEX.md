@@ -8,7 +8,7 @@ darüber (Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt):
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Gesamt-Architektur: Threads, Datenfluss, Modul-Übersicht | [architektur.md](architektur.md) |
-| **Gefahrzonen** — Fehler, die versteckt wiederkommen: Eingefrorener Tag (Mitternacht im Dauerbetrieb; die eine Uhr `core/uhr.py`, Tageswechsel-Ereignis, Wächter, bekannte Funde); Stumme Leere (leeres Ergebnis ohne Grund, `except: {}`) | [gefahrzonen.md](gefahrzonen.md) |
+| **Gefahrzonen** — Fehler, die versteckt wiederkommen: Eingefrorener Tag (Mitternacht im Dauerbetrieb; die eine Uhr `core/uhr.py`, Tageswechsel-Ereignis, Wächter, bekannte Funde); Stumme Leere (leeres Ergebnis ohne Grund, `except: {}`); Standard liest anders als wir (.ics-DTSTART: Phantom-Termin nur bei Google) | [gefahrzonen.md](gefahrzonen.md) |
 | **Bauplan des Kerns** — Schichten, wer wen importieren darf, Türen, Altlasten (mit Prüftest) | [bauplan_kern.md](bauplan_kern.md) |
 | **Bauplan der TUI** — wie `tui/` in Ansichten geschnitten ist, Kontext statt Closures, Reihenfolge, Sicherheitsnetz | [tui_bauplan.md](tui_bauplan.md) |
 | **Tastentabelle und Leiste** — EINE Tastenleiste ganz unten; jedes Programm verteilt aus einer Tabelle, der Horcher liest sie beim Verkabeln; Ansichten je Programm | [tastentabelle.md](tastentabelle.md) |

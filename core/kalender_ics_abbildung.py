@@ -68,6 +68,7 @@ X_AUS = "X-ZENTRALE-AUS"
 X_PAUSE = "X-ZENTRALE-PAUSE"
 X_ABSAGE = "X-ZENTRALE-ABSAGE-NOETIG"
 X_OHNE_ANFANG = "X-ZENTRALE-OHNE-ANFANG"
+X_SEIT = "X-ZENTRALE-SEIT"               # `seit`, wenn kein Regel-Tag (DTSTART = 1. Vorkommen)
 X_RRULE_ROH = "X-ZENTRALE-RRULE-ROH"
 X_ZEIT_ROH = "X-ZENTRALE-ZEIT-ROH"
 X_MOTIV = "X-ZENTRALE-MOTIV"
@@ -615,10 +616,9 @@ def anker_ausrichten(r: dict, anker: date) -> date:
     immer das erste Vorkommen — läge er auf einem Tag, den die Regel gar
     nicht trifft, zeigte Google dort einen Termin zu viel."""
     try:
-        occ = kalender_regel.vorkommen({**r, "seit": anker.isoformat()},
-                                       anker, anker + timedelta(days=800))
-        if occ:
-            return occ[0].date()
+        erstes = kalender_regel.erstes_vorkommen(r, anker)
+        if erstes:
+            return erstes
     except Exception:
         pass
     return anker
@@ -669,7 +669,12 @@ def routine_kalender(r: dict, uid: str, pos=None, pausen: list | None = None,
 
     seit = _datum(r.get("seit"))
     if seit is not None:
-        start_d = seit
+        # DTSTART = erstes echtes Vorkommen ab `seit` (RFC 5545 zählt DTSTART
+        # immer mit — ein Anfang am Do bei BYDAY=MO wäre bei Google ein
+        # Phantom-Termin am Do). `seit` selbst bleibt verlustfrei erhalten.
+        start_d = anker_ausrichten(r, seit)
+        if start_d != seit:
+            ev.add(X_SEIT, seit.isoformat())
         rest.pop("seit", None)
     else:
         start_d = anker_ausrichten(r, anker or date.today())
@@ -1059,6 +1064,17 @@ def _spanne_lesen(ev, abw, start, ende, rr, extras):
     return _luecken_fuellen(daten, extras, tagesfelder=("times", "enden"))
 
 
+def _seit_lesen(ev, daten: dict, start_tag: date) -> date:
+    """`seit` einer Routine: X-ZENTRALE-SEIT, wenn er noch zu DTSTART passt
+    (sein erstes Vorkommen IST DTSTART) — sonst wurde die Serie außerhalb
+    verschoben oder ihre Regel geändert, dann gilt DTSTART."""
+    x = _datum(str(ev.get(X_SEIT) or "")) if ev.get(X_SEIT) is not None else None
+    if x is None or x > start_tag:
+        return start_tag
+    return x if anker_ausrichten({**daten, "seit": x.isoformat()}, x) == start_tag \
+        else start_tag
+
+
 def _routine_lesen(ev, abw, start, ende, rr, extras):
     daten = {}
     _kopf_lesen(ev, daten)
@@ -1073,7 +1089,8 @@ def _routine_lesen(ev, abw, start, ende, rr, extras):
             daten["ende"] = _ende_text(start, ende)
     _roh_anwenden(ev, daten)
     if str(ev.get(X_OHNE_ANFANG) or "").upper() != "TRUE":
-        daten["seit"] = (start.date() if isinstance(start, datetime) else start).isoformat()
+        start_tag = start.date() if isinstance(start, datetime) else start
+        daten["seit"] = _seit_lesen(ev, daten, start_tag).isoformat()
 
     pausen = []
     for p in _liste(ev.get(X_PAUSE)):

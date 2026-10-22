@@ -120,3 +120,24 @@ Vorhersage selbst in der Vergangenheit liegt.
 |---|---|---|
 | `ui/routen/kalender.py` `cycle` + `core/cycle.day_marks` | `except: {}`; markiert wurde nur der EINE nächste Start — verstrichen und nichts neu geloggt → jeder spätere Monat leer, ohne Grund | **Sashas 20.10.:** „periodentracker im kalender wurde einmal angezeigt, danach nie wieder" (behoben: fortgeschrieben + `fehler`) |
 
+## 3. Standard liest anders als wir (seit 22.10.2026)
+
+**Was:** ZENTRALE rechnet ein Format nach seiner eigenen Lesart (oft der
+einer Bibliothek), der Standard meint etwas anderes. Bei uns unsichtbar,
+sichtbar erst bei Google/am Handy.
+
+**Woran man es erkennt:** Google oder das Handy zeigen einen Termin, den
+ZENTRALE nicht zeigt (oder umgekehrt) — fast immer am Rand einer Serie
+(erster Tag, letzter Tag, Zeitzone, Ganztags-Ende).
+
+**Wie richtig:** beim Schreiben nach .ics die Standard-Semantik herstellen
+(nicht unsere), unsere Lesart verlustfrei in `X-ZENTRALE-*` aufheben, und
+beim Lesen prüfen, ob die X-Property noch zum Standard-Feld passt (sonst gilt
+das Standard-Feld). Test: Vorkommen nach RFC (DTSTART zählt) == Vorkommen in
+ZENTRALE.
+
+**Bekannte Funde:**
+
+| Stelle | Was wich ab | Wirkung |
+|---|---|---|
+| `kalender_ics_abbildung.routine_kalender` | DTSTART = `seit`; dateutil überspringt einen Anfang ohne Regel-Tag, RFC 5545 zählt ihn | Phantom-Termine bei Google am Starttag (z. B. „ExPhy Tutorium" Do statt nur Fr); behoben 22.10.2026: DTSTART = erstes Vorkommen, `X-ZENTRALE-SEIT` |
