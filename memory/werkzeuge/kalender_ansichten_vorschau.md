@@ -70,7 +70,10 @@ Listen-Sidebar heraus).
   von und bis bleiben.
 - **C — Woche als Zeitachse** (Wochendaten): Termine als Flächen nach Dauer,
   Spannentage ohne Uhrzeit als volle Säule → durchgehende Fläche, Spannen
-  reihum verschieden gefärbt, Überschneidungen nebeneinander. Bereich 08–22 Uhr,
+  reihum verschieden gefärbt, Überschneidungen nebeneinander — Bahnen und
+  Breite je Überlappungs-Gruppe (seit 22.10.2026, `_c_bahnen`): ein Termin
+  ohne Überschneidung behält die volle Spalte, in der Gruppe dehnt sich ein
+  Block in freie Nachbarbahnen nach rechts. Bereich 08–22 Uhr,
   erweitert um jede echte Uhrzeit; ist Höhe übrig, beginnt die Achse früher.
 
 ## Warum so

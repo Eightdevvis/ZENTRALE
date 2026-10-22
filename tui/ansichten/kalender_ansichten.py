@@ -1181,11 +1181,32 @@ def _c_bloecke(daten, tag: date, erledigte):
 
 
 def _c_bahnen(bloecke):
-    """Überschneidungen nebeneinander: jeder Block bekommt eine Bahn,
-    die erste freie (Greedy, wie im Handy-Kalender)."""
+    """Überschneidungen nebeneinander, wie im Google-/Apple-Kalender: Bahnen
+    gelten je Überlappungs-Gruppe (zusammenhängende Kette sich schneidender
+    Blöcke), nicht für den ganzen Tag (Sasha, 22.10.2026: sonst werden alle
+    Termine gequetscht, obwohl sie Platz hätten). In der Gruppe bekommt
+    jeder Block die erste freie Bahn (Greedy) und dehnt sich nach rechts in
+    Nachbarbahnen aus, in denen nichts mit ihm kollidiert.
+    -> [(bahn, bis_bahn, bahnen_der_gruppe, s, e, t)]; ein Block ohne
+    Überschneidung ist (0, 0, 1, …) = volle Spalte."""
+    out: list = []
+    gruppe: list = []
     ende_je_bahn: list = []
-    out = []
+    gruppen_ende = None
+
+    def abschliessen():
+        ng = max(1, len(ende_je_bahn))
+        for bi, s, e, t in gruppe:
+            bis = bi
+            while bis + 1 < ng and not any(
+                    b == bis + 1 and s2 < e and s < e2 for b, s2, e2, _t in gruppe):
+                bis += 1
+            out.append((bi, bis, ng, s, e, t))
+
     for s, e, t in sorted(bloecke, key=lambda b: (b[0], -b[1])):
+        if gruppen_ende is not None and s >= gruppen_ende:
+            abschliessen()
+            gruppe, ende_je_bahn, gruppen_ende = [], [], None
         for i, be in enumerate(ende_je_bahn):
             if s >= be:
                 ende_je_bahn[i] = e
@@ -1193,8 +1214,11 @@ def _c_bahnen(bloecke):
         else:
             i = len(ende_je_bahn)
             ende_je_bahn.append(e)
-        out.append((i, s, e, t))
-    return out, max(1, len(ende_je_bahn))
+        gruppe.append((i, s, e, t))
+        gruppen_ende = e if gruppen_ende is None else max(gruppen_ende, e)
+    if gruppe:
+        abschliessen()
+    return out
 
 
 def _c_zeit(t: dict, s: int, e: int) -> str:
@@ -1389,14 +1413,16 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
         alle = []
         for ebene in ([b for b in bloecke if not b[2]["unv"]],
                       [b for b in bloecke if b[2]["unv"]]):
-            bahnen, nb = _c_bahnen(ebene)
+            bahnen = _c_bahnen(ebene)
             alle += bahnen
-            teil = max(1, (pw - (nb - 1)) // nb)
-            for bi, s, e, t in bahnen:
+            for bi, bis, nb, s, e, t in bahnen:
                 if e <= lo or s >= sicht_ende:
                     continue
+                teil = max(1, (pw - (nb - 1)) // nb)
                 bx = x0 + i * colw + bi * (teil + 1)
-                bw = teil if bi < nb - 1 else max(1, pw - bi * (teil + 1))
+                rand = (x0 + i * colw + pw if bis >= nb - 1
+                        else x0 + i * colw + bis * (teil + 1) + teil)
+                bw = max(1, rand - bx)
                 if bx >= x0 + i * colw + pw:
                     continue
                 k0 = (max(s, lo) - lo) // m
@@ -1433,9 +1459,9 @@ def _c_achse(lw, y0, y_ende, x0, g, colw, tage, breite, sel=None, hintergrund=No
                                  r + INV + (LEISE if txt else ""))
         # Ganz außerhalb des Fensters? Dann ein Pfeil in der Spalte des Tages.
         rechts = x0 + i * colw + max(0, colw - 2)
-        if any(e <= lo for _bi, s, e, _t in alle):
+        if any(b[4] <= lo for b in alle):
             lw.setze(y0, rechts, "▲", _a_rolle("a_akzent"))
-        if any(s >= sicht_ende for _bi, s, e, _t in alle):
+        if any(b[3] >= sicht_ende for b in alle):
             lw.setze(y0 + n - 1, rechts, "▼", _a_rolle("a_akzent"))
     # Deadlines zuletzt: eine hingemalte Linie ÜBER allem (kalender_deadline)
     for i, (_b, _g, dls) in enumerate(tage):

@@ -475,6 +475,50 @@ def test_c_uncommitted_untereinander_eigene_bahnen():
     assert text(e).index("Eins") != text(zw).index("Zwei")
 
 
+# ── Bahnen je Überlappungs-Gruppe (22.10.2026) ────────────────────────
+def _b(s, e, name):
+    return (s * 60, e * 60, {"name": name})
+
+
+def _lagen(bloecke):
+    return {t["name"]: (bi, bis, nb) for bi, bis, nb, _s, _e, t in ka._c_bahnen(bloecke)}
+
+
+def test_c_bahnen_je_gruppe():
+    # ohne Überlappung: volle Spalte
+    assert _lagen([_b(9, 10, "A")]) == {"A": (0, 0, 1)}
+    # zwei überlappende: je eine halbe
+    assert _lagen([_b(9, 11, "A"), _b(10, 12, "B")]) == {"A": (0, 0, 2), "B": (1, 1, 2)}
+    # Kette A∩B, B∩C, A∩C=∅: eine Gruppe mit zwei Bahnen, C nimmt As Bahn
+    assert _lagen([_b(9, 11, "A"), _b(10, 13, "B"), _b(12, 14, "C")]) == \
+        {"A": (0, 0, 2), "B": (1, 1, 2), "C": (0, 0, 2)}
+    # unabhängige Gruppe am selben Tag bleibt unbeeinflusst
+    lagen = _lagen([_b(9, 11, "A"), _b(9, 11, "B"), _b(9, 11, "C"), _b(15, 16, "D")])
+    assert lagen["D"] == (0, 0, 1) and lagen["C"] == (2, 2, 3)
+
+
+def test_c_bahnen_dehnen_sich_in_freie_nachbarbahnen():
+    # A, B, C drei Bahnen um 9; D um 11 kollidiert nur mit dem langen A
+    lagen = _lagen([_b(9, 12, "A"), _b(9, 10, "B"), _b(9, 10, "C"), _b(11, 12, "D")])
+    assert lagen["D"] == (1, 2, 3)          # Bahn 1, reicht bis zum Rand
+    assert lagen["B"] == (1, 1, 3)
+
+
+def test_c_freier_termin_behaelt_volle_breite_neben_ueberlappung():
+    termine = [{"day": "2026-10-05", "label": "Frei", "time": "09:00", "ende": "10:00"},
+               {"day": "2026-10-05", "label": "Eins", "time": "13:00", "ende": "15:00"},
+               {"day": "2026-10-05", "label": "Zwei", "time": "14:00", "ende": "16:00"}]
+    zeilen = ka.ansicht_c(daten("week", termine=termine, routinen=[]), 110, 34)
+    a, b = _spalte(110, 0)
+    z = next(z for z in zeilen if "Frei" in text(z))
+    fr = zellen(z)
+    assert text(z).index("Frei") == a
+    assert fr[b - 1][1] == fr[a][1], "freier Termin reicht über die ganze Spalte"
+    e = next(z for z in zeilen if "Eins" in text(z))
+    zw = next(z for z in zeilen if "Zwei" in text(z))
+    assert text(e).index("Eins") == a and a < text(zw).index("Zwei") < b
+
+
 def test_c_gewaehlter_uncommitted_ist_deckend():
     d = _unv(daten("week"), "Zahnarzt")
     sel = next(e for e in d["days"]["2026-10-05"] if e["label"] == "Zahnarzt")
