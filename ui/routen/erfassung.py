@@ -24,6 +24,18 @@ bp = Blueprint('erfassung', __name__)
 
 # ── Data Collection ────────────────────────────────────────────────────
 
+def _erfassbar(category_id):
+    """Nur bekannte Kategorien und Graphen. Die id kommt von außen und wird
+    zum Dateinamen in data/ — ohne diese Prüfung las /api/data/ai_config die
+    API-Schlüssel, und /api/log schrieb mit »../« außerhalb von data/
+    (Inventur 2026-10-22, memory/hub/kern_auszug_inventur.md)."""
+    if not isinstance(category_id, str) or not category_id:
+        return False
+    bekannt = {c.get('id') for c in categories.CATEGORIES}
+    bekannt |= {g.get('id') for g in graphs.list_graphs()}
+    return category_id in bekannt
+
+
 @bp.route('/api/categories')
 def api_categories():
     """Gibt alle verfügbaren Data-Collection-Kategorien zurück (aus categories.py)."""
@@ -37,6 +49,8 @@ def api_data(category_id):
     Die Daten liegen in data/<category_id>.json auf Disk.
     Leere Liste wenn noch keine Einträge existieren.
     """
+    if not _erfassbar(category_id):
+        return jsonify({"fehler": "unbekannt"}), 404
     log_file = graphs.reihe_pfad(category_id, os.path.join(_DATA_DIR, f'{category_id}.json'))
     if not os.path.exists(log_file):
         return jsonify([])
@@ -154,8 +168,12 @@ def api_log():
     Erwartet JSON: {"category": "sleep_quality", "data": {"date": "...", "quality": 3}}
     Anhängt den Eintrag an data/<category>.json (erstellt die Datei wenn nötig).
     """
-    entry       = request.get_json()
+    entry       = request.get_json(silent=True)
+    if not isinstance(entry, dict):
+        return jsonify({"fehler": "ungueltig"}), 400
     category_id = entry.get('category')
+    if not _erfassbar(category_id):
+        return jsonify({"fehler": "unbekannt"}), 400
     data        = entry.get('data', {})
     upsert      = bool(entry.get('upsert'))   # True → Eintrag mit gleichem Datum ersetzen
 
