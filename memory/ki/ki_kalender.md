@@ -137,6 +137,35 @@ Tests: `tests/test_werkzeug_kalender_erzeugt.py` (Einmal, Routine, normal
 bleibt fest, nur fest/vielleicht, Frage), `tests/test_modell_profile.py`
 (`test_qwen_sieht_die_ebene_bei_uncommitted`).
 
+## Nur übernehmen, was Sasha gesagt hat (seit 2026-10-22)
+
+**Anlass:** dasselbe Gespräch `20261022-111358-dd6127`: qwen schrieb
+„Sprechstunde Jonas Schömer (Mo)" an eine Serie BYDAY=WE, erfand den Zeitraum
+26.10.–20.12. und behauptete „alle mit 'uncommitted'". Sasha: „der
+wochentausch ist doch ziemlich böse."
+
+- **Texte** (`core/werkzeug_kalender.py`, gross und qwen):
+  add_calendar_entry „Füll nur Felder, die Sasha genannt hat — kein Ende,
+  keine Ebene erfinden.", add_calendar_routine „… von/bis, Ende, Ebene nie
+  erfinden; fehlt das Ende der Serie, frag nach." Das Genaue in den Feldern:
+  `label` (`_TITEL_NEU`: wie Sasha die Sache nennt, ohne Wochentag, Uhrzeit,
+  Ort), `ende`, `von` (ohne Angabe: ab heute), `bis` (nur aus Sashas Angabe,
+  sonst fragen), `neuer_titel` der edit-Werkzeuge. Kalender-Deckel danach
+  ~2.594 von 2.620.
+- **Abbruch `K-TITEL-WOCHENTAG`** (`ki_kalender_adapter._wochentag_passt`):
+  Titel nennt einen Wochentag, an dem der Eintrag nicht stattfindet (Regel
+  bzw. Datum; beim Anlegen und bei neuer_titel) → nichts gespeichert, „Was
+  tun" im Abbruch. „(Mo)" an einer Montags-Serie (wie Sashas eigene „Chemie
+  (Mo)") geht durch. Erkennung: `core/titel_wochentag.py`.
+- **Nachprüfung danach** (Prüfer, [ehrlichkeit_live.md](ehrlichkeit_live.md)):
+  von/bis/ende ohne Grundlage, Behauptungen gegen die echten Aufrufe.
+- **Offen beim Kalender-Kern:** eine Warnung für gespeicherte Einträge, deren
+  Titel-Wochentag nicht zur Regel passt (z. B. die schon gespeicherte
+  „Sprechstunde Jonas Schömer (Mo)", oder eine Serie wechselt den Tag und der
+  Titel bleibt) — der Adapter sieht nur neue Titel.
+
+Tests: `tests/test_kalender_nachpruefung.py`.
+
 ## Historie
 
 - **2026-10-08** — Kennungen, genau ein Eintrag, nur genannte Felder, `bis` bei
@@ -146,3 +175,5 @@ bleibt fest, nur fest/vielleicht, Frage), `tests/test_modell_profile.py`
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
 - **2026-10-20** — Deadlines über die Werkzeuge (`typ`, `vorwarnung`).
 - **2026-10-22** — vielleicht (uncommitted) gleich beim Anlegen, auch für qwen.
+- **2026-10-22** — nur übernehmen, was Sasha gesagt hat: Texte, K-TITEL-WOCHENTAG,
+  Nachprüfung im Prüfer.

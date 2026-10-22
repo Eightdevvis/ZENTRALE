@@ -1,6 +1,6 @@
 # KI-Bibel — Baustellen
 
-**Stand 2026-10-22:** Fünf offene Punkte (B-01 bis B-05), die keine Regel von
+**Stand 2026-10-22:** Fünf Punkte (B-01 bis B-05, B-05 teilweise), die keine Regel von
 außen sind, sondern Widersprüche und Reste im eigenen Bau. Legende und
 Pflegeregeln: [README.md](README.md).
 
@@ -56,13 +56,20 @@ Pflegeregeln: [README.md](README.md).
 - **Zitat:** —
 - **Quelle:** Sasha, 22.10.2026 (8,61 € von 8,00 € verbraucht)
 - **Gilt für:** qwen
-- **Status:** offen — `core/profil/modelle/qwen.py` ~121–129
-  (`werkzeug_erzeuger.zuschneiden(..., "schwach", ...)`)
-- **Heute bei ZENTRALE:** Seit 22.10. läuft qwen; PR-10 in
-  [pruefung.md](pruefung.md) ist dort passiert. Profil: `memory/ki/modell_profile.md`.
+- **Status:** teilweise — `core/profil/modelle/qwen.py` (Zuschnitt
+  `werkzeug_erzeuger.zuschneiden(..., "schwach", ...)`, Regel 5); c3955c0
+- **Heute bei ZENTRALE:** Seit 22.10. läuft qwen. Die drei Fehler aus dem
+  Gespräch 20261022-111358-dd6127 (Wochentag im Titel, erfundener Zeitraum,
+  falsches „uncommitted“) fängt jetzt Python für alle Modelle (PR-10, PR-12,
+  PR-13 in [pruefung.md](pruefung.md)); die Texte sagen „nur, was Sasha gesagt
+  hat“ (W-14), qwen hat dazu einen Satz in Regel 5. Der Zuschnitt erhält die
+  neuen Texte (`einfach` von add_calendar_entry nachgezogen). Offen: nicht
+  gemessen (Prüfstand mit qwen kostet), und `schwach=False` blendet weiter
+  Felder aus. Profil: `memory/ki/modell_profile.md`.
 
 ---
 
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-22** — B-05 auf teilweise (Kalender-Nachprüfung, c3955c0).

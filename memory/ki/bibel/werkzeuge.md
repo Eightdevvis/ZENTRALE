@@ -1,6 +1,7 @@
 # KI-Bibel — Werkzeuge: Beschreibungen, Suche, Ergebnisse
 
-**Stand 2026-10-22:** Dreizehn Einträge (W-01 bis W-13). Die Werkzeug-Suche
+**Stand 2026-10-22:** Vierzehn Einträge (W-01 bis W-14). W-14 (Kalender-Felder
+nur aus Sashas Angaben) ist umgesetzt. Die Werkzeug-Suche
 ist gebaut, aber ausgeschaltet; Beschreibungen und Fehlertexte sind teilweise
 umgestellt. Offen sind vor allem Beispiele, knappe Ergebnisse, Schritt 9 und
 10 der Suche und die Großbuchstaben. Wie die Werkzeuge heute gebaut sind:
@@ -34,7 +35,8 @@ Legende und Pflegeregeln: [README.md](README.md).
   offiziell, erfasst 22.10.2026
 - **Gilt für:** alle
 - **Status:** teilweise — K-Codes mit „Was tun“-Texten in
-  `core/fehlercodes.py`; Deadline- und uncommitted-Felder (7b37c4c, 4cabae0)
+  `core/fehlercodes.py`; Deadline- und uncommitted-Felder (7b37c4c, 4cabae0);
+  K-TITEL-WOCHENTAG mit „Was tun“ im Abbruch (c3955c0)
 - **Heute bei ZENTRALE:** Die Kalender-Werkzeuge haben Fehlercodes mit
   Handlungstext. Andere Werkzeuge geben oft nur den Fehler zurück.
 
@@ -172,6 +174,28 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Status:** offen
 - **Heute bei ZENTRALE:** Nicht gebaut, nicht geplant.
 
+### W-14 Kalender-Felder nur aus dem, was Sasha gesagt hat
+
+- **Regel:** Die Kalender-Schreibwerkzeuge sagen kurz: Felder nur aus Sashas
+  Angaben füllen, kein von/bis, kein Ende, keine Ebene erfinden. Der Titel
+  bleibt, wie Sasha die Sache nennt, ohne Wochentag oder Uhrzeit. Das Genaue
+  steht in den Feldern (Kalender-Deckel 2.620 in `tests/test_profil.py`).
+  Was Python prüfen kann, prüft Python danach ([PR-12](pruefung.md#pr-12-kalender-werte-ohne-grundlage),
+  [PR-13](pruefung.md#pr-13-wochentag-im-titel-gegen-regel-und-datum)).
+- **Zitat:** —
+- **Quelle:** Sasha/Kalender-Session, 22.10.2026 — Gespräch
+  20261022-111358-dd6127 („der wochentausch ist doch ziemlich böse. können wir
+  die qwen etwas aufpeppen?“)
+- **Gilt für:** claude-gross, qwen
+- **Status:** umgesetzt — `core/werkzeug_kalender.py` (`_TITEL_NEU`, `_ENDE`,
+  `_ZEITRAUM_VON/_BIS`, Texte von add_calendar_entry/routine, `neuer_titel`
+  der edit-Werkzeuge), qwen-Regel 5 in `core/profil/modelle/qwen.py`; c3955c0
+- **Heute bei ZENTRALE:** add_calendar_entry: „Füll nur Felder, die Sasha
+  genannt hat — kein Ende, keine Ebene erfinden.“ add_calendar_routine: „Füll
+  nur Felder, die Sasha genannt hat — von/bis, Ende, Ebene nie erfinden; fehlt
+  das Ende der Serie, frag nach.“ qwen bekommt dieselben Texte (Zuschnitt
+  geprüft in `tests/test_kalender_nachpruefung.py`).
+
 ### W-13 Claude Code hält ~15 Werkzeuge geladen
 
 - **Regel:** Keine Regel, eine Beobachtung zum Vergleich: Claude Code selbst
@@ -188,3 +212,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-22** — W-14 neu und umgesetzt (c3955c0); W-02 um K-TITEL-WOCHENTAG ergänzt.

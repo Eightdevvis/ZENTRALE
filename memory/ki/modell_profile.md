@@ -188,6 +188,19 @@ fragen. Zier-Symbole (✦ ★ ❄) streut qwen in fast jede Antwort (Persona:
 und `core/cloud.py` (`_static_system(…, schiene=)`, `_profil(modell)`).
 Tests: `tests/test_modell_profile.py`. Fälle: `tests/pruefstand/faelle_modelle/`.
 
+## Budget-Rückfall 22.10.2026: nur übernehmen, was Sasha gesagt hat
+
+Gespräch `20261022-111358-dd6127`: Titel mit falschem Wochentag („(Mo)" an
+einer Mittwochs-Serie), Zeitraum erfunden, „uncommitted" behauptet. Regel 5
+der Arbeitsweise hat jetzt den Satz „Titel, Ende, Zeitraum und Ebene
+übernimmst du nur so, wie {nutzer} sie gesagt hat: kein Wochentag im Titel,
+und „uncommitted" sagst du nur, wenn ein Aufruf es gesetzt hat." Die neuen
+Werkzeug-Texte ([ki_kalender.md](ki_kalender.md), „Nur übernehmen …") gehen
+durch den Zuschnitt unverändert durch; der `einfach`-Text von
+add_calendar_entry ist nachgezogen. Gefangen wird es in Python für alle
+Modelle (`K-TITEL-WOCHENTAG`, `core/ehrlichkeit_kalender.py`). Nicht gemessen
+(Prüfstand mit qwen kostet).
+
 ## Erzeugte Werkzeuge (2026-10-10, ungemessen)
 
 Werkzeuge aus dem Schema ([werkzeug_erzeuger.md](werkzeug_erzeuger.md))

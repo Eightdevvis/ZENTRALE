@@ -480,6 +480,36 @@ dahin prüfte das nur der qwen-Zusatzprüfer; jetzt der Prüfer der Schiene
   danach Warnung „⚠ ‚Nicht gefunden' nach nur einer Stichwortsuche …".
 - Gemessen 10.10.: Gespräche 35 → 0; Prüfstand 82 → 1 (genau f10, echt).
 
+## Kalender: WAS geschrieben wurde — alle Modelle (seit 2026-10-22)
+
+Anlass: Gespräch `20261022-111358-dd6127` (qwen im Budget-Rückfall) — Titel
+„… (Mo)" an einer Mittwochs-Serie, Zeitraum 26.10.–20.12. erfunden, „alle mit
+'uncommitted'" ohne layer. Der Prüfer sah nur, DASS geschrieben wurde.
+`core/ehrlichkeit_kalender.py`, gerufen aus `ehrlichkeit.befunde`, nur wenn in
+diesem Zug ein Kalender-Werkzeug ok geschrieben hat:
+
+- **grundlos:** von/bis (add/edit_calendar_routine) und ende (nur beim
+  Anlegen), die weder in Sashas Nachricht noch im Gespräch noch in einem
+  gelesenen Ergebnis stehen — Daten und Uhrzeiten normalisiert („26.10.",
+  „20. Dezember", „17 Uhr", „halb sechs", „19-21"). Ungefähres in Sashas
+  Nachricht („ab nächster Woche", „bis Semesterende", „zwei Monate", ein
+  Monatsname, eine Dauer) → kein Befund. von zwischen heute und +7 Tagen
+  gilt als „ab jetzt". Eine Runde je Zug (`ehrlichkeit_kalender.EINMAL`),
+  danach Warnung „⚠ Angenommen, nicht von dir: …", außer die Antwort nennt
+  den Wert. Gleicher Wert an mehreren Einträgen = ein Befund.
+- **behauptung:** die Antwort sagt Ebene vielleicht/uncommitted, Deadline,
+  mehr angelegte Einträge als Aufrufe oder eine Zeitspanne, die in keinem
+  Aufruf, Ergebnis oder Gespräch steht. Runden wie bei „tat", danach Warnung.
+  Fragen und Verneinungen zählen nicht.
+- Befunde bringen Hinweis (`zeile`) und Warnung (`warnung`) selbst mit;
+  `_befund_zeile` und `warnungen` reichen sie nur durch.
+- Gegenprobe über alle gespeicherten Gespräche (22.10.: 6 Züge mit
+  Kalender-Schreiben): Treffer nur im Anlass-Gespräch.
+- Wochentag im Titel prüft schon der Adapter vor dem Speichern
+  (`K-TITEL-WOCHENTAG`, `core/titel_wochentag.py`).
+
+Tests: `tests/test_kalender_nachpruefung.py`. Bibel: PR-10, PR-12, PR-13.
+
 ## Klassifikator bei Zweifel (seit 2026-10-10, Standard aus)
 
 `core/klassifikator.py`: `satzarten(text, sprache) -> [{satz, art, sicher}]`

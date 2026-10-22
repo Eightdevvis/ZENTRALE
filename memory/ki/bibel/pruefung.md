@@ -1,8 +1,9 @@
 # KI-Bibel — Prüfung: Richter, Evals, unser Python-Prüfer
 
-**Stand 2026-10-22:** Elf Einträge (PR-01 bis PR-11). Der Live-Prüfer ist ein
+**Stand 2026-10-22:** Dreizehn Einträge (PR-01 bis PR-13). Der Live-Prüfer ist ein
 Python-Satzmuster-Prüfer (`core/ehrlichkeit.py`, `core/ehrlichkeit_erkennen.py`)
-und kennt nur Kalender und Dateien. Recherche-Qualität und „passt die Antwort
+und kennt nur Kalender und Dateien. Seit PR-10/12/13 prüft er nach Kalender-
+Schreibaufrufen auch, WAS geschrieben wurde (`core/ehrlichkeit_kalender.py`). Recherche-Qualität und „passt die Antwort
 zum Wunsch?“ sieht er nicht. Wie er heute arbeitet:
 `memory/ki/ehrlichkeit_live.md`, der Prüfstand: `memory/ki/pruefstand.md`.
 Ein Modell als Richter steht in der Ideenecke ([klassifikatoren.md](klassifikatoren.md)).
@@ -118,8 +119,13 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Quelle:** Sasha, 22.10.2026 — Gespräch 20261022-111358-dd6127 (qwen
   behauptete „uncommitted“, kein layer war gesetzt)
 - **Gilt für:** qwen, claude-gross
-- **Status:** offen
-- **Heute bei ZENTRALE:** Der Prüfer erkannte es nicht.
+- **Status:** umgesetzt (Kalender) — `core/ehrlichkeit_kalender.py`
+  `behauptung_befunde` (~247), eingehängt in `ehrlichkeit.befunde` (~467); c3955c0
+- **Heute bei ZENTRALE:** Nach einem Kalender-Schreibaufruf prüft Python jede
+  Aussage über die Einträge gegen Argumente und Ergebnisse: Ebene vielleicht/
+  uncommitted, Typ Deadline, mehr angelegte Einträge als Aufrufe, eine
+  Zeitspanne, die nirgends steht. Befund „behauptung“ → Korrekturrunden wie
+  bei „tat“, danach Warnung. Fragen und Verneinungen zählen nicht.
 
 ### PR-11 Prüf-Statuszeile verschwindet, sobald die Antwort steht
 
@@ -130,8 +136,46 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Status:** umgesetzt — e892b8e
 - **Heute bei ZENTRALE:** Behoben.
 
+### PR-12 Kalender-Werte ohne Grundlage
+
+- **Regel:** Nach einem Kalender-Schreibaufruf prüft Python, ob von, bis und
+  ende in Sashas Text (oder im Gespräch, oder in einem gelesenen Ergebnis)
+  stehen — als Datum/Uhrzeit, auch normalisiert („26.10.“, „17 Uhr“, „halb
+  sechs“). Steht etwas Ungefähres da („ab nächster Woche“, „bis Semesterende“,
+  „zwei Stunden“), gibt es keinen Befund. Im Zweifel Befund statt Abbruch.
+- **Zitat:** —
+- **Quelle:** Sasha/Kalender-Session, 22.10.2026 — Gespräch
+  20261022-111358-dd6127 (von=2026-10-26, bis=2026-12-20 erfunden)
+- **Gilt für:** claude-gross, qwen
+- **Status:** umgesetzt — `core/ehrlichkeit_kalender.py` `grundlos_befunde`
+  (~174); c3955c0
+- **Heute bei ZENTRALE:** Befund „grundlos“: EINE Korrekturrunde je Zug (die
+  KI soll den Wert als angenommen nennen und nachfragen), danach eine Warnung
+  „⚠ Angenommen, nicht von dir: …“, falls die Antwort den Wert nicht nennt.
+  von zwischen heute und in sieben Tagen gilt als „ab jetzt“. ende nur beim
+  Anlegen (beim Verschieben wandert es mit).
+
+### PR-13 Wochentag im Titel gegen Regel und Datum
+
+- **Regel:** Nennt ein Titel einen Wochentag, an dem der Eintrag nicht
+  stattfindet, wird nichts gespeichert. Erkannt wird nur Sicheres
+  (ausgeschriebene Namen, Kürzel in Klammern oder als Anhang), damit „To Do“
+  oder „Montagsrunde“ nie anschlagen.
+- **Zitat:** —
+- **Quelle:** Sasha/Kalender-Session, 22.10.2026 — Gespräch
+  20261022-111358-dd6127 („Sprechstunde Jonas Schömer (Mo)“ an BYDAY=WE)
+- **Gilt für:** claude-gross, qwen
+- **Status:** umgesetzt — `core/titel_wochentag.py`,
+  `core/ki_kalender_adapter.py` `_wochentag_passt` (~76; Anlegen und
+  neuer_titel), Code `K-TITEL-WOCHENTAG` in `core/fehlercodes.py`; c3955c0
+- **Heute bei ZENTRALE:** Abbruch vor dem Speichern mit „Was tun“. Eine
+  Warnung des Kalender-Kerns für schon gespeicherte Einträge (z. B. wenn eine
+  Serie den Tag wechselt und der Titel bleibt) fehlt noch — Wunsch an die
+  Kalender-Session.
+
 ---
 
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-22** — PR-12, PR-13 neu und umgesetzt, PR-10 umgesetzt (Kalender), c3955c0.
