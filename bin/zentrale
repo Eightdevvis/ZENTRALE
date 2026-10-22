@@ -7,4 +7,6 @@ ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 PY="$ROOT/venv/bin/python"
 [[ -x "$PY" ]] || PY="$(command -v python3)"
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-exec "$PY" -m zentrale_cli "$@"
+# -P: nie Module aus dem aktuellen Ordner laden (sonst gewinnt ein fremdes
+# zentrale_cli/ im Arbeitsordner gegen den installierten Hub).
+exec "$PY" -P -m zentrale_cli "$@"
