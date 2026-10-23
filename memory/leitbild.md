@@ -1,0 +1,190 @@
+# Leitbild und Plan — wofür es ZENTRALE gibt
+
+**Stand 2026-10-23: beschlossen.** Diese Datei steht über allen anderen. Jede
+Entscheidung — Feature, Umbau, Reihenfolge — wird zuerst hieran gemessen.
+Hub, Knoten, Cloud und Apps ([hub/hub_bauplan.md](hub/hub_bauplan.md)) sind
+**Unterbau**: nötig, aber nebenläufig, nie das Ziel.
+
+## Das Leitbild
+
+> **ZENTRALE ist das Nervensystem deines Zuhauses.** Sie hört, sieht und
+> spricht in jedem Raum — über Mikros, Lautsprecher, Kameras und
+> Bildschirme. Kommst du heim, macht sie das Licht an, begrüßt dich und
+> fragt im Plaudern nach deinem Tag. Alles, was sich mit Information
+> erledigen lässt, übernimmt sie. **Und alles, was sie weiß, gehört dir.**
+
+Sasha, 23.10.2026: *„die hauptvision die den ganzen anfang prägte war einfach
+nur ein — ich komme heim, zentrale schaltet die lampe an und begrüßt mich und
+nimmt mir ein paar datenpunkte im small talk ab für die datenanalyse."* Und:
+*„zentrale war die idee einer voll vertechnisierten umgebung. mikros,
+lautsprecher, kameras, überall und überall traffic, auch bildschirme.
+zentrale lauscht, zentrale spricht, zentrale überwacht. zentrale analysiert,
+zentrale stellt bereit, zentrale macht alles in deinem leben was irgendwie
+per information gehandhabt werden kann."*
+
+Anlass: *„wenn leute mich fragen was das ist. ich kanns nich erklären … das
+projekt ist ausgeufert in alle möglichen richtungen, außer in die, in die es
+geplant war."*
+
+### Die sechs Tätigkeiten
+
+| ZENTRALE … | heißt | heute |
+|---|---|---|
+| **lauscht** | Mikros in den Räumen, Sprache und Geräusche | ein USB-Mikro am Pi, Whisper am PC; Audio-Straße entworfen ([system/audio_strasse.md](system/audio_strasse.md)) |
+| **spricht** | Lautsprecher in den Räumen, Begrüßung, Small Talk, Antworten | TTS (de/zh/es) am PC, Lautsprecher am Pi |
+| **überwacht** | Anwesenheit, Tür, Licht, Bewegung, später Kameras | PIR vorbereitet (GPIO4), **nicht angeschlossen**; Tür/Licht nur Tastatur-Simulation; Rechner-Anwesenheit per Code ([system/anwesenheit_und_ring.md](system/anwesenheit_und_ring.md)) |
+| **analysiert** | Datenpunkte aus Small Talk und Sensoren, Messreihen, Muster | Messreihen/Graphen, Zyklus, Schlaf (erster Datenpunkt 15.03.2026) |
+| **stellt bereit** | den Plan über alle Lebensbereiche halten und dich mit passendem Stoff umgeben — die **Schemen-Mechanik** | entworfen ([ki/cloud_umstieg_plan.md](ki/cloud_umstieg_plan.md) §4), **nicht gebaut** |
+| **handelt** | Lampe, Steckdosen, Relais, „Mechanik" | **nichts** — `core/actions.py` druckt nur |
+
+### Überwachung, die dir gehört
+
+Das Leitbild widerspricht den Grundpfeilern nicht — es braucht sie.
+Überwachung ist nur gruselig, wenn sie jemand anderem gehört. Bei ZENTRALE
+gehören Mikros, Kameras und Daten dem Menschen, dessen Zuhause es ist. Das
+kann kein Alexa- und kein Google-Gerät versprechen.
+
+## Die Grundpfeiler (Sasha, 2026-10-23)
+
+*„leg das prinzip von anonymität als grundpfeiler fest — anonymität,
+datenschutz, open source."* Jede Entscheidung wird daran gemessen:
+
+1. **Anonymität** — ZENTRALE fragt nie nach Identität: keine Mail, kein
+   Klarname, keine Telefonnummer. Ein Konto ist ein selbst gewählter Name
+   oder eine gewürfelte Kontonummer (wie bei Mullvad). IP-Adressen nur
+   gehasht und kurzlebig.
+2. **Datenschutz** — Zero-Knowledge: alles wird auf dem Gerät verschlüsselt,
+   der Server sieht nur Bytes ([hub/knoten_beitritt.md](hub/knoten_beitritt.md)).
+   So wenig speichern wie möglich; Daten gehören dem Nutzer. Für das
+   Zuhause heißt das: **was in der Wohnung passiert, bleibt in der
+   Wohnung** — Sinne werden lokal verarbeitet, nach draußen geht nur, was
+   der Nutzer bewusst freigibt (der Satz von 05/2026, „keine Daten verlassen
+   das Heimnetz“, wieder in Kraft; die Cloud-KI bekommt nur, was man ihr gibt).
+3. **Open Source** — der Code ist offen. **Offen:** welche Lizenz. Weg 3
+   ([betrieb/verteilung.md](betrieb/verteilung.md)) sah „lesbar, aber
+   Kopieren verboten" vor — das ist *source-available*, nicht Open Source.
+   Vorschlag: **AGPL-3.0** (offen; wer es ändert oder als Dienst betreibt,
+   muss seinen Code ebenfalls offenlegen; Geld über Server/Abo bleibt
+   möglich). Entscheidet Sasha.
+
+Prüffragen bei jedem Feature: Braucht es Identität? Speichert es mehr als
+nötig? Sieht der Server Klartext? Im Zweifel weglassen.
+
+## Die Messlatte
+
+Bei jedem Vorhaben zuerst fragen:
+
+1. **Bringt es das Zuhause näher, das hört, sieht, spricht und handelt?**
+   Wenn nein: warten lassen — außer es ist Unterbau, den eine Etappe unten
+   jetzt braucht.
+2. Besteht es die drei Prüffragen der Grundpfeiler (Identität? mehr
+   gespeichert als nötig? Klartext beim Server?)
+3. Ist es mit offenen Standards gebaut ([../CLAUDE.md](../CLAUDE.md),
+   „Standards statt Eigenformat") — für Geräte heißt das: MQTT, Zigbee,
+   Matter statt Herstellerwolke.
+
+## Der Plan
+
+Jede Etappe endet mit etwas, das man im Zuhause **spürt**, nicht nur im Code.
+
+### Etappe 1 — Heimkommen (die Ursprungsszene)
+
+1. **Heimkommen erkennen:** Türkontakt (Reed) + PIR am Pi; der Kern macht
+   daraus `HOMECOMING` (das Ereignis gibt es seit 14.05.2026 in
+   `core/events.py`, nur ohne echten Sensor).
+2. **Licht an:** eine schaltbare Steckdose oder ein Relais — die erste echte
+   Aktion in der Welt.
+3. **Begrüßung** über den Lautsprecher.
+4. **Small Talk:** zwei, drei Fragen („wie war dein Tag?", „wie hast du
+   geschlafen?"); die Antworten werden zu Datenpunkten in den Messreihen.
+
+Fertig, wenn: Sasha kommt heim, das Licht geht an, ZENTRALE begrüßt ihn und
+fragt; die Antwort steht danach als Wert im Graphen.
+
+### Etappe 2 — Die Hardware-Karte der Wohnung
+
+Welcher Raum welche Sinne bekommt (Mikro, Lautsprecher, Kamera, Bildschirm,
+Sensoren, Aktoren), womit (Pi, Mikrocontroller, Zigbee …), wie verkabelt bzw.
+gefunkt, was es kostet. Eine Tabelle Raum × Sinn, dazu Einkaufsliste und
+Schaltpläne. Die Seite, die in der Doku bisher fast fehlt
+([betrieb/hardware.md](betrieb/hardware.md) kennt nur den einen Pi).
+
+### Etappe 3 — Sinne in jedem Raum
+
+- **Lauschen + sprechen überall:** die Audio-Straße fertig bauen (Weiche
+  entscheiden), ein Mikro + Lautsprecher je Raum, mehrere Räume synchron.
+- **Sehen:** Kamera(s), lokal ausgewertet (Anwesenheit, wer ist da), keine
+  Aufzeichnung ohne ausdrücklichen Wunsch.
+- **Bildschirme:** die Pi-Vollansicht an der Wand („ich will Linux nicht
+  sehen", README vom 07.03.2026) als eigener Knoten.
+
+### Etappe 4 — Analysieren
+
+Datenpunkte aus Small Talk, Sensoren und Smartwatch zusammenführen:
+Messreihen, Gesundheits-Logbuch, „Was mache ich gerade?"
+([ki/zukunftsvisionen.md](ki/zukunftsvisionen.md)). Die Daten gehören dem
+Nutzer.
+
+### Etappe 5 — Bereitstellen: die Schemen-Mechanik
+
+Der Plan über alle Lebensbereiche (vier Ebenen, Fenster und Kapazität,
+[ki/cloud_umstieg_plan.md](ki/cloud_umstieg_plan.md) §4) und das „von Stoff
+umgeben sein". Wartet auf Daten aus Etappe 1 und 4 — so war es schon
+geplant (`system/takt.md`: „das Schemen baut auf dem auf, was der Takt
+erzeugt").
+
+### Etappe 6 — Handeln, wo immer Information reicht
+
+Weitere Aktoren und Abläufe: Licht nach Tageszeit, Wecken, Erinnern im Raum,
+in dem man gerade ist, Geräte schalten. Jede neue Fähigkeit ist eine App im
+Hub.
+
+### Der Unterbau — nur, wenn eine Etappe ihn braucht
+
+Hub (leerer Kern, Apps), Knoten, Cloud, Login, Pakete, Handy-App. Er ist
+seit 22.10.2026 weit genug: Sensoren und Aktoren werden **Apps**, die Räume
+**Knoten**. Weiter ausgebaut wird er nur, wenn eine Etappe oben es verlangt.
+
+**Überall deploybar** (Sasha, 2026-10-22):
+
+*„zentrale muss im kern barebone sein und überall drauf gemorpht werden
+können — android mit app, browser app, tablet app, raspberry pi full view, AR
+stardust XR environment usw."* Nachtrag: auf **jedem nur erdenklichen
+Format** — die genannten sind Beispiele, keine Grenze. Jede Oberfläche ist nur ein weiterer **Knoten**
+([hub/knoten_beitritt.md](hub/knoten_beitritt.md)). Darum: Protokolle (Cloud, Mitte,
+Kacheln) nur HTTP + JSON + Standard-Krypto, beschrieben in OpenAPI/JSON
+Schema und mit **Testvektoren**, damit eine Dart-, JS- oder Rust-Fassung sie
+allein aus der Doku nachbauen und Byte für Byte prüfen kann. Keine Logik in
+einer Oberfläche — Terminal und TUI rufen nur auf.
+
+### Was ruht
+
+Werkstatt, Shop, Desk-Ausbau, Karte, News, Verkaufen/Abo. Nicht gestrichen —
+sie warten, bis die Etappen 1–3 stehen.
+
+## Offene Entscheidungen
+
+- **Funk für Sensoren/Aktoren:** Zigbee (eigener Stick, keine Cloud), WLAN mit
+  offener Firmware (Tasmota/ESPHome über MQTT) oder Kabel am Pi-GPIO —
+  Etappe 2.
+- **Audio-Weiche:** wo sie sitzt ([system/audio_strasse.md](system/audio_strasse.md)).
+- **Kamera:** welche Auswertung, was nie gespeichert wird.
+- **Lizenz** (Vorschlag AGPL-3.0).
+
+## Woher es kommt (Kurzfassung)
+
+| Datum | Was |
+|---|---|
+| 07.03.2026 | Erster Commit `58d6685`: „Event-getriebene Zentrale für einen Wand-Monitor auf Raspberry Pi … Sensor-/Zeit-Inputs … Aktionen (Display, Sound, Mechanik)". V1 = Morgengruß. |
+| 14.03.2026 | „i want the tutot in there now!" — Lernen gehört von Anfang an dazu. |
+| 05.05.2026 | Dashboard, lokale KI: „vollständig offline … keine Daten verlassen das Heimnetz". |
+| 14.05.2026 | PC wird Gehirn, Pi wird Kiosk + Sensor-Brücke; `HOMECOMING` erfunden. |
+| Juni–Okt. | KI, Gedächtnis, TUI, Karte, Mail, Kalender, Hub, Cloud — die Plattform wächst, die Wohnung nicht. |
+| 23.10.2026 | Rückkehr zum Ursprung: dieses Leitbild. |
+
+Ausführlich: Bericht vom 23.10.2026 (Git-Historie, 785 Commits).
+
+## Historie
+
+- **2026-10-23** — angelegt nach Sashas Rückbesinnung; Hub zum Unterbau
+  erklärt, Etappen 1–6 festgelegt.

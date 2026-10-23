@@ -1,5 +1,9 @@
 # Projekt-Überblick & Status
 
+> **Leitbild zuerst:** [leitbild.md](leitbild.md) — wofür es ZENTRALE gibt und
+> in welcher Reihenfolge gebaut wird (seit 2026-10-23). Der Hub unten ist
+> Unterbau.
+
 **Stand 2026-10-11:** ZENTRALE ist ein event-getriebener Assistent für
 Sashas Wohnung und wird zum **Hub**: eine anfangs leere Plattform, in die
 Module als Apps geladen werden (Fahrplan unten, Bauplan

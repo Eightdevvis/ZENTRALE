@@ -1,5 +1,9 @@
 # ZENTRALE – Entwicklungshinweise für Claude
 
+**Zuerst: das Leitbild** (`memory/leitbild.md`). ZENTRALE ist das Nervensystem
+von Sashas Zuhause — sie hört, sieht, spricht und handelt; jede Entscheidung
+wird zuerst daran gemessen (Messlatte dort). Hub/Cloud/Apps sind Unterbau.
+
 Event-getriebenes Dashboard mit eigenem KI-Assistenten (Laptop, Linux-PC,
 Raspberry Pi; später Handy als weiterer Knoten). Die KI läuft über die
 Cloud (Claude, andere Anbieter per Einstellung) mit lokalem Ollama als

@@ -1,5 +1,9 @@
 # Zukunftsvisionen
 
+> **Über allem steht das Leitbild** ([../leitbild.md](../leitbild.md)): das
+> Zuhause, das hört, sieht, spricht und handelt. Die Ideen hier ordnen sich
+> dort in die Etappen ein; der Hub ist Unterbau, nicht Ziel.
+
 Ideen von Sasha für später. Nichts davon ist gebaut oder geplant. Hier steht
 nur, WAS gewünscht ist, damit es nicht verloren geht. Wird etwas davon
 angegangen, bekommt es eine eigene Themendatei, und hier bleibt nur der

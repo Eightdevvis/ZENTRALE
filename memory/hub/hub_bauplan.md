@@ -1,5 +1,9 @@
 # Hub-Bauplan — ZENTRALE als Plattform, die Module als Apps
 
+> **Unterbau.** Seit 2026-10-23 steht das Leitbild darüber
+> ([../leitbild.md](../leitbild.md)): der Hub wird nur so weit ausgebaut, wie
+> eine Etappe dort es braucht.
+
 **Stand 2026-10-10: entschieden, Schritt 1 (Tutor) erledigt; Kacheln
 gebaut und neutral (Adressen, Katalog, Farbrollen — unten).** Sasha: *„du lädst zentrale
 runter, evt kaufst du schon hardware dazu, und am anfang ist zentrale blank.
@@ -18,45 +22,16 @@ reden nur über Türen — galt INNEN; zwischen Tutor und Kern hielt sie nicht,
 weil der Tutor Kern-Code importierte. Der Hub macht aus der Abmachung eine
 Grenze.
 
-## Grundpfeiler: Anonymität, Datenschutz, Open Source (Sasha, 2026-10-23)
+## Grundpfeiler
 
-*„leg das prinzip von anonymität als grundpfeiler fest — anonymität,
-datenschutz, open source."* Jede Entscheidung wird daran gemessen:
-
-1. **Anonymität** — ZENTRALE fragt nie nach Identität: keine Mail, kein
-   Klarname, keine Telefonnummer. Ein Konto ist ein selbst gewählter Name
-   oder eine gewürfelte Kontonummer (wie bei Mullvad). IP-Adressen nur
-   gehasht und kurzlebig.
-2. **Datenschutz** — Zero-Knowledge: alles wird auf dem Gerät verschlüsselt,
-   der Server sieht nur Bytes ([knoten_beitritt.md](knoten_beitritt.md)).
-   So wenig speichern wie möglich; Daten gehören dem Nutzer.
-3. **Open Source** — der Code ist offen. **Offen:** welche Lizenz. Weg 3
-   ([../betrieb/verteilung.md](../betrieb/verteilung.md)) sah „lesbar, aber
-   Kopieren verboten" vor — das ist *source-available*, nicht Open Source.
-   Vorschlag: **AGPL-3.0** (offen; wer es ändert oder als Dienst betreibt,
-   muss seinen Code ebenfalls offenlegen; Geld über Server/Abo bleibt
-   möglich). Entscheidet Sasha.
-
-Prüffragen bei jedem Feature: Braucht es Identität? Speichert es mehr als
-nötig? Sieht der Server Klartext? Im Zweifel weglassen.
+Anonymität, Datenschutz, Open Source und „überall deploybar“ stehen im
+Leitbild ([../leitbild.md](../leitbild.md)).
 
 ## Leitlinie: Standards statt Eigenformat (Sasha, 2026-10-10)
 
 Keine eigenen Daten- oder Schnittstellen-Formate: Feld-/Datenbeschreibungen
 sind **JSON Schema** (2020-12), HTTP-Schnittstellen **OpenAPI 3.1**
 (`openapi.yaml`), Adressen **URIs** (RFC 3986), Flächen **JSON Canvas**.
-
-## Leitlinie: überall deploybar (Sasha, 2026-10-22)
-
-*„zentrale muss im kern barebone sein und überall drauf gemorpht werden
-können — android mit app, browser app, tablet app, raspberry pi full view, AR
-stardust XR environment usw."* Nachtrag: auf **jedem nur erdenklichen
-Format** — die genannten sind Beispiele, keine Grenze. Jede Oberfläche ist nur ein weiterer **Knoten**
-([knoten_beitritt.md](knoten_beitritt.md)). Darum: Protokolle (Cloud, Mitte,
-Kacheln) nur HTTP + JSON + Standard-Krypto, beschrieben in OpenAPI/JSON
-Schema und mit **Testvektoren**, damit eine Dart-, JS- oder Rust-Fassung sie
-allein aus der Doku nachbauen und Byte für Byte prüfen kann. Keine Logik in
-einer Oberfläche — Terminal und TUI rufen nur auf.
 
 ## Die eine Regel
 
