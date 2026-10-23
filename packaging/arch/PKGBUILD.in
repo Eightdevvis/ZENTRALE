@@ -1,0 +1,27 @@
+# Maintainer: @BETREUER@
+#
+# Gerendert von scripts/arch_bauen.py aus packaging/arch/PKGBUILD.in
+# (Fassung, Quelle und sha256 des tar.gz aus scripts/paket_bauen.py).
+# Bauen und Veröffentlichen: memory/betrieb/verteilung.md, „pacman".
+
+pkgname=zentrale
+_fassung=@FASSUNG@
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Hub for lists, calendar, notes, memory and an assistant on every device"
+arch=('any')
+url=@URL@
+license=(@LIZENZ@)
+depends=('python>=3.11')
+optdepends=('portaudio: sound in the terminal piano')
+# Der Name vor :: lässt makepkg ein danebenliegendes tar.gz nehmen (lokal bauen).
+source=("zentrale-${_fassung}.tar.gz::@QUELLE@")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "$srcdir/zentrale-${_fassung}"
+  install -d "$pkgdir/usr/lib/zentrale"
+  cp -R --no-preserve=ownership . "$pkgdir/usr/lib/zentrale/"
+  printf 'pacman\n' > "$pkgdir/usr/lib/zentrale/KANAL"
+  install -Dm755 packaging/starter.sh "$pkgdir/usr/bin/zentrale"
+}

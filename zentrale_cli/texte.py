@@ -180,7 +180,9 @@ EN = {
     "use_more": " (+{n} more)",
 
     # ── Programm ────────────────────────────────────────────────────
-    "version_line": "ZENTRALE {fassung}",
+    "version_line": "ZENTRALE {fassung} ({kanal})",
+    "kanal": {"apt": "installed with apt", "pacman": "installed with pacman",
+              "script": "installed with install.sh", "dev": "developer checkout"},
     "upd_check": "Checking for a new version …",
     "upd_current": "You have the newest version ({fassung}).",
     "upd_found": "New version {neu} (you have {alt}), {groesse}.",
@@ -190,6 +192,10 @@ EN = {
     "upd_ok": "Updated to {neu}. The old version stays in {alt_ordner} until the next update.",
     "upd_dev": ("This is a developer checkout ({wurzel}), not an installed hub.\n"
                 "Update it with git instead."),
+    "upd_paket_apt": ("ZENTRALE was installed with apt, so apt updates it:\n"
+                      "  sudo apt update && sudo apt upgrade"),
+    "upd_paket_pacman": ("ZENTRALE was installed with pacman, so update it the same way\n"
+                         "(pacman -Syu, or your AUR helper)."),
     "upd_need_login": "Log in first ('zentrale login') — downloads need your account or an invite code.",
     "tui_missing": "The terminal view could not be started: {grund}",
 

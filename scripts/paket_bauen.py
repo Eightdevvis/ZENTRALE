@@ -6,6 +6,11 @@ Liest die Positivliste deploy/paket.txt und schreibt
   dist/neueste.json                {version, sha256, groesse} — so wie GET /v1/paket antwortet
 
 Fassung: --fassung, sonst deploy/RELEASE, sonst das Datum (JJJJ.MM.TT).
+Ins Paket kommen dazu VERSION und VERTEILUNG.json (woher `zentrale update`
+holt — aus deploy/verteilung.toml, memory/betrieb/verteilung.md).
+
+Die EINE Stelle, die entscheidet, was ausgeliefert wird: .deb (deb_bauen.py)
+und PKGBUILD (arch_bauen.py) nehmen genau dieses tar.gz.
 Verweigert alles, was nie ins Paket darf (data/, memory/, tests/, venv,
 *.enc, ai_config.json, *.schluessel) — auch wenn es in der Liste stünde.
 """
@@ -19,6 +24,7 @@ import json
 import os
 import sys
 import tarfile
+import tomllib
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LISTE = os.path.join(ROOT, "deploy", "paket.txt")
@@ -32,6 +38,55 @@ UEBERSPRINGEN = ("__pycache__",)
 
 class PaketFehler(Exception):
     pass
+
+
+# ── Der Schalter (deploy/verteilung.toml) ──────────────────────────────
+
+VERTEILUNG_VORGABE = {
+    "oeffentlich": False, "quelle": "github", "betreuer": "", "lizenz": "", "homepage": "",
+    "quellen": {"cloud": {"neueste": "{cloud}/v1/paket",
+                          "paket": "{cloud}/v1/paket/{version}.tar.gz"}},
+}
+
+
+def cloud_vorgabe(root=ROOT) -> str:
+    """Die Cloud-Adresse aus ihrer einen Stelle (core/cloud_api.py, VORGABE)."""
+    import re
+    with open(os.path.join(root, "core", "cloud_api.py"), encoding="utf-8") as f:
+        m = re.search(r'^VORGABE = "([^"]+)"', f.read(), re.M)
+    if not m:
+        raise PaketFehler("core/cloud_api.py: VORGABE nicht gefunden.")
+    return m.group(1)
+
+
+def verteilung_lesen(root=ROOT) -> dict:
+    """deploy/verteilung.toml; fehlt sie, gilt: nicht öffentlich, Cloud mit Code."""
+    cfg = json.loads(json.dumps(VERTEILUNG_VORGABE))
+    try:
+        with open(os.path.join(root, "deploy", "verteilung.toml"), "rb") as f:
+            roh = tomllib.load(f)
+    except FileNotFoundError:
+        return cfg
+    quellen = {**cfg["quellen"], **roh.get("quellen", {})}
+    cfg.update(roh)
+    cfg["quellen"] = quellen
+    if not isinstance(cfg["oeffentlich"], bool):
+        raise PaketFehler("deploy/verteilung.toml: oeffentlich muss true oder false sein.")
+    if cfg["oeffentlich"] and cfg["quelle"] not in cfg["quellen"]:
+        raise PaketFehler(f"deploy/verteilung.toml: unbekannte quelle '{cfg['quelle']}'.")
+    return cfg
+
+
+def quell_vorlagen(cfg, oeffentlich=None) -> dict:
+    """→ {neueste, paket} mit den Laufzeit-Platzhaltern __CLOUD__ und __VERSION__.
+    Nicht öffentlich: immer die Cloud (mit Einladungscode bzw. Konto)."""
+    oeffentlich = cfg["oeffentlich"] if oeffentlich is None else oeffentlich
+    q = cfg["quellen"][cfg["quelle"]] if oeffentlich else cfg["quellen"]["cloud"]
+    raus = {}
+    for k in ("neueste", "paket"):
+        u = q[k].replace("{repo}", str(q.get("repo", "")))
+        raus[k] = u.replace("{cloud}", "__CLOUD__").replace("{version}", "__VERSION__")
+    return raus
 
 
 def liste_lesen(pfad=LISTE):
@@ -108,10 +163,16 @@ def fassung_bestimmen(root=ROOT):
     return datetime.date.today().strftime("%Y.%m.%d")
 
 
-def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9):
+def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, verteilung=None):
     """→ (pfad des Pakets, {version, sha256, groesse}). `stufe` = gzip-Stufe
     (Tests nehmen 1: dasselbe Paket, nur schneller gepackt)."""
     fassung = fassung or fassung_bestimmen(root)
+    cfg = verteilung or verteilung_lesen(root)
+    zusatz = {
+        "VERSION": fassung + "\n",
+        "VERTEILUNG.json": json.dumps({"oeffentlich": cfg["oeffentlich"],
+                                       **quell_vorlagen(cfg)}, indent=2) + "\n",
+    }
     ziel_ordner = ziel_ordner or os.path.join(root, "dist")
     os.makedirs(ziel_ordner, exist_ok=True)
     oben = f"zentrale-{fassung}"
@@ -125,10 +186,11 @@ def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9):
     with tarfile.open(pfad, "w:gz", compresslevel=stufe) as tar:
         for q, z in dateien(root, liste):
             tar.add(q, arcname=f"{oben}/{z}", recursive=False, filter=normal)
-        v = (fassung + "\n").encode("ascii")
-        info = normal(tarfile.TarInfo(f"{oben}/VERSION"))
-        info.size, info.mtime, info.mode = len(v), int(datetime.datetime.now().timestamp()), 0o644
-        tar.addfile(info, io.BytesIO(v))
+        for name, text in zusatz.items():
+            v = text.encode("utf-8")
+            info = normal(tarfile.TarInfo(f"{oben}/{name}"))
+            info.size, info.mtime, info.mode = len(v), int(datetime.datetime.now().timestamp()), 0o644
+            tar.addfile(info, io.BytesIO(v))
     with open(pfad, "rb") as f:
         daten = f.read()
     neueste = {"version": fassung, "sha256": hashlib.sha256(daten).hexdigest(),

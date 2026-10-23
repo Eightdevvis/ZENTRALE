@@ -1,0 +1,66 @@
+# Wie ZENTRALE verteilt wird — der Schalter (memory/betrieb/verteilung.md).
+#
+# Gelesen von scripts/verteilung.py, scripts/paket_bauen.py, scripts/deb_bauen.py,
+# scripts/arch_bauen.py. KEIN Skript lädt irgendetwas hoch: Bauen schreibt nur
+# nach dist/ (und erneuert deploy/install.sh aus deploy/install.sh.in).
+#
+# Nach jeder Änderung hier:  scripts/verteilung.py alles  — dann committen.
+# Der Test tests/test_verteilung.py merkt, wenn deploy/install.sh nicht mehr
+# zu dieser Datei passt.
+
+# ── Der Schalter ────────────────────────────────────────────────────────
+# false: install.sh holt das Paket mit Einladungscode aus der Cloud,
+#        `zentrale update` nur mit Konto. apt/pacman-Pakete werden gebaut,
+#        aber nirgends angeboten.
+# true:  install.sh und `zentrale update` holen ohne Code aus `quelle`.
+#        Erst umlegen, wenn die Liste „Vor dem Veröffentlichen" in
+#        memory/betrieb/verteilung.md abgehakt ist.
+oeffentlich = false
+
+# Woher öffentliche Pakete kommen: "github" (Vorgabe) oder "cloud".
+quelle = "github"
+
+# Wer das Paket betreut (Debian „Maintainer", Arch „# Maintainer").
+# Leer = beim Bauen aus git config user.name / user.email.
+betreuer = ""
+
+# Lizenz als SPDX-Name (z. B. "LicenseRef-ZENTRALE"). Leer = noch offen
+# (das Paket sagt dann „alle Rechte vorbehalten").
+lizenz = ""
+
+# Projektseite (Debian „Homepage", Arch „url"). Leer = keine.
+homepage = ""
+
+# ── Quellen ─────────────────────────────────────────────────────────────
+# Platzhalter: {repo} {cloud} werden beim Bauen bzw. zur Laufzeit gefüllt
+# ({cloud} = Env ZENTRALE_CLOUD oder die Vorgabe), {version} beim Holen.
+# `neueste` antwortet {version, sha256, groesse} (= dist/neueste.json).
+
+[quellen.github]
+repo = "OWNER/zentrale"     # das künftige öffentliche Repo — noch offen
+neueste = "https://github.com/{repo}/releases/latest/download/neueste.json"
+paket = "https://github.com/{repo}/releases/download/v{version}/zentrale-{version}.tar.gz"
+
+[quellen.cloud]
+# Heute verlangt der Worker hier einen Einladungscode; öffentlich bräuchte
+# cloud/src/paket.ts eine Freigabe ohne Code.
+neueste = "{cloud}/v1/paket"
+paket = "{cloud}/v1/paket/{version}.tar.gz"
+
+# ── Kanäle: was jeder nimmt ─────────────────────────────────────────────
+[kanaele.skript]
+# curl … | bash  → deploy/install.sh (gerendert aus deploy/install.sh.in)
+baut = "dist/install.sh"
+nimmt = "dist/zentrale-<fassung>.tar.gz über `quelle` (öffentlich) bzw. die Cloud mit Code"
+
+[kanaele.apt]
+# Debian, Ubuntu, Pop!_OS — scripts/deb_bauen.py
+baut = "dist/zentrale_<fassung>_all.deb"
+nimmt = "dasselbe tar.gz, entpackt nach /usr/lib/zentrale"
+ziel = "eigenes signiertes apt-Repo (Ort offen) oder Datei-Download"
+
+[kanaele.pacman]
+# Arch, EndeavourOS — scripts/arch_bauen.py
+baut = "dist/arch/PKGBUILD + dist/arch/.SRCINFO"
+nimmt = "dasselbe tar.gz als source=, sha256 eingetragen"
+ziel = "AUR (PKGBUILD + .SRCINFO) und/oder eigenes pacman-Repo"

@@ -35,6 +35,10 @@ deploy/zentrale-abgleich.timer
 deploy/install.sh
 deploy/paket.txt
 deploy/RELEASE
+deploy/verteilung.toml
+
+# ── Starter für apt/pacman (/usr/bin/zentrale; deb_bauen.py, PKGBUILD) ──
+packaging/starter.sh
 requirements-basis.txt
 requirements.txt
 

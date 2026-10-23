@@ -10,9 +10,16 @@ Aufbau eines installierten Hubs (gleich in deploy/install.sh):
     ~/.local/bin/zentrale -> HEIM/hub/aktuell/bin/zentrale
 
 Die alte Fassung bleibt bis zum nächsten Update liegen (Rückweg: den
-Verweis `aktuell` zurückdrehen)."""
+Verweis `aktuell` zurückdrehen).
+
+Woher das Programm kam, sagt `kanal()` (memory/betrieb/verteilung.md):
+apt/pacman (Datei KANAL, legt nur das Paket an — dann verweigert `update`
+und verweist auf die Paketverwaltung), script (install.sh), dev (Checkout).
+Ob ohne Konto aus einer öffentlichen Quelle geholt wird, steht in
+VERTEILUNG.json im Paket (scripts/paket_bauen.py, deploy/verteilung.toml)."""
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -28,6 +35,7 @@ import knoten      # noqa: E402
 import konto       # noqa: E402
 
 _FASSUNG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+PAKETVERWALTUNGEN = ("apt", "pacman")
 
 
 def heim() -> str:
@@ -37,6 +45,37 @@ def heim() -> str:
 def installiert(wurzel=WURZEL) -> bool:
     hub = os.path.realpath(os.path.join(heim(), "hub"))
     return os.path.realpath(wurzel).startswith(hub + os.sep)
+
+
+def kanal(wurzel=WURZEL) -> str:
+    """apt | pacman | script | dev — woher dieses Programm kam."""
+    try:
+        with open(os.path.join(wurzel, "KANAL"), encoding="utf-8") as f:
+            k = f.read().strip()
+        if k in PAKETVERWALTUNGEN:
+            return k
+    except OSError:
+        pass
+    if os.path.realpath(wurzel).startswith("/usr/lib/zentrale" + os.sep) or \
+            os.path.realpath(wurzel) == "/usr/lib/zentrale":
+        return "apt"                 # Paket ohne KANAL-Datei: trotzdem nie selbst ersetzen
+    return "script" if installiert(wurzel) else "dev"
+
+
+def verteilung(wurzel=WURZEL) -> dict:
+    """VERTEILUNG.json des Pakets; fehlt sie (Checkout, alte Pakete): nicht öffentlich."""
+    try:
+        with open(os.path.join(wurzel, "VERTEILUNG.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d, dict) and d.get("oeffentlich") is True:
+            return d
+    except (OSError, ValueError):
+        pass
+    return {"oeffentlich": False}
+
+
+def _url(vorlage, fassung=""):
+    return vorlage.replace("__CLOUD__", cloud_api.adresse()).replace("__VERSION__", fassung)
 
 
 def _groesse(n):
@@ -94,15 +133,23 @@ def aufraeumen(behalten):
 
 
 def update(term, venv=venv_bauen, wurzel=WURZEL):
-    if not installiert(wurzel):
+    k = kanal(wurzel)
+    if k in PAKETVERWALTUNGEN:
+        term.sag(t("upd_paket_" + k))
+        return 1
+    if k != "script":
         term.sag(t("upd_dev", wurzel=wurzel))
         return 1
-    if not konto.angemeldet():
+    oeffentlich = verteilung(wurzel)
+    if not oeffentlich["oeffentlich"] and not konto.angemeldet():
         term.sag(t("upd_need_login"))
         return 1
     term.sag(t("upd_check"), "blass")
-    c = konto.client()
-    info = c.get("/v1/paket")
+    if oeffentlich["oeffentlich"]:
+        info = cloud_api.Client(basis=_url(oeffentlich["neueste"])).get("")
+    else:
+        c = konto.client()
+        info = c.get("/v1/paket")
     neu, sha, groesse = str(info.get("version", "")), str(info.get("sha256", "")).lower(), info.get("groesse")
     if not _FASSUNG.match(neu) or len(sha) != 64:
         raise cloud_api.CloudFehler("The cloud sent an unreadable package description.")
@@ -112,7 +159,10 @@ def update(term, venv=venv_bauen, wurzel=WURZEL):
         return 0
     term.sag(t("upd_found", neu=neu, alt=alt, groesse=_groesse(groesse)))
     term.sag(t("upd_download"), "blass")
-    daten = c.bytes_holen(f"/v1/paket/{neu}.tar.gz")
+    if oeffentlich["oeffentlich"]:
+        daten = cloud_api.Client(basis=_url(oeffentlich["paket"], neu)).bytes_holen("")
+    else:
+        daten = c.bytes_holen(f"/v1/paket/{neu}.tar.gz")
     if hashlib.sha256(daten).hexdigest() != sha:
         term.sag(t("upd_bad_sha"), "fehler")
         return 1

@@ -5,6 +5,7 @@ gezeigt."""
 import os
 
 from zentrale_cli import WURZEL
+from zentrale_cli.aktualisieren import kanal
 from zentrale_cli.ausgabe import banner
 from zentrale_cli.texte import t
 
@@ -46,7 +47,7 @@ def welcome(term):
 
 
 def version(term):
-    term.sag(t("version_line", fassung=knoten.fassung(WURZEL)))
+    term.sag(t("version_line", fassung=knoten.fassung(WURZEL), kanal=t("kanal")[kanal(WURZEL)]))
     return 0
 
 
@@ -175,7 +176,7 @@ def status(term):
         (t("st_account"), d["mail"] if d else t("st_account_none")),
         (t("st_server"), (d or {}).get("server") or cloud_api.adresse()),
         (t("st_device"), dateien.knoten()),
-        (t("st_version"), knoten.fassung(WURZEL)),
+        (t("st_version"), f"{knoten.fassung(WURZEL)} ({t('kanal')[kanal(WURZEL)]})"),
         (t("st_way"), f"{z['weg']} / {z['mitte_art']}"),
         (t("st_areas"), _bereiche_text(z["bereiche"])),
         (t("st_sync"), (z["letzter_erfolg"] or t("st_sync_never")).replace("T", " ")),

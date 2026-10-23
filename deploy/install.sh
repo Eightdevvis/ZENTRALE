@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 #
-# ZENTRALE installieren (memory/betrieb/setup.md, „Installieren mit install.sh").
+# GERENDERT aus deploy/install.sh.in von scripts/verteilung.py nach deploy/verteilung.toml
+# (oeffentlich = false). Nicht von Hand ändern.
 #
-# Öffentlich unter <cloud>/install.sh; das Paket selbst gibt es nur mit
-# Einladungscode. Installiert nichts mit Root: fehlende Systempakete werden
-# nur GENANNT (apt: Debian/Ubuntu/Pop!_OS, pacman: Arch/EndeavourOS).
+# ZENTRALE installieren (memory/betrieb/setup.md, „Installieren mit install.sh";
+# Schalter: memory/betrieb/verteilung.md).
+#
+# Öffentlich unter <cloud>/install.sh. Solange deploy/verteilung.toml
+# `oeffentlich = false` sagt, gibt es das Paket nur mit Einladungscode aus der
+# Cloud; danach ohne Code aus der öffentlichen Quelle. Installiert nichts mit
+# Root: fehlende Systempakete werden nur GENANNT (apt: Debian/Ubuntu/Pop!_OS,
+# pacman: Arch/EndeavourOS).
 #
 #   bash install.sh [EINLADUNGSCODE]
 #
@@ -19,10 +25,20 @@
 
 set -euo pipefail
 
-# Die eine Stelle für die Adresse der Cloud (Env ZENTRALE_CLOUD gewinnt).
-CLOUD_VORGABE="https://zentrale-cloud.sevendevs.workers.dev"
+# Adresse der Cloud: beim Rendern aus core/cloud_api.py (VORGABE), Env ZENTRALE_CLOUD gewinnt.
+CLOUD_VORGABE=https://zentrale-cloud.sevendevs.workers.dev
 CLOUD="${ZENTRALE_CLOUD:-$CLOUD_VORGABE}"
 CLOUD="${CLOUD%/}"
+
+# Woher das Paket kommt — beim Bauen aus deploy/verteilung.toml eingesetzt.
+# __CLOUD__ und __VERSION__ füllt url_fuer() zur Laufzeit.
+OEFFENTLICH=0
+NEUESTE_VORLAGE=__CLOUD__/v1/paket
+PAKET_VORLAGE=__CLOUD__/v1/paket/__VERSION__.tar.gz
+url_fuer() {   # $1 = Vorlage, $2 = Fassung
+  local u="${1//__CLOUD__/$CLOUD}"
+  printf '%s' "${u//__VERSION__/$2}"
+}
 
 HEIM="${ZENTRALE_HEIM:-$HOME/.local/share/zentrale}"
 BIN_DIR="${ZENTRALE_BIN_DIR:-$HOME/.local/bin}"
@@ -109,25 +125,33 @@ if [[ -e "$LINK" || -L "$LINK" ]]; then
   esac
 fi
 
-# ── Einladungscode ─────────────────────────────────────────────────────
-CODE="${1:-}"
-if [[ -z "$CODE" ]]; then
-  if [[ -r /dev/tty ]]; then
-    printf 'Invite code: ' > /dev/tty
-    read -r CODE < /dev/tty
+# ── Einladungscode (nur solange nicht öffentlich) ──────────────────────
+ANHANG=""
+OFFLINE_HINWEIS="Are you online?"
+if [[ "$OEFFENTLICH" != 1 ]]; then
+  CODE="${1:-}"
+  if [[ -z "$CODE" ]]; then
+    if [[ -r /dev/tty ]]; then
+      printf 'Invite code: ' > /dev/tty
+      read -r CODE < /dev/tty
+    fi
   fi
+  CODE="$(printf '%s' "$CODE" | tr -d '[:space:]')"
+  [[ -n "$CODE" ]] || abbruch "An invite code is needed to download ZENTRALE."
+  CODE_URL="$("$PY" -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CODE")"
+  ANHANG="?code=$CODE_URL"
+  OFFLINE_HINWEIS="Is the invite code right, and are you online?"
 fi
-CODE="$(printf '%s' "$CODE" | tr -d '[:space:]')"
-[[ -n "$CODE" ]] || abbruch "An invite code is needed to download ZENTRALE."
-CODE_URL="$("$PY" -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CODE")"
 
 # ── Paket holen und prüfen ─────────────────────────────────────────────
 ARBEIT="$(mktemp -d)"
 trap 'rm -rf "$ARBEIT"' EXIT
 
-sag "Asking $CLOUD for the newest version …"
-if ! curl -fsS --proto '=https,http' -o "$ARBEIT/paket.json" "$CLOUD/v1/paket?code=$CODE_URL"; then
-  abbruch "Could not get the package description. Is the invite code right, and are you online?"
+NEUESTE_URL="$(url_fuer "$NEUESTE_VORLAGE" "")"
+HOST="${NEUESTE_URL#*://}"
+sag "Asking ${HOST%%/*} for the newest version …"
+if ! curl -fsSL --proto '=https,http' -o "$ARBEIT/paket.json" "$NEUESTE_URL$ANHANG"; then
+  abbruch "Could not get the package description. $OFFLINE_HINWEIS"
 fi
 read -r FASSUNG SHA GROESSE < <("$PY" -c '
 import json, re, sys
@@ -135,11 +159,11 @@ d = json.load(open(sys.argv[1]))
 v, s = str(d.get("version", "")), str(d.get("sha256", "")).lower()
 if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", v) or not re.fullmatch(r"[0-9a-f]{64}", s):
     sys.exit(1)
-print(v, s, d.get("groesse") or 0)' "$ARBEIT/paket.json") || abbruch "The cloud sent an unreadable package description."
+print(v, s, d.get("groesse") or 0)' "$ARBEIT/paket.json") || abbruch "The server sent an unreadable package description."
 gut "Version $FASSUNG ($(( GROESSE / 1000000 )) MB)"
 
-curl -fS --progress-bar --proto '=https,http' -o "$ARBEIT/paket.tar.gz" \
-  "$CLOUD/v1/paket/$FASSUNG.tar.gz?code=$CODE_URL" || abbruch "Download failed."
+curl -fSL --progress-bar --proto '=https,http' -o "$ARBEIT/paket.tar.gz" \
+  "$(url_fuer "$PAKET_VORLAGE" "$FASSUNG")$ANHANG" || abbruch "Download failed."
 IST="$("$PY" -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$ARBEIT/paket.tar.gz")"
 [[ "$IST" == "$SHA" ]] || abbruch "The download is damaged (checksum mismatch). Nothing was installed."
 gut "Checksum verified"

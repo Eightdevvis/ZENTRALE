@@ -20,7 +20,8 @@ import konto_schluessel as ks
 from _falsche_cloud import FalscheCloud
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
+# Hinten anhängen: scripts/abgleich.py darf core/abgleich.py nicht verdecken.
+sys.path.append(os.path.join(ROOT, "scripts"))
 import paket_bauen  # noqa: E402
 
 
