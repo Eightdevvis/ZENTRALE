@@ -58,12 +58,66 @@ bleiben, die Kennungen aller Stände für immer.
   Gespeichert nur als Hash; Codes zeigt das Skript genau einmal.
 - Jede Abfrage filtert nach Konto; ein Test prüft, dass Konto B nichts von A sieht.
 
+## Gratis-Grenzen im Blick (seit 23.10.)
+
+Sashas Wunsch: ein Prüfer, wo wir an der Grenze stehen, Warnung bei 50, 80
+und 95 %. Nur **R2** kostet über dem Gratis-Kontingent Geld; Workers und D1
+hören einfach auf (bis 00:00 UTC).
+
+Die Grenzen stehen an **einer** Stelle, `cloud/src/grenzen.ts` (geprüft
+23.10.2026 in der Cloudflare-Doku, GB = 10⁹ Byte, weil die Doku es nicht sagt
+und das die kleinere Zahl ist):
+
+| Grenze | Gratis | Zeitraum | Quelle |
+|---|---|---|---|
+| Worker-Anfragen | 100 000 | Tag (UTC) | developers.cloudflare.com/workers/platform/limits/ |
+| D1 Zeilen gelesen | 5 Mio. | Tag (UTC) | developers.cloudflare.com/d1/platform/pricing/ |
+| D1 Zeilen geschrieben | 100 000 | Tag (UTC) | ebd. |
+| D1 Datenbank-Größe | 500 MB je Datenbank (Konto gesamt 5 GB) | jetzt | developers.cloudflare.com/d1/platform/limits/ |
+| R2 Speicher | 10 GB-Monat | jetzt (aktueller Stand) | developers.cloudflare.com/r2/pricing/ |
+| R2 Klasse A (put, list, multipart) | 1 Mio. | Monat | ebd. |
+| R2 Klasse B (get, head) | 10 Mio. | Monat | ebd. |
+
+**Selbst gezählt** (`cloud/src/nutzung.ts`, Tabellen aus Migration `0002`):
+jede Anfrage läuft gegen ein zählendes D1/R2; D1-Zeilen aus `meta`, R2 je
+Aufruf, gespeicherte Bytes genau bei put/delete. Danach **ein** Upsert in die
+Tageszeile (`ctx.waitUntil`, Fehler nur ins Log). Der Zähler kostet selbst
+eine D1-Schreibzeile je Anfrage — bei 100 000 Anfragen am Tag wäre das das
+ganze D1-Schreib-Kontingent; die 50-%-Warnung kommt lange vorher. CPU lokal
+gemessen: ~5 µs je Anfrage.
+Täglicher Cron (03:17 UTC) zählt R2 aus einer Liste nach (fängt auch Pakete,
+die `wrangler` am Worker vorbei hochlädt). Monat = Kalendermonat UTC; der
+Abrechnungsmonat bei Cloudflare kann verschoben sein.
+
+**Wahrheit von Cloudflare (freiwillig):** Secret `CF_ANALYTICS_TOKEN` + Var
+`CF_ACCOUNT_ID` → der stündliche Cron (:47) fragt die GraphQL Analytics API
+(kontoweit) und speichert die Zahlen; der Bericht nimmt die größere Zahl und
+zeigt beide. Token anlegen: Cloudflare-Dashboard → Konto-API-Tokens →
+eigenes Token → Rechte **Account → Account Analytics → Read** (sonst nichts),
+nur dieses Konto. Dann das Token als Secret beim Worker hinterlegen und die
+Konto-ID (steht im Dashboard rechts in der Übersicht) in `wrangler.jsonc`
+unter `vars` eintragen und ausrollen. Ohne Token läuft alles mit
+Selbstzählung.
+
+**Anschauen:** `zentrale cloud usage` (Balken je Grenze, Farbe nach Stufe,
+Zeitraum, Quelle). Nur Konten aus der Var `BETREIBER_MAILS`
+(`jenny_wolff@hotmail.com`); andere bekommen 403 bzw. einen höflichen Satz.
+`zentrale status` und der Start von `zentrale` zeigen **eine** Zeile, sobald
+eine Grenze ≥ 50 % steht. Die Antwort liegt 1 h in
+`~/.local/state/zentrale/nutzung.json` (auch „kein Betreiber" 24 h und
+„nicht erreichbar" 1 h) — der Start wartet höchstens 1,5 s, nie ein Fehler.
+
+**Bremse:** käme R2 über 100 % des Gratis-Speichers, lehnen Blob-Upload und
+Inline-Dateien mit 507 `speicher_voll` ab; das Paket-Skript genauso (außer
+mit `--ohne-bremse`). Aus: Var `BREMSE_SPEICHER` auf `aus`.
+
 ## Fallen
 
 - **CPU-Grenze 10 ms.** Lokal gemessen (langsamer Laptop): Login 0,04 ms,
   Stand mit 1 100 Verweisen (≈ Sashas ganzer erster Abgleich) 5 ms, mit
   2 000 knapp 8 ms. Viel mehr neue Namen auf einmal gingen darüber.
-- Alte Dateien in R2 räumt noch niemand weg (kein Aufräumen nach Prüfsumme).
+- Alte Dateien in R2 räumt noch niemand weg (kein Aufräumen nach Prüfsumme) —
+  der Speicher wächst also nur; die Bremse hält ihn unter 10 GB.
 - Der allererste Ausrollen-Schritt braucht das Geheimnis gleich mit, weil
   es den Worker vorher nicht gibt (Weg in `cloud/README.md`).
 

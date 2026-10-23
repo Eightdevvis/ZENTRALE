@@ -24,13 +24,15 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 
 | Path | What |
 |---|---|
-| `src/index.ts` | route table, error handling, daily cleanup (cron) |
+| `src/index.ts` | route table, error handling, usage meter per request, crons |
 | `src/konto.ts` | account, `vorab`, login/logout, emergency key, password change |
 | `src/mitte.ts` | the sync "Mitte": snapshot stands, compare-and-swap head, `enthaelt` |
 | `src/knoten.ts` | device descriptions and account ownership |
 | `src/paket.ts` | `install.sh`, release packages, invite-code check |
 | `src/drossel.ts` | rate limit: 5 failures / 15 min per mail and per IP |
 | `src/krypto.ts` | salted HMAC, constant-time compare, tokens |
+| `src/grenzen.ts` | the Cloudflare free-tier limits (one table, with sources) |
+| `src/nutzung.ts` | self-metering, `GET /v1/nutzung`, storage brake, R2 recount, GraphQL |
 | `migrations/` | D1 schema |
 | `scripts/` | admin: invite codes, publishing a release |
 | `test/` | vitest inside the Workers runtime (`@cloudflare/vitest-plugin`) |
@@ -67,6 +69,53 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
   stand / `fehlende` call.
 - No CORS, no request bodies or tokens in logs.
 
+## Free-tier usage
+
+Only R2 costs money above the free tier; Workers and D1 just fail until the
+next UTC day. The limits live in `src/grenzen.ts`, checked **2026-10-23**
+against the Cloudflare docs (GB taken as 10^9 bytes — the docs do not say;
+decimal is the smaller, safer number):
+
+| id | Limit (Workers Free) | Period | Source |
+|---|---|---|---|
+| `worker_anfragen` | 100,000 requests | day (UTC) | https://developers.cloudflare.com/workers/platform/limits/ |
+| `d1_gelesen` | 5,000,000 rows read | day (UTC) | https://developers.cloudflare.com/d1/platform/pricing/ |
+| `d1_geschrieben` | 100,000 rows written | day (UTC) | https://developers.cloudflare.com/d1/platform/pricing/ |
+| `d1_speicher` | 500 MB per database (5 GB per account) | now | https://developers.cloudflare.com/d1/platform/limits/ |
+| `r2_speicher` | 10 GB-month storage | now (current bytes) | https://developers.cloudflare.com/r2/pricing/ |
+| `r2_a` | 1,000,000 Class A ops (put, list, multipart) | month (UTC) | https://developers.cloudflare.com/r2/pricing/ |
+| `r2_b` | 10,000,000 Class B ops (get, head) | month (UTC) | https://developers.cloudflare.com/r2/pricing/ |
+
+- **Self-metering**: each request runs against a counting view of D1 and R2
+  (`meta.rows_read/rows_written/size_after`; R2 ops per call; stored bytes
+  exact on put/delete). After the answer, ONE upsert adds them to today's row
+  in `nutzung_tag` (`ctx.waitUntil`; a failure is logged, never returned).
+  The meter itself costs 1 D1 row write per request. Measured CPU overhead
+  (Node, mocked bindings): about 5 µs per request.
+- **Crons**: `17 3 * * *` cleans up and recounts all R2 bytes from a bucket
+  list (catches packages uploaded by wrangler). `47 * * * *` asks the
+  GraphQL Analytics API — only if the secret `CF_ANALYTICS_TOKEN` and the var
+  `CF_ACCOUNT_ID` are set. Those numbers are account-wide; the report takes
+  the larger of self-counted and Cloudflare and shows both.
+- **`GET /v1/nutzung`**: only for accounts listed in the var `BETREIBER_MAILS`
+  (others 403 `nur_betreiber`). Per limit: used, limit, unit, period, percent,
+  level (`ok`, `50`, `80`, `95`, `voll`), source; plus `warnungen`.
+  Client: `zentrale cloud usage`; `zentrale status` and the start of
+  `zentrale` print one warning line at ≥ 50 % (cached 1 h).
+- **Brake**: with `BREMSE_SPEICHER` = `an` (default), `PUT /v1/mitte/blob`
+  and inline files of a stand answer 507 `speicher_voll` when they would push
+  stored R2 bytes over 10 GB; `scripts/paket_hochladen.mjs` refuses the same
+  way (unless `--ohne-bremse`) and adds the package size to the count.
+- Months are UTC calendar months; Cloudflare's billing month may be shifted.
+
+### Optional: Cloudflare analytics token
+
+Create a custom API token in the Cloudflare dashboard (Account API tokens →
+Create Token → Custom token) with exactly one permission: **Account →
+Account Analytics → Read**, limited to this account. Store it as the Worker
+secret `CF_ANALYTICS_TOKEN` and put the account id into `vars.CF_ACCOUNT_ID`
+in `wrangler.jsonc`, then deploy.
+
 ## Tests
 
 ```
@@ -80,6 +129,7 @@ npm run typecheck
 | Name | What |
 |---|---|
 | `VORAB_GEHEIMNIS` | HMAC key for the fake `vorab` answers. Any long random string. |
+| `CF_ANALYTICS_TOKEN` | optional: API token with "Account Analytics: Read" for the usage numbers. |
 
 Never in the repo. Local `wrangler dev` reads it from `.dev.vars`
 (gitignored).
@@ -88,7 +138,7 @@ Never in the repo. Local `wrangler dev` reads it from `.dev.vars`
 
 Runs on the **Workers Free** plan (10 ms CPU per request). Measured locally
 on a slow laptop (pure CPU, D1/R2 time is I/O and not counted): login/account
-hash 0.04 ms; a stand with 100 / 1 100 / 2 000 references 1.3 / 5.3 / 7.6 ms;
+hash 0.04 ms; usage meter ~0.005 ms per request; a stand with 100 / 1 100 / 2 000 references 1.3 / 5.3 / 7.6 ms;
 inline 256 KiB 4.3 ms; blob upload is streamed (no hashing in the Worker).
 Only a stand with far more than ~2 000 new names at once would go over.
 
@@ -105,6 +155,10 @@ node scripts/paket_hochladen.mjs --remote          # dist/ + ../deploy/install.s
 node scripts/code_anlegen.mjs --remote --notiz "first code"
 ```
 
+Vars (in `wrangler.jsonc`): `BETREIBER_MAILS` (who may read usage),
+`BREMSE_SPEICHER` (`an`/`aus`), `CF_ACCOUNT_ID` (optional, for analytics).
+After changing them run `npm run types`.
+
 Later deploys: `npx wrangler deploy`; new migrations:
 `npx wrangler d1 migrations apply zentrale --remote`; rotate the secret:
 `npx wrangler secret put VORAB_GEHEIMNIS`.
@@ -114,7 +168,7 @@ Later deploys: `npx wrangler deploy`; new migrations:
 ```
 node scripts/code_anlegen.mjs --local|--remote [--anzahl N] [--notiz TEXT]
 node scripts/code_anlegen.mjs --local|--remote --sperren ZB-XXXX-XXXX-XXXX-XXXX
-node scripts/paket_hochladen.mjs --local|--remote [--dist ../dist] [--install ../deploy/install.sh]
+node scripts/paket_hochladen.mjs --local|--remote [--dist ../dist] [--install ../deploy/install.sh] [--ohne-bremse]
 ```
 
 `--local` targets the storage of `wrangler dev` (apply migrations there first

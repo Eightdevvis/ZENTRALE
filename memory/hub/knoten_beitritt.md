@@ -230,6 +230,8 @@ Sitzung als `Authorization: Bearer <token>`.
 | `GET /v1/mitte/enthaelt/<kennung>` | `{enthaelt: bool}` |
 | `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben); schreiben nur der eigene Name der Sitzung; GET → `{knoten: [...]}` |
 | `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob): `{besitz: string|null, aktualisiert}` / PUT `{besitz: string}` |
+| `GET /v1/nutzung` | nur Konten aus der Var `BETREIBER_MAILS`, sonst 403 `nur_betreiber` → `{zeit, grenzen_geprueft, grenzen: [{id, name, used, limit, unit, period, percent, level, source, self, cloudflare, cloudflare_at, costs_money}], warnungen: [{id, name, level, percent, text}]}`; `level` = `ok`/`50`/`80`/`95`/`voll`. Gratis-Grenzen und Zählweise: [../betrieb/cloud.md](../betrieb/cloud.md) |
+| Bremse | `PUT /v1/mitte/blob/…` und Inline-Dateien eines Stands → **507** `speicher_voll`, wenn R2 dadurch über den Gratis-Speicher käme (Var `BREMSE_SPEICHER`, Vorgabe `an`) |
 
 `<name>` in der Mitte sind die schon verschlüsselten Namen (`inhalt.enc`,
 `d/<hmac>.enc`, `knoten/<k>/<hmac>.enc`) — der Server sieht dasselbe, was
