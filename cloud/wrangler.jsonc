@@ -23,7 +23,7 @@
   "vars": {
     // Account names (usernames) that may read GET /v1/nutzung, comma list.
     // Empty = nobody. Sasha sets the name after creating the account, then deploys.
-    "BETREIBER_NAMEN": "",
+    "BETREIBER_NAMEN": "sasha",
     // "an": refuse uploads with 507 speicher_voll once R2 would go over the free storage.
     "BREMSE_SPEICHER": "an",
     // Optional: Cloudflare account id for the GraphQL Analytics API (with secret CF_ANALYTICS_TOKEN).
