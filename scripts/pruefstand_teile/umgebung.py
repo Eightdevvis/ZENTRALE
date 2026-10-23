@@ -42,7 +42,9 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
                         # in Sashas echtes data/klassifikator_beispiele/.
                         ("KLASSIFIKATOR_BEISPIELE", "klassifikator_beispiele"),
                         ("RUECKMELDUNGEN", "rueckmeldungen"), ("ABGLEICH", "abgleich"),
-                        ("ANBINDUNGEN", "anbindungen")):
+                        ("ANBINDUNGEN", "anbindungen"),
+                        # 2026-10-23: Zwischenspeicher der Cloud-Nutzung (Warnzeile).
+                        ("NUTZUNG", "nutzung")):
         os.environ[f"ZENTRALE_{name}_DIR"] = os.path.join(tmp, unter)
     os.environ["ZENTRALE_LOKALE_KI"] = "aus"         # kein Ollama, Chat über die Cloud
     os.environ["ZENTRALE_MAIL"] = "off"
