@@ -42,8 +42,7 @@ def test_mail_bekommt_den_hinweis():
         assert str(e.value) == konto.KEINE_MAIL
 
 
-def test_nfc():
-    zerlegt = "émile"                             # é als e + Akzent
-    with pytest.raises(konto.KontoFehler):
-        konto.name_lesen(zerlegt)                      # bleibt kein a–z, auch nach NFC
-    assert konto.name_lesen("Ångstrom".replace("Å", "a")) == "angstrom"
+def test_akzent_auch_zerlegt_abgelehnt():
+    for name in ("\u00e9mile", "e\u0301mile"):           # é fertig und als e + Akzent
+        with pytest.raises(konto.KontoFehler):
+            konto.name_lesen(name)

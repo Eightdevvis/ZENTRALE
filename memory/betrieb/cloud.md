@@ -4,6 +4,7 @@
 (Cloudflare-Konto sevendevs@outlook.com, Workers Free, R2 seit 23.10.
 freigeschaltet). D1 `zentrale` + R2 `zentrale` angelegt, Migration `0001`
 remote, Paket 36 + `install.sh` hochgeladen, ein Einladungscode für Sasha.
+Migration `0003_anonym` (Mail → Name) ist gebaut, aber noch nicht remote.
 Probe von außen: Paket ohne Code 401, falscher Code 403. Eingetragen in
 `core/cloud_api.py` (`VORGABE`; `deploy/install.sh` bekommt sie beim Rendern).
 Seit 23.10. ist die Cloud nur Konten + Abgleich, nicht die Programmquelle —
@@ -45,14 +46,34 @@ Anfrage riesig wird:
 Stand ist eine volle Liste Name → Datei; die Listen der letzten 10 Stände
 bleiben, die Kennungen aller Stände für immer.
 
+## Anonym (seit 23.10.)
+
+Keine Mail, nirgends. Ein Konto ist ein **Benutzername** (Regeln in
+`cloud/src/name.ts` = `core/konto.py`, gemeinsame Fälle
+`tests/daten/konto_namen.json`). Keine erzeugten Kontonummern: eine Wahl
+„anonyme Option ja/nein" wäre selbst Metadaten und verkleinert die
+Anonymitätsmenge (Tor-Prinzip) — ein Weg für alle. Name vergeben → 409
+`name_vergeben` (nur mit freiem Einladungscode zu sehen).
+
+- Drossel-Zähler: HMAC(Tagesschlüssel, Name/IP), Tagesschlüssel =
+  HMAC(`VORAB_GEHEIMNIS`, UTC-Datum). Kein Klartext, kein umkehrbarer
+  SHA-256 einer IP; um 00:00 UTC beginnt ein Zähler neu.
+- Logs: nur eigene `console.error` mit Routen-Muster, nie Pfad, Name, IP,
+  Body. Invocation-Logs aus, Query-Strings geschwärzt (`wrangler.jsonc`).
+- `--notiz` beim Einladungscode ist freiwillig — **keine Personendaten**
+  hinein: ein verbrauchter Code zeigt auf sein Konto.
+- Was trotzdem bleibt: Cloudflare sieht am Rand jede IP; der Gerätename
+  (`knoten`, meist der Hostname) liegt in Sitzungen und Knoten-Liste;
+  Zeitpunkte (Konto erstellt = Code verbraucht).
+
 ## Sicherheit in Kürze
 
 - Sitzung 90 Tage, nur als Hash gespeichert, an den Gerätenamen gebunden:
   ein Gerät schreibt nur seine eigene Beschreibung.
 - Passwort ändern braucht das alte (gedrosselt wie ein Login); nur die
   Notfall-Sitzung kommt ohne aus.
-- 5 Fehlversuche je 15 min — je Mail und je IP — bei Login und Notfall.
-- Unbekannte Mail bei `vorab`: erfundene, aber feste Werte (Geheimnis
+- 5 Fehlversuche je 15 min — je Name und je IP — bei Login und Notfall.
+- Unbekannter Name bei `vorab`: erfundene, aber feste Werte (Geheimnis
   `VORAB_GEHEIMNIS`), damit niemand Konten abfragen kann.
 - Notfall gibt nur eine 15-Minuten-Sitzung, die allein das Passwort neu
   setzen darf; danach sind alle Sitzungen des Kontos weg.
@@ -102,8 +123,9 @@ unter `vars` eintragen und ausrollen. Ohne Token läuft alles mit
 Selbstzählung.
 
 **Anschauen:** `zentrale cloud usage` (Balken je Grenze, Farbe nach Stufe,
-Zeitraum, Quelle). Nur Konten aus der Var `BETREIBER_MAILS`
-(`jenny_wolff@hotmail.com`); andere bekommen 403 bzw. einen höflichen Satz.
+Zeitraum, Quelle). Nur Konten aus der Var `BETREIBER_NAMEN` (leer, bis
+Sasha einen Namen festlegt und einträgt); andere bekommen 403 bzw. einen
+höflichen Satz.
 `zentrale status` und der Start von `zentrale` zeigen **eine** Zeile, sobald
 eine Grenze ≥ 50 % steht. Die Antwort liegt 1 h in
 `~/.local/state/zentrale/nutzung.json` (auch „kein Betreiber" 24 h und

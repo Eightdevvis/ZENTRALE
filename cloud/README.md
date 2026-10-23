@@ -29,7 +29,8 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 | `src/mitte.ts` | the sync "Mitte": snapshot stands, compare-and-swap head, `enthaelt` |
 | `src/knoten.ts` | device descriptions and account ownership |
 | `src/paket.ts` | `install.sh`, release packages, invite-code check |
-| `src/drossel.ts` | rate limit: 5 failures / 15 min per mail and per IP |
+| `src/drossel.ts` | rate limit: 5 failures / 15 min per name and per IP (keys: daily HMAC, no plain IP) |
+| `src/name.ts` | account names: usernames only, reserved names, no email |
 | `src/krypto.ts` | salted HMAC, constant-time compare, tokens |
 | `src/grenzen.ts` | the Cloudflare free-tier limits (one table, with sources) |
 | `src/nutzung.ts` | self-metering, `GET /v1/nutzung`, storage brake, R2 recount, GraphQL |
@@ -39,6 +40,19 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 
 ## Behaviour worth knowing
 
+- **Anonymous accounts**: an account is a username (3–32 characters
+  `a-z 0-9 . _ -`, starting with a letter, NFC + lower case; reserved names
+  refused on creation; anything with `@` is refused with "No email needed").
+  No email is asked or stored. No generated account numbers either: one path
+  for everyone, so the choice itself is not metadata. A taken name answers
+  409 `name_vergeben` — the only answer that reveals a name exists, and only
+  to someone holding an unused invite code.
+- **No IPs, no names in logs or counters**: rate-limit keys are
+  HMAC(daily key, name/IP), daily key = HMAC(`VORAB_GEHEIMNIS`, UTC date).
+  Logs carry the route pattern only; invocation logs are off and query
+  strings redacted (`wrangler.jsonc`). Cloudflare itself still sees client
+  IPs at the edge.
+
 - **Sessions**: 32 random bytes, stored only as SHA-256, valid 90 days,
   bound to the device name given at login (a session may only write its
   own device description). Changing the password with a normal session
@@ -47,11 +61,12 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 - **Emergency key** (`POST /v1/notfall`): returns `verpackt_notfall` and a
   15-minute token that can only call `PUT /v1/konto/passwort`; that call ends
   every session of the account, including the emergency one.
-- **`/v1/vorab`** for an unknown mail returns a salt derived with
-  HMAC(`VORAB_GEHEIMNIS`, mail) and the default KDF, so the answer does not
+- **`/v1/vorab`** for an unknown name returns a salt derived with
+  HMAC(`VORAB_GEHEIMNIS`, name) and the default KDF, so the answer does not
   reveal whether an account exists.
 - **Invite codes** are stored as SHA-256 (upper case, no spaces). Creating an
-  account uses one up; downloading the package does not.
+  account uses one up; downloading the package does not. `--notiz` is
+  optional — never put personal data there: a used code points to its account.
 - **Mitte**: a stand is a full snapshot `name → blob`. Blobs live in R2 at
   `mitte/<account>/<sha256>` (an unchanged file is stored once) and are
   listed in D1 (`mitte_blobs`). Sending a stand:
@@ -97,7 +112,7 @@ decimal is the smaller, safer number):
   GraphQL Analytics API — only if the secret `CF_ANALYTICS_TOKEN` and the var
   `CF_ACCOUNT_ID` are set. Those numbers are account-wide; the report takes
   the larger of self-counted and Cloudflare and shows both.
-- **`GET /v1/nutzung`**: only for accounts listed in the var `BETREIBER_MAILS`
+- **`GET /v1/nutzung`**: only for accounts listed in the var `BETREIBER_NAMEN`
   (others 403 `nur_betreiber`). Per limit: used, limit, unit, period, percent,
   level (`ok`, `50`, `80`, `95`, `voll`), source; plus `warnungen`.
   Client: `zentrale cloud usage`; `zentrale status` and the start of
@@ -152,10 +167,10 @@ npx wrangler deploy --secrets-file .secrets.env   # also creates D1 "zentrale" +
 rm .secrets.env
 npx wrangler d1 migrations apply zentrale --remote
 node scripts/paket_hochladen.mjs --remote          # dist/ + ../deploy/install.sh
-node scripts/code_anlegen.mjs --remote --notiz "first code"
+node scripts/code_anlegen.mjs --remote --notiz "batch 1"     # no personal data in notes
 ```
 
-Vars (in `wrangler.jsonc`): `BETREIBER_MAILS` (who may read usage),
+Vars (in `wrangler.jsonc`): `BETREIBER_NAMEN` (account names that may read usage; empty = nobody),
 `BREMSE_SPEICHER` (`an`/`aus`), `CF_ACCOUNT_ID` (optional, for analytics).
 After changing them run `npm run types`.
 

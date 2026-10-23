@@ -178,7 +178,9 @@ international.
 | Login | **optional.** Ohne Login läuft ZENTRALE rein lokal. |
 | Wählbare Einheiten | Bis es eine leere Hub-Fassung gibt: **Bereiche** der Daten (aus `core/abgleich_auswahl.py`) + echte Apps (Tutor). |
 | Besitz | gehört dem **Konto**, nicht dem Gerät: jedes eingeloggte Gerät sieht ihn. Installiert ist je Gerät (Knoten-Beschreibung). |
-| Sashas Konto | `jenny_wolff@hotmail.com`; Sasha legt es selbst an (Passwort nur bei Sasha). Echte Daten werden erst dann hochgeladen. |
+| Konto-Kennung | **Anonym** (23.10.): ein selbst gewählter **Benutzername**, keine Mail — weder gefragt noch gespeichert. 3–32 Zeichen `a-z 0-9 . _ -`, vorn ein Buchstabe, NFC + klein; reservierte Namen (admin, root, support, zentrale…) gehen nicht; `@` → Hinweis „No email needed". Sasha: *„jedem das Recht und die Freiheit geben, komplett anonym zu bleiben."* |
+| Keine erzeugten Kontonummern | Erst angeboten (Mullvad-Art), am 23.10. wieder gestrichen: **ein Weg für alle**. Eine Wahl wäre selbst Metadaten („diese Person nahm die anonyme Option") und verkleinert die Anonymitätsmenge (Tor-Prinzip). Der Assistent fragt nur `username:`. |
+| Sashas Konto | Sasha legt einen Namen fest und das Konto selbst an (Passwort nur bei Sasha); dann kommt der Name in die Var `BETREIBER_NAMEN`. Echte Daten werden erst dann hochgeladen. |
 
 ## Schlüssel (alles auf dem Gerät)
 
@@ -193,7 +195,9 @@ verpackt_notfall  = Fernet(HKDF(notfall, info="zentrale/notfall/v1")).encrypt(ko
 notfall_beweis    = base64url(HKDF(notfall, info="zentrale/notfall-beweis/v1", 32 B)) → an den Server
 ```
 
-- Der Server speichert: Mail (klein geschrieben), `salz`, KDF-Werte,
+- Der Name geht in keine Ableitung ein (Schema oben unverändert, die
+  Testvektoren gelten weiter).
+- Der Server speichert: Benutzername (klein, NFC), `salz`, KDF-Werte,
   HMAC-SHA256 (Schlüssel = 32 zufällige Server-Bytes je Konto, Spalte
   `hash_art`) über `anmelde_schluessel` und über `notfall_beweis`,
   `verpackt_passwort`, `verpackt_notfall`. Kein langsamer Hash auf dem
@@ -216,11 +220,11 @@ Sitzung als `Authorization: Bearer <token>`.
 | `GET /install.sh` | öffentlich; das Installationsskript |
 | `GET /v1/paket` | `?code=` oder Bearer → `{version, sha256, groesse}` der neuesten Fassung |
 | `GET /v1/paket/<version>.tar.gz` | `?code=` oder Bearer → das Paket |
-| `POST /v1/konto` | `{mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis}` → 201. Code wird verbraucht (der Download verbraucht ihn nicht). |
-| `POST /v1/vorab` | `{mail}` → `{salz, kdf}`. Unbekannte Mail: erfundene, aber für diese Mail feste Werte (verrät nicht, ob es das Konto gibt). |
-| `POST /v1/sitzung` | `{mail, anmelde_schluessel, knoten}` → `{token, laeuft_ab, verpackt_passwort}`. Gedrosselt (5 Fehlversuche/15 min je Mail und IP). |
+| `POST /v1/konto` | `{name, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis}` → 201 `{name, erstellt}`. Code wird verbraucht (der Download verbraucht ihn nicht). Name vergeben → **409** `name_vergeben`, Code bleibt frei — die einzige Stelle, die verrät, dass es einen Namen gibt (nur wer einen freien Code hat). |
+| `POST /v1/vorab` | `{name}` → `{salz, kdf}`. Unbekannter Name: erfundene, aber für diesen Namen feste Werte (verrät nicht, ob es das Konto gibt). |
+| `POST /v1/sitzung` | `{name, anmelde_schluessel, knoten}` → `{token, laeuft_ab, verpackt_passwort}`. Gedrosselt (5 Fehlversuche/15 min je Name und IP; Zähler nur als HMAC mit Tagesschlüssel, nie Name/IP im Klartext). |
 | `DELETE /v1/sitzung` | abmelden |
-| `POST /v1/notfall` | `{mail, notfall_beweis}` → `{verpackt_notfall, token, laeuft_ab}`; der Token gilt 15 min und nur für `PUT /v1/konto/passwort`. Gedrosselt wie die Sitzung. |
+| `POST /v1/notfall` | `{name, notfall_beweis}` → `{verpackt_notfall, token, laeuft_ab}`; der Token gilt 15 min und nur für `PUT /v1/konto/passwort`. Gedrosselt wie die Sitzung. |
 | `PUT /v1/konto/passwort` | `{salz, kdf, anmelde_schluessel, verpackt_passwort, altes_anmelde_schluessel}` — `altes_…` Pflicht mit normaler Sitzung (gedrosselt), nicht mit dem Notfall-Token. Beendet alle anderen Sitzungen (nach Notfall: alle). |
 | `GET /v1/mitte` | `{kennung|null, namen: [...]}` |
 | `GET /v1/mitte/datei/<name>` | Bytes der Datei im aktuellen Stand |
@@ -230,7 +234,7 @@ Sitzung als `Authorization: Bearer <token>`.
 | `GET /v1/mitte/enthaelt/<kennung>` | `{enthaelt: bool}` |
 | `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben); schreiben nur der eigene Name der Sitzung; GET → `{knoten: [...]}` |
 | `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob): `{besitz: string|null, aktualisiert}` / PUT `{besitz: string}` |
-| `GET /v1/nutzung` | nur Konten aus der Var `BETREIBER_MAILS`, sonst 403 `nur_betreiber` → `{zeit, grenzen_geprueft, grenzen: [{id, name, used, limit, unit, period, percent, level, source, self, cloudflare, cloudflare_at, costs_money}], warnungen: [{id, name, level, percent, text}]}`; `level` = `ok`/`50`/`80`/`95`/`voll`. Gratis-Grenzen und Zählweise: [../betrieb/cloud.md](../betrieb/cloud.md) |
+| `GET /v1/nutzung` | nur Konten aus der Var `BETREIBER_NAMEN`, sonst 403 `nur_betreiber` → `{zeit, grenzen_geprueft, grenzen: [{id, name, used, limit, unit, period, percent, level, source, self, cloudflare, cloudflare_at, costs_money}], warnungen: [{id, name, level, percent, text}]}`; `level` = `ok`/`50`/`80`/`95`/`voll`. Gratis-Grenzen und Zählweise: [../betrieb/cloud.md](../betrieb/cloud.md) |
 | Bremse | `PUT /v1/mitte/blob/…` und Inline-Dateien eines Stands → **507** `speicher_voll`, wenn R2 dadurch über den Gratis-Speicher käme (Var `BREMSE_SPEICHER`, Vorgabe `an`) |
 
 `<name>` in der Mitte sind die schon verschlüsselten Namen (`inhalt.enc`,
@@ -302,7 +306,7 @@ gegen dieselbe Schnittstelle):
 | KDF-Untergrenze | `m` ≥ 19456 KiB — der Client nimmt schwächere Werte auch vom Server nicht an |
 | Einladungscode | `ZB-XXXX-XXXX-XXXX-XXXX`; der Client schickt ihn groß und ohne Leerzeichen |
 | Mindestlänge Passwort | 10 Zeichen (nur Client) |
-| Fehler 401 | Client sagt „Wrong email or password." bzw. „Not logged in" |
+| Fehler 401 | Client sagt „Wrong username or password." bzw. „Not logged in" |
 
 ### Testvektoren für andere Oberflächen
 

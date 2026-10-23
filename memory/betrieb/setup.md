@@ -47,7 +47,7 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
   hub/aktuell            Verweis auf die laufende Fassung
   abgleich/              Basis, Vorhaben, Hinweise (wie bisher)
 ~/.local/bin/zentrale    → hub/aktuell/bin/zentrale
-~/.config/zentrale/konto.json   Sitzung + Kontoschlüssel (600), nur nach Login
+~/.config/zentrale/konto.json   Benutzername, Sitzung, Kontoschlüssel (600), nur nach Login — keine Mail
 ```
 
 - **Schutz für Sashas Laptop:** Liegt in `~/.local/bin/zentrale` schon etwas,
