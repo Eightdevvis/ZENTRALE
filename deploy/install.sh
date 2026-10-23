@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # Die eine Stelle für die Adresse der Cloud (Env ZENTRALE_CLOUD gewinnt).
-CLOUD_VORGABE="https://zentrale-cloud.example.workers.dev"
+CLOUD_VORGABE="https://zentrale-cloud.sevendevs.workers.dev"
 CLOUD="${ZENTRALE_CLOUD:-$CLOUD_VORGABE}"
 CLOUD="${CLOUD%/}"
 

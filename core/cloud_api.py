@@ -15,7 +15,7 @@ import urllib.request
 import ai_config
 
 # Die eine Stelle für die Adresse der Cloud (Sasha trägt die echte ein).
-VORGABE = "https://zentrale-cloud.example.workers.dev"
+VORGABE = "https://zentrale-cloud.sevendevs.workers.dev"
 ZEIT = 30
 
 
