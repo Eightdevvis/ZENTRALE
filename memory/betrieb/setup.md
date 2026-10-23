@@ -56,14 +56,19 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 - **Updates:** `zentrale update` holt die neue Fassung daneben, prüft sha256,
   baut ihr venv und dreht erst dann `hub/aktuell` um. Die alte bleibt bis zum
   nächsten Update liegen (Rückweg: den Verweis zurückdrehen). Im
-  Entwickler-Checkout weigert sich `update` (dort gilt git).
-- **Die Cloud-Adresse** steht an je einer Stelle: `CLOUD_VORGABE` oben in
-  `deploy/install.sh` und `VORGABE` in `core/cloud_api.py`; beide überstimmt
-  die Env `ZENTRALE_CLOUD`.
+  Entwickler-Checkout weigert sich `update` (dort gilt git), bei apt/pacman
+  verweist es auf die Paketverwaltung ([verteilung.md](verteilung.md)).
+- **Die Cloud-Adresse** steht an einer Stelle: `VORGABE` in
+  `core/cloud_api.py`; `deploy/install.sh` bekommt sie beim Rendern
+  (`CLOUD_VORGABE`). Env `ZENTRALE_CLOUD` überstimmt beide.
+- **`deploy/install.sh` ist gerendert** aus `deploy/install.sh.in` nach dem
+  Schalter `deploy/verteilung.toml` — nie von Hand ändern
+  ([verteilung.md](verteilung.md)).
 - **Paket bauen:** `scripts/paket_bauen.py` aus der Positivliste
   `deploy/paket.txt` (nur eingecheckte Dateien) → `dist/zentrale-<fassung>.tar.gz`
   + `dist/neueste.json` (`{version, sha256, groesse}` wie `GET /v1/paket`).
   Fassung aus `deploy/RELEASE`. Hochladen in die Cloud macht der Server-Teil.
+  .deb, PKGBUILD und install.sh aus demselben tar.gz: [verteilung.md](verteilung.md).
 - **Ohne lokale KI geprüft (22.10.):** Backend (`core/main.py`, `ui/app.py`
   mit allen Routen) und TUI importieren sauber, wenn faster-whisper,
   sherpa-onnx, piper, webrtcvad, keyboard und pygame fehlen. Ein ganzer Lauf

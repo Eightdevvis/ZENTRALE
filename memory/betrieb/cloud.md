@@ -5,7 +5,9 @@
 freigeschaltet). D1 `zentrale` + R2 `zentrale` angelegt, Migration `0001`
 remote, Paket 36 + `install.sh` hochgeladen, ein Einladungscode für Sasha.
 Probe von außen: Paket ohne Code 401, falscher Code 403. Eingetragen in
-`core/cloud_api.py` (`VORGABE`) und `deploy/install.sh` (`CLOUD_VORGABE`).
+`core/cloud_api.py` (`VORGABE`; `deploy/install.sh` bekommt sie beim Rendern).
+Seit 23.10. ist die Cloud nur Konten + Abgleich, nicht die Programmquelle —
+Pakete heute noch hier, später öffentlich: [verteilung.md](verteilung.md).
 Der Vertrag steht in [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 („Bauplan v1"), die Routen in `cloud/openapi.yaml`, Befehle und Ablauf auf
 Englisch in `cloud/README.md`.

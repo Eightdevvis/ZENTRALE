@@ -259,7 +259,8 @@ gegen dieselbe Schnittstelle):
 | Der Befehl | `zentrale_cli/` (Front, Tür im Kern-Bauplan), Starter `bin/zentrale`, `pyproject.toml` (Einstiegspunkt für `pip install -e .`) |
 | Alle Texte (Englisch) | `zentrale_cli/texte.py` — Deutsch = zweites Wörterbuch mit denselben Schlüsseln |
 | Paket | `deploy/paket.txt` + `scripts/paket_bauen.py` → `dist/` |
-| Installieren | `deploy/install.sh`, Ablauf in [../betrieb/setup.md](../betrieb/setup.md) |
+| Installieren | `deploy/install.sh` (gerendert aus `install.sh.in`), Ablauf in [../betrieb/setup.md](../betrieb/setup.md) |
+| Verteilung (seit 23.10.) | apt/.deb, pacman/PKGBUILD, curl-Einzeiler aus demselben tar.gz; öffentlich erst nach Schalter + Durchsicht — [../betrieb/verteilung.md](../betrieb/verteilung.md) |
 | Grundlage ohne lokale KI | `requirements-basis.txt` |
 
 - **Befehle:** `zentrale` (TUI über `scripts/start_tui.sh`; beim allerersten
@@ -317,8 +318,8 @@ neue Vektoren, nie still.
 
 ### Offen
 
-- Die echte Cloud-Adresse eintragen (`core/cloud_api.py` `VORGABE`,
-  `deploy/install.sh` `CLOUD_VORGABE`).
+- ~~Die echte Cloud-Adresse eintragen~~ (erledigt 23.10.; steht nur noch in
+  `core/cloud_api.py` `VORGABE`, install.sh bekommt sie beim Rendern).
 - `GET/PUT /v1/besitz` nutzt der Client noch nicht.
 - Dateien der Mitte kommen ohne Stand-Angabe („aktueller Stand"); ein
   optionales `?stand=<kennung>` an `GET /v1/mitte/datei/<name>` machte das
