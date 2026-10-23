@@ -7,7 +7,8 @@ Code wird verbraucht (Groß/klein und Leerzeichen egal), anmelde_schluessel nur
 als Hash, KDF mindestens 19456 KiB, Bearer-Sitzung, Notfall-Token nur für das
 Passwort, altes_anmelde_schluessel beim Passwortwechsel, Knoten nur unter dem
 eigenen Namen, Blobs nach sha256 (400 pruefsumme / blob_fehlt),
-Compare-and-Swap auf den Kopf der Mitte (409 jemand_schneller).
+Compare-and-Swap auf den Kopf der Mitte (409 jemand_schneller),
+GET /v1/nutzung nur für `betreiber` (sonst 403 nur_betreiber).
 Stand: Absprache mit dem Server-Teil 2026-10-22 (cloud/openapi.yaml)."""
 
 import base64
@@ -30,6 +31,9 @@ class Zustand:
         self.eltern = {}            # kennung → basis
         self.knoten = {}            # mail → {name: beschreibung}
         self.paket = None           # (version, bytes)
+        self.betreiber = set()      # Mails, die GET /v1/nutzung sehen dürfen
+        self.nutzung = {"zeit": "2026-10-23T09:00:00.000Z", "grenzen_geprueft": "2026-10-23",
+                        "grenzen": [], "warnungen": []}
         self.aufrufe = []           # (methode, pfad) — zum Nachsehen in Tests
         self.zaehler = 0
         self.sperre = threading.Lock()
@@ -185,6 +189,10 @@ class _Handler(BaseHTTPRequestHandler):
         mail = self._mail()
         if mail is None:
             return self._fehler(403, "nur_passwort", "This session may only set a new password.")
+        if (m, pfad) == ("GET", "/v1/nutzung"):
+            if mail not in z.betreiber:
+                return self._fehler(403, "nur_betreiber", "Usage figures are only for the operator of this cloud.")
+            return self._antwort(200, z.nutzung)
         if (m, pfad) == ("GET", "/v1/mitte"):
             kopf = z.kopf.get(mail)
             return self._antwort(200, {"kennung": kopf,

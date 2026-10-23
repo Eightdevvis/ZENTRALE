@@ -32,6 +32,7 @@ EN = {
     "cmd_sync": ("sync", "sync now with your account"),
     "cmd_status": ("status", "account, device, last sync, what is synced"),
     "cmd_devices": ("devices", "list all devices of your account"),
+    "cmd_cloud_usage": ("cloud usage", "how close the cloud is to its free limits (operator only)"),
     "cmd_update": ("update", "download and install the newest version"),
     "cmd_version": ("version", "show the installed version"),
     "cmd_help": ("-h, --help", "this help"),
@@ -164,6 +165,19 @@ EN = {
     "dev_this": "(this device)",
     "hw": {"gpu": "GPU", "bildschirm": "display", "mikro": "mic", "lautsprecher": "speaker"},
     "dev_seen": "last seen {zeit}",
+
+    # ── Cloud-Nutzung (core/cloud_nutzung.py) ───────────────────────
+    "use_title": "Cloud usage — Cloudflare free tier",
+    "use_asof": "as of {zeit} UTC",
+    "use_period": {"day": "today (UTC)", "month": "this month (UTC)", "now": "right now"},
+    "use_self": "self-counted",
+    "use_both": "self-counted {selbst} · Cloudflare {cf} ({um})",
+    "use_all_ok": "All limits are below 50 %.",
+    "use_money": "Only R2 costs money above free; Workers and D1 simply stop until the next day.",
+    "use_checked": "Limits checked {datum} against the Cloudflare docs.",
+    "use_only_operator": "Sorry — usage figures are only for the operator of this cloud.",
+    "use_warning": "Cloud free tier: {text}{weitere} See 'zentrale cloud usage'.",
+    "use_more": " (+{n} more)",
 
     # ── Programm ────────────────────────────────────────────────────
     "version_line": "ZENTRALE {fassung}",

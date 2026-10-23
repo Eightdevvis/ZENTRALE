@@ -382,6 +382,14 @@ def _konto_frisch(_test_ordner, monkeypatch):
     yield
 
 
+# 7e1c. Der Nutzungs-Cache der Cloud (core/cloud_nutzung.py, 2026-10-23) liegt
+# je Test woanders — nie im echten ~/.local/state. Nur ein Pfad, kein Ordner.
+@pytest.fixture(autouse=True)
+def _nutzung_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_NUTZUNG_DIR", str(_test_ordner / "nutzung"))
+    yield
+
+
 # 7e2. Jeder Test hat seinen eigenen Besitz im Schaufenster (core/shop.py,
 # 2026-10-10).
 @pytest.fixture(autouse=True)

@@ -182,3 +182,139 @@ def test_hardware_wird_erkannt_nicht_gefragt(tmp_path):
     leer.mkdir()
     assert knoten.hardware(str(leer), umgebung={}) == \
         {"gpu": False, "bildschirm": False, "mikro": False, "lautsprecher": False}
+
+
+# ── Cloud-Nutzung (core/cloud_nutzung.py, GET /v1/nutzung) ──────────────
+
+def _bericht(*stufen):
+    """Ein Bericht wie vom Worker: R2-Speicher und Worker-Anfragen."""
+    g = [
+        {"id": "worker_anfragen", "name": "Worker requests", "used": 60000, "limit": 100000,
+         "unit": "requests", "period": "day", "percent": 60.0, "level": "50", "source": "self",
+         "self": 60000, "cloudflare": None, "cloudflare_at": None, "costs_money": False},
+        {"id": "r2_speicher", "name": "R2 storage", "used": 8_200_000_000, "limit": 10_000_000_000,
+         "unit": "bytes", "period": "now", "percent": 82.0, "level": "80", "source": "cloudflare",
+         "self": 8_100_000_000, "cloudflare": 8_200_000_000, "cloudflare_at": "2026-10-23T08:47:00.000Z",
+         "costs_money": True},
+    ]
+    w = [{"id": "r2_speicher", "name": "R2 storage", "level": "80", "percent": 82.0,
+          "text": "R2 storage at 82 % (8.20 GB of 10.00 GB)."},
+         {"id": "worker_anfragen", "name": "Worker requests", "level": "50", "percent": 60.0,
+          "text": "Worker requests at 60 % (60,000 of 100,000)."}]
+    return {"zeit": "2026-10-23T09:12:00.000Z", "grenzen_geprueft": "2026-10-23",
+            "grenzen": g, "warnungen": w if stufen != ("ok",) else []}
+
+
+def _nutzung_aufrufe(geraet):
+    return [a for a in geraet.zustand.aufrufe if a == ("GET", "/v1/nutzung")]
+
+
+@pytest.fixture
+def betreiber(geraet):
+    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    geraet.zustand.betreiber.add("s@x.org")
+    geraet.zustand.nutzung = _bericht()
+    return geraet
+
+
+def test_cloud_usage_balken_zeitraum_quelle(betreiber):
+    term = Spiel()
+    assert haupt.main(["cloud", "usage"], term=term) == 0
+    txt = term.text
+    assert "Cloud usage" in txt and "2026-10-23 09:12 UTC" in txt
+    assert "Worker requests" in txt and " 60.0 %" in txt and "60,000 / 100,000 requests" in txt
+    assert "today (UTC)" in txt and "self-counted" in txt
+    assert "8.20 GB / 10.00 GB" in txt and "right now" in txt
+    assert "Cloudflare 8.20 GB (08:47)" in txt and "self-counted 8.10 GB" in txt
+    zeile = next(z for z in txt.splitlines() if z.strip().startswith("R2 storage") and "%" in z)
+    assert zeile.count("█") == round(0.82 * 24) and zeile.count("░") == 24 - round(0.82 * 24)
+    assert "R2 storage at 82 %" in txt and "Only R2 costs money" in txt
+    assert "\x1b[" not in txt                                        # kein Terminal → keine Farbe
+
+
+def test_cloud_usage_farbe_nach_stufe(betreiber):
+    class Tty(io.StringIO):
+        def isatty(self):
+            return True
+    term = Terminal(aus=Tty(), ein=io.StringIO())
+    term.farbig = True
+    assert befehle.cloud_usage(term) == 0
+    txt = term.aus.getvalue()
+    assert "\x1b[33;1m" in txt and "\x1b[33m" in txt                 # 80 % gelb fett, 50 % gelb
+
+
+def test_cloud_usage_nicht_betreiber_hoeflich(geraet):
+    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    term = Spiel()
+    assert haupt.main(["cloud", "usage"], term=term) == 1
+    assert "only for the operator" in term.text and "Error" not in term.text
+    # Danach fragt die Warnzeile einen Tag lang nicht mehr nach.
+    vorher = len(_nutzung_aufrufe(geraet))
+    term = Spiel()
+    assert befehle.status(term) == 0
+    assert "Cloud free tier" not in term.text
+    assert len(_nutzung_aufrufe(geraet)) == vorher
+
+
+def test_cloud_usage_nicht_angemeldet(geraet):
+    term = Spiel()
+    assert haupt.main(["cloud", "usage"], term=term) == 1
+    assert "Not logged in" in term.text and not _nutzung_aufrufe(geraet)
+
+
+def test_warnzeile_genau_eine_und_eine_stunde_gemerkt(betreiber, monkeypatch):
+    import cloud_nutzung
+    term = Spiel()
+    assert befehle.status(term) == 0
+    zeilen = [z for z in term.text.splitlines() if "Cloud free tier" in z]
+    assert zeilen == ["Cloud free tier: R2 storage at 82 % (8.20 GB of 10.00 GB) (+1 more). "
+                      "See 'zentrale cloud usage'."]
+    assert len(_nutzung_aufrufe(betreiber)) == 1
+    # Innerhalb einer Stunde: aus dem Cache, kein Netz.
+    term = Spiel()
+    befehle.status(term)
+    assert "Cloud free tier" in term.text and len(_nutzung_aufrufe(betreiber)) == 1
+    # Nach mehr als einer Stunde: neu gefragt — jetzt ohne Warnung.
+    betreiber.zustand.nutzung = _bericht("ok")
+    import time as _time
+    echt = _time.time
+    monkeypatch.setattr(cloud_nutzung.time, "time", lambda: echt() + cloud_nutzung.GUELTIG_S + 5)
+    term = Spiel()
+    befehle.status(term)
+    assert "Cloud free tier" not in term.text and len(_nutzung_aufrufe(betreiber)) == 2
+
+
+def test_start_zeigt_warnzeile_vor_der_tui(betreiber, monkeypatch):
+    gestartet = []
+    monkeypatch.setattr(befehle, "tui", lambda term: gestartet.append(term.text) or 0)
+    monkeypatch.setattr(haupt, "_entwickler_checkout", lambda: True)
+    term = Spiel()
+    assert haupt.main([], term=term) == 0
+    assert gestartet and gestartet[0].count("Cloud free tier") == 1
+
+
+def test_start_offline_schnell_ohne_fehler_und_gemerkt(betreiber, monkeypatch):
+    import time as _time
+
+    import cloud_nutzung
+    betreiber.stopp()                                                # Cloud weg
+    gestartet = []
+    monkeypatch.setattr(befehle, "tui", lambda term: gestartet.append(1) or 0)
+    monkeypatch.setattr(haupt, "_entwickler_checkout", lambda: True)
+    term = Spiel()
+    t0 = _time.monotonic()
+    assert haupt.main([], term=term) == 0
+    assert _time.monotonic() - t0 < cloud_nutzung.ZEIT_START + 1
+    assert gestartet == [1] and "Cloud free tier" not in term.text and "Error" not in term.text
+    # Der Fehlschlag gilt eine Stunde: der nächste Start fragt gar nicht erst.
+    monkeypatch.setattr(cloud_nutzung, "holen", lambda *a, **k: pytest.fail("nicht fragen"))
+    assert haupt.main([], term=Spiel()) == 0 and gestartet == [1, 1]
+
+
+def test_warnung_wirft_nie(betreiber, monkeypatch):
+    import cloud_nutzung
+    monkeypatch.setattr(cloud_nutzung, "holen", lambda *a, **k: 1 / 0)
+    assert cloud_nutzung.warnung() is None
+    with open(cloud_nutzung._pfad(), "w", encoding="utf-8") as f:
+        f.write("{kaputt")
+    assert cloud_nutzung.warnung() is None

@@ -13,6 +13,7 @@ import abgleich_mitte      # noqa: E402
 import abgleich_schluessel  # noqa: E402
 import ai_config           # noqa: E402
 import cloud_api           # noqa: E402
+import cloud_nutzung       # noqa: E402
 import dateien             # noqa: E402
 import knoten              # noqa: E402
 import konto               # noqa: E402
@@ -190,6 +191,7 @@ def status(term):
         for h in z["hinweise"][-10:]:
             term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
+    nutzung_warnung(term)
     return 0
 
 
@@ -229,6 +231,78 @@ def devices(term):
         term.sag(f"     {k.get('sorte', '?')} · {hat} · {k.get('programm', '?')} · "
                  + t("dev_seen", zeit=str(k.get("zuletzt_gesehen", "?"))[:16].replace("T", " ")),
                  "blass")
+    return 0
+
+
+# ── Cloud-Nutzung ──────────────────────────────────────────────────
+
+_STUFE_FARBE = {"ok": ("gut",), "50": ("warn",), "80": ("warn", "fett"),
+                "95": ("fehler",), "voll": ("fehler", "fett")}
+BALKEN = 24
+
+
+def _menge(n, einheit):
+    n = float(n or 0)
+    if einheit == "bytes":
+        for grenze, name in ((1e9, "GB"), (1e6, "MB"), (1e3, "kB")):
+            if n >= grenze:
+                return f"{n / grenze:.2f} {name}"
+        return f"{int(n)} B"
+    return f"{int(n):,}"
+
+
+def _uhr(iso):
+    return str(iso or "")[11:16]
+
+
+def nutzung_warnung(term):
+    """EINE Zeile, wenn ein Gratis-Limit ≥ 50 % steht (nur Betreiber). Nie ein Fehler."""
+    w = cloud_nutzung.warnung()
+    if not w:
+        return
+    weitere = t("use_more", n=w["weitere"]) if w["weitere"] else ""
+    term.sag(t("use_warning", text=w["text"].rstrip("."), weitere=weitere + "."),
+             *_STUFE_FARBE.get(w["level"], ("warn",)))
+
+
+def cloud_usage(term):
+    if not konto.angemeldet():
+        term.sag(t("not_logged_in"))
+        return 1
+    try:
+        d = cloud_nutzung.holen()
+    except cloud_nutzung.NurBetreiber:
+        term.sag(t("use_only_operator"))
+        return 1
+    term.sag(t("use_title") + "  " + term.f(t("use_asof", zeit=str(d.get("zeit", ""))[:16].replace("T", " ")),
+                                            "blass"), "fett")
+    grenzen = [g for g in d.get("grenzen", []) if isinstance(g, dict)]
+    breite = max([len(str(g.get("name", ""))) for g in grenzen] + [0]) + 2
+    for g in grenzen:
+        prozent = float(g.get("percent") or 0)
+        farbe = _STUFE_FARBE.get(str(g.get("level")), ("warn",))
+        voll = min(BALKEN, round(prozent / 100 * BALKEN))
+        balken = term.f("█" * voll, *farbe) + term.f("░" * (BALKEN - voll), "blass")
+        term.sag(f"  {str(g.get('name', '')).ljust(breite)}{balken} " + term.f(f"{prozent:5.1f} %", *farbe))
+        einheit = g.get("unit")
+        menge = f"{_menge(g.get('used'), einheit)} / {_menge(g.get('limit'), einheit)}"
+        if einheit != "bytes":
+            menge += f" {einheit}"
+        if g.get("cloudflare") is not None:
+            quelle = t("use_both", selbst=_menge(g.get("self"), einheit), cf=_menge(g.get("cloudflare"), einheit),
+                       um=_uhr(g.get("cloudflare_at")))
+        else:
+            quelle = t("use_self")
+        zeitraum = t("use_period").get(str(g.get("period")), str(g.get("period")))
+        term.sag("  " + " " * breite + term.f(f"{menge} · {zeitraum} · {quelle}", "blass"))
+    term.sag()
+    warnungen = d.get("warnungen") or []
+    if not warnungen:
+        term.sag(t("use_all_ok"), "gut")
+    for w in warnungen:
+        term.sag("  " + str(w.get("text", "")), *_STUFE_FARBE.get(str(w.get("level")), ("warn",)))
+    term.sag(t("use_money"), "blass")
+    term.sag(t("use_checked", datum=d.get("grenzen_geprueft", "?")), "blass")
     return 0
 
 
