@@ -1,0 +1,97 @@
+{
+  "_": "Regeln für Kontonamen (Bauplan v1, anonym seit 23.10.2026: nur Benutzernamen, keine Mail, keine erzeugten Nummern). Dieselben Fälle prüfen cloud/test/name.test.ts (Server, cloud/src/name.ts) und tests/test_konto_namen.py (Gerät, core/konto.py). 'reserviert' und 'reserviert_anfang' müssen genau den Listen im Code entsprechen.",
+  "reserviert": [
+    "abuse",
+    "admin",
+    "administrator",
+    "anonym",
+    "anonymous",
+    "api",
+    "betreiber",
+    "cloudflare",
+    "contact",
+    "help",
+    "hilfe",
+    "hostmaster",
+    "info",
+    "kontakt",
+    "mod",
+    "moderator",
+    "no-reply",
+    "noreply",
+    "null",
+    "official",
+    "offiziell",
+    "operator",
+    "owner",
+    "postmaster",
+    "root",
+    "security",
+    "sicherheit",
+    "staff",
+    "superuser",
+    "support",
+    "sysadmin",
+    "system",
+    "team",
+    "undefined",
+    "webmaster",
+    "zentrale"
+  ],
+  "reserviert_anfang": [
+    "admin",
+    "zentrale"
+  ],
+  "gut": [
+    [
+      " Sasha ",
+      "sasha"
+    ],
+    [
+      "Ab.c_d-1",
+      "ab.c_d-1"
+    ],
+    [
+      "abc",
+      "abc"
+    ],
+    [
+      "abcdefghijklmnopqrstuvwxyz012345",
+      "abcdefghijklmnopqrstuvwxyz012345"
+    ],
+    [
+      "zentral",
+      "zentral"
+    ]
+  ],
+  "reserviert_faelle": [
+    "Admin",
+    "ROOT",
+    "zentrale-team",
+    "zentrale_support",
+    "admin2",
+    "betreiber"
+  ],
+  "schlecht": [
+    "ab",
+    "1sasha",
+    "sa sha",
+    "-abc",
+    ".abc",
+    "_abc",
+    "über",
+    "émile",
+    "sasha!",
+    "abcdefghijklmnopqrstuvwxyz0123456",
+    "12345",
+    "12345678901234567",
+    "",
+    "1234567890123456",
+    "1234 5678 9012 3456"
+  ],
+  "mail": [
+    "sasha@example.org",
+    "@sasha",
+    "Jemand@Example.ORG"
+  ]
+}

@@ -84,15 +84,22 @@ async function bearbeiten(anfrage: Request, env: Env): Promise<Response> {
   throw new HttpFehler(404, "nicht_gefunden", "There is nothing at this address.");
 }
 
+/** The route pattern of a path ("/v1/knoten/{name}"), never the path itself:
+ *  device names and file names stay out of the logs. */
+export function routeVon(pfad: string): string {
+  return MUSTER.find((m) => m.re.test(pfad))?.route.pfad ?? "(unbekannt)";
+}
+
 async function antworten(anfrage: Request, env: Env): Promise<Response> {
   try {
     return await bearbeiten(anfrage, env);
   } catch (e) {
     if (e instanceof HttpFehler) return fehlerAntwort(e);
-    // Never log request bodies, tokens or keys — only what went wrong where.
+    // Never log request bodies, tokens, keys, names, IPs or raw paths —
+    // only what went wrong on which route.
     console.error(JSON.stringify({
       nachricht: "unerwarteter Fehler",
-      pfad: new URL(anfrage.url).pathname,
+      route: routeVon(new URL(anfrage.url).pathname),
       methode: anfrage.method,
       fehler: e instanceof Error ? e.message : String(e),
     }));

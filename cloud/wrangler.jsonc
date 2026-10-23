@@ -7,14 +7,23 @@
   "compatibility_date": "2026-10-20",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // Only our own console.error lines (no names, IPs, bodies — src/index.ts).
+  // No invocation logs: those would keep every request's URL and client
+  // metadata at Cloudflare. Query strings (?code=) are redacted anyway.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  },
   // Daily (03:17 UTC): cleanup of expired sessions and old rate-limit counters,
   // recount of stored R2 bytes. Hourly (:47): Cloudflare usage numbers, only
   // if CF_ANALYTICS_TOKEN + CF_ACCOUNT_ID are set (src/nutzung.ts).
   "triggers": { "crons": ["17 3 * * *", "47 * * * *"] },
   "vars": {
-    // Accounts that may read GET /v1/nutzung (comma list, lower case).
-    "BETREIBER_MAILS": "jenny_wolff@hotmail.com",
+    // Account names (usernames) that may read GET /v1/nutzung, comma list.
+    // Empty = nobody. Sasha sets the name after creating the account, then deploys.
+    "BETREIBER_NAMEN": "",
     // "an": refuse uploads with 507 speicher_voll once R2 would go over the free storage.
     "BREMSE_SPEICHER": "an",
     // Optional: Cloudflare account id for the GraphQL Analytics API (with secret CF_ANALYTICS_TOKEN).

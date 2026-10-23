@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // Invite codes for the private beta.
 //
-//   node scripts/code_anlegen.mjs --local|--remote [--anzahl 3] [--notiz "for Alex"]
+//   node scripts/code_anlegen.mjs --local|--remote [--anzahl 3] [--notiz "batch 2"]
 //   node scripts/code_anlegen.mjs --local|--remote --sperren ZB-XXXX-XXXX-XXXX-XXXX
 //
 // The codes are printed ONCE; the database only keeps their SHA-256
 // (same normalization as the Worker: no spaces, upper case).
+//
+// --notiz is optional and stays next to the code in D1 — and a used code
+// points to the account that used it. So never put personal data there
+// (no names, no mail): it would tie a person to an anonymous account.
 import { createHash, randomInt } from "node:crypto";
 import { DB, wert, wrangler, ziel } from "./_wrangler.mjs";
 

@@ -10,6 +10,10 @@ info:
     `anmelde_schluessel` and `notfall_beweis`. Both are 256-bit keys the
     client derived with Argon2id/HKDF, so no slow hash is needed server-side.
 
+    Anonymous: an account is a username (`Name`), never an email. The server
+    keeps no IP address and no plain name outside `konten` (rate-limit keys
+    are HMAC with a key that changes every UTC day).
+
     Key scheme and decisions: `memory/hub/knoten_beitritt.md` ("Bauplan v1").
 
     All answers are JSON unless stated. Errors:
@@ -40,11 +44,21 @@ components:
           description: |
             Machine code, e.g. ungueltig, zu_gross, nicht_angemeldet, nur_passwort,
             falsche_anmeldung, falscher_notfallschluessel, zu_viele_versuche,
-            code_ungueltig, code_noetig, mail_vergeben, jemand_schneller,
+            code_ungueltig, code_noetig, name_vergeben, jemand_schneller,
             blob_fehlt (with `fehlen: [sha256…]`), pruefsumme, laenge_fehlt,
             fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
             nicht_eingerichtet, nur_betreiber, speicher_voll, serverfehler.
         text: { type: string, description: English sentence for the user. }
+    Name:
+      type: string
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9._-]{2,31}$"
+      description: |
+        Username, 3–32 characters a-z 0-9 . _ -, starting with a letter. The
+        server trims, NFC-normalizes and lower-cases before checking. A value
+        with '@' is refused with the hint that no email is needed. When
+        creating, reserved names (admin, root, support, zentrale…, see
+        cloud/src/name.ts) are refused too.
     Kdf:
       type: object
       required: [name, t, m, p]
@@ -117,15 +131,19 @@ paths:
   /v1/konto:
     post:
       summary: Create an account. Uses up the invite code.
+      description: |
+        A taken name answers 409 `name_vergeben` (the code stays unused). This
+        is the one place that reveals that a name exists — and only to someone
+        holding an unused invite code.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [mail, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis]
+              required: [name, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis]
               properties:
-                mail: { type: string, maxLength: 254, description: Stored lower case. }
+                name: { $ref: "#/components/schemas/Name" }
                 code: { type: string }
                 salz: { type: string, description: 16–64 bytes base64url (client Argon2id salt). }
                 kdf: { $ref: "#/components/schemas/Kdf" }
@@ -140,18 +158,18 @@ paths:
           description: Created
           content:
             application/json:
-              schema: { type: object, properties: { mail: { type: string }, erstellt: { type: string, format: date-time } } }
+              schema: { type: object, properties: { name: { type: string }, erstellt: { type: string, format: date-time } } }
         "400": { $ref: "#/components/responses/Fehler" }
         "403": { $ref: "#/components/responses/Fehler" }
         "409": { $ref: "#/components/responses/Fehler" }
   /v1/vorab:
     post:
-      summary: Salt and KDF values for a mail. Unknown mail → invented values that are stable for that mail.
+      summary: Salt and KDF values for a name. Unknown name → invented values that are stable for that name.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, required: [mail], properties: { mail: { type: string } } }
+            schema: { type: object, required: [name], properties: { name: { $ref: "#/components/schemas/Name" } } }
       responses:
         "200":
           description: Values for the client-side Argon2id
@@ -166,16 +184,16 @@ paths:
         "400": { $ref: "#/components/responses/Fehler" }
   /v1/sitzung:
     post:
-      summary: Log in. Rate limited (5 failures / 15 min per mail and per IP).
+      summary: Log in. Rate limited (5 failures / 15 min per name and per IP; counters keyed by a daily HMAC, never stored in plain).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [mail, anmelde_schluessel, knoten]
+              required: [name, anmelde_schluessel, knoten]
               properties:
-                mail: { type: string }
+                name: { $ref: "#/components/schemas/Name" }
                 anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
                 knoten: { type: string, pattern: "^[\\p{L}\\p{N}@._-]{1,64}$", description: Device name; the session is bound to it. }
       responses:
@@ -209,9 +227,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [mail, notfall_beweis]
+              required: [name, notfall_beweis]
               properties:
-                mail: { type: string }
+                name: { $ref: "#/components/schemas/Name" }
                 notfall_beweis: { $ref: "#/components/schemas/B64u32" }
       responses:
         "200":
@@ -465,7 +483,7 @@ paths:
     get:
       summary: Free-tier usage of this cloud (operator only).
       description: |
-        Only for sessions whose account mail is in the var `BETREIBER_MAILS`
+        Only for sessions whose account name is in the var `BETREIBER_NAMEN`
         (others: 403 `nur_betreiber`). Numbers are counted by the Worker itself
         (D1 rows from query meta, R2 operations per call, stored R2 bytes exact on
         put/delete plus a daily recount). With the optional secret

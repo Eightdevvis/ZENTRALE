@@ -9,7 +9,7 @@ export default defineConfig(async () => {
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           // Test-only values; the real secret is set with `wrangler secret put`.
-          bindings: { VORAB_GEHEIMNIS: "nur-fuer-tests", TEST_MIGRATIONS: migrations },
+          bindings: { VORAB_GEHEIMNIS: "nur-fuer-tests", BETREIBER_NAMEN: "betreiber-test", TEST_MIGRATIONS: migrations },
         },
       }),
     ],

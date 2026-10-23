@@ -64,7 +64,7 @@ describe("Mitte", () => {
     const r1 = await stand(t, null, { "d/a.enc": b64("gleich"), "d/b.enc": b64("gleich") });
     const k1 = (await jsonVon(r1)).kennung;
     await stand(t, k1, { "d/c.enc": b64("gleich") });
-    const konto = await env.DB.prepare("SELECT id FROM konten WHERE mail = ?").bind(k.mail).first<{ id: string }>();
+    const konto = await env.DB.prepare("SELECT id FROM konten WHERE name = ?").bind(k.name).first<{ id: string }>();
     const liste = await env.R2.list({ prefix: `mitte/${konto!.id}/` });
     expect(liste.objects.length).toBe(1);
   });

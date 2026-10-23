@@ -5,40 +5,42 @@ import { anmelden, b64u, codeAnlegen, fernet, jsonVon, kontoAnlegen, neueIp, ruf
 const KDF = { name: "argon2id", t: 3, m: 65536, p: 4 };
 
 describe("Konto anlegen", () => {
-  it("legt an, verbraucht den Code, Mail klein", async () => {
+  it("legt an, verbraucht den Code, Name klein", async () => {
     const code = await codeAnlegen();
     const body = {
-      mail: "  Jemand@Example.ORG ", code, salz: b64u(zufall(16)), kdf: KDF,
+      name: "  Jemand.X ", code, salz: b64u(zufall(16)), kdf: KDF,
       anmelde_schluessel: b64u(zufall()), verpackt_passwort: fernet(), verpackt_notfall: fernet(),
       notfall_beweis: b64u(zufall()),
     };
     const r = await rufen("POST", "/v1/konto", { json: body });
     expect(r.status).toBe(201);
-    expect((await jsonVon(r)).mail).toBe("jemand@example.org");
+    expect((await jsonVon(r)).name).toBe("jemand.x");
 
-    const row = await env.DB.prepare("SELECT hash_art, anmelde_hash, anmelde_salz, notfall_hash FROM konten WHERE mail = ?")
-      .bind("jemand@example.org").first<{ hash_art: string; anmelde_hash: string; anmelde_salz: string; notfall_hash: string }>();
+    const row = await env.DB.prepare("SELECT hash_art, anmelde_hash, anmelde_salz, notfall_hash FROM konten WHERE name = ?")
+      .bind("jemand.x").first<{ hash_art: string; anmelde_hash: string; anmelde_salz: string; notfall_hash: string }>();
     expect(row?.hash_art).toBe("hmac-sha256");
     expect(row?.anmelde_hash).not.toBe(body.anmelde_schluessel);
     expect(row?.anmelde_hash).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(row?.anmelde_salz).toMatch(/^[A-Za-z0-9_-]{43}$/); // 32 bytes
 
     // Code ist verbraucht.
-    const zweit = await rufen("POST", "/v1/konto", { json: { ...body, mail: "anders@example.org" } });
+    const zweit = await rufen("POST", "/v1/konto", { json: { ...body, name: "anders" } });
     expect(zweit.status).toBe(403);
     expect((await jsonVon(zweit)).fehler).toBe("code_ungueltig");
 
-    // Gleiche Mail (andere Schreibweise) mit neuem Code → 409.
+    // Gleicher Name (andere Schreibweise) mit neuem Code → 409; der Code bleibt frei.
+    const neuerCode = await codeAnlegen();
     const doppelt = await rufen("POST", "/v1/konto", {
-      json: { ...body, mail: "JEMAND@example.org", code: await codeAnlegen() },
+      json: { ...body, name: "JEMAND.x", code: neuerCode },
     });
     expect(doppelt.status).toBe(409);
-    expect((await jsonVon(doppelt)).fehler).toBe("mail_vergeben");
+    expect((await jsonVon(doppelt)).fehler).toBe("name_vergeben");
+    expect((await rufen("POST", "/v1/konto", { json: { ...body, name: "jemand.y", code: neuerCode } })).status).toBe(201);
   });
 
   it("weist unbekannte Codes und kaputte Felder ab", async () => {
     const body = {
-      mail: "x@example.org", code: "GIBTSNICHT", salz: b64u(zufall(16)), kdf: KDF,
+      name: "xaver", code: "GIBTSNICHT", salz: b64u(zufall(16)), kdf: KDF,
       anmelde_schluessel: b64u(zufall()), verpackt_passwort: fernet(), verpackt_notfall: fernet(),
       notfall_beweis: b64u(zufall()),
     };
@@ -48,7 +50,7 @@ describe("Konto anlegen", () => {
     expect((await rufen("POST", "/v1/konto", { json: ohneBeweis })).status).toBe(400);
     expect((await rufen("POST", "/v1/konto", { json: { ...body, kdf: { ...KDF, m: 1024 } } })).status).toBe(400);
     expect((await rufen("POST", "/v1/konto", { json: { ...body, anmelde_schluessel: "kurz" } })).status).toBe(400);
-    expect((await rufen("POST", "/v1/konto", { json: { ...body, mail: "keine-mail" } })).status).toBe(400);
+    expect((await rufen("POST", "/v1/konto", { json: { ...body, name: "x" } })).status).toBe(400);
     expect((await rufen("POST", "/v1/konto", { body: "{kaputt", kopf: { "Content-Type": "application/json" } })).status).toBe(400);
     const gross = await rufen("POST", "/v1/konto", { json: { ...body, rest: "x".repeat(20_000) } });
     expect(gross.status).toBe(413);
@@ -57,17 +59,17 @@ describe("Konto anlegen", () => {
 });
 
 describe("Vorab", () => {
-  it("liefert echte Werte für bekannte Mail", async () => {
+  it("liefert echte Werte für bekannten Namen", async () => {
     const k = await kontoAnlegen();
-    const d = await jsonVon(await rufen("POST", "/v1/vorab", { json: { mail: k.mail.toUpperCase() } }));
+    const d = await jsonVon(await rufen("POST", "/v1/vorab", { json: { name: k.name.toUpperCase() } }));
     expect(d.salz).toBe(k.salz);
     expect(d.kdf).toEqual(KDF);
   });
 
-  it("erfindet feste Werte für unbekannte Mail", async () => {
-    const a1 = await jsonVon(await rufen("POST", "/v1/vorab", { json: { mail: "niemand@example.org" } }));
-    const a2 = await jsonVon(await rufen("POST", "/v1/vorab", { json: { mail: "Niemand@Example.org" } }));
-    const b = await jsonVon(await rufen("POST", "/v1/vorab", { json: { mail: "keiner@example.org" } }));
+  it("erfindet feste Werte für unbekannten Namen", async () => {
+    const a1 = await jsonVon(await rufen("POST", "/v1/vorab", { json: { name: "niemand" } }));
+    const a2 = await jsonVon(await rufen("POST", "/v1/vorab", { json: { name: " Niemand " } }));
+    const b = await jsonVon(await rufen("POST", "/v1/vorab", { json: { name: "keiner" } }));
     expect(a1).toEqual(a2);
     expect(a1.salz).not.toBe(b.salz);
     expect(a1.kdf).toEqual(KDF);
@@ -79,7 +81,7 @@ describe("Sitzung", () => {
   it("meldet an und ab; Token nur als Hash gespeichert", async () => {
     const k = await kontoAnlegen();
     const r = await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: k.anmelde_schluessel, knoten: "minipc" },
+      ip: neueIp(), json: { name: k.name, anmelde_schluessel: k.anmelde_schluessel, knoten: "minipc" },
     });
     expect(r.status).toBe(200);
     const d = await jsonVon(r);
@@ -91,8 +93,8 @@ describe("Sitzung", () => {
 
     const roh = await env.DB.prepare("SELECT COUNT(*) AS n FROM sitzungen WHERE token_hash = ?").bind(d.token).first<{ n: number }>();
     expect(roh?.n).toBe(0);
-    const s = await env.DB.prepare("SELECT knoten FROM sitzungen WHERE konto_id = (SELECT id FROM konten WHERE mail = ?)")
-      .bind(k.mail).first<{ knoten: string }>();
+    const s = await env.DB.prepare("SELECT knoten FROM sitzungen WHERE konto_id = (SELECT id FROM konten WHERE name = ?)")
+      .bind(k.name).first<{ knoten: string }>();
     expect(s?.knoten).toBe("minipc");
 
     expect((await rufen("GET", "/v1/mitte", { token: d.token })).status).toBe(200);
@@ -101,30 +103,30 @@ describe("Sitzung", () => {
     expect((await rufen("DELETE", "/v1/sitzung", { token: d.token })).status).toBe(401);
   });
 
-  it("falsches Passwort und unbekannte Mail sehen gleich aus", async () => {
+  it("falsches Passwort und unbekannter Name sehen gleich aus", async () => {
     const k = await kontoAnlegen();
     const falsch = await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
+      ip: neueIp(), json: { name: k.name, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
     });
     const unbekannt = await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: "gibts-nicht@example.org", anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
+      ip: neueIp(), json: { name: "gibts-nicht", anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
     });
     expect(falsch.status).toBe(401);
     expect(unbekannt.status).toBe(401);
     expect(await jsonVon(falsch)).toEqual(await jsonVon(unbekannt));
   });
 
-  it("drosselt nach 5 Fehlversuchen je Mail", async () => {
+  it("drosselt nach 5 Fehlversuchen je Name", async () => {
     const k = await kontoAnlegen();
     for (let i = 0; i < 5; i++) {
       const r = await rufen("POST", "/v1/sitzung", {
-        ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
+        ip: neueIp(), json: { name: k.name, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
       });
       expect(r.status).toBe(401);
     }
     // Auch mit dem richtigen Schlüssel und von einer neuen IP: gesperrt.
     const r = await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
+      ip: neueIp(), json: { name: k.name, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
     });
     expect(r.status).toBe(429);
     expect((await jsonVon(r)).fehler).toBe("zu_viele_versuche");
@@ -139,12 +141,12 @@ describe("Sitzung", () => {
     const ip = "192.0.2.77";
     for (let i = 0; i < 5; i++) {
       await rufen("POST", "/v1/sitzung", {
-        ip, json: { mail: `raten${i}@example.org`, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
+        ip, json: { name: `raten${i}`, anmelde_schluessel: b64u(zufall()), knoten: "laptop" },
       });
     }
     const k = await kontoAnlegen();
     const r = await rufen("POST", "/v1/sitzung", {
-      ip, json: { mail: k.mail, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
+      ip, json: { name: k.name, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
     });
     expect(r.status).toBe(429);
   });
@@ -155,11 +157,11 @@ describe("Notfall und Passwort", () => {
     const k = await kontoAnlegen();
     const alt = await anmelden(k);
 
-    const falsch = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { mail: k.mail, notfall_beweis: b64u(zufall()) } });
+    const falsch = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { name: k.name, notfall_beweis: b64u(zufall()) } });
     expect(falsch.status).toBe(401);
     expect((await jsonVon(falsch)).fehler).toBe("falscher_notfallschluessel");
 
-    const r = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { mail: k.mail, notfall_beweis: k.notfall_beweis } });
+    const r = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { name: k.name, notfall_beweis: k.notfall_beweis } });
     expect(r.status).toBe(200);
     const d = await jsonVon(r);
     expect(d.verpackt_notfall).toBe(k.verpackt_notfall);
@@ -178,25 +180,25 @@ describe("Notfall und Passwort", () => {
 
     // Alter Schlüssel geht nicht mehr, neuer schon; vorab liefert das neue Salz.
     const altLogin = await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
+      ip: neueIp(), json: { name: k.name, anmelde_schluessel: k.anmelde_schluessel, knoten: "laptop" },
     });
     expect(altLogin.status).toBe(401);
     const neuLogin = await jsonVon(await rufen("POST", "/v1/sitzung", {
-      ip: neueIp(), json: { mail: k.mail, anmelde_schluessel: neu.anmelde_schluessel, knoten: "laptop" },
+      ip: neueIp(), json: { name: k.name, anmelde_schluessel: neu.anmelde_schluessel, knoten: "laptop" },
     }));
     expect(neuLogin.verpackt_passwort).toBe(neu.verpackt_passwort);
-    expect((await jsonVon(await rufen("POST", "/v1/vorab", { json: { mail: k.mail } }))).salz).toBe(neu.salz);
+    expect((await jsonVon(await rufen("POST", "/v1/vorab", { json: { name: k.name } }))).salz).toBe(neu.salz);
 
     // Der Notfallschlüssel selbst bleibt gültig.
-    expect((await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { mail: k.mail, notfall_beweis: k.notfall_beweis } })).status).toBe(200);
+    expect((await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { name: k.name, notfall_beweis: k.notfall_beweis } })).status).toBe(200);
   });
 
   it("Notfall wird gedrosselt", async () => {
     const k = await kontoAnlegen();
     for (let i = 0; i < 5; i++) {
-      await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { mail: k.mail, notfall_beweis: b64u(zufall()) } });
+      await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { name: k.name, notfall_beweis: b64u(zufall()) } });
     }
-    const r = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { mail: k.mail, notfall_beweis: k.notfall_beweis } });
+    const r = await rufen("POST", "/v1/notfall", { ip: neueIp(), json: { name: k.name, notfall_beweis: k.notfall_beweis } });
     expect(r.status).toBe(429);
   });
 

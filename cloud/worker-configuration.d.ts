@@ -4,7 +4,7 @@
 interface __BaseEnv_Env {
 	R2: R2Bucket;
 	DB: D1Database;
-	BETREIBER_MAILS: string;
+	BETREIBER_NAMEN: string;
 	BREMSE_SPEICHER: string;
 	CF_ACCOUNT_ID: string;
 	VORAB_GEHEIMNIS: string;
@@ -20,7 +20,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "BETREIBER_MAILS" | "BREMSE_SPEICHER" | "CF_ACCOUNT_ID" | "VORAB_GEHEIMNIS">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "BETREIBER_NAMEN" | "BREMSE_SPEICHER" | "CF_ACCOUNT_ID" | "VORAB_GEHEIMNIS">> {}
 }
 declare module "*.txt" {
 	const value: string;

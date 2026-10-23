@@ -40,7 +40,7 @@ describe("Paket", () => {
     // Der Code ist nach dem Download noch frei für ein Konto …
     const konto = await rufen("POST", "/v1/konto", {
       json: {
-        mail: "paket@example.org", code, salz: b64u(zufall(16)), kdf: { name: "argon2id", t: 3, m: 65536, p: 4 },
+        name: "paket", code, salz: b64u(zufall(16)), kdf: { name: "argon2id", t: 3, m: 65536, p: 4 },
         anmelde_schluessel: b64u(zufall()), verpackt_passwort: fernet(), verpackt_notfall: fernet(),
         notfall_beweis: b64u(zufall()),
       },

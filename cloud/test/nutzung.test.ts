@@ -8,7 +8,7 @@ import {
 } from "../src/nutzung";
 import { anmelden, blobHoch, jsonVon, kontoAnlegen, rufen, rufenGezaehlt, shaHex } from "./hilfe";
 
-const BETREIBER = "jenny_wolff@hotmail.com";
+const BETREIBER = "betreiber-test";   // vitest.config.ts: BETREIBER_NAMEN
 const heute = () => new Date().toISOString().slice(0, 10);
 
 async function zeile() {

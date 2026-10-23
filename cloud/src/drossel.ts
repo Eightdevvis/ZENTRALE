@@ -1,9 +1,14 @@
 // Rate limit for login-like routes: 5 failed attempts per 15 minutes, counted
-// separately per mail and per client IP. Keys are hashed (no plain mail/IP in
-// the table). Only failures count; a success clears the mail counter.
+// separately per account name and per client IP. Neither is stored: a key is
+// HMAC(tageskey, value), where tageskey = HMAC(VORAB_GEHEIMNIS, UTC date)
+// changes every day. A plain SHA-256 of an IPv4 address could be reversed by
+// trying all 2^32; this cannot without the secret, and yesterday's keys are
+// useless today. Price: a counter starts fresh at 00:00 UTC (at most 2×5
+// attempts around midnight). Only failures count; a success clears the name
+// counter. Old rows go with the daily cron.
 
-import { HttpFehler } from "./hilfe";
-import { sha256Hex } from "./krypto";
+import { HttpFehler, hex } from "./hilfe";
+import { hmac } from "./krypto";
 
 export const MAX_FEHLVERSUCHE = 5;
 export const FENSTER_MS = 15 * 60 * 1000;
@@ -16,11 +21,23 @@ export function ip(anfrage: Request): string {
   return anfrage.headers.get("CF-Connecting-IP") ?? "unbekannt";
 }
 
-export async function drossel(route: string, mail: string, adresse: string): Promise<Drossel> {
+export const utcTag = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** The key of today (UTC) for hashing names and IPs; 503 without the secret. */
+async function tagesSchluessel(env: Env, jetzt: number): Promise<string> {
+  if (!env.VORAB_GEHEIMNIS) {
+    throw new HttpFehler(503, "nicht_eingerichtet", "The server is not fully configured.");
+  }
+  return hex(await hmac(env.VORAB_GEHEIMNIS, `zentrale/drossel/v1|${utcTag(jetzt)}`));
+}
+
+export async function drossel(env: Env, route: string, name: string, adresse: string,
+                              jetzt: number): Promise<Drossel> {
+  const tag = await tagesSchluessel(env, jetzt);
   return {
     schluessel: [
-      `${route}:mail:${await sha256Hex(mail)}`,
-      `${route}:ip:${await sha256Hex(adresse)}`,
+      `${route}:name:${hex(await hmac(tag, `name|${name}`))}`,
+      `${route}:ip:${hex(await hmac(tag, `ip|${adresse}`))}`,
     ],
   };
 }

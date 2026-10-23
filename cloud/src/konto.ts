@@ -1,8 +1,10 @@
 // Accounts and sessions (zero-knowledge: the server only sees values the
 // client derived from the password; it stores salted HMAC-SHA256 of them).
+// Anonymous: an account is a username or a 16-digit number (src/name.ts),
+// never an email.
 //
 //   POST   /v1/konto           create (uses up the invite code)
-//   POST   /v1/vorab           salt + kdf for a mail (fake but stable if unknown)
+//   POST   /v1/vorab           salt + kdf for a name (fake but stable if unknown)
 //   POST   /v1/sitzung         log in → token
 //   DELETE /v1/sitzung         log out
 //   POST   /v1/notfall         emergency key → verpackt_notfall + restricted token
@@ -11,6 +13,7 @@
 import { drossel, erfolg, fehlschlag, ip, pruefen } from "./drossel";
 import { HttpFehler, KB, b64Lesen, b64u, json, jsonLesen, text, ungueltig } from "./hilfe";
 import { HASH_ART, gleich, hmac, neuerHash, neuesToken, schluesselHash, sha256Hex, zufall } from "./krypto";
+import { nameLesen, neuerNameLesen } from "./name";
 import { codeHash } from "./paket";
 
 export const SITZUNG_TAGE = 90;
@@ -30,7 +33,7 @@ export interface Sitzung {
 
 interface KontoZeile {
   id: string;
-  mail: string;
+  name: string;
   salz: string;
   kdf: string;
   anmelde_hash: string;
@@ -44,15 +47,8 @@ interface KontoZeile {
 
 // ── Field checks ─────────────────────────────────────────────────────────
 
-const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FERNET = /^[A-Za-z0-9_=-]+$/;
 export const KNOTEN_NAME = /^[\p{L}\p{N}@._-]{1,64}$/u;
-
-export function mailLesen(daten: Record<string, unknown>): string {
-  const mail = text(daten, "mail", 254).toLowerCase();
-  if (!MAIL.test(mail)) throw ungueltig("The email address is not valid.");
-  return mail;
-}
 
 /** A 32-byte key from the client (base64url) → its bytes. */
 function schluesselLesen(daten: Record<string, unknown>, feld: string): Uint8Array {
@@ -151,7 +147,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
-  const mail = mailLesen(d);
+  const name = neuerNameLesen(d);
   const code = text(d, "code", 128);
   const salz = salzLesen(d);
   const kdf = kdfLesen(d);
@@ -176,11 +172,11 @@ export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): P
   try {
     ergebnis = await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO konten (id, mail, salz, kdf, anmelde_hash, anmelde_salz, notfall_hash, notfall_salz,
+        `INSERT INTO konten (id, name, salz, kdf, anmelde_hash, anmelde_salz, notfall_hash, notfall_salz,
                              hash_art, verpackt_passwort, verpackt_notfall, erstellt, geaendert)
          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE EXISTS (SELECT 1 FROM codes WHERE code_hash = ? AND gesperrt = 0 AND verbraucht_von IS NULL)`,
-      ).bind(id, mail, salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, HASH_ART,
+      ).bind(id, name, salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, HASH_ART,
         verpackt_passwort, verpackt_notfall, jetzt, jetzt, ch),
       env.DB.prepare(
         `UPDATE codes SET verbraucht_von = ?, verbraucht_am = ?
@@ -190,29 +186,30 @@ export async function kontoAnlegen(env: Env, anfrage: Request, jetzt: number): P
         .bind(id, id),
     ]);
   } catch (e) {
+    // Necessarily tells that this name exists — the only route that does.
     if (String(e).includes("UNIQUE")) {
-      throw new HttpFehler(409, "mail_vergeben", "An account with this email address already exists.");
+      throw new HttpFehler(409, "name_vergeben", "This name is already taken. Please choose another one.");
     }
     throw e;
   }
   if (ergebnis[0].meta.changes !== 1) {
     throw new HttpFehler(403, "code_ungueltig", "This invite code is not valid or was already used.");
   }
-  return json({ mail, erstellt: iso(jetzt) }, 201);
+  return json({ name, erstellt: iso(jetzt) }, 201);
 }
 
 export async function vorab(env: Env, anfrage: Request): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
-  const mail = mailLesen(d);
-  const k = await env.DB.prepare("SELECT salz, kdf FROM konten WHERE mail = ?").bind(mail)
+  const name = nameLesen(d);
+  const k = await env.DB.prepare("SELECT salz, kdf FROM konten WHERE name = ?").bind(name)
     .first<{ salz: string; kdf: string }>();
   if (k) return json({ salz: k.salz, kdf: JSON.parse(k.kdf) });
-  // Unknown mail: invented values that stay the same for this mail, so the
+  // Unknown name: invented values that stay the same for this name, so the
   // answer does not reveal whether the account exists.
   if (!env.VORAB_GEHEIMNIS) {
     throw new HttpFehler(503, "nicht_eingerichtet", "The server is not fully configured.");
   }
-  const h = await hmac(env.VORAB_GEHEIMNIS, `zentrale/vorab/v1|${mail}`);
+  const h = await hmac(env.VORAB_GEHEIMNIS, `zentrale/vorab/v1|${name}`);
   return json({ salz: b64u(h.slice(0, 16)), kdf: KDF_VORGABE });
 }
 
@@ -234,17 +231,17 @@ const notfallHash = (k: KontoZeile | null) =>
 
 export async function anmelden(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
-  const mail = mailLesen(d);
+  const name = nameLesen(d);
   const anmelde = schluesselLesen(d, "anmelde_schluessel");
   const knoten = knotenLesen(d);
 
-  const dr = await drossel("sitzung", mail, ip(anfrage));
+  const dr = await drossel(env, "sitzung", name, ip(anfrage), jetzt);
   await pruefen(env.DB, dr, jetzt);
-  const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE name = ?").bind(name).first<KontoZeile>();
   const ok = await pruefeHash(anmelde, anmeldeHash(k));
   if (!ok || !k) {
     await fehlschlag(env.DB, dr, jetzt);
-    throw new HttpFehler(401, "falsche_anmeldung", "Wrong email or password.");
+    throw new HttpFehler(401, "falsche_anmeldung", "Wrong name or password.");
   }
   await erfolg(env.DB, dr);
   const s = await sitzungAnlegen(env.DB, k.id, knoten, "normal", SITZUNG_TAGE * TAG_MS, jetzt);
@@ -260,12 +257,12 @@ export async function abmelden(env: Env, anfrage: Request, jetzt: number): Promi
 
 export async function notfall(env: Env, anfrage: Request, jetzt: number): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_JSON);
-  const mail = mailLesen(d);
+  const name = nameLesen(d);
   const beweis = schluesselLesen(d, "notfall_beweis");
 
-  const dr = await drossel("notfall", mail, ip(anfrage));
+  const dr = await drossel(env, "notfall", name, ip(anfrage), jetzt);
   await pruefen(env.DB, dr, jetzt);
-  const k = await env.DB.prepare("SELECT * FROM konten WHERE mail = ?").bind(mail).first<KontoZeile>();
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE name = ?").bind(name).first<KontoZeile>();
   const ok = await pruefeHash(beweis, notfallHash(k));
   if (!ok || !k) {
     await fehlschlag(env.DB, dr, jetzt);
@@ -293,7 +290,7 @@ export async function passwortSetzen(env: Env, anfrage: Request, jetzt: number):
   // proved the emergency key.
   if (s.art === "normal") {
     const alt = schluesselLesen(d, "altes_anmelde_schluessel");
-    const dr = await drossel("passwort", k.mail, ip(anfrage));
+    const dr = await drossel(env, "passwort", k.name, ip(anfrage), jetzt);
     await pruefen(env.DB, dr, jetzt);
     if (!(await pruefeHash(alt, anmeldeHash(k)))) {
       await fehlschlag(env.DB, dr, jetzt);

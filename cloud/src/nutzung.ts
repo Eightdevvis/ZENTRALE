@@ -1,6 +1,6 @@
 // Free-tier usage: how close is the cloud to the Cloudflare free limits?
 //
-//   GET /v1/nutzung   Bearer, only for accounts in BETREIBER_MAILS (else 403)
+//   GET /v1/nutzung   Bearer, only for accounts in BETREIBER_NAMEN (else 403)
 //                     → {zeit, grenzen_geprueft, grenzen: [...], warnungen: [...]}
 //
 // Self-metering: every request runs against a counting view of D1 and R2
@@ -25,6 +25,7 @@
 
 import { HttpFehler, json } from "./hilfe";
 import type { Sitzung } from "./konto";
+import { nameNormal } from "./name";
 
 import { GRENZEN, GRENZEN_GEPRUEFT, type Grenze, type Stufe, type Zeitraum, stufe } from "./grenzen";
 
@@ -328,14 +329,15 @@ export async function berichtErstellen(env: Env, jetzt: number): Promise<Bericht
   return { zeit: new Date(jetzt).toISOString(), grenzen_geprueft: GRENZEN_GEPRUEFT, grenzen, warnungen };
 }
 
-export function betreiber(env: Env, mail: string): boolean {
-  return (env.BETREIBER_MAILS ?? "").split(",").map((m) => m.trim().toLowerCase()).filter(Boolean)
-    .includes(mail.toLowerCase());
+/** BETREIBER_NAMEN: comma list of account names (usernames). */
+export function betreiber(env: Env, name: string): boolean {
+  return (env.BETREIBER_NAMEN ?? "").split(",").map(nameNormal).filter(Boolean)
+    .includes(nameNormal(name));
 }
 
 export async function nutzungRoute(env: Env, s: Sitzung, jetzt: number): Promise<Response> {
-  const k = await env.DB.prepare("SELECT mail FROM konten WHERE id = ?").bind(s.konto_id).first<{ mail: string }>();
-  if (!k || !betreiber(env, k.mail)) {
+  const k = await env.DB.prepare("SELECT name FROM konten WHERE id = ?").bind(s.konto_id).first<{ name: string }>();
+  if (!k || !betreiber(env, k.name)) {
     throw new HttpFehler(403, "nur_betreiber", "Usage figures are only for the operator of this cloud.");
   }
   return json(await berichtErstellen(env, jetzt));
