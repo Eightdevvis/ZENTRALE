@@ -99,7 +99,8 @@ def test_text_wird_eng_kuerzer():
 def test_titel_schluessel_kopie_rechnet_wie_der_kern():
     assert ka.KURZFORMEN == kalender_kategorie.KURZFORMEN
     for t in ("Analysis I @ HS 1", "ExPhy-Übung", "exphy", "Theoretische Physik Ia",
-              "Allgemeine Chemie für Nebenfächler (Mo)", "", None, "  Chor  ", "A/B"):
+              "Allgemeine Chemie für Nebenfächler (Mo)", "", None, "  Chor  ", "A/B",
+              "TP Sprechstunde X", "Ana Tutorium Y"):
         assert ka.titel_schluessel(t) == kalender_kategorie.titel_schluessel(t), t
 
 

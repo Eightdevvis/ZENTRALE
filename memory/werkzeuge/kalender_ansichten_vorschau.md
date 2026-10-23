@@ -99,7 +99,7 @@ Listen-Sidebar heraus).
   anderes, sind aber dieselben. exphy = experimentalphysik … ich habe nur 4
   kurse." Die Farbe hängt am **ersten Wort** ohne „@ Ort"
   (`titel_schluessel`; „Analysis Saalübung" = „Analysis I"), Kurzformen in
-  `KURZFORMEN` (`exphy` → `experimentalphysik`). Was in den geladenen Daten
+  `KURZFORMEN` (`exphy`, seit 23.10. `tp`, `ana`). Was in den geladenen Daten
   ≥ 2× vorkommt, bekommt beim ersten Auftauchen fest die nächste freie Farbe
   in `RANGFOLGE` (Cyan, Orange, Pink, Meergrün, Violett …; häufigste zuerst)
   — garantiert verschieden, gespeichert in

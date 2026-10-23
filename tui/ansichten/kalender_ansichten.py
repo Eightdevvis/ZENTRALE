@@ -87,6 +87,8 @@ TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))
 # Kurzformen werden auf den vollen Namen gelegt. Neue Kurzform → hier rein.
 KURZFORMEN = {
     "exphy": "experimentalphysik",
+    "tp": "theoretische",       # „TP Sprechstunde …" (23.10.2026)
+    "ana": "analysis",          # „Ana Tutorium …", „Ana Sprechstunde …"
 }
 # Wiederkehrendes bekommt beim ersten Auftauchen fest eine FREIE Farbe
 # (farben_vergeben); die Tabelle hält tui/ansichten/kalender.py auf Platte,

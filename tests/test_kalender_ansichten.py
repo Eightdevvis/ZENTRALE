@@ -382,6 +382,8 @@ def test_kurs_schluessel_fasst_varianten_zusammen():
     assert s("Exphy Mathe") == s("ExPhy Tutorium") == s("Experimentalphysik mathe") \
         == s("Experimentalphysik")
     assert s("Analysis Saalübung") == s("Analysis I")
+    assert s("TP Sprechstunde Jonas Schömer (Mi)") == "theoretische" == s("Theoretische Physik Ia")
+    assert s("Ana Tutorium Jäger") == s("Ana Sprechstunde Brenner") == "analysis" == s("Analysis I")
     assert s("Theoretische Physik Ia Tutorium") == s("Theoretische Physik Ia")
     assert s("Allgemeine Chemie für Nebenfächler (Mo)") == s("Allgemeine Chemie (Do)")
     assert s("Geigenstunde @ Geigenschule") == s("Geigenstunde")

@@ -133,6 +133,8 @@ def aus_namen(namen: list[str]) -> dict:
 # die TUI von hier bezieht). Kurzformen: wie Sasha Kurse abkürzt.
 KURZFORMEN = {
     "exphy": "experimentalphysik",
+    "tp": "theoretische",       # „TP Sprechstunde …" (23.10.2026)
+    "ana": "analysis",          # „Ana Tutorium …", „Ana Sprechstunde …"
 }
 
 
