@@ -61,7 +61,7 @@ EN = {
     ],
 
     # ── Eingaben ────────────────────────────────────────────────────
-    "ask_mail": "Email: ",
+    "ask_name": "username: ",
     "ask_password": "Password: ",
     "ask_password_new": "New password (at least {n} characters): ",
     "ask_password_again": "Repeat the password: ",
@@ -75,8 +75,8 @@ EN = {
     "working_key": "Deriving your key (this takes a moment) …",
 
     # ── Konto ───────────────────────────────────────────────────────
-    "login_ok": "Logged in as {mail} on device '{device}'.",
-    "login_already": "Already logged in as {mail}. Log out first to switch accounts.",
+    "login_ok": "Logged in as {name} on device '{device}'.",
+    "login_already": "Already logged in as {name}. Log out first to switch accounts.",
     "logout_ok": "Logged out. The account key was removed from this device.",
     "logout_none": "Nobody was logged in on this device.",
     "create_intro": ("Creating a ZENTRALE account. Your password never leaves this\n"
@@ -88,9 +88,9 @@ EN = {
         "Nobody — not even the ZENTRALE team — can recover your data without it."),
     "emergency_confirm": "Have you saved the emergency key somewhere safe?",
     "emergency_not_saved": "Account not created. Run 'zentrale account create' again when you are ready.",
-    "create_ok": "Account created and logged in as {mail}.",
+    "create_ok": "Account created and logged in as {name}.",
     "recover_intro": "Set a new password with your emergency key. Your data stays as it is.",
-    "recover_ok": "New password set. Logged in as {mail}.",
+    "recover_ok": "New password set. Logged in as {name}.",
     "password_ok": "Password changed. Your data and other devices are not affected; log in there with the new password.",
     "not_logged_in": "Not logged in. Run 'zentrale login' first (or 'zentrale setup').",
 
@@ -159,7 +159,7 @@ EN = {
     "st_notes": "Notes",
 
     # ── Geräte ──────────────────────────────────────────────────────
-    "dev_title": "Devices of {mail}",
+    "dev_title": "Devices of {name}",
     "dev_none": "No devices yet.",
     "dev_registered": "This device is registered as '{name}'.",
     "dev_this": "(this device)",

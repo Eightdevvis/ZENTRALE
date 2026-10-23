@@ -93,7 +93,7 @@ def _einstellungen(geraet):
 def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     from zentrale_cli import assistent
     term = Spiel("2",                                          # neues Konto
-                 "ZB-AAAA-BBBB-CCCC-DDDD", "s@x.org", PW, PW, "y",         # Code, Mail, Passwort ×2, gesichert
+                 "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y",         # Code, Name, Passwort ×2, gesichert
                  "2",                                          # einzeln wählen
                  "n", "1 5", "")                               # nichts, dann Listen + Gedächtnis
     assert befehle.eingerichtet() is False
@@ -105,8 +105,8 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     assert e["abgleich_mitte_art"] == "http" and e["abgleich_weg"] == "mitte"
     assert e["einrichtung"]
     assert befehle.eingerichtet()
-    assert "minipc" in geraet.zustand.knoten["s@x.org"]           # Gerät gemeldet
-    assert geraet.zustand.kopf["s@x.org"] is not None              # gleich abgeglichen
+    assert "minipc" in geraet.zustand.knoten["sasha"]           # Gerät gemeldet
+    assert geraet.zustand.kopf["sasha"] is not None              # gleich abgeglichen
     # Neu geladen (wie nach einem Neustart): die Wahl ist noch da.
     ai_config._overrides.clear()
     ai_config._config.clear()
@@ -117,7 +117,7 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
 
 def test_assistent_notfallschluessel_nicht_bestaetigt_kein_konto(geraet):
     from zentrale_cli import assistent
-    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "s@x.org", PW, PW, "n")
+    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "n")
     assert assistent.setup(term) == 1
     assert not geraet.zustand.konten and not konto.angemeldet()
     assert "ZB-AAAA-BBBB-CCCC-DDDD" in geraet.zustand.codes
@@ -144,18 +144,42 @@ def test_erster_start_ohne_einrichtung_erst_assistent_dann_tui(geraet, monkeypat
 
 
 def test_login_falsches_passwort_ein_satz_kein_traceback(geraet):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     konto.abmelden()
-    term = Spiel("s@x.org", "falsch-falsch-falsch")
+    term = Spiel("sasha", "falsch-falsch-falsch")
     assert haupt.main(["login"], term=term) == 1
-    assert "Wrong email or password" in term.text and "Traceback" not in term.text
+    assert "Wrong username or password" in term.text and "Traceback" not in term.text
+
+
+def test_konto_anlegen_name_erst_falsch_dann_vergeben_dann_frei(geraet):
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.abmelden()
+    term = Spiel("ZB-EEEE-FFFF-GGGG-HHHH",
+                 "sasha@example.org",                       # Mail aus Gewohnheit → Hinweis
+                 "admin",                                    # reserviert
+                 "sasha", PW, PW, "y",                       # vergeben (erst der Server weiß es)
+                 "Anna.B")                                   # frei
+    assert befehle.account_create(term) == 0, term.text
+    assert term.text.count("username: ") == 4
+    assert "No email needed" in term.text and "reserved" in term.text and "already taken" in term.text
+    assert "logged in as anna.b" in term.text
+    assert konto.lesen()["name"] == "anna.b" and "anna.b" in geraet.zustand.konten
+    assert "mail" not in json.dumps(geraet.zustand.konten).lower()
+
+
+def test_login_fragt_nur_username(geraet):
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.abmelden()
+    term = Spiel(" Sasha ", PW)
+    assert haupt.main(["login"], term=term) == 0, term.text
+    assert term.text.startswith("username: ") and "Logged in as sasha" in term.text
 
 
 def test_devices_meldet_sich_selbst_und_listet(geraet, monkeypatch):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     term = Spiel()
     assert befehle.devices(term) == 0
-    b = geraet.zustand.knoten["s@x.org"]["minipc"]
+    b = geraet.zustand.knoten["sasha"]["minipc"]
     assert b["name"] == "minipc" and b["sorte"] == "vollknoten"
     assert set(b["hardware"]) == {"gpu", "bildschirm", "mikro", "lautsprecher"}
     assert "minipc" in term.text and "(this device)" in term.text
@@ -211,8 +235,8 @@ def _nutzung_aufrufe(geraet):
 
 @pytest.fixture
 def betreiber(geraet):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
-    geraet.zustand.betreiber.add("s@x.org")
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    geraet.zustand.betreiber.add("sasha")
     geraet.zustand.nutzung = _bericht()
     return geraet
 
@@ -244,7 +268,7 @@ def test_cloud_usage_farbe_nach_stufe(betreiber):
 
 
 def test_cloud_usage_nicht_betreiber_hoeflich(geraet):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     term = Spiel()
     assert haupt.main(["cloud", "usage"], term=term) == 1
     assert "only for the operator" in term.text and "Error" not in term.text

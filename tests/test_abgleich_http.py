@@ -37,7 +37,7 @@ def _mitte(cloud, token=None):
 
 
 def _token(cloud):
-    konto.anlegen(konto.Entwurf(PW), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.anlegen(konto.Entwurf(PW), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     return konto.lesen()["token"]
 
 
@@ -152,9 +152,9 @@ def zwei(cloud, monkeypatch, tmp_path):
     monkeypatch.setattr(ai_config, "_save", lambda: None)
     laptop = Geraet(cloud, monkeypatch, tmp_path, "laptop").ich()
     entwurf = konto.Entwurf(PW)
-    konto.anlegen(entwurf, "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
+    konto.anlegen(entwurf, "sasha", "ZB-AAAA-BBBB-CCCC-DDDD", PW)
     pc = Geraet(cloud, monkeypatch, tmp_path, "pc").ich()
-    konto.anmelden("s@x.org", PW)
+    konto.anmelden("sasha", PW)
     laptop.konto_schluessel = entwurf.konto_schluessel
     return laptop, pc
 
@@ -183,14 +183,14 @@ def test_zwei_geraete_ueber_die_cloud(zwei, cloud):
     # Die Basis merkt sich die ECHTE Kennung des Servers.
     pc.ich()
     assert json.loads((pc.ordner / "abgleich" / "basis.json").read_text())["stand"] \
-        == cloud.zustand.kopf["s@x.org"]
+        == cloud.zustand.kopf["sasha"]
 
 
 def test_cloud_sieht_nur_verschluesseltes_mit_dem_konto_schluessel(zwei, cloud):
     laptop, _ = zwei
     laptop.schreiben("gedaechtnis/geheim.md", "Tagebuch: streng geheim\n")
     laptop.abgleichen()
-    stand = cloud.zustand.staende[cloud.zustand.kopf["s@x.org"]]
+    stand = cloud.zustand.staende[cloud.zustand.kopf["sasha"]]
     alles = b"".join(stand.values()) + b"".join(n.encode() for n in stand)
     assert b"streng geheim" not in alles and b"gedaechtnis" not in alles
     inhalt = json.loads(schluessel.Tresor(laptop.konto_schluessel).auf(stand["inhalt.enc"]))
@@ -249,7 +249,7 @@ def test_abgewaehlter_bereich_wird_weder_geholt_noch_gesendet(zwei, cloud):
     assert laptop.lesen("gedaechtnis/nur_pc.md") is None            # nicht gesendet
     assert laptop.lesen("gedaechtnis/sasha.md") == "mag Tee\n"      # in der Mitte unberührt
     inhalt = json.loads(schluessel.Tresor(laptop.konto_schluessel).auf(
-        cloud.zustand.staende[cloud.zustand.kopf["s@x.org"]]["inhalt.enc"]))
+        cloud.zustand.staende[cloud.zustand.kopf["sasha"]]["inhalt.enc"]))
     assert "data/gedaechtnis/sasha.md" in inhalt["dateien"]
     assert "data/gedaechtnis/nur_pc.md" not in inhalt["dateien"]
 
@@ -301,9 +301,9 @@ def test_absturz_nach_dem_senden_ueber_die_cloud_wird_zu_ende_gebracht(zwei, clo
     with pytest.raises(RuntimeError):
         laptop.abgleichen()
     monkeypatch.setattr(abgleich, "_vorhaben_abschliessen", echt)
-    kopf = cloud.zustand.kopf["s@x.org"]
+    kopf = cloud.zustand.kopf["sasha"]
     laptop.abgleichen()                         # erkennt die vorläufige Kennung wieder
-    assert cloud.zustand.kopf["s@x.org"] == kopf  # nichts doppelt gesendet
+    assert cloud.zustand.kopf["sasha"] == kopf  # nichts doppelt gesendet
     assert json.loads((laptop.ordner / "abgleich" / "basis.json").read_text())["stand"] == kopf
     pc.abgleichen()
     assert pc.lesen("gedaechtnis/neu.md") == "nach dem Absturz da\n"

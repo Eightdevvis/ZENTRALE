@@ -66,16 +66,25 @@ def _neues_passwort(term, frage_key="ask_password_new"):
         term.sag(t("passwords_differ"), "warn")
 
 
+def _name(term, pruefen):
+    """Fragt „username:", bis der Name die Regeln erfüllt (Fehlersatz dazwischen)."""
+    while True:
+        try:
+            return pruefen(term.frage(t("ask_name")))
+        except konto.KontoFehler as e:
+            term.sag(str(e), "warn")
+
+
 def login(term):
     d = konto.lesen() if konto.angemeldet() else None
     if d:
-        term.sag(t("login_already", mail=d["mail"]))
+        term.sag(t("login_already", name=d["name"]))
         return 0
-    mail = term.frage(t("ask_mail"))
+    name = _name(term, konto.name_lesen)
     pw = term.geheim(t("ask_password"))
     term.sag(t("working_key"), "blass")
-    d = konto.anmelden(mail, pw)
-    term.sag(t("login_ok", mail=d["mail"], device=d["knoten"]), "gut")
+    d = konto.anmelden(name, pw)
+    term.sag(t("login_ok", name=d["name"], device=d["knoten"]), "gut")
     return 0
 
 
@@ -86,12 +95,12 @@ def logout(term):
 
 def account_create(term):
     if konto.angemeldet():
-        term.sag(t("login_already", mail=konto.lesen()["mail"]))
+        term.sag(t("login_already", name=konto.lesen()["name"]))
         return 1
     term.sag(t("create_intro"))
     term.sag()
     code = term.frage(t("ask_code")).strip()
-    mail = term.frage(t("ask_mail")).strip()
+    name = _name(term, konto.neuer_name)
     pw = _neues_passwort(term)
     term.sag(t("working_key"), "blass")
     entwurf = konto.Entwurf(pw)
@@ -107,19 +116,25 @@ def account_create(term):
         term.sag(t("emergency_not_saved"))
         return 1
     term.sag(t("working_key"), "blass")
-    d = konto.anlegen(entwurf, mail, code, pw)
-    term.sag(t("create_ok", mail=d["mail"]), "gut")
+    while True:
+        try:
+            d = konto.anlegen(entwurf, name, code, pw)
+            break
+        except konto.NameVergeben as e:        # Code und Entwurf gelten weiter
+            term.sag(str(e), "warn")
+            name = _name(term, konto.neuer_name)
+    term.sag(t("create_ok", name=d["name"]), "gut")
     return 0
 
 
 def account_recover(term):
     term.sag(t("recover_intro"))
-    mail = term.frage(t("ask_mail")).strip()
+    name = _name(term, konto.name_lesen)
     notfall = term.geheim(t("ask_emergency"))
     pw = _neues_passwort(term)
     term.sag(t("working_key"), "blass")
-    d = konto.wiederherstellen(mail, notfall, pw)
-    term.sag(t("recover_ok", mail=d["mail"]), "gut")
+    d = konto.wiederherstellen(name, notfall, pw)
+    term.sag(t("recover_ok", name=d["name"]), "gut")
     return 0
 
 
@@ -173,7 +188,7 @@ def status(term):
         term.sag(str(e), "warn")
     z = abgleich.zustand()
     zeilen = [
-        (t("st_account"), d["mail"] if d else t("st_account_none")),
+        (t("st_account"), d["name"] if d else t("st_account_none")),
         (t("st_server"), (d or {}).get("server") or cloud_api.adresse()),
         (t("st_device"), dateien.knoten()),
         (t("st_version"), f"{knoten.fassung(WURZEL)} ({t('kanal')[kanal(WURZEL)]})"),
@@ -220,7 +235,7 @@ def devices(term):
     except cloud_api.CloudFehler as e:
         raise konto.KontoFehler(str(e)) from None
     liste = antwort.get("knoten", []) if isinstance(antwort, dict) else antwort
-    term.sag(t("dev_title", mail=konto.lesen()["mail"]), "fett")
+    term.sag(t("dev_title", name=konto.lesen()["name"]), "fett")
     if not liste:
         term.sag("  " + t("dev_none"))
     for k in sorted(liste or [], key=lambda k: str(k.get("name"))):

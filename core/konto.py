@@ -5,6 +5,11 @@
 # dem Gerät liegt: Sitzung + konto_schluessel in ~/.config/zentrale/konto.json
 # (Rechte 600). Abmelden löscht beides.
 #
+# Anonym (23.10.2026): ein Konto ist ein Benutzername, nie eine Mail. Für alle
+# dieselbe Art Name — keine „anonyme Option" (erzeugte Nummern), denn schon die
+# Wahl wäre Metadaten. Regeln wie cloud/src/name.ts, gemeinsame Fälle in
+# tests/daten/konto_namen.json.
+#
 # Kein Terminal, keine Fragen, kein print: jede Oberfläche (CLI, TUI, Handy,
 # Browser …) ruft diese Funktionen und zeigt die Fehler (KontoFehler,
 # englischer Satz) selbst. Das Rechnen steht in konto_schluessel, der Draht
@@ -12,6 +17,8 @@
 
 import json
 import os
+import re
+import unicodedata
 
 import ai_config
 import cloud_api
@@ -29,17 +36,53 @@ def datei() -> str:
     return os.path.expanduser(ai_config.setting("konto_datei") or VORGABE_DATEI)
 
 
-def _mail(mail: str) -> str:
-    mail = (mail or "").strip().lower()
-    if "@" not in mail or len(mail) < 3:
-        raise KontoFehler("Please enter a valid email address.")
-    return mail
+# ── Der Name ───────────────────────────────────────────────────────────
+
+_BENUTZERNAME = re.compile(r"[a-z][a-z0-9._-]{2,31}")
+RESERVIERT = frozenset({
+    "abuse", "admin", "administrator", "anonym", "anonymous", "api", "betreiber", "cloudflare",
+    "contact", "help", "hilfe", "hostmaster", "info", "kontakt", "mod", "moderator", "no-reply",
+    "noreply", "null", "official", "offiziell", "operator", "owner", "postmaster", "root",
+    "security", "sicherheit", "staff", "superuser", "support", "sysadmin", "system", "team",
+    "undefined", "webmaster", "zentrale",
+})
+RESERVIERT_ANFANG = ("admin", "zentrale")
+KEINE_MAIL = ("No email needed — ZENTRALE accounts are anonymous. Use a username instead "
+              "(3–32 characters: a–z, 0–9, '.', '_', '-', starting with a letter).")
+
+
+class NameVergeben(KontoFehler):
+    """Beim Anlegen: den Namen hat schon jemand (409 name_vergeben)."""
+
+
+def name_lesen(name: str) -> str:
+    """Getrimmt, NFC, klein — oder KontoFehler mit einem Satz für Menschen."""
+    name = name or ""
+    if "@" in name:
+        raise KontoFehler(KEINE_MAIL)
+    name = unicodedata.normalize("NFC", name.strip()).lower()
+    if not _BENUTZERNAME.fullmatch(name):
+        raise KontoFehler("A username has 3–32 characters (a–z, 0–9, '.', '_', '-') "
+                          "and starts with a letter.")
+    return name
+
+
+def reserviert(name: str) -> bool:
+    return name in RESERVIERT or name.startswith(RESERVIERT_ANFANG)
+
+
+def neuer_name(name: str) -> str:
+    """Wie name_lesen, aber für ein neues Konto: reservierte Namen gehen nicht."""
+    name = name_lesen(name)
+    if reserviert(name):
+        raise KontoFehler("This username is reserved. Please choose another one.")
+    return name
 
 
 # ── Was auf dem Gerät liegt ────────────────────────────────────────────
 
 def lesen():
-    """→ dict {server, mail, token, laeuft_ab, konto_schluessel, knoten} oder None."""
+    """→ dict {server, name, token, laeuft_ab, konto_schluessel, knoten} oder None."""
     try:
         with open(datei(), encoding="utf-8") as f:
             d = json.load(f)
@@ -48,7 +91,8 @@ def lesen():
     except (OSError, ValueError):
         raise KontoFehler(f"The account file {datei()} is damaged. "
                           "Log out and log in again.") from None
-    return d if isinstance(d, dict) and d.get("konto_schluessel") else None
+    # Ohne "name" (Format 1 hatte noch "mail"): wie abgemeldet.
+    return d if isinstance(d, dict) and d.get("konto_schluessel") and d.get("name") else None
 
 
 def angemeldet() -> bool:
@@ -58,9 +102,9 @@ def angemeldet() -> bool:
         return False
 
 
-def _speichern(server, mail, token, laeuft_ab, konto_schluessel: bytes, knoten):
+def _speichern(server, name, token, laeuft_ab, konto_schluessel: bytes, knoten):
     dateien.json_schreiben(datei(), {
-        "format": 1, "server": server, "mail": mail, "token": token,
+        "format": 2, "server": server, "name": name, "token": token,
         "laeuft_ab": laeuft_ab, "knoten": knoten,
         "konto_schluessel": konto_schluessel.decode("ascii")}, geheim=True)
 
@@ -117,54 +161,60 @@ class Entwurf:
         self.teile.update(ks.notfall_teile(self._notfall, self.konto_schluessel))
 
 
-def anlegen(entwurf: Entwurf, mail: str, code: str, passwort: str, knoten: str = None,
+def anlegen(entwurf: Entwurf, name: str, code: str, passwort: str, knoten: str = None,
             basis: str = None):
     """Konto beim Server anlegen (verbraucht den Einladungscode) und gleich
-    anmelden."""
-    mail = _mail(mail)
+    anmelden. Name vergeben → NameVergeben; der Code bleibt dann frei, der
+    Entwurf gilt weiter (mit einem anderen Namen noch einmal)."""
+    name = neuer_name(name)
     code = "".join((code or "").split()).upper()     # ZB-XXXX-…, Groß/klein und Leerzeichen egal
     if not code:
         raise KontoFehler("An invite code is required.")
     c = cloud_api.Client(basis)
-    _cloud(c.post, "/v1/konto", dict(entwurf.teile, mail=mail, code=code))
-    return anmelden(mail, passwort, knoten, basis=c.basis)
+    try:
+        c.post("/v1/konto", dict(entwurf.teile, name=name, code=code))
+    except cloud_api.CloudFehler as e:
+        if e.code == "name_vergeben":
+            raise NameVergeben("This username is already taken. Please choose another one.") from None
+        raise KontoFehler(str(e)) from None
+    return anmelden(name, passwort, knoten, basis=c.basis)
 
 
 # ── Anmelden / Abmelden ────────────────────────────────────────────────
 
-def _vorab(c, mail):
-    d = _cloud(c.post, "/v1/vorab", {"mail": mail})
+def _vorab(c, name):
+    d = _cloud(c.post, "/v1/vorab", {"name": name})
     try:
         return ks.b64u_lesen(d["salz"]), ks.kdf_lesen(d.get("kdf"))
     except (KeyError, TypeError, ValueError):
         raise KontoFehler("The cloud sent unreadable login values.") from None
 
 
-def _sitzung(c, mail, passwort, knoten):
-    salz, kdf = _vorab(c, mail)
+def _sitzung(c, name, passwort, knoten):
+    salz, kdf = _vorab(c, name)
     haupt = ks.hauptschluessel(passwort, salz, kdf)
     try:
-        d = c.post("/v1/sitzung", {"mail": mail, "anmelde_schluessel": ks.anmelde_schluessel(haupt),
+        d = c.post("/v1/sitzung", {"name": name, "anmelde_schluessel": ks.anmelde_schluessel(haupt),
                                    "knoten": knoten})
     except cloud_api.CloudFehler as e:
         if e.status in (401, 403):
-            raise KontoFehler("Wrong email or password.") from None
+            raise KontoFehler("Wrong username or password.") from None
         raise KontoFehler(str(e)) from None
     k = ks.auspacken(ks.verpack_schluessel(haupt), d.get("verpackt_passwort"),
                      "The account key could not be unlocked with this password.")
     return d, k
 
 
-def anmelden(mail: str, passwort: str, knoten: str = None, basis: str = None) -> dict:
+def anmelden(name: str, passwort: str, knoten: str = None, basis: str = None) -> dict:
     """Anmelden und Sitzung + konto_schluessel ablegen. → gespeicherte Daten."""
-    mail = _mail(mail)
+    name = name_lesen(name)
     knoten = knoten or dateien.knoten()
     c = cloud_api.Client(basis)
     try:
-        d, k = _sitzung(c, mail, passwort, knoten)
+        d, k = _sitzung(c, name, passwort, knoten)
     except ks.SchluesselFehler as e:
         raise KontoFehler(str(e)) from None
-    _speichern(c.basis, mail, d.get("token"), d.get("laeuft_ab"), k, knoten)
+    _speichern(c.basis, name, d.get("token"), d.get("laeuft_ab"), k, knoten)
     return lesen()
 
 
@@ -189,10 +239,10 @@ def abmelden() -> bool:
 
 # ── Notfall und Passwort ───────────────────────────────────────────────
 
-def wiederherstellen(mail: str, notfall_text: str, neues_passwort: str,
+def wiederherstellen(name: str, notfall_text: str, neues_passwort: str,
                      knoten: str = None, basis: str = None) -> dict:
     """Mit dem Notfallschlüssel ein neues Passwort setzen und anmelden."""
-    mail = _mail(mail)
+    name = name_lesen(name)
     passwort_pruefen(neues_passwort)
     try:
         notfall = ks.notfall_lesen(notfall_text)
@@ -200,7 +250,7 @@ def wiederherstellen(mail: str, notfall_text: str, neues_passwort: str,
         raise KontoFehler(str(e)) from None
     c = cloud_api.Client(basis)
     try:
-        d = c.post("/v1/notfall", {"mail": mail, "notfall_beweis": ks.notfall_beweis(notfall)})
+        d = c.post("/v1/notfall", {"name": name, "notfall_beweis": ks.notfall_beweis(notfall)})
     except cloud_api.CloudFehler as e:
         if e.status in (401, 403, 404):
             raise KontoFehler("This emergency key does not match this account.") from None
@@ -212,7 +262,7 @@ def wiederherstellen(mail: str, notfall_text: str, neues_passwort: str,
         raise KontoFehler(str(e)) from None
     neu = cloud_api.Client(c.basis, token=d.get("token"))
     _cloud(neu.put, "/v1/konto/passwort", ks.passwort_teile(neues_passwort, k))
-    return anmelden(mail, neues_passwort, knoten, basis=c.basis)
+    return anmelden(name, neues_passwort, knoten, basis=c.basis)
 
 
 def passwort_aendern(altes: str, neues: str) -> dict:
@@ -226,7 +276,7 @@ def passwort_aendern(altes: str, neues: str) -> dict:
         raise KontoFehler("Not logged in. Run 'zentrale login' first.")
     c = cloud_api.Client(d.get("server"), token=d.get("token"))
     try:
-        salz, kdf = _vorab(c, d["mail"])
+        salz, kdf = _vorab(c, d["name"])
         alt = ks.anmelde_schluessel(ks.hauptschluessel(altes, salz, kdf))
         teile = ks.passwort_teile(neues, d["konto_schluessel"].encode("ascii"))
     except ks.SchluesselFehler as e:

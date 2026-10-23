@@ -108,7 +108,7 @@ def test_update_daneben_installieren_und_umschalten(tmp_path, monkeypatch):
         monkeypatch.setenv("ZENTRALE_CLOUD", c.adresse)
         monkeypatch.setattr(ks, "KDF_VORGABE", {"name": "argon2id", "t": 1, "m": 19456, "p": 1})
         monkeypatch.setattr(dateien, "knoten", lambda: "minipc")
-        konto.anlegen(konto.Entwurf("ein-langes-passwort"), "s@x.org", "ZB-AAAA-BBBB-CCCC-DDDD",
+        konto.anlegen(konto.Entwurf("ein-langes-passwort"), "sasha", "ZB-AAAA-BBBB-CCCC-DDDD",
                       "ein-langes-passwort")
         c.zustand.paket = ("2", _kleines_paket(tmp_path, "2"))
         venvs = []
