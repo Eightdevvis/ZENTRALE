@@ -23,6 +23,12 @@ export function wert(argv, name, vorgabe = undefined) {
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : vorgabe;
 }
 
+/** Like wrangler(), but returns null instead of exiting when it fails. */
+export function wranglerVersuch(args) {
+  const r = spawnSync("npx", ["wrangler", ...args], { cwd: CLOUD, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+  return r.status === 0 ? r.stdout : null;
+}
+
 export function wrangler(args, { still = false } = {}) {
   const r = spawnSync("npx", ["wrangler", ...args], {
     cwd: CLOUD,

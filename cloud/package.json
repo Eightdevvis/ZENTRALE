@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "types": "wrangler types",
+    "types": "wrangler types --strict-vars=false",
     "dev": "wrangler dev --local",
     "code": "node scripts/code_anlegen.mjs",
     "hochladen": "node scripts/paket_hochladen.mjs"

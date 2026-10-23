@@ -19,6 +19,7 @@ import { HttpFehler, MB, b64Lesen, hex, json, jsonLesen, roh, ungueltig } from "
 
 const SHA = /^[0-9a-f]{64}$/;
 import { neueKennung } from "./krypto";
+import { speicherPruefen } from "./nutzung";
 
 /** JSON body of POST /v1/mitte/stand (inline files + references). */
 export const MAX_STAND = 4 * MB;
@@ -117,6 +118,7 @@ export async function mitteBlob(env: Env, anfrage: Request, konto: string, sha: 
     await anfrage.body?.cancel();
     return new Response(null, { status: 204 });
   }
+  await speicherPruefen(env, groesse);
   // Streamed straight to R2; R2 checks the SHA-256 itself (no hashing CPU in
   // the Worker, nothing stored if it does not match).
   try {
@@ -164,6 +166,8 @@ export async function mitteStand(env: Env, anfrage: Request, konto: string, jetz
   for (const [n, h] of verweise) {
     if (typeof h !== "string" || !SHA.test(h)) throw ungueltig(`'verweise.${n}' must be a lower-case hex SHA-256.`);
   }
+
+  if (inline > 0) await speicherPruefen(env, inline);
 
   // Cheap early answer; the real check is the transaction below.
   if ((await kopf(env.DB, konto)) !== basis) throw schneller();

@@ -43,7 +43,7 @@ components:
             code_ungueltig, code_noetig, mail_vergeben, jemand_schneller,
             blob_fehlt (with `fehlen: [sha256…]`), pruefsumme, laenge_fehlt,
             fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
-            nicht_eingerichtet, serverfehler.
+            nicht_eingerichtet, nur_betreiber, speicher_voll, serverfehler.
         text: { type: string, description: English sentence for the user. }
     Kdf:
       type: object
@@ -333,6 +333,9 @@ paths:
         "401": { $ref: "#/components/responses/Fehler" }
         "411": { $ref: "#/components/responses/Fehler" }
         "413": { $ref: "#/components/responses/Fehler" }
+        "507":
+          description: "speicher_voll: storing it would push R2 over the free storage (brake, var BREMSE_SPEICHER). Nothing was stored."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
   /v1/mitte/stand:
     post:
       summary: New stand = basis + schreiben + verweise − loeschen (vorbereiten + senden). Compare-and-swap on the head.
@@ -373,6 +376,9 @@ paths:
           description: "jemand_schneller: the head is no longer `basis`. Fetch again and merge."
           content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
         "413": { $ref: "#/components/responses/Fehler" }
+        "507":
+          description: "speicher_voll: the inline files would push R2 over the free storage. Nothing changed."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
   /v1/mitte/enthaelt/{kennung}:
     get:
       summary: Was this stand ever the head of this account's Mitte?
@@ -455,3 +461,59 @@ paths:
           content: { application/json: { schema: { type: object, properties: { aktualisiert: { type: string, format: date-time } } } } }
         "400": { $ref: "#/components/responses/Fehler" }
         "401": { $ref: "#/components/responses/Fehler" }
+  /v1/nutzung:
+    get:
+      summary: Free-tier usage of this cloud (operator only).
+      description: |
+        Only for sessions whose account mail is in the var `BETREIBER_MAILS`
+        (others: 403 `nur_betreiber`). Numbers are counted by the Worker itself
+        (D1 rows from query meta, R2 operations per call, stored R2 bytes exact on
+        put/delete plus a daily recount). With the optional secret
+        `CF_ANALYTICS_TOKEN` and var `CF_ACCOUNT_ID` an hourly cron also stores the
+        account-wide numbers of the Cloudflare GraphQL Analytics API; `used` is
+        the larger of both. Days and months are UTC. `level`: ok below 50 %,
+        then "50", "80", "95", and "voll" at 100 %.
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Usage per limit and the warnings (highest level first)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [zeit, grenzen_geprueft, grenzen, warnungen]
+                properties:
+                  zeit: { type: string, format: date-time }
+                  grenzen_geprueft: { type: string, description: Date the limit table was checked against the Cloudflare docs. }
+                  grenzen:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, used, limit, unit, period, percent, level, source]
+                      properties:
+                        id: { enum: [worker_anfragen, d1_gelesen, d1_geschrieben, d1_speicher, r2_speicher, r2_a, r2_b] }
+                        name: { type: string, description: English name. }
+                        used: { type: number }
+                        limit: { type: number }
+                        unit: { enum: [requests, rows, bytes, operations] }
+                        period: { enum: [day, month, now], description: "day/month: UTC calendar day/month; now: current amount" }
+                        percent: { type: number }
+                        level: { enum: [ok, "50", "80", "95", voll] }
+                        source: { enum: [self, cloudflare], description: Which number `used` is. }
+                        self: { type: number }
+                        cloudflare: { type: [number, "null"] }
+                        cloudflare_at: { type: [string, "null"], format: date-time }
+                        costs_money: { type: boolean, description: Going over costs money (R2) instead of just failing. }
+                  warnungen:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, level, percent, text]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        level: { enum: ["50", "80", "95", voll] }
+                        percent: { type: number }
+                        text: { type: string, description: One English sentence. }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }

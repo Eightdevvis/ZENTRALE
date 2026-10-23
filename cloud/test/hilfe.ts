@@ -1,5 +1,7 @@
 // Test helpers: call the Worker like a client would, make codes and accounts.
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
+import worker from "../src/index";
 import { expect } from "vitest";
 
 let ipZaehler = 0;
@@ -17,7 +19,7 @@ export interface Optionen {
   kopf?: Record<string, string>;
 }
 
-export async function rufen(methode: string, pfad: string, o: Optionen = {}): Promise<Response> {
+function anfrageBauen(methode: string, pfad: string, o: Optionen): Request<unknown, IncomingRequestCfProperties> {
   const kopf: Record<string, string> = { "CF-Connecting-IP": o.ip ?? "203.0.113.1", ...(o.kopf ?? {}) };
   let body: BodyInit | undefined = o.body;
   if (o.json !== undefined) {
@@ -25,7 +27,22 @@ export async function rufen(methode: string, pfad: string, o: Optionen = {}): Pr
     kopf["Content-Type"] = "application/json";
   }
   if (o.token) kopf.Authorization = `Bearer ${o.token}`;
-  return exports.default.fetch(new Request(`https://cloud.test${pfad}`, { method: methode, headers: kopf, body }));
+  // Direct worker.fetch (rufenGezaehlt) does not add it on its own.
+  if (body instanceof Uint8Array) kopf["Content-Length"] ??= String(body.byteLength);
+  return new Request<unknown, IncomingRequestCfProperties>(`https://cloud.test${pfad}`, { method: methode, headers: kopf, body });
+}
+
+export async function rufen(methode: string, pfad: string, o: Optionen = {}): Promise<Response> {
+  return exports.default.fetch(anfrageBauen(methode, pfad, o));
+}
+
+/** Like rufen, but waits for ctx.waitUntil (the usage meter) and may change env. */
+export async function rufenGezaehlt(methode: string, pfad: string, o: Optionen = {},
+                                    umgebung: Env = env): Promise<Response> {
+  const ctx = createExecutionContext();
+  const r = await worker.fetch(anfrageBauen(methode, pfad, o), umgebung, ctx);
+  await waitOnExecutionContext(ctx);
+  return r;
 }
 
 export async function jsonVon(r: Response): Promise<Record<string, any>> {

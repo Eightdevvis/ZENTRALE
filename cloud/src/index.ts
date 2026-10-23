@@ -7,6 +7,7 @@ import { HttpFehler, fehlerAntwort, jetzt } from "./hilfe";
 import { abmelden, angemeldet, anmelden, kontoAnlegen, notfall, passwortSetzen, vorab } from "./konto";
 import { besitzHolen, besitzSetzen, knotenListe, knotenSetzen } from "./knoten";
 import { mitteBlob, mitteDatei, mitteEnthaelt, mitteFehlende, mitteHolen, mitteStand } from "./mitte";
+import { neuerZaehler, nutzungRoute, zaehlendeUmgebung, zaehlerSchreiben, speicherNachzaehlen, cloudflareAbfragen } from "./nutzung";
 import { installSh, paketDatei, paketInfo } from "./paket";
 
 type Handler = (env: Env, anfrage: Request, p: Record<string, string>, t: number) => Promise<Response>;
@@ -41,6 +42,7 @@ export const ROUTEN: Route[] = [
   { methode: "PUT", pfad: "/v1/knoten/{name}", handler: auth((env, a, s, p, t) => knotenSetzen(env, a, s, p.name, t)) },
   { methode: "GET", pfad: "/v1/besitz", handler: auth((env, _a, s) => besitzHolen(env, s)) },
   { methode: "PUT", pfad: "/v1/besitz", handler: auth((env, a, s, _p, t) => besitzSetzen(env, a, s, t)) },
+  { methode: "GET", pfad: "/v1/nutzung", handler: auth((env, _a, s, _p, t) => nutzungRoute(env, s, t)) },
 ];
 
 /** `{name}` in /v1/mitte/datei/ may span several path segments (d/<hmac>.enc). */
@@ -82,29 +84,53 @@ async function bearbeiten(anfrage: Request, env: Env): Promise<Response> {
   throw new HttpFehler(404, "nicht_gefunden", "There is nothing at this address.");
 }
 
+async function antworten(anfrage: Request, env: Env): Promise<Response> {
+  try {
+    return await bearbeiten(anfrage, env);
+  } catch (e) {
+    if (e instanceof HttpFehler) return fehlerAntwort(e);
+    // Never log request bodies, tokens or keys — only what went wrong where.
+    console.error(JSON.stringify({
+      nachricht: "unerwarteter Fehler",
+      pfad: new URL(anfrage.url).pathname,
+      methode: anfrage.method,
+      fehler: e instanceof Error ? e.message : String(e),
+    }));
+    return fehlerAntwort(new HttpFehler(500, "serverfehler", "Something went wrong on the server. Please try again."));
+  }
+}
+
+/** Cron "17 3 * * *": daily cleanup + R2 recount (+ Cloudflare numbers). */
+export const CRON_TAEGLICH = "17 3 * * *";
+
 export default {
-  async fetch(anfrage, env): Promise<Response> {
-    try {
-      return await bearbeiten(anfrage, env);
-    } catch (e) {
-      if (e instanceof HttpFehler) return fehlerAntwort(e);
-      // Never log request bodies, tokens or keys — only what went wrong where.
-      console.error(JSON.stringify({
-        nachricht: "unerwarteter Fehler",
-        pfad: new URL(anfrage.url).pathname,
-        methode: anfrage.method,
-        fehler: e instanceof Error ? e.message : String(e),
-      }));
-      return fehlerAntwort(new HttpFehler(500, "serverfehler", "Something went wrong on the server. Please try again."));
-    }
+  async fetch(anfrage, env, ctx): Promise<Response> {
+    // Self-metering: count D1 rows and R2 ops of this request, write them
+    // after the answer (one upsert, never fails the request).
+    const z = neuerZaehler();
+    const antwort = await antworten(anfrage, zaehlendeUmgebung(env, z));
+    ctx.waitUntil(zaehlerSchreiben(env.DB, z, jetzt(), 1));
+    return antwort;
   },
 
-  /** Daily: remove expired sessions and stale rate-limit counters. */
-  async scheduled(_ereignis, env): Promise<void> {
+  /** Daily: cleanup + recount; hourly: Cloudflare analytics (only with token). */
+  async scheduled(ereignis, env, ctx): Promise<void> {
     const t = jetzt();
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM sitzungen WHERE laeuft_ab <= ?").bind(t),
-      env.DB.prepare("DELETE FROM drossel WHERE start <= ?").bind(t - 24 * 60 * 60 * 1000),
-    ]);
+    const z = neuerZaehler();
+    const zenv = zaehlendeUmgebung(env, z);
+    try {
+      if (ereignis.cron === CRON_TAEGLICH) {
+        await zenv.DB.batch([
+          zenv.DB.prepare("DELETE FROM sitzungen WHERE laeuft_ab <= ?").bind(t),
+          zenv.DB.prepare("DELETE FROM drossel WHERE start <= ?").bind(t - 24 * 60 * 60 * 1000),
+          // Keep usage rows for about 13 months.
+          zenv.DB.prepare("DELETE FROM nutzung_tag WHERE tag < ?").bind(new Date(t - 400 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)),
+        ]);
+        await speicherNachzaehlen(zenv, t);
+      }
+      await cloudflareAbfragen(zenv, t);
+    } finally {
+      ctx.waitUntil(zaehlerSchreiben(env.DB, z, t, 0));
+    }
   },
 } satisfies ExportedHandler<Env>;

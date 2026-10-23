@@ -8,8 +8,18 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  // Daily cleanup of expired sessions and old rate-limit counters.
-  "triggers": { "crons": ["17 3 * * *"] },
+  // Daily (03:17 UTC): cleanup of expired sessions and old rate-limit counters,
+  // recount of stored R2 bytes. Hourly (:47): Cloudflare usage numbers, only
+  // if CF_ANALYTICS_TOKEN + CF_ACCOUNT_ID are set (src/nutzung.ts).
+  "triggers": { "crons": ["17 3 * * *", "47 * * * *"] },
+  "vars": {
+    // Accounts that may read GET /v1/nutzung (comma list, lower case).
+    "BETREIBER_MAILS": "jenny_wolff@hotmail.com",
+    // "an": refuse uploads with 507 speicher_voll once R2 would go over the free storage.
+    "BREMSE_SPEICHER": "an",
+    // Optional: Cloudflare account id for the GraphQL Analytics API (with secret CF_ANALYTICS_TOKEN).
+    "CF_ACCOUNT_ID": ""
+  },
   // No database_id / no bucket id: Wrangler provisions both on the first deploy.
   "d1_databases": [
     { "binding": "DB", "database_name": "zentrale", "migrations_dir": "migrations" }
@@ -18,5 +28,6 @@
     { "binding": "R2", "bucket_name": "zentrale" }
   ],
   // Set with `npx wrangler secret put VORAB_GEHEIMNIS` — never in this file.
+  // Optional secret CF_ANALYTICS_TOKEN (Account Analytics: Read) — not required.
   "secrets": { "required": ["VORAB_GEHEIMNIS"] }
 }
