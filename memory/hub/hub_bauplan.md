@@ -18,6 +18,28 @@ reden nur über Türen — galt INNEN; zwischen Tutor und Kern hielt sie nicht,
 weil der Tutor Kern-Code importierte. Der Hub macht aus der Abmachung eine
 Grenze.
 
+## Grundpfeiler: Anonymität, Datenschutz, Open Source (Sasha, 2026-10-23)
+
+*„leg das prinzip von anonymität als grundpfeiler fest — anonymität,
+datenschutz, open source."* Jede Entscheidung wird daran gemessen:
+
+1. **Anonymität** — ZENTRALE fragt nie nach Identität: keine Mail, kein
+   Klarname, keine Telefonnummer. Ein Konto ist ein selbst gewählter Name
+   oder eine gewürfelte Kontonummer (wie bei Mullvad). IP-Adressen nur
+   gehasht und kurzlebig.
+2. **Datenschutz** — Zero-Knowledge: alles wird auf dem Gerät verschlüsselt,
+   der Server sieht nur Bytes ([knoten_beitritt.md](knoten_beitritt.md)).
+   So wenig speichern wie möglich; Daten gehören dem Nutzer.
+3. **Open Source** — der Code ist offen. **Offen:** welche Lizenz. Weg 3
+   ([../betrieb/verteilung.md](../betrieb/verteilung.md)) sah „lesbar, aber
+   Kopieren verboten" vor — das ist *source-available*, nicht Open Source.
+   Vorschlag: **AGPL-3.0** (offen; wer es ändert oder als Dienst betreibt,
+   muss seinen Code ebenfalls offenlegen; Geld über Server/Abo bleibt
+   möglich). Entscheidet Sasha.
+
+Prüffragen bei jedem Feature: Braucht es Identität? Speichert es mehr als
+nötig? Sieht der Server Klartext? Im Zweifel weglassen.
+
 ## Leitlinie: Standards statt Eigenformat (Sasha, 2026-10-10)
 
 Keine eigenen Daten- oder Schnittstellen-Formate: Feld-/Datenbeschreibungen
