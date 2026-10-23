@@ -1,6 +1,11 @@
 # Cloud — Login, Mitte, Pakete (Cloudflare)
 
-**Stand 2026-10-22: gebaut und lokal getestet, noch nicht ausgerollt.**
+**Stand 2026-10-23: online** unter `https://zentrale-cloud.sevendevs.workers.dev`
+(Cloudflare-Konto sevendevs@outlook.com, Workers Free, R2 seit 23.10.
+freigeschaltet). D1 `zentrale` + R2 `zentrale` angelegt, Migration `0001`
+remote, Paket 36 + `install.sh` hochgeladen, ein Einladungscode für Sasha.
+Probe von außen: Paket ohne Code 401, falscher Code 403. Eingetragen in
+`core/cloud_api.py` (`VORGABE`) und `deploy/install.sh` (`CLOUD_VORGABE`).
 Der Vertrag steht in [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 („Bauplan v1"), die Routen in `cloud/openapi.yaml`, Befehle und Ablauf auf
 Englisch in `cloud/README.md`.
