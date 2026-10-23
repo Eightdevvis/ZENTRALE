@@ -309,6 +309,14 @@ def test_autostart(prozess_app, monkeypatch):
     assert app_verwaltung.eigene_stoppen() == ["probe"]
 
 
+def test_lebt_fragt_nicht_ueber_einen_proxy(probe, monkeypatch):
+    """Ein gesetzter http_proxy darf die Frage an die lokale App nicht
+    umlenken (sonst „lebt nicht", obwohl sie läuft)."""
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    assert app_verwaltung.app_prozess.lebt("http://127.0.0.1:%d" % probe.server_port)
+
+
 def test_starter_und_hub_teilen_die_handgriffe():
     """Kein dritter Satz Start-Code: open_tutor_room und apps nehmen
     core/app_prozess.py."""

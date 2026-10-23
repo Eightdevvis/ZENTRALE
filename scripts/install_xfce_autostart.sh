@@ -302,7 +302,7 @@ elif [ "$KIOSK_MODE" = "tui" ]; then
     #
     # Warum -maximized und NICHT -fullscreen: ein echtes Fullscreen-Fenster
     # liegt bei xfwm4 in einem eigenen Layer GANZ oben — dann oeffnen die
-    # Zusatzfenster der TUI (Karte 'w' -> scripts/map_window.py via pygame,
+    # Zusatzfenster der TUI (Karte 'w' -> scripts/open_app_window.py karte via pygame,
     # /slide-PDFs) DAHINTER und sind unerreichbar. -maximized ist ein ganz
     # normales Fenster auf voller Groesse -> neue Fenster stapeln sich normal
     # drueber und kommen nach vorn. Randlos macht es das xfconf-Setting

@@ -113,7 +113,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 | System | gebaut (Kern): Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | `memory/system/INDEX.md` |
 | Hub | Plattform: Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt | `memory/hub/INDEX.md` |
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
-| Maps | die Karte: Layer, Quellen-Charta, Design-Brief | `memory/maps/INDEX.md` |
+| Maps | seit 2026-10-22 eigene App (Repo `zentrale-karte`), hier nur Zeiger | `memory/maps/INDEX.md` |
 | Tutor | seit 2026-10-09 eigene App (Repo `language-tutor`), hier nur Zeiger | `memory/tutor/INDEX.md` |
 
 Flach geblieben: `memory/ueberblick.md` (Einstieg, was ZENTRALE ist) und

@@ -97,10 +97,9 @@ data/photos/
 # verschachtelte .git). Lokal nützlich, aber kein Repo-Inhalt.
 tools/
 
-# Maps-Overlay-Cache: lizenzierte Quellen (z.B. IMF PortWatch) werden LIVE
-# geholt und nur lokal zwischengespeichert — NICHT weiterverteilen, also nie
-# committen (anders als das gemeinfreie Natural Earth in core/map/data/*.geojson).
-# Siehe memory/maps_quellen.md.
+# Maps-Overlay-Cache aus der Zeit vor dem Auszug der Karte (2026-10-22, jetzt
+# Repo zentrale-karte, dort karte/map/data/cache/): lizenzierte Live-Daten, nie
+# committen. Bleibt hier stehen, solange alte Checkouts den Ordner noch haben.
 core/map/data/cache/
 
 # Editor-/Atomic-Write-Temp-Dateien (z.B. <name>.tmp.<ts>.<hash>) — sollen

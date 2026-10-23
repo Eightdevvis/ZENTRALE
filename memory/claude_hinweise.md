@@ -176,7 +176,8 @@ Generelles Bau-Prinzip für **jedes** neue Feature:
   Zimmer" schrumpft oder weiter gilt, hat Sasha nicht entschieden.
 
 Gelebte Vorbilder: das **Graph-Werkzeug** (`core/graphs.py` + `/api/graphs`)
-und das **Maps-System** (`memory/maps/maps_system.md`, `core/map/` + `/api/map`).
+und das **Maps-System** (seit 2026-10-22 eigene App `zentrale-karte`, Zeiger
+`memory/maps/INDEX.md`; `/api/map` reicht der Hub weiter).
 Wer ein Feature „nur schnell ins Template" baut, das später überall hin soll,
 verletzt dieses Prinzip — Logik gehört nach `core/`, nicht in die Front.
 

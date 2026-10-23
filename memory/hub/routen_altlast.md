@@ -76,9 +76,6 @@ Nichts neu eintragen — beschreiben.
 | `/api/mail/reconcile` | mail |
 | `/api/mail/refresh-counts` | mail |
 | `/api/mail/reply` | mail |
-| `/api/map/braille` | map |
-| `/api/map/countries` | map |
-| `/api/map/layer/` | map |
 | `/api/melodies` | melodies |
 | `/api/melodies/` | melodies |
 | `/api/morgenblick` | morgenblick |

@@ -1,17 +1,22 @@
-# Maps — Index
+# Karte — ausgezogen
 
-Die interaktive Karte: Layer-Architektur, woher die Daten kommen und wie sie
-aussehen soll.
+Seit 2026-10-22 ist die Weltkarte ein **eigenes Programm** im Repo
+`zentrale-karte` (liegt neben ZENTRALE) und die zweite App nach dem
+Hub-Bauplan ([../hub/hub_bauplan.md](../hub/hub_bauplan.md)), nach dem
+Sprach-Tutor. Ihre ganze Doku ist mitgezogen und liegt dort unter `docs/`
+(Einstieg `docs/INDEX.md`: Layer-Architektur `maps_system.md`, Quellen-Charta
+`maps_quellen.md`, Design-Brief `maps_design_brief.md`). Die Geschichte der
+Dateien ist dort erhalten.
 
-| Was du wissen willst | Datei |
+Was in ZENTRALE von der Karte bleibt:
+
+| Was | Wo |
 |---|---|
-| **Einstieg.** Layer-Architektur, die drei Achsen, Rendering, wie ein Layer dazukommt | [maps_system.md](maps_system.md) |
-| Welcher Layer aus welcher offiziellen Quelle kommt, mit Lizenz — die Charta | [maps_quellen.md](maps_quellen.md) |
-| Look-Handoff: wie die Karte aussehen soll (Design-Brief) | [maps_design_brief.md](maps_design_brief.md) |
+| Die App finden, ihr Manifest `app.toml` lesen | `core/apps.py` (Einstellung `app_pfad_karte`, Standard `../zentrale-karte`) |
+| Den Karten-Server mit dem Backend starten (`autostart = true`) | `core/app_verwaltung.py` (aus `core/main.py`) |
+| `/api/map/*` unverändert an die App reichen (`routen = ["/api/map"]`) | `core/app_weiterleitung.py`, `ui/routen/hub_apps.py` |
+| Die Karten-Ansicht der TUI (Taste `m`, ruft nur `/api/map/*`) | `tui/ansichten/karte.py` |
+| Das Fenster aus der TUI (Taste `w`) | `scripts/open_app_window.py karte …` → `[ansicht.fenster]` der App |
 
-## Zwei harte Regeln
-
-- **Primärquellen, tagesaktuell, sauber lizenziert.** Lizenzierte Daten werden
-  nur gecacht, nie committet (siehe `.gitignore`, `core/map/data/cache/`).
-- **Keine Produkt- oder Designentscheidung ohne Sashas Freigabe.** Quellen
-  stapeln statt verschmelzen; Überschneidungen sind ein eigener Konsens-Layer.
+Alte Verweise in dieser Doku auf `memory/maps/…` oder `core/map/` meinen die
+Dateien, die jetzt im Karten-Repo unter `docs/` bzw. `karte/map/` liegen.

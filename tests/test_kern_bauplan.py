@@ -119,7 +119,7 @@ def altlast_riesen():
 # ── Code lesen ─────────────────────────────────────────────────────────
 
 def kern_module():
-    """Modulname → Dateien. Pakete (profil/, map/) zählen als EIN Modul."""
+    """Modulname → Dateien. Pakete (profil/) zählen als EIN Modul."""
     raus = {}
     for eintrag in sorted(os.listdir(CORE)):
         pfad = os.path.join(CORE, eintrag)

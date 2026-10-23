@@ -24,7 +24,7 @@ dann versprechen.
 | Messreihen / Graphen | 🟡 | frei | wenig benutzt, ungeprüft |
 | Mail | 🔧 | frei | Neubau in eigener Sitzung (mbsync/notmuch) |
 | News / Briefing | 🟡? | Abo | seit Wochen nicht angefasst — erst testen |
-| Karte | 🟡 | frei/exklusiv | Datenlizenzen je Layer (maps_quellen.md) vor Verkauf |
+| Karte | 🟡 | frei/exklusiv | seit 2026-10-22 eigene App (Repo `zentrale-karte`, startet mit dem Backend, `/api/map/*` weitergereicht); Datenlizenzen je Layer (`docs/maps_quellen.md` dort) vor Verkauf |
 | Zyklus/PMS | 🟡 | frei | Gesundheitsdaten = DSGVO besondere Kategorie → nur lokal, nie Cloud ohne Einwilligung |
 | Klavier | 🟡? | frei | Nische; prüfen, ob es überhaupt rein soll |
 | Sprach-Tutor (eigenes Repo) | 🟡 | exklusiv/Abo | Mikro + Spracherkennung, Bilder/Umgebung, Server-Dauerbetrieb |

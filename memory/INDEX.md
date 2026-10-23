@@ -18,7 +18,7 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 | **System** | Wie der Kern gebaut ist: Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | [system/INDEX.md](system/INDEX.md) |
 | **Hub** | ZENTRALE als Plattform: Hub-Schnittstelle, App-Modell, Werkstatt, Shop, Desk, Bausteine für Apps, Produkt | [hub/INDEX.md](hub/INDEX.md) |
 | **Betrieb** | Wie es läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Dateizugriffe | [betrieb/INDEX.md](betrieb/INDEX.md) |
-| **Maps** | Die interaktive Karte: Layer, Quellen-Charta, Design-Brief | [maps/INDEX.md](maps/INDEX.md) |
+| **Maps** | Die Karte — seit 2026-10-22 eigene App (Repo `zentrale-karte`), hier nur Zeiger | [maps/INDEX.md](maps/INDEX.md) |
 | **Tutor** | Der Sprach-Tutor — seit 2026-10-09 eigene App (Repo `language-tutor`); hier nur Zeiger und Hub-Seite | [tutor/INDEX.md](tutor/INDEX.md) |
 
 ## Flach geblieben

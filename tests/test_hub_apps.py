@@ -34,7 +34,8 @@ def test_manifest_der_test_app():
 
 def test_fehlende_app_ist_einfach_nicht_da(monkeypatch, tmp_path):
     monkeypatch.setenv("ZENTRALE_APP_PFAD_TUTOR", str(tmp_path / "weg"))
-    assert apps.manifest("tutor") is None and apps.installiert() == []
+    assert apps.manifest("tutor") is None
+    assert "tutor" not in [m["name"] for m in apps.installiert()]
     assert hub_ereignisse.senden("anwesenheit", warten=True) == 0
 
 

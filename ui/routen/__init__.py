@@ -4,7 +4,8 @@
 # Flask-App an und hängt hier alle Bereiche ein — neue Routen gehören in
 # den passenden Bereich (oder einen neuen), nie zurück in app.py.
 
-from ui.routen import zugang, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel
+from ui.routen import zugang, zustand, erfassung, klavier, listen, notizen, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel
+# karte ist seit 2026-10-22 eine App (Repo zentrale-karte): /api/map/* reicht hub_apps weiter.
 from ui.routen import shop  # Schaufenster (2026-10-10)
 from ui.routen import werkstatt  # Werkstatt (2026-10-10)
 from ui.routen import tasten  # Tastentabellen der Apps (2026-10-11)
@@ -14,7 +15,7 @@ from ui.routen import hub_apps  # Apps: Liste, Start/Stopp, Weiterleitung (2026-
 # zugang zuerst: seine Prüfung (before_app_request) muss vor allem anderen
 # laufen (memory/betrieb/zugang.md, 2026-10-08). hub_apps gleich danach: die
 # Weiterleitung an Apps (routen im app.toml) greift vor allen eigenen Routen.
-BEREICHE = (zugang, hub_apps, zustand, erfassung, klavier, listen, notizen, karte, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel,
+BEREICHE = (zugang, hub_apps, zustand, erfassung, klavier, listen, notizen, kalender, ki, gespraeche, stimme, mail, skills, ablage, projekte, morgenblick, abgleich, desk, kachel,
             shop, werkstatt, tasten, browser,)
 
 

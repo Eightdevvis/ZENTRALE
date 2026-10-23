@@ -104,7 +104,8 @@ scripts/install_pi_sudoers.sh
 # (git-Clone auf dem Knoten, manueller RELEASE-Bump als Ausloeser). Ein
 # Paket-Knoten hat kein git und braucht beides nicht.
 #
-# Das Karten-Fenster (scripts/map_window.py) fehlt ebenfalls: es braucht
-# core/map/ (37 MB), core/glossary.py und numpy. Wer die Karte an der Wand
-# will, nimmt diese vier Zeilen dazu — dann waechst der Knoten aber um den
-# Faktor 20.
+# Das Karten-Fenster fehlt ebenfalls: seit 2026-10-22 gehoert es der App
+# „karte" (Repo zentrale-karte, karte/fenster.py + karte/map/ mit 29 MB
+# Daten + numpy). Wer die Karte an der Wand will, nimmt app:karte/… Zeilen
+# dazu (wie beim Tutor) und scripts/open_app_window.py — dann waechst der
+# Knoten aber um den Faktor 20.

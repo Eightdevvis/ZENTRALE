@@ -1,7 +1,8 @@
 # tui/ansichten/karte.py
 #
-# Die Weltkarte der TUI (Zeichner gegen /api/map; core/map/ rechnet,
-# memory/maps/maps_system.md). Bis 06.10.2026 Closures in run_ui
+# Die Weltkarte der TUI (Zeichner gegen /api/map; seit 2026-10-22 rechnet die
+# App „karte" — Repo zentrale-karte, der Hub reicht /api/map/* weiter,
+# memory/maps/INDEX.md). Bis 06.10.2026 Closures in run_ui
 # (tui/zentrale_tui.py), siehe memory/system/tui_bauplan.md.
 
 import curses
@@ -35,14 +36,14 @@ class Karte:
     """Die Karte (Mitte, Taste 'm'): Braille-Basiskarte, Pan/Zoom, Overlays
     (Handel, Politik) mit Zeitachse, Länder-Fokus mit Kamerafahrt, natives
     Fenster per 'w'. Ein reiner Zeichner gegen /api/map (Geo-Logik in
-    core/map/). Zustand in self.M (auch z.M)."""
+    der App karte). Zustand in self.M (auch z.M)."""
 
     def __init__(self, z):
         self.z = z
         # ── Karte (füllt die MITTE-Box, Taste 'm') ──────────────────────────
         # Maps-System Schritt 1: grobe Basiskarte (Küsten 1:110m). Die TUI ist
-        # ein reiner Zeichner — alle Geo-Logik liegt im Backend (core/map/ →
-        # /api/map/base, siehe memory/maps/maps_system.md). Wir halten nur den
+        # ein reiner Zeichner — alle Geo-Logik liegt im Backend (App karte →
+        # /api/map/base, siehe memory/maps/INDEX.md). Wir halten nur den
         # Viewport (Mittelpunkt lon/lat + Zoom) und die letzte Server-Antwort.
         #   active : Karte hat den Fokus (Pan/Zoom-Tasten gehen an die Karte)
         #   cx,cy  : Mittelpunkt in lon/lat (Start: 0°/20°, ganze Welt zentriert)
@@ -66,7 +67,7 @@ class Karte:
         """Karte fürs aktuelle Viewport+Raster synchron holen (localhost, wenige
         ms — wie das Graph-Werkzeug bei Benutzeraktionen). Die TUI rendert das
         gefüllte Land in Braille (/api/map/braille) — der frühere Umriss-Stil ist
-        raus (sah zu grob aus). Alle Geo-Mathematik bleibt in core/map/."""
+        raus (sah zu grob aus). Alle Geo-Mathematik bleibt in der App karte."""
         M = self.M
         try:
             q = ("/api/map/braille?cx=%.5f&cy=%.5f&zoom=%.2f&cols=%d&rows=%d"
@@ -154,20 +155,22 @@ class Karte:
         M["fdata"] = None
 
     def m_window(self):
-        """Die Karte im NATIVEN Fenster aufklappen (pygame, scripts/map_window.py)
-        — wie /slide PDFs extern in zathura öffnet. Kein curses-Limit: echte
-        antialiased Vektorgrafik. Wir reichen den aktuellen Viewport (cx/cy/zoom)
-        mit, damit das Fenster genau dort aufgeht, wo die TUI gerade steht.
-        Detached gestartet (eigener Prozess), die TUI läuft normal weiter."""
+        """Die Karte im NATIVEN Fenster aufklappen (pygame) — wie /slide PDFs
+        extern in zathura öffnet. Kein curses-Limit: echte antialiased
+        Vektorgrafik. Wir reichen den aktuellen Viewport (cx/cy/zoom) mit,
+        damit das Fenster genau dort aufgeht, wo die TUI gerade steht.
+        Seit 2026-10-22 gehört das Fenster der App „karte" (`[ansicht.fenster]`
+        im app.toml); die TUI ruft nur den Starter scripts/open_app_window.py,
+        der die App findet. Detached gestartet, die TUI läuft normal weiter."""
         M = self.M
         root = PROJEKT
         py = venv_python(root)
-        script = os.path.join(root, "scripts", "map_window.py")
+        script = os.path.join(root, "scripts", "open_app_window.py")
         if not os.environ.get("DISPLAY"):
             M["msg"] = "kein DISPLAY (X11?)"
             return
         if not os.path.exists(script):
-            M["msg"] = "map_window.py fehlt"
+            M["msg"] = "open_app_window.py fehlt"
             return
         # NUR EIN Fenster pro TUI: curses' getch() feuert bei gehaltener Taste
         # (Auto-Repeat) mehrfach — ohne diese Sperre würde jeder Tick einen neuen
@@ -178,14 +181,14 @@ class Karte:
             M["msg"] = "fenster läuft schon"
             return
         try:
-            # stderr NICHT nach /dev/null: fehlt pygame/numpy (z.B. Pi ohne venv),
-            # stirbt map_window.py beim Import STILL — man drueckt 'w' und nichts
+            # stderr NICHT nach /dev/null: fehlt pygame/numpy oder die App
+            # (z.B. Pi ohne venv), stirbt das Fenster beim Import STILL — man drueckt 'w' und nichts
             # passiert, kein Hinweis. In ein Log umgeleitet ist der Grund lesbar
             # (cat $ZENTRALE_MAP_WINDOW_LOG bzw. /tmp/zentrale-map-window.log).
             map_log = os.environ.get("ZENTRALE_MAP_WINDOW_LOG") or "/tmp/zentrale-map-window.log"
             errf = open(map_log, "a", encoding="utf-8")
             M["proc"] = subprocess.Popen(
-                [py, script,
+                [py, script, "karte",
                  "--cx", "%.5f" % M["cx"], "--cy", "%.5f" % M["cy"],
                  "--zoom", "%.2f" % M["zoom"]],
                 stdout=subprocess.DEVNULL, stderr=errf,

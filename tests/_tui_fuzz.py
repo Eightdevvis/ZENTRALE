@@ -58,7 +58,7 @@ def run_session(seed, n_keys, url, deadline_s=12):
                # voll durchgeklopft, nur eben stumm.
                ZENTRALE_NO_AUDIO="1")
     # WICHTIG: KEIN DISPLAY für die getestete TUI. Der Fuzzer landet zwangsläufig
-    # im Karten-Modus und drückt dort w/Enter, was m_window() → scripts/map_window.py
+    # im Karten-Modus und drückt dort w/Enter, was m_window() → scripts/open_app_window.py karte
     # (natives pygame-Fenster) startet. Ohne DISPLAY greift der Guard in m_window()
     # und es wird NIE ein Fenster gespawnt — egal auf welcher Maschine der Test läuft.
     env.pop("DISPLAY", None)

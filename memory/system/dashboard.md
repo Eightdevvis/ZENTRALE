@@ -779,22 +779,22 @@ Der frühere Monolith/Laptop (`#projects`, heute Archiv) pollte
 
 **Karte (Mitte, Taste `m`):** Maps-System Schritt 1 — grobe Weltkarte (Küsten
 1:110m) in der MITTE-Box, analog zum Graph-Werkzeug. Die TUI ist reiner
-Zeichner: holt fertig projizierte Linien über `/api/map/base` (Engine in
-`core/map/`) und rastert sie per Bresenham. Steuerung `↑↓←→`/`hjkl` pan,
+Zeichner: holt fertig projizierte Linien über `/api/map/base` (Engine seit 2026-10-22 in der App
+`zentrale-karte`, der Hub reicht weiter) und rastert sie per Bresenham. Steuerung `↑↓←→`/`hjkl` pan,
 `+`/`−` zoom, `0` reset, `esc`/`m` zu. **`f`** schaltet den Stil um: `outline`
 (Küsten-Bresenham `▓`) ↔ `braille` (gefülltes Land in Braille-Punkten, 2×4
 Subpixel/Zelle — Endpoint `/api/map/braille`, gerendert in
-`core/map/render.py:base_braille`; die TUI druckt nur die fertigen Zeilen). **`o`**
+`karte/map/render.py:base_braille` der App; die TUI druckt nur die fertigen Zeilen). **`o`**
 schaltet das **Handelsrouten-Overlay** (Achse 2) ein/aus: leuchtende
 `◆`-Marker an den maritimen Engstellen + Detail (Name/heutiger Verkehr) der dem
 Fadenkreuz nächsten Stelle, samt Datenstand. Quelle: IMF PortWatch über
-`/api/map/layer/trade` (Provenienz/Lizenz: [memory/maps/maps_quellen.md](../maps/maps_quellen.md)).
+`/api/map/layer/trade` (Provenienz/Lizenz: `docs/maps_quellen.md` im Repo `zentrale-karte`).
 Mit **`w`** klappt die Karte im
-**nativen pygame-Fenster** auf (`scripts/map_window.py`, echte antialiased
+**nativen pygame-Fenster** auf (`karte/fenster.py` der App, über `scripts/open_app_window.py karte`; echte antialiased
 Vektorgrafik, gleicher Viewport — wie `/slide` PDFs extern öffnet; dort Taste
 **`t`** fürs selbe Overlay als Bernstein-Marker); der
 ASCII-Grid in der TUI ist nur die reduzierte Variante. Architektur + die drei
-Achsen (Detail/Layer/Zeit): [memory/maps/maps_system.md](../maps/maps_system.md).
+Achsen: `docs/maps_system.md` im Repo `zentrale-karte` ([../maps/INDEX.md](../maps/INDEX.md)).
 
 **Kalender (Mitte) — Stand 07.10.2026:** nur noch die drei Ansichten aus
 `tui/ansichten/kalender_ansichten.py`, alle bedienbar wie calcurse (Tasten

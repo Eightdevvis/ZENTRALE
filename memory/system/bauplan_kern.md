@@ -48,8 +48,8 @@ das Gebrauchte nach unten verschieben, oder es von oben **hereingeben**
 
 ## Module
 
-Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
-`map/`) zählen als ein Modul.
+Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`)
+zählen als ein Modul.
 
 | Modul | Schicht | Was |
 |---|---|---|
@@ -95,7 +95,6 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
 | `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `ablage_zip` |
 | `melden` | 1 | Meldung auf dem Desktop |
-| `glossary` | 1 | Kuratiertes Mini-Glossar |
 | `categories` | 1 | Data-Collection-Kategorien |
 | `host_metrics` | 1 | CPU/GPU/VRAM/Temp/RAM des PCs |
 | `aussenposten` | 1 | Pakete für Knoten ohne Backend (auch Dateien von Apps, `app:<name>/…`) |
@@ -155,7 +154,6 @@ Die Schicht-Nummer ist die Wahrheit, die der Test liest. Pakete (`profil/`,
 | `anwesenheit` | 2 | Ist Sasha da, schaut er hin? |
 | `hub_ereignisse` | 2 | Ereignisse an Apps schicken, die sie abonniert haben (HTTP POST, im Hintergrund, Fehler nur geloggt) |
 | `takt` | 2 | Wann ZENTRALE von sich aus spricht |
-| `map` | 2 | Geo-Layer-System der Weltkarte |
 | `ollama` | 2 | Anbindung an Ollama: Adresse, Modell, Kontext, Sampling, Erreichbarkeit, Warmup — einmal |
 | `sandbox` | 2 | Code abgeschottet ausführen (bubblewrap): eigener Arbeitsordner, kein Netz, keine Dateien von Sasha, Zeit-/Speicher-/Ausgabe-Grenzen |
 | `skills` | 2 | Skills der KI im Claude-Format (Ordner mit SKILL.md): Liste für den Prompt, laden samt Dateien, vorschlagen/ändern, an/aus, Erstbefüllung (eigene + Anthropic-Vorlagen) |
@@ -271,7 +269,6 @@ egal woran, ging durch dieselbe Datei.
 | `klavier` | Melodien |
 | `listen` | Listen, Einträge, Projekte |
 | `notizen` | Block-Notizen |
-| `karte` | Weltkarte |
 | `kalender` | Kalender; Stand des Google-Syncs (`/api/calendar/sync`) |
 | `ki` | Chat-Stream, Wiederholen, Stoppen, Verlauf, Erlaubnis, Status, Backend-Wahl, Einstellungen, Devtools |
 | `gespraeche` | Gesprächs-Liste, neu, öffnen, laden, umbenennen, archivieren; Bewertungen der Antworten |
@@ -323,6 +320,7 @@ es sie nicht mehr. Eine App zieht aus → Zeile hier, im selben Commit.
 | Modulname | Repo | seit |
 |---|---|---|
 | `tutor` | `language-tutor` | 2026-10-09 |
+| `karte`, `map`, `glossary` | `zentrale-karte` (vorher `core/map/`, `core/glossary.py`, `ui/routen/karte.py`, `scripts/map_window.py`) | 2026-10-22 |
 
 ## Altlasten
 

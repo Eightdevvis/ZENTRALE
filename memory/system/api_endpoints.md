@@ -331,10 +331,14 @@ Kein KI-Backend nötig; geschrieben wird nur, was Sasha in der TUI tut. Unbekann
 
 ## Maps (Karten-System)
 
+**Seit 2026-10-22 gehören diese Pfade der App `karte`** (Repo `zentrale-karte`,
+`routen = ["/api/map"]`); der Hub reicht sie unverändert weiter (oben „Apps
+des Hubs"), die genaue Form steht in `openapi.yaml` des Karten-Repos. Ist die
+App aus: `503 {"fehler": "aus"}`.
 Front-agnostisch: jede Front schickt ihren Viewport (`cx,cy,zoom`) + ihr
-Zielraster (`cols,rows,aspect`); die Engine in `core/map/` projiziert fertig.
+Zielraster (`cols,rows,aspect`); die Engine der App projiziert fertig.
 **Nicht** KI-gegatet (Karte gibt es auch ohne lokale KI). Architektur +
-drei Achsen: `memory/maps/maps_system.md`; Quellen/Lizenzen: `memory/maps/maps_quellen.md`.
+drei Achsen: `docs/maps_system.md` im Karten-Repo; Quellen/Lizenzen: `docs/maps_quellen.md` dort.
 
 | Endpoint                 | Methode | Beschreibung                          |
 |--------------------------|---------|---------------------------------------|

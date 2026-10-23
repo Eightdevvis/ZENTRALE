@@ -65,7 +65,9 @@ python-dateutil
 # Projekts: per pipx installiert, eigenes Programm.
 icalendar>=7.3
 
-# Natives Karten-Fenster (Maps-System): scripts/map_window.py rendert die Karte
+# Natives Karten-Fenster: seit 2026-10-22 Teil der App „karte" (Repo
+# zentrale-karte, karte/fenster.py) — solange sie kein eigenes venv hat, nimmt
+# sie dieses. Es rendert die Karte
 # als zweites X11-Fenster mit echter antialiased Vektorgrafik (aus der TUI per
 # 'w' aufklappbar). Nur dafür nötig — TUI/Backend laufen ohne. ~15 MB Wheel.
 # numpy: vektorisierte Projektion der LOD-Geometrie (10m = >500k Punkte) — ohne

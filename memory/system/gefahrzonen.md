@@ -90,7 +90,7 @@ Datum abhängen.
 | `tui/ansichten/erinnerung.py` `nag_dismissed` | weggeklickt „bis Sitzungsende" | am neuen Tag kein „bitte eintragen" |
 | `tui/ansichten/graphen.py` `G["cyc"]` | Zyklus-Vorhersage nur beim Öffnen geholt | „in 3 Tagen" stimmt nach Mitternacht nicht mehr |
 | `core/main.py` Alarm-Heartbeat | Alarme nur alle ~5 min neu | bis zu 5 min Alarme vom Vortag |
-| `core/map/layers/viina.py` `_YEAR`/`_URL` | Jahr auf Modulebene | im Dauerbetrieb über Silvester das alte Jahr |
+| `karte/map/layers/viina.py` `_YEAR`/`_URL` (seit 2026-10-22 im Repo `zentrale-karte`) | Jahr auf Modulebene | im Dauerbetrieb über Silvester das alte Jahr |
 
 Nicht betroffen (geprüft): `/api/calendar` (`today` bei jedem Aufruf —
 live am 20.10. richtig), Imprint und Alarme im Kern (`kalender_konflikte`,

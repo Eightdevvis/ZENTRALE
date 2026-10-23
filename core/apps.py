@@ -28,7 +28,8 @@ import app_prozess
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # name → Ordnername neben ZENTRALE (Standard, wenn app_pfad_<name> fehlt)
-BEKANNT = {"tutor": "language-tutor"}
+BEKANNT = {"tutor": "language-tutor",
+           "karte": "zentrale-karte"}       # seit 2026-10-22 (Weltkarte)
 
 
 def eigene_ordner() -> str:

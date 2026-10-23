@@ -116,10 +116,12 @@ schon umziehen.
 2. **Hub-Schnittstelle + `zentrale_sdk`** (klein, Python) — entsteht MIT dem
    Tutor, nicht vorher auf Vorrat.
 3. Kalender, Notizen/Listen, Mail (neu), Karte, Morgenblick — je eine App.
+   **Karte ✅ erledigt 2026-10-22** (unten „Schritt Karte: so ist es gebaut").
+   Reihenfolge der übrigen: [kern_auszug_inventur.md](kern_auszug_inventur.md) D.
 4. **Assistent** zuletzt: er nutzt die anderen nur über Rechte.
 5. Hub selbst wird leer installierbar (Sashas Installation = eine von vielen).
 
-Bis Schritt 5 bleibt alles in einem Repo außer dem Tutor; der Kern-Bauplan
+Bis Schritt 5 bleibt alles in einem Repo außer Tutor und Karte; der Kern-Bauplan
 (`bauplan_kern.md`) gilt weiter für den Hub-Teil.
 
 ## Entscheidungen (Sasha, 2026-10-09)
@@ -216,6 +218,34 @@ kann = ["aktion", "parameter_jetzt", "pruefen", "bevorzugt"]   # optionale Frage
   App im App-Repo (Grenz-Test, Vorlage `language-tutor/tests/test_tutor_grenze.py`),
   E4 jede Route der TUI steht in `openapi.yaml` oder gehört einer App
   (Altlasten: [routen_altlast.md](routen_altlast.md)).
+
+## Schritt Karte: so ist es gebaut (2026-10-22)
+
+- **Repo** `zentrale-karte` neben ZENTRALE (noch ohne GitHub-Gegenstück).
+  Geschichte mitgenommen (`git filter-branch` auf einer Kopie, 27 Commits):
+  `core/map/` → `karte/map/`, `core/glossary.py` → `karte/glossary.py`,
+  `ui/routen/karte.py` → `karte/routen.py` (Code unverändert),
+  `scripts/map_window.py` → `karte/fenster.py`, `map_render_proto.py` und
+  `ingest_shipdensity.py` → `werkzeuge/`, `tests/test_map_*.py`,
+  `memory/maps/*.md` → `docs/`. Gecachte Layer-Daten (gitignored) aus
+  `core/map/data/cache/` nach `karte/map/data/cache/` kopiert.
+- **Manifest** `app.toml`: `start = "python -m karte.server"`, `adresse =
+  "http://127.0.0.1:5071"`, `autostart = true`, `routen = ["/api/map"]`,
+  `[ansicht.fenster] start = "python -m karte.fenster"`, keine Rechte.
+- **Beweis, dass nichts kaputt ist:** 30 Anfragen an alle fünf Routen (mit
+  Fehlern 400/404/405) auf festem Stand (Netz zu, dieselben Cache-Dateien)
+  vor dem Umzug gegen ZENTRALE aufgenommen (zweimal, gleich) und danach durch
+  die Weiterleitung — Status, Inhaltstyp und Körper byte-gleich. Die
+  Aufnahme liegt im Karten-Repo (`tests/aufnahme_vor_umzug.json`) und wird
+  dort für alle Anfragen ohne Live-Daten bei jedem Testlauf wiederholt.
+- **Hub-Seite:** `apps.BEKANNT["karte"]`, Weiterleitung `/api/map/*`,
+  Autostart; die TUI-Ansicht `tui/ansichten/karte.py` bleibt (ruft nur
+  HTTP), Taste `w` ruft `scripts/open_app_window.py karte` (öffnet
+  `[ansicht.fenster]` jeder App). Weg aus ZENTRALE: `core/map/`,
+  `core/glossary.py`, `ui/routen/karte.py`, die drei Skripte, drei Tests.
+- **Wächter:** E1 (`karte`, `map`, `glossary` in „Ausgezogene Apps"), E3 im
+  Karten-Repo (`tests/test_karte_grenze.py`), Test-App
+  `tests/fixtures/app_karte`.
 
 ## Selbst gebaute Apps: Manifest ohne Prozess (2026-10-10)
 

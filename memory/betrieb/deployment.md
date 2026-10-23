@@ -257,7 +257,7 @@ dasselbe `install_xfce_autostart.sh`:
 
 **`-maximized` / `--wand`, NICHT Fullscreen:** Ein echtes Fullscreen-Fenster
 liegt bei xfwm4 in einem eigenen Layer ganz oben → Zusatzfenster (die TUI per
-Alt+Z, Karte `w` → `scripts/map_window.py`, `/slide`-PDFs) oeffnen
+Alt+Z, Karte `w` → `scripts/open_app_window.py karte`, `/slide`-PDFs) oeffnen
 **dahinter** und sind unerreichbar. Ein normales Fenster auf voller Groesse
 stapelt sich normal. Randlos macht es das xfconf-Setting
 `xfwm4 /general/borderless_maximize = true` (setzt das Skript selbst).

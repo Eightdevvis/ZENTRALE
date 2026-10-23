@@ -1,0 +1,15 @@
+# Eine Test-App nach dem Vorbild der echten Karte (Repo zentrale-karte,
+# tests/conftest.py lenkt app_pfad_karte hierher). Adresse zeigt ins Leere:
+# kein Testlauf erreicht einen echten Karten-Server, /api/map/* ist „aus".
+name      = "karte"
+version   = "0.0.0"
+start     = "python -m karte.server"
+adresse   = "http://127.0.0.1:9"
+autostart = true
+routen    = ["/api/map"]
+ansichten = ["terminal", "fenster"]
+rechte    = []
+liefert   = []
+
+[ansicht.fenster]
+start = "python -m karte.fenster"

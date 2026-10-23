@@ -116,7 +116,6 @@ ZENTRALE/
 │   ├── kalender_*.py        # darunter: Speicher json/.ics, Abbildung, Sicherung, Migration
 │   │                        # (memory/werkzeuge/kalender_ics_bauplan.md)
 │   ├── lists.py             # Dynamische Listen-Registry (To-Do/Checklisten, Listen-Werkzeug)
-│   ├── glossary.py          # Kuratiertes Mini-Glossar (front-agnostisch, `?`-Suche)
 │   ├── mail.py              # Mail-Triage: IMAP rein, sortieren, zurückschreiben
 │   ├── mail_rules.py        # Triage-Keymap (Sender → Ordner/Aktion)
 │   ├── mail_secrets.py      # Verschlüsselter Zugangsdaten-Speicher (Mail-Konten)
@@ -133,11 +132,11 @@ ZENTRALE/
 │   │                        # rein lokal, KEIN Backend-Weg — Lautsprecher sitzt am Knoten)
 │   ├── apps.py              # installierte Apps: Ordner + Manifest app.toml (Hub)
 │   ├── hub_ereignisse.py    # Ereignisse per HTTP an abonnierte Apps (Hub)
-│   └── map/                 # Geo-Layer-System (front-agnostisch, pure stdlib)
-│       ├── basemap.py       # Basiskarte (Natural Earth, data/*.geojson)
-│       ├── projection.py    # Geo→Pixel-Projektion
-│       ├── render.py        # ASCII/Braille-Rasterung
-│       └── layers/          # Overlay-Registry: trade.py, portwatch.py, density.py
+│   ├── app_prozess.py       # App starten / lebt sie? / anhalten (stdlib, auch Pi)
+│   ├── app_verwaltung.py    # /api/apps, Start/Stopp, Autostart (Hub)
+│   ├── app_weiterleitung.py # `routen` im app.toml → Anfrage unverändert an die App (Hub)
+│   └── kachel_http.py       # Kachel-Quelle einer App über HTTP (Hub)
+│                            # (map/ + glossary.py: seit 2026-10-22 App, Repo zentrale-karte)
 ├── ui/
 │   ├── app.py               # Flask-App anlegen, Bereiche einhängen, Takt, Start
 │   └── routen/              # REST-Routen, ein Modul pro Bereich (reiner Adapter auf core/)
@@ -198,10 +197,10 @@ Skripte in `scripts/` ohne eigenen Doku-Ort (Stand 2026-10-14):
 
 ## Wie Bausteine andocken (Baustein-Konvention)
 
-Die Feature-Module in `core/` (kalender, mail, news, web, lists, glossary,
-graphs, map …) sind **autonom gekapselt**: keine zirkulären Importe, alle
+Die Feature-Module in `core/` (kalender, mail, news, web, lists,
+graphs …; die Karte ist seit 2026-10-22 eine eigene App) sind **autonom gekapselt**: keine zirkulären Importe, alle
 Abhängigkeiten hierarchisch (Stern-Muster: `ai.py` → Features; `mail.py` →
-`mail_*`; `map/layers` → Sub-Layer). Geteilter Zustand läuft ausschließlich
+`mail_*`). Geteilter Zustand läuft ausschließlich
 über `state.py`. Jeder Baustein dockt über genau **zwei Konventions-Stellen**
 an:
 

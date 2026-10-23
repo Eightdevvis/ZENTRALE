@@ -20,6 +20,7 @@ import time
 import urllib.request
 
 GESUND = "/hub/gesund"
+_OHNE_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def python_fuer(ordner: str, ersatz_ordner: str = None) -> str:
@@ -49,8 +50,10 @@ def lebt(adresse: str, wartezeit: float = 1.5) -> bool:
     if not adresse:
         return False
     try:
-        with urllib.request.urlopen(str(adresse).rstrip("/") + GESUND,
-                                    timeout=wartezeit) as r:
+        # Ohne Proxy: eine App lauscht auf diesem Rechner. Mit gesetztem
+        # http_proxy ging die Frage sonst an den Proxy (gesehen beim Umzug der
+        # Karte, 2026-10-22: Start meldete „lebt nicht", obwohl sie lief).
+        with _OHNE_PROXY.open(str(adresse).rstrip("/") + GESUND, timeout=wartezeit) as r:
             r.read()
         return True
     except Exception:
