@@ -16,6 +16,7 @@ bp = Blueprint('abgleich', __name__)
 
 @bp.route('/api/abgleich', methods=['GET'])
 def api_abgleich():
-    """-> {weg, rechner, schluessel_da, letzter_versuch, letzter_erfolg,
+    """-> {weg, rechner, schluessel_da, mitte_art, cloud (App an?), apps
+    ({app: bool} oder null = alles), letzter_versuch, letzter_erfolg,
     fehler, geholt, gesendet, hinweise: [{am, text}], konflikte_ordner}."""
     return jsonify(abgleich.zustand())

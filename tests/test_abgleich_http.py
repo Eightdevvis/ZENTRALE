@@ -1,14 +1,14 @@
 """Abgleich über die Cloud: HttpMitte (core/abgleich_mitte.py) gegen eine
 gespielte Cloud (tests/_falsche_cloud.py), und ein ganzer Abgleich mit zwei
 gespielten Geräten, Schlüssel = konto_schluessel aus konto.json.
-Dazu die Bereichs-Wahl je Gerät (core/abgleich_bereiche.py)."""
+Dazu die Wahl je App und Gerät (core/abgleich_apps.py)."""
 import json
 
 import pytest
 
 import abgleich
+import abgleich_apps
 import abgleich_auswahl as auswahl
-import abgleich_bereiche as bereiche
 import abgleich_mitte
 import abgleich_schluessel as schluessel
 import ai_config
@@ -129,6 +129,9 @@ class Geraet:
         self.mp.setattr(dateien, "knoten", lambda: self.name)
         self.mp.setattr(ai_config, "_overrides", getattr(self, "_einst", {}))
         self._einst = ai_config._overrides
+        # Einstellungen gelten je Gerät — auch die persistierten.
+        self.mp.setattr(ai_config, "_config", getattr(self, "_conf", {}))
+        self._conf = ai_config._config
         return self
 
     def abgleichen(self):
@@ -143,6 +146,11 @@ class Geraet:
     def lesen(self, rel):
         p = self.wurzel / "data" / rel
         return p.read_text(encoding="utf-8") if p.exists() else None
+
+    def alles(self):
+        """{rel: inhalt} von allem, was auf der Positivliste steht."""
+        return {rel: (self.wurzel / rel).read_bytes()
+                for rel in auswahl.auswahl(str(self.wurzel), auswahl.ABGLEICH)}
 
 
 @pytest.fixture
@@ -232,15 +240,15 @@ def test_abgemeldet_klarer_fehler_statt_abgleich(zwei):
     assert abgleich.zustand()["schluessel_da"] is False
 
 
-# ── Bereiche je Gerät ──────────────────────────────────────────────────
+# ── Apps je Gerät ──────────────────────────────────────────────────
 
-def test_abgewaehlter_bereich_wird_weder_geholt_noch_gesendet(zwei, cloud):
+def test_abgewaehlte_app_wird_weder_geholt_noch_gesendet(zwei, cloud):
     laptop, pc = zwei
     laptop.schreiben("lists.json", LISTE)
     laptop.schreiben("gedaechtnis/sasha.md", "mag Tee\n")
     laptop.abgleichen()
     pc.ich()
-    bereiche.setzen(["lists"])
+    abgleich_apps.setzen({"fokus": True, "assistent": False})
     pc.schreiben("gedaechtnis/nur_pc.md", "bleibt hier\n")
     pc.abgleichen()
     assert pc.lesen("lists.json") is not None
@@ -254,26 +262,98 @@ def test_abgewaehlter_bereich_wird_weder_geholt_noch_gesendet(zwei, cloud):
     assert "data/gedaechtnis/nur_pc.md" not in inhalt["dateien"]
 
 
-def test_bereich_spaeter_abwaehlen_loescht_nirgends(zwei):
+def test_app_spaeter_abwaehlen_loescht_nirgends(zwei):
     laptop, pc = zwei
     laptop.schreiben("gedaechtnis/sasha.md", "mag Tee\n")
     laptop.abgleichen()
     pc.abgleichen()
     pc.ich()
-    bereiche.setzen([])                                             # clean slate
+    abgleich_apps.setzen({n: False for n in abgleich_apps.tabelle()})   # clean slate
     pc.abgleichen()
     laptop.abgleichen()
     assert pc.lesen("gedaechtnis/sasha.md") == "mag Tee\n"
     assert laptop.lesen("gedaechtnis/sasha.md") == "mag Tee\n"
 
 
-def test_jedes_muster_der_positivliste_hat_genau_einen_bereich():
-    for m in auswahl.ABGLEICH:
-        treffer = [i for i, _a, ms in bereiche.BEREICHE if m in ms]
-        assert len(treffer) == 1, f"{m}: {treffer} — in core/abgleich_bereiche.py eintragen"
-    alle = [m for _i, _a, ms in bereiche.BEREICHE for m in ms]
-    assert set(alle) == set(auswahl.ABGLEICH)
-    assert bereiche.gewaehlt() is None and set(bereiche.muster()) == set(auswahl.ABGLEICH)
+# Eine Datei je App (und je Muster), auch der Tutor am alten Ort.
+JE_APP = {"data/lists.json": "[]", "data/features.json": "[]", "data/notes.json": '{"notes": []}',
+          "data/kalender_neben.json": "{}", "data/graphs.json": "[]", "data/g_schlaf.json": "{}",
+          "data/sleep_quality.json": "{}", "data/gedaechtnis/sasha.md": "Tee\n",
+          "data/gespraeche/g1/laptop.jsonl": "{}\n", "data/ai_transcripts/a.jsonl": "{}\n",
+          "data/rueckmeldungen/laptop.jsonl": "{}\n", "data/mobil/kontext.json": "{}",
+          "data/ai_usage.json": "{}", "data/ablage/d1/brief.txt": "Hallo\n",
+          "data/desk/a.canvas": "{}", "data/apps/meine/app.toml": "name = 'meine'\n",
+          "data/shop/besitz-laptop.jsonld": "{}", "data/mail_rules.json": "[]",
+          "data/melodies.json": "[]", "tutor/data/tutor_config.json": "{}",
+          "tutor/data/aktiver_stand": "es\n", "tutor/data/staende/s1.json": "{}",
+          "tutor/data/es/w.json": "{}"}
+
+
+def test_sashas_alte_wahl_alles_gleicht_genau_dasselbe_ab(zwei, cloud):
+    """Sasha am 23.10.: Setup mit „alles" (abgleich_bereiche = alle ids, Weg
+    mitte, http). Nach dem Umbau liest das Gerät die alte Wahl und gleicht
+    dieselben Dateien ab wie ein Gerät ohne Wahl — nichts fehlt, nichts fragt."""
+    laptop, pc = zwei
+    for rel, inhalt in JE_APP.items():
+        p = laptop.wurzel / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(inhalt, encoding="utf-8")
+    assert sorted(laptop.alles()) == sorted(JE_APP)              # jede Datei steht auf der Liste
+    pc.ich()
+    pc._einst.update(abgleich_bereiche=["lists", "notes", "calendar", "graphs", "memory",
+                                        "conversations", "documents", "desk", "apps", "mail",
+                                        "music", "tutor"],
+                     abgleich_weg="mitte")
+    assert abgleich_apps.offen(str(pc.wurzel), lambda: pytest.fail("nicht fragen")) == []
+    laptop.abgleichen()
+    pc.abgleichen()
+    assert pc.alles() == laptop.alles()
+    (pc.wurzel / "data" / "notes.json").write_text('{"notes": [{"id": "n1"}]}')
+    (pc.wurzel / "tutor" / "data" / "es" / "neu.json").write_text("{}")
+    pc.abgleichen()
+    laptop.abgleichen()
+    assert pc.alles() == laptop.alles() and len(laptop.alles()) == len(JE_APP) + 1
+
+
+def test_manifest_mit_schluesseldatei_wird_nie_abgeglichen(zwei, cloud, tmp_path, monkeypatch):
+    laptop, pc = zwei
+    eigen = tmp_path / "eigene_apps" / "boese"
+    eigen.mkdir(parents=True)
+    (eigen / "app.toml").write_text('name = "boese"\nvorlage = "desk"\n[daten]\n'
+                                    'muster = ["data/ai_config.json", "../x", "data/**"]\n'
+                                    'abgleichen = true\n')
+    monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(tmp_path / "eigene_apps"))
+    laptop.ich()
+    abgleich_apps.setzen({"boese": True, "fokus": True})
+    laptop.schreiben("ai_config.json", {"ANTHROPIC_API_KEY": "sk-geheim"})
+    (laptop.wurzel / "x").write_text("daneben")
+    laptop.schreiben("lists.json", LISTE)
+    laptop.abgleichen()
+    inhalt = json.loads(schluessel.Tresor(laptop.konto_schluessel).auf(
+        cloud.zustand.staende[cloud.zustand.kopf["sasha"]]["inhalt.enc"]))
+    assert sorted(inhalt["dateien"]) == ["data/lists.json"]
+
+
+def test_cloud_pfade_nur_aus_dem_inhaltsverzeichnis(zwei, cloud):
+    laptop, pc = zwei
+    laptop.schreiben("lists.json", LISTE)
+    laptop.schreiben("gedaechtnis/sasha.md", "Tee\n")
+    laptop.abgleichen()
+    pc.ich()
+    vorher = len(cloud.zustand.aufrufe)
+    assert abgleich.cloud_pfade() == {"data/lists.json", "data/gedaechtnis/sasha.md"}
+    dateien_geholt = [p for m, p in cloud.zustand.aufrufe[vorher:] if "/datei/" in p]
+    assert dateien_geholt == ["/v1/mitte/datei/inhalt.enc"]
+    konto.abmelden()
+    assert abgleich.cloud_pfade() is None
+
+
+def test_cloud_als_app_im_zustand(zwei):
+    laptop, _ = zwei
+    laptop.ich()
+    assert abgleich.cloud_an() is True and abgleich.zustand()["cloud"] is True
+    konto.abmelden()
+    assert abgleich.cloud_an() is False
 
 
 def test_daten_als_verweis_werden_gefunden(tmp_path):

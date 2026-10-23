@@ -176,7 +176,7 @@ international.
 | Download | **Nur mit Einladungscode** (private Beta). `install.sh` ist öffentlich, das Paket nicht. |
 | Sprache | **Englisch** für CLI, Begrüßung, Assistent; Texte in einer eigenen Datei, Deutsch später als zweite Sprache. |
 | Login | **optional.** Ohne Login läuft ZENTRALE rein lokal. |
-| Wählbare Einheiten | Bis es eine leere Hub-Fassung gibt: **Bereiche** der Daten (aus `core/abgleich_auswahl.py`) + echte Apps (Tutor). |
+| Wählbare Einheiten | **Apps** (seit 2026-10-23, [cloud_app.md](cloud_app.md)): jede sagt in `[daten]`, was sie hat; eingebaute in `core/eingebaute_apps.py`. Bis dahin Bereiche aus der Positivliste (`abgleich_bereiche`, wird übernommen). |
 | Besitz | gehört dem **Konto**, nicht dem Gerät: jedes eingeloggte Gerät sieht ihn. Installiert ist je Gerät (Knoten-Beschreibung). |
 | Konto-Kennung | **Anonym** (23.10.): ein selbst gewählter **Benutzername**, keine Mail — weder gefragt noch gespeichert. 3–32 Zeichen `a-z 0-9 . _ -`, vorn ein Buchstabe, NFC + klein; reservierte Namen (admin, root, support, zentrale…) gehen nicht; `@` → Hinweis „No email needed". Sasha: *„jedem das Recht und die Freiheit geben, komplett anonym zu bleiben."* |
 | Keine erzeugten Kontonummern | Erst angeboten (Mullvad-Art), am 23.10. wieder gestrichen: **ein Weg für alle**. Eine Wahl wäre selbst Metadaten („diese Person nahm die anonyme Option") und verkleinert die Anonymitätsmenge (Tor-Prinzip). Der Assistent fragt nur `username:`. |
@@ -258,7 +258,7 @@ gegen dieselbe Schnittstelle):
 | Draht zur Cloud (urllib, Fehler als englischer Satz) | `core/cloud_api.py` — Adresse an EINER Stelle: `VORGABE`, Env `ZENTRALE_CLOUD` |
 | Konto: anlegen, anmelden, abmelden, Notfall, Passwort ändern | `core/konto.py` → `~/.config/zentrale/konto.json` (600) |
 | Mitte über die Cloud | `HttpMitte` in `core/abgleich_mitte.py` ([../betrieb/abgleich.md](../betrieb/abgleich.md)) |
-| Bereiche je Gerät | `core/abgleich_bereiche.py` |
+| Apps je Gerät | `core/abgleich_apps.py`, `core/eingebaute_apps.py` |
 | Knoten-Beschreibung, Hardware erkannt | `core/knoten.py` |
 | Der Befehl | `zentrale_cli/` (Front, Tür im Kern-Bauplan), Starter `bin/zentrale`, `pyproject.toml` (Einstiegspunkt für `pip install -e .`) |
 | Alle Texte (Englisch) | `zentrale_cli/texte.py` — Deutsch = zweites Wörterbuch mit denselben Schlüsseln |
@@ -277,9 +277,14 @@ gegen dieselbe Schnittstelle):
   den Notfallschlüssel EINMAL mit Warnung und legt das Konto erst an, wenn
   bestätigt ist, dass er gesichert ist (sonst bleibt der Code unverbraucht).
 - **`setup`:** abgemeldet → anmelden / Konto anlegen / lokal bleiben; dann
-  alles / einzeln (Pfeiltasten + Leertaste, über ssh; ohne Terminal über
-  Nummern) / clean slate (`[]`, nichts abgleichen). Danach
-  `abgleich_mitte_art=http`, `abgleich_weg=mitte`, Gerät melden, abgleichen.
+  nur die Apps, die hier oder in der Cloud schon Daten haben: alle / einzeln
+  (Pfeiltasten + Leertaste, über ssh; ohne Terminal über Nummern) / keine.
+  Hat keine Daten: „Nothing to sync yet — new apps will ask when they have
+  data." (`abgleich_apps = {}`). Danach immer `abgleich_mitte_art=http`,
+  `abgleich_weg=mitte` (die App `cloud` ist an), Gerät melden, abgleichen.
+- **Neue App mit Daten:** fragt einmal bei `sync` und beim Start; ohne
+  Terminal eine Zeile. **`status`** zeigt unter „Apps" die Cloud und je App
+  synced / stays on this device / not decided yet.
 - **`devices`:** meldet zuerst die eigene Beschreibung (`PUT /v1/knoten/<hostname>`,
   Sorte `vollknoten`, Hardware gpu/bildschirm/mikro/lautsprecher erkannt),
   dann `GET /v1/knoten`.

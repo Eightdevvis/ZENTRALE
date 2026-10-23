@@ -20,6 +20,9 @@ class Terminal:
         self.ein = ein or sys.stdin
         self.farbig = (hasattr(self.aus, "isatty") and self.aus.isatty()
                        and not os.environ.get("NO_COLOR") and os.environ.get("TERM") != "dumb")
+        # Darf ungefragt eine Frage kommen (neue App mit Daten)? Nur, wenn
+        # jemand am Terminal sitzt — nie in einem Skript oder Timer.
+        self.interaktiv = hasattr(self.ein, "isatty") and self.ein.isatty()
 
     # ── Ausgabe ─────────────────────────────────────────────────────
     def f(self, text, *arten):

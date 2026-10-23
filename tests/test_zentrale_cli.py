@@ -92,16 +92,21 @@ def _einstellungen(geraet):
 
 def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     from zentrale_cli import assistent
+    (geraet.wurzel / "data" / "lists.json").write_text("[]")
+    (geraet.wurzel / "data" / "notes.json").write_text('{"notes": []}')
+    (geraet.wurzel / "data" / "gedaechtnis").mkdir()
+    (geraet.wurzel / "data" / "gedaechtnis" / "a.md").write_text("x")
     term = Spiel("2",                                          # neues Konto
                  "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y",         # Code, Name, Passwort ×2, gesichert
                  "2",                                          # einzeln wählen
-                 "n", "1 5", "")                               # nichts, dann Listen + Gedächtnis
+                 "n", "1 3", "")                               # nichts, dann Listen + Assistent
     assert befehle.eingerichtet() is False
     rc = assistent.setup(term)
     assert rc == 0, term.text
     assert "EMERGENCY KEY" in term.text
     e = _einstellungen(geraet)
-    assert e["abgleich_bereiche"] == ["lists", "memory"]
+    assert "Lists, Notes, Assistant" in term.text                # nur Apps mit Daten
+    assert e["abgleich_apps"] == {"fokus": True, "notizen": False, "assistent": True}
     assert e["abgleich_mitte_art"] == "http" and e["abgleich_weg"] == "mitte"
     assert e["einrichtung"]
     assert befehle.eingerichtet()
@@ -111,8 +116,72 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     ai_config._overrides.clear()
     ai_config._config.clear()
     ai_config._load()
-    import abgleich_bereiche
-    assert abgleich_bereiche.gewaehlt() == ["lists", "memory"]
+    import abgleich_apps
+    assert abgleich_apps.entscheidungen() == {"fokus": True, "notizen": False, "assistent": True}
+
+
+def _frisches_konto_eingerichtet(geraet):
+    from zentrale_cli import assistent
+    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y")
+    assert assistent.setup(term) == 0, term.text
+    return term
+
+
+def test_frisch_nichts_abzugleichen_cloud_trotzdem_an(geraet):
+    term = _frisches_konto_eingerichtet(geraet)
+    assert "Nothing to sync yet — new apps will ask when they have data." in term.text
+    assert "What should this device sync?" not in term.text
+    e = _einstellungen(geraet)
+    assert e["abgleich_apps"] == {}
+    assert e["abgleich_mitte_art"] == "http" and e["abgleich_weg"] == "mitte"
+    term = Spiel()
+    assert befehle.status(term) == 0
+    assert "Cloud" in term.text and "on — syncs over your account" in term.text
+
+
+def test_neue_app_mit_daten_fragt_einmal_und_die_antwort_bleibt(geraet):
+    _frisches_konto_eingerichtet(geraet)
+    (geraet.wurzel / "data" / "lists.json").write_text("[]")
+    (geraet.wurzel / "data" / "melodies.json").write_text("[]")
+    term = Spiel("y", "n")
+    term.interaktiv = True
+    assert befehle.sync(term) == 0, term.text
+    assert "Lists has data — sync it with your account?" in term.text
+    assert "Melodies has data" in term.text
+    assert _einstellungen(geraet)["abgleich_apps"] == {"fokus": True, "klavier": False}
+    term = Spiel()
+    term.interaktiv = True
+    assert befehle.sync(term) == 0 and "has data" not in term.text     # nur einmal
+    import abgleich
+    assert abgleich.cloud_pfade() == {"data/lists.json"}                # klavier blieb hier
+    term = Spiel()
+    assert befehle.status(term) == 0
+    assert "stays on this device" in term.text and "synced" in term.text
+
+
+def test_neue_app_ohne_terminal_eine_zeile_und_nicht_abgeglichen(geraet):
+    _frisches_konto_eingerichtet(geraet)
+    (geraet.wurzel / "data" / "notes.json").write_text('{"notes": []}')
+    term = Spiel()                                                      # kein Terminal
+    assert befehle.sync(term) == 0
+    zeilen = [z for z in term.text.splitlines() if "waiting for your decision" in z]
+    assert zeilen == ["Not synced yet, waiting for your decision: Notes. "
+                      "Run 'zentrale sync' in a terminal."]
+    import abgleich
+    assert abgleich.cloud_pfade() == set()
+    assert _einstellungen(geraet)["abgleich_apps"] == {}
+
+
+def test_start_fragt_neue_app_nur_mit_cloud(geraet, monkeypatch):
+    _frisches_konto_eingerichtet(geraet)
+    (geraet.wurzel / "data" / "notes.json").write_text('{"notes": []}')
+    monkeypatch.setattr(befehle, "tui", lambda term: 0)
+    monkeypatch.setattr(haupt, "_entwickler_checkout", lambda: True)
+    term = Spiel("y")
+    term.interaktiv = True
+    assert haupt.main([], term=term) == 0
+    assert "Notes has data" in term.text
+    assert _einstellungen(geraet)["abgleich_apps"] == {"notizen": True}
 
 
 def test_assistent_notfallschluessel_nicht_bestaetigt_kein_konto(geraet):

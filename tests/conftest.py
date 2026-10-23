@@ -119,6 +119,7 @@ os.environ.setdefault("ZENTRALE_ABGLEICH_MITTE", os.path.join(_DATEN_TMP, "keine
 os.environ.pop("ZENTRALE_ABGLEICH_WEG", None)
 os.environ.pop("ZENTRALE_ABGLEICH_MITTE_ART", None)
 os.environ.pop("ZENTRALE_ABGLEICH_BEREICHE", None)
+os.environ.pop("ZENTRALE_ABGLEICH_APPS", None)
 # Konto und Cloud (core/konto.py, Bauplan v1, 2026-10-22): nie die echte
 # konto.json, nie die echte Cloud (die Adresse zeigt ins Leere; Tests mit
 # tests/_falsche_cloud.py setzen ihre eigene), nie der echte Hub-Ordner.

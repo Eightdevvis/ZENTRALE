@@ -44,6 +44,7 @@ def main(argv=None, term=None):
                 if rc != 0:
                     return rc
             befehle.nutzung_warnung(term)      # eine Zeile, nur Betreiber; nie blockierend
+            befehle.neue_apps_beim_start(term)
             return befehle.tui(term)
         fn = BEFEHLE.get(tuple(argv[:2])) or BEFEHLE.get(tuple(argv[:1]))
         if fn is None:

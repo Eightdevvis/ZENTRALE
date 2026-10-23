@@ -10,7 +10,7 @@
 #
 # Hier liegt nur der Ablauf. Die Regeln: abgleich_zusammenfuehren. Die Mitte:
 # abgleich_mitte. Der Schlüssel: abgleich_schluessel. Was mitdarf:
-# abgleich_auswahl.
+# abgleich_auswahl; was dieses Gerät davon will (je App): abgleich_apps.
 #
 # Örtlicher Zustand unter `abgleich_dir` (Vorgabe ~/.local/share/zentrale/
 # abgleich) — bewusst außerhalb von data/, sonst trüge der alte rsync-Weg
@@ -34,8 +34,8 @@ import re
 import shutil
 import time
 
+import abgleich_apps
 import abgleich_auswahl as auswahl
-import abgleich_bereiche as bereiche
 import abgleich_mitte
 import abgleich_schluessel as schluessel
 import abgleich_zusammenfuehren as regeln
@@ -117,6 +117,33 @@ def schluessel_da() -> bool:
     return konto.angemeldet() if mitte_art() == "http" else schluessel.vorhanden()
 
 
+def cloud_an() -> bool:
+    """Die App `cloud` (core/eingebaute_apps.py) ist an: dieses Gerät gleicht
+    über die ZENTRALE-Cloud ab und ist angemeldet. Sonst ist es rein lokal."""
+    return mitte_art() == "http" and konto.angemeldet()
+
+
+def cloud_pfade():
+    """Welche Pfade in der Cloud liegen — nur aus dem verschlüsselten
+    Inhaltsverzeichnis (inhalt.enc), ohne eine Datei zu laden. Für die Frage
+    „hat diese App schon Daten?". Immer die Cloud (Konto + konto_schluessel),
+    egal, über welchen Weg dieses Gerät gerade abgleicht. None, wenn es nicht
+    geht (abgemeldet, offline) — das ist nie ein Fehler."""
+    try:
+        if not konto.angemeldet():
+            return None
+        tresor = schluessel.Tresor(konto.konto_schluessel())
+        c = konto.client()
+        stand, lesen, _namen = abgleich_mitte.oeffnen("http", c.basis, "", token=c.token).holen()
+        if stand is None:
+            return set()
+        roh = lesen(INHALT)
+        return set(json.loads(tresor.auf(roh)).get("dateien", {})) if roh else set()
+    except (schluessel.SchluesselFehler, abgleich_mitte.MitteFehler, konto.KontoFehler,
+            OSError, ValueError):
+        return None
+
+
 def _sha(b):
     return hashlib.sha256(b).hexdigest() if b is not None else None
 
@@ -192,7 +219,7 @@ def _leeres_inhalt():
 
 def _mitte_lesen(tresor, stand, lesen, basis, muster=auswahl.ABGLEICH):
     """→ (inhalt, {rel: klartext}) für alle Dateien auf unserer Liste
-    (`muster` = was dieses Gerät abgleicht, abgleich_bereiche)."""
+    (`muster` = was dieses Gerät abgleicht, abgleich_apps)."""
     if stand is None:
         return _leeres_inhalt(), {}
     roh = lesen(INHALT)
@@ -264,7 +291,7 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
         if not auswahl.passt(rel, auswahl.ABGLEICH) or teile[2] != tresor.name(rel) + ".enc":
             bericht.hinweise.append(f"Eingang {knoten}: {rel!r} gehört nicht dorthin — übergangen")
         elif not auswahl.passt(rel, muster):
-            continue          # Bereich auf diesem Gerät abgewählt
+            continue          # App auf diesem Gerät abgewählt
         elif eigene_datei(rel, knoten):
             fremd[rel] = inhalt
         elif _vorschlag(rel):
@@ -458,14 +485,14 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
             tresor = schluessel.Tresor(schluessel_laden())
             mitte = mitte_oeffnen()
             rechner = dateien.knoten()
-            muster = bereiche.muster()
+            muster = abgleich_apps.muster()
             if not trocken:
                 _vorhaben_nachholen(wurzel, mitte)
             for _versuch in range(4):
                 stand, lesen, namen = mitte.holen()
                 basis_stand, basis = _basis_lesen()
-                # Abgewählte Bereiche: weder holen noch senden — auch nicht
-                # über die Basis (sonst sähe ein abgewählter Bereich aus wie
+                # Abgewählte Apps: weder holen noch senden — auch nicht
+                # über die Basis (sonst sähe eine abgewählte App aus wie
                 # „überall gelöscht").
                 basis = {rel: b for rel, b in basis.items() if auswahl.passt(rel, muster)}
                 try:
@@ -553,7 +580,8 @@ def zustand() -> dict:
     z = _zustand_lesen()
     return {"weg": weg(), "rechner": dateien.knoten(),
             "schluessel_da": schluessel_da(),
-            "mitte_art": mitte_art(), "bereiche": bereiche.gewaehlt(),
+            "mitte_art": mitte_art(), "cloud": cloud_an(),
+            "apps": abgleich_apps.entscheidungen(),
             "letzter_versuch": z.get("letzter_versuch"),
             "letzter_erfolg": z.get("letzter_erfolg"),
             "fehler": z.get("fehler"),

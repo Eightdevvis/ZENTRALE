@@ -1,6 +1,6 @@
 # Die Cloud als App — Apps sagen, was sie haben
 
-**Stand 2026-10-23: Plan, Bau läuft.** Sasha beim ersten `zentrale setup`:
+**Stand 2026-10-23: gebaut** (Branch `cloud-app`; was echt ist: „Gebaut“ unten). Sasha beim ersten `zentrale setup`:
 *„das choose what this device syncs is fraglich … wenn ein user das neu
 aufmacht dann sollte ja quasi kaum was kommen … lowk wird die cloud eine
 weitere app in zentrale sein, ein dienst den man wahrnehmen kann, und der
@@ -14,7 +14,8 @@ zuerst" so zur Bauweise wird statt zur Einstellung.
 ## Was falsch war
 
 Die Auswahl im Assistenten waren zwölf feste **Bereiche**
-(`core/abgleich_bereiche.py`), gruppiert aus der Positivliste der Dateien.
+(`core/abgleich_bereiche.py`, seit 2026-10-23 gelöscht), gruppiert aus der
+Positivliste der Dateien.
 Ein neuer Nutzer mit leerem Hub sah Kalender, Tutor, Musik … — Dinge, die es
 bei ihm nicht gibt.
 
@@ -26,8 +27,8 @@ bei ihm nicht gibt.
 
    ```toml
    [daten]
-   muster = ["data/lists.json", "data/features.json"]   # relativ zur Installation
-   abgleichen = true        # false = bleibt immer auf dem Gerät (z. B. Caches)
+   muster = ["data/lists.json", "data/features.json"]   # relativ zum ZENTRALE-Ordner (wie die Positivliste)
+   abgleichen = true        # fehlt/false = bleibt immer auf dem Gerät (z. B. Caches)
    ```
 
 3. **Die Cloud ist eine App** (`cloud`): Konto, Abgleich, Geräteliste,
@@ -41,7 +42,7 @@ bei ihm nicht gibt.
    beim Start: „App X hat Daten — mit abgleichen? [y/n]". Die Antwort gilt je
    Gerät.
 6. Die Wahl gilt je **App** und je Gerät (Einstellung `abgleich_apps`,
-   abgelöst von `abgleich_bereiche`; die alte Wahl wird beim ersten Lesen
+   abgelöst von `abgleich_bereiche`; die alte Wahl wird beim Lesen
    übernommen).
 
 ## Übergang: eingebaute Apps
@@ -70,6 +71,41 @@ Die Positivliste `core/abgleich_auswahl.py` bleibt der Schutz: ein Muster aus
 einem Manifest wird nur abgeglichen, wenn es auch dort steht (deny by
 default — eine App kann sich keine Schlüsseldatei erschleichen).
 
+## Gebaut (2026-10-23)
+
+- `[daten]` im app.toml: `apps.daten()` liest es (Muster mit `..`, absolut,
+  `~`, `\` fallen weg; `abgleichen` fehlt = false). `GET /api/apps` zeigt
+  `daten` (null = keine). Muster stehen relativ zum ZENTRALE-Ordner — dem
+  Namensraum der Positivliste.
+- `core/eingebaute_apps.py`: die Tabelle oben plus `cloud` (Dienst, ohne
+  Daten) und der **Ersatz** für den Tutor, solange `language-tutor/app.toml`
+  kein `[daten]` hat (gilt auch, wenn der Tutor auf dem Gerät nicht
+  installiert ist — seine Daten liegen noch in `ZENTRALE/tutor/data`).
+  Hat ein Manifest gleichen Namens `[daten]`, gewinnt das Manifest.
+- `core/abgleich_apps.py`: Tabelle (Muster nur, wenn sie **genau so** auf
+  der Positivliste stehen; jedes Muster nur einer App — eingebaute zuerst),
+  Wahl `abgleich_apps` je Gerät, Übernahme von `abgleich_bereiche`, wer
+  Daten hat, wer noch fragen muss. `core/abgleich.py` gleicht nur noch die
+  Muster der gewählten Apps ab.
+- Cloud-Seite ohne Herunterladen: `abgleich.cloud_pfade()` liest nur
+  `inhalt.enc` (ein Blob) und gibt die Pfade.
+- Die App `cloud` ist an, wenn `abgleich_mitte_art = http` und angemeldet
+  (`abgleich.cloud_an()`); `zentrale status` zeigt sie unter „Apps“ mit dem
+  Stand jeder App.
+- Fragen: `zentrale setup` (nur Apps mit Daten; keine → „Nothing to sync
+  yet …“, Cloud trotzdem an, `abgleich_apps = {}`), `zentrale sync` und Start
+  von `zentrale` (dort nur lokal nachgesehen) fragen je neue App einmal; ohne
+  Terminal eine Zeile, die App bleibt draußen.
+- Übernahme: alte Wahl „alles“ → alle Apps ja, dieselben Muster wie vorher;
+  `[]` → alle nein; teilweise (memory ohne conversations) → `assistent`
+  unentschieden, fragt einmal; nicht gesetzt → alles wie bisher.
+- Tests: `tests/test_abgleich_apps.py`, `tests/test_abgleich_http.py`
+  (zwei Geräte, Sashas Stand, Manifest mit Schlüsseldatei),
+  `tests/test_zentrale_cli.py`.
+- **Offen:** `language-tutor/app.toml` bekommt `[daten]` (dann fällt der
+  Ersatz weg); die TUI zeigt die Wahl noch nicht; ein Rechte-Dialog für
+  fremde Manifeste fehlt (bis dahin schützt die Positivliste).
+
 ## Historie
 
-- **2026-10-23** — Plan nach Sashas erstem Setup.
+- **2026-10-23** — Plan nach Sashas erstem Setup; am selben Tag gebaut.

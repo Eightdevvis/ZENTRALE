@@ -138,3 +138,24 @@ def kachel_arten(m: dict) -> list:
         return []
     return [str(x)[len("kachel:"):] for x in (m.get("liefert") or [])
             if str(x).startswith("kachel:") and len(str(x)) > len("kachel:")]
+
+
+def daten(m: dict):
+    """`[daten]` aus dem Manifest (memory/hub/cloud_app.md): welche Dateien die
+    App hat und ob sie abgeglichen werden dürfen →
+    {"muster": [...], "abgleichen": bool} oder None (kein `[daten]`).
+
+    Muster sind relativ zum ZENTRALE-Ordner (der Namensraum der Positivliste
+    core/abgleich_auswahl.py). Was nach außen zeigt (absolut, `..`, `\\`,
+    leer), fällt hier still weg; was übrig bleibt, gleicht der Abgleich
+    trotzdem nur ab, wenn es auch auf der Positivliste steht."""
+    d = m.get("daten")
+    if not isinstance(d, dict):
+        return None
+    muster = []
+    for x in d.get("muster") or []:
+        x = str(x).strip()
+        if x and not x.startswith(("/", "~")) and "\\" not in x \
+                and ".." not in x.split("/") and x not in muster:
+            muster.append(x)
+    return {"muster": muster, "abgleichen": d.get("abgleichen") is True}

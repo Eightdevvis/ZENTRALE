@@ -62,7 +62,8 @@ zählen als ein Modul.
 | `abgleich_schluessel` | 1 | Der Schlüssel der Mitte: anlegen, laden, ablegen, Fernet, versteckte Dateinamen |
 | `abgleich_zusammenfuehren` | 1 | Drei-Wege-Regeln über die Basis: JSON nach Eintrag/Feld, Zähler, Zeilen, Text mit beiden Fassungen |
 | `abgleich_mitte` | 1 | Die Mitte hinter vier Handgriffen (holen, vorbereiten, senden, enthaelt); Umsetzung git und (seit 2026-10-22) http = die ZENTRALE-Cloud (`HttpMitte`) |
-| `abgleich_bereiche` | 1 | Wählbare Einheiten des Abgleichs (Bereiche aus der Positivliste + Apps) und die Wahl je Gerät (Einstellung `abgleich_bereiche`) (seit 2026-10-22) |
+| `abgleich_apps` | 1 | Was dieses Gerät abgleicht, je App (seit 2026-10-23, löst `abgleich_bereiche` ab): Tabelle der Apps mit `[daten]` (geschnitten mit der Positivliste), Wahl je Gerät (Einstellung `abgleich_apps`, liest die alte `abgleich_bereiche` mit), wer Daten hat, wer noch fragen muss |
+| `eingebaute_apps` | 1 | Die eingebauten Apps (fokus, notizen, kalender … und `cloud`) mit Titel und `[daten]` wie ein app.toml, dazu der Ersatz für den Tutor, solange sein app.toml kein `[daten]` hat (seit 2026-10-23) |
 | `konto_schluessel` | 1 | Schlüssel-Schema des Kontos, nur Rechnen: Argon2id, HKDF-Infos, Fernet-Verpackung, Notfallschlüssel als Base32 — nachbaubar aus der Doku, Prüfstein `tests/daten/konto_testvektoren.json` (seit 2026-10-22) |
 | `cloud_api` | 1 | Der Draht zur ZENTRALE-Cloud: urllib, Bearer, Fehler als `CloudFehler` mit englischem Satz; Adresse an einer Stelle (`VORGABE`, Env `ZENTRALE_CLOUD`) (seit 2026-10-22) |
 | `cloud_nutzung` | 1 | Gratis-Grenzen der Cloud für den Betreiber: `GET /v1/nutzung` holen, 1 h merken in `~/.local/state/zentrale/nutzung.json`, `warnung()` für Start/Status nie blockierend und nie mit Ausnahme (seit 2026-10-23) |
@@ -297,7 +298,7 @@ das für `core/`, `ui/`, `tui/`, `scripts/`).
 | Bereich | Darf aus dem Kern | Warum |
 |---|---|---|
 | `tui/` | `theme`, `tone`, `pc_status`, `listen_baum`, `listen_bild`, `graph_reihen`, `stil`, `tastentabelle`, `uhr` | Reine Helfer ohne Kern-Abhängigkeit. Alles andere holt die TUI per HTTP von den Routen (`ui/routen/`). `listen_baum`/`graph_reihen` seit 2026-10-10: Ansicht und Kachel rechnen dasselbe; `listen_bild` seit 2026-10-11: Ansicht und Kachel zeigen dasselbe Bild einer Liste; `stil` seit 2026-10-10: Farbwähler und Stylebox prüfen CSS wie das Backend; `tastentabelle` seit 2026-10-11: TUI und Hub lesen Tastentabellen gleich; `uhr` seit 2026-10-20: dieselbe Uhr und derselbe Tageswechsel wie das Backend; alle stehen in `deploy/aussenposten.txt`. |
-| `zentrale_cli/` | `abgleich`, `abgleich_bereiche`, `abgleich_mitte`, `abgleich_schluessel`, `ai_config`, `cloud_api`, `cloud_nutzung`, `dateien`, `knoten`, `konto` | Der Befehl `zentrale` (seit 2026-10-22) ist eine Front wie `scripts/abgleich.py`: er bedient Konto, Abgleich und Gerät direkt, ohne laufendes Backend (er läuft auch, bevor es eines gibt). Rechnen und Netz bleiben im Kern; hier stehen nur Fragen, Ausgabe und Texte (`zentrale_cli/texte.py`). |
+| `zentrale_cli/` | `abgleich`, `abgleich_apps`, `abgleich_mitte`, `abgleich_schluessel`, `ai_config`, `cloud_api`, `cloud_nutzung`, `dateien`, `knoten`, `konto` | Der Befehl `zentrale` (seit 2026-10-22) ist eine Front wie `scripts/abgleich.py`: er bedient Konto, Abgleich und Gerät direkt, ohne laufendes Backend (er läuft auch, bevor es eines gibt). Rechnen und Netz bleiben im Kern; hier stehen nur Fragen, Ausgabe und Texte (`zentrale_cli/texte.py`). |
 
 Mit Apps redet der Hub nur über HTTP: starten und stoppen
 (`core/app_verwaltung.py`, `POST /api/apps/<name>/start|stop`, Autostart mit

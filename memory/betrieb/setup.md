@@ -38,6 +38,13 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 4. Ist `~/.local/bin` nicht im PATH, sagt es, wie es für bash, zsh und fish
    dazukommt. Dann `zentrale welcome`; danach `zentrale setup`.
 
+**Der Assistent `zentrale setup`** (seit 2026-10-23 je App,
+[../hub/cloud_app.md](../hub/cloud_app.md)): anmelden / Konto anlegen / lokal
+bleiben. Mit Konto zeigt er nur Apps, die auf dem Gerät oder in der Cloud
+schon Daten haben (alle / einzeln / keine); ein frisches Konto sieht „Nothing
+to sync yet — new apps will ask when they have data." Die Cloud wird so oder
+so eingeschaltet; später fragt jede neue App mit Daten einmal selbst.
+
 **Aufbau auf dem Gerät:**
 
 ```

@@ -1,28 +1,31 @@
-"""`zentrale setup` — der Einrichtungs-Assistent (Bauplan v1): Login ja/nein →
-alles / auswählen / clean slate → holen. Die Wahl gilt je Gerät
-(core/abgleich_bereiche.py); ein nicht gewählter Bereich wird hier weder
-geholt noch gesendet."""
+"""`zentrale setup` — der Einrichtungs-Assistent (Bauplan v1, seit 2026-10-23
+je App: memory/hub/cloud_app.md): Login ja/nein → welche Apps mit Daten
+abgleichen (alle / auswählen / keine) → holen. Angeboten werden nur Apps, die
+hier oder in der Cloud schon Daten haben; ein frisches Konto sieht keine.
+Die Wahl gilt je Gerät (core/abgleich_apps.py)."""
 
 from zentrale_cli import befehle
 from zentrale_cli.texte import t
 
-import abgleich_bereiche as bereiche  # noqa: E402
+import abgleich                       # noqa: E402
+import abgleich_apps                  # noqa: E402
 import ai_config                      # noqa: E402
 import konto                          # noqa: E402
 
 
-def bereiche_waehlen(term):
-    """→ Liste der ids oder None (abgebrochen)."""
+def apps_waehlen(term, angebot, tabelle):
+    """angebot = Namen der Apps mit Daten → {name: ja/nein} oder None (abgebrochen)."""
+    term.sag(t("setup_apps_found", liste=", ".join(befehle.app_name(n, tabelle)[0] for n in angebot)))
     art = term.eins_von(t("setup_choose_q"), t("setup_choose_opts"))
     if art == "all":
-        return list(bereiche.IDS)
+        return {n: True for n in angebot}
     if art == "none":
-        return []
-    vorher = bereiche.gewaehlt()
-    an = set(bereiche.IDS if vorher is None else vorher)
-    eintraege = [(i, *t("area")[i]) for i in bereiche.IDS]
+        return {n: False for n in angebot}
+    vorher = abgleich_apps.entscheidungen()
+    an = {n for n in angebot if vorher is None or vorher.get(n, True)}
+    eintraege = [(n, *befehle.app_name(n, tabelle)) for n in angebot]
     gewaehlt = term.ankreuzen(t("setup_pick_title"), eintraege, an)
-    return None if gewaehlt is None else [i for i in bereiche.IDS if i in gewaehlt]
+    return None if gewaehlt is None else {n: n in gewaehlt for n in angebot}
 
 
 def cloud_einschalten():
@@ -47,20 +50,26 @@ def setup(term, erster_start=False):
         if rc != 0:
             return rc
     term.sag()
-    ids = bereiche_waehlen(term)
-    if ids is None:
-        term.sag(t("cancelled"))
-        return 1
-    bereiche.setzen(ids)
-    term.sag(t("setup_choice_saved", liste=", ".join(t("area")[i][0] for i in ids))
-             if ids else t("setup_choice_none"))
+    tabelle = abgleich_apps.tabelle()
+    angebot = abgleich_apps.mit_daten(befehle.WURZEL, abgleich.cloud_pfade())
+    if angebot:
+        wahl = apps_waehlen(term, angebot, tabelle)
+        if wahl is None:
+            term.sag(t("cancelled"))
+            return 1
+        an = [befehle.app_name(n, tabelle)[0] for n in angebot if wahl[n]]
+        term.sag(t("setup_choice_saved", liste=", ".join(an)) if an else t("setup_choice_none"))
+    else:
+        wahl = {}
+        term.sag(t("setup_nothing_yet"))
+    abgleich_apps.setzen(wahl)          # {} heißt: neue Apps fragen selbst
     cloud_einschalten()
     befehle.einrichtung_merken()
     try:
         befehle.geraet_melden()
     except konto.KontoFehler as e:
         term.sag(str(e), "warn")       # Gerät melden ist Beiwerk — Abgleich geht vor
-    if ids:
+    if any((abgleich_apps.entscheidungen() or {}).values()):
         term.sag(t("setup_sync_now"), "blass")
         befehle.sync(term)
     term.sag(t("setup_done"), "gut")

@@ -105,22 +105,36 @@ Der Abgleich kennt die Mitte nur über vier Handgriffe (`core/abgleich_mitte.py`
 - Prüfstein: `tests/test_abgleich_http.py` (zwei gespielte Geräte gegen
   `tests/_falsche_cloud.py`).
 
-### Bereiche je Gerät (seit 2026-10-22)
+### Apps je Gerät (seit 2026-10-23, vorher Bereiche)
 
-`core/abgleich_bereiche.py` gruppiert die Positivliste in wählbare Einheiten:
-lists, notes, calendar (nur `kalender_neben.json`), graphs, memory,
-conversations (Gespräche, Transkripte, Rückmeldungen, Kontextpaket, Kosten),
-documents (Ablage), desk, apps (eigene Apps + Schaufenster), mail (Regeln),
-music, und die App tutor. Jedes Muster gehört zu genau einem Bereich (Test).
+Daten haben nur Apps ([../hub/cloud_app.md](../hub/cloud_app.md)). Jede sagt
+in `[daten]` (app.toml; eingebaute: `core/eingebaute_apps.py`), welche
+Muster ihr gehören; `core/abgleich_apps.py` schneidet sie mit der
+Positivliste (nur was dort **genau so** steht, deny by default) und gibt
+jedes Muster nur einer App. Eingebaut: fokus, notizen, kalender (nur
+`kalender_neben.json`), graph, assistent (Gedächtnis, Gespräche, Transkripte,
+Rückmeldungen, Kontextpaket, Kosten), ablage, desk, werkstatt (eigene Apps +
+Schaufenster), mail (Regeln), klavier; dazu tutor (Ersatz-Eintrag, bis sein
+app.toml `[daten]` hat). Test: jedes Muster der Positivliste gehört genau
+einer App.
 
-- Die Wahl steht je Gerät in der Einstellung `abgleich_bereiche`
-  (`data/ai_config.json`, wandert nie). **Nicht gesetzt = alles** — so bleibt
-  Sashas git-Weg, wie er war. `[]` = clean slate.
-- Ein abgewählter Bereich wird hier **weder geholt noch gesendet**; in der
-  Mitte bleibt er unberührt (sein Eintrag im Inhaltsverzeichnis bleibt stehen).
-  Auch die Basis wird darauf zugeschnitten — sonst sähe ein abgewählter
-  Bereich aus wie „überall gelöscht". Später wieder anwählen: die Mitte kommt
-  dazu wie bei einem neuen Gerät.
+- Die Wahl steht je Gerät in `abgleich_apps` (`data/ai_config.json`, wandert
+  nie): `{app: true|false}`. **Nicht gesetzt = alles** (Sashas git-Weg bleibt).
+  `{}` = noch nichts entschieden. Eine App ohne Eintrag wird weder geholt noch
+  gesendet, bis sie gefragt hat.
+- **Alte Wahl** `abgleich_bereiche` wird beim Lesen übernommen (nicht
+  gelöscht): ganz gewählt → ja, gar nicht → nein; nur zum Teil (memory ohne
+  conversations → assistent) → keine Entscheidung, die App fragt einmal.
+  „Alles" ergibt dieselben Muster wie vorher (Test mit zwei Geräten).
+- **Fragen:** eine App mit Daten (hier oder laut `inhalt.enc` in der Cloud —
+  nur das Inhaltsverzeichnis, `abgleich.cloud_pfade()`) und ohne Entscheidung
+  fragt einmal bei `zentrale sync`, `zentrale setup` und beim Start von
+  `zentrale` (dort nur hier nachgesehen). Ohne Terminal: eine Zeile, kein
+  Abgleich dieser App.
+- Abgewählt: hier **weder geholt noch gesendet**; in der Mitte bleibt sie
+  unberührt. Auch die Basis wird zugeschnitten — sonst sähe sie aus wie
+  „überall gelöscht". Wieder anwählen: die Mitte kommt dazu wie bei einem
+  neuen Gerät.
 
 ## Verschlüsselt — was auf GitHub liegt
 
@@ -523,7 +537,8 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 |---|---|---|
 | `abgleich_weg` | `rsync` | `rsync` = alter Weg, `mitte` = dieser |
 | `abgleich_mitte_art` | `git` | `http` = die ZENTRALE-Cloud (Adresse und Sitzung aus dem Konto) |
-| `abgleich_bereiche` | (nicht gesetzt = alles) | Bereiche, die dieses Gerät abgleicht; `[]` = nichts |
+| `abgleich_apps` | (nicht gesetzt = alles) | `{app: true\|false}` je Gerät; `{}` = noch nichts, neue Apps fragen |
+| `abgleich_bereiche` | — | alt (bis 2026-10-23), wird nur noch gelesen und in `abgleich_apps` übernommen |
 | `cloud` | `core/cloud_api.py` `VORGABE` | Adresse der Cloud (Env `ZENTRALE_CLOUD`) |
 | `konto_datei` | `~/.config/zentrale/konto.json` | Sitzung + Kontoschlüssel (600) |
 | `abgleich_mitte` | `git@github.com:Eightdevvis/data.git` | Adresse der Mitte |
@@ -538,7 +553,7 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_schluessel.py` | Schlüssel anlegen, laden, ver-/entschlüsseln, versteckte Namen |
 | `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes |
 | `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git und http (`HttpMitte`) |
-| `core/abgleich_bereiche.py` | Bereiche und die Wahl je Gerät |
+| `core/abgleich_apps.py`, `core/eingebaute_apps.py` | Apps mit Daten, die Wahl je App und Gerät, Übernahme der alten Bereiche |
 | `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |
 | `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten, Vorhaben, Hinweise, Zustand |
 | `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |

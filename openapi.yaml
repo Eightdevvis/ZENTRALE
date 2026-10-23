@@ -971,7 +971,7 @@ components:
     App:
       type: object
       required: [name, titel, version, art, adresse, laeuft, gestartet_vom_hub, autostart,
-                 ansichten, rechte, liefert, routen]
+                 ansichten, rechte, liefert, routen, daten]
       additionalProperties: false
       properties:
         name: {type: string, description: Name (Prozess-App) bzw. Kurzname (selbst gebaut)}
@@ -990,6 +990,20 @@ components:
           items: {type: string}
           description: Pfad-Anfänge, die der Hub an die App weiterreicht
           examples: [["/api/map"]]
+        daten:
+          description: >
+            `[daten]` aus dem app.toml: welche Dateien die App hat (Muster
+            relativ zum ZENTRALE-Ordner) und ob sie abgeglichen werden dürfen.
+            Abgeglichen wird ein Muster nur, wenn es auch auf der Positivliste
+            des Hubs steht. null = die App hat keine Daten.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [muster, abgleichen]
+              additionalProperties: false
+              properties:
+                muster: {type: array, items: {type: string}, examples: [["data/lists.json"]]}
+                abgleichen: {type: boolean}
 
     AppKachelFrage:
       type: object

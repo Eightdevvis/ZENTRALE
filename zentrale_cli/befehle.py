@@ -10,6 +10,7 @@ from zentrale_cli.ausgabe import banner
 from zentrale_cli.texte import t
 
 import abgleich            # noqa: E402  (Kern, über zentrale_cli/__init__ im Pfad)
+import abgleich_apps       # noqa: E402
 import abgleich_mitte      # noqa: E402
 import abgleich_schluessel  # noqa: E402
 import ai_config           # noqa: E402
@@ -152,10 +153,43 @@ def account_password(term):
 
 # ── Abgleich ───────────────────────────────────────────────────────────
 
+def app_name(n, tabelle=None):
+    """(Name, Beschreibung) einer App für Menschen."""
+    if n in t("app"):
+        return t("app")[n]
+    return ((tabelle or abgleich_apps.tabelle()).get(n, {}).get("titel") or n, "")
+
+
+def neue_apps_fragen(term, cloud=True):
+    """Apps mit Daten, über die dieses Gerät noch nicht entschieden hat
+    (core/abgleich_apps.py): am Terminal einmal fragen, die Antwort gilt je
+    Gerät. Ohne Terminal nie blockieren — eine Zeile, und die App wird bis
+    dahin weder geholt noch gesendet. `cloud` = auch in der Cloud nachsehen
+    (nur das Inhaltsverzeichnis, und nur, wenn es Unentschiedene gibt)."""
+    holen = abgleich.cloud_pfade if cloud and abgleich.cloud_an() else None
+    neu = abgleich_apps.offen(WURZEL, holen)
+    if not neu:
+        return
+    if not term.interaktiv:
+        term.sag(t("new_apps_hint", liste=", ".join(app_name(n)[0] for n in neu)), "warn")
+        return
+    for n in neu:
+        abgleich_apps.setzen({n: term.ja(t("ask_new_app", name=app_name(n)[0]))})
+
+
+def neue_apps_beim_start(term):
+    """Beim Start von `zentrale`: nur mit eingeschalteter Cloud, und nur auf
+    diesem Gerät nachsehen (schnell, auch offline). Was erst in der Cloud
+    liegt, fragt der nächste `zentrale sync`."""
+    if abgleich.cloud_an():
+        neue_apps_fragen(term, cloud=False)
+
+
 def sync(term):
     if abgleich.mitte_art() == "http" and not konto.angemeldet():
         term.sag(t("not_logged_in"))
         return 1
+    neue_apps_fragen(term)
     try:
         b = abgleich.abgleichen(WURZEL)
     except abgleich.Besetzt:
@@ -172,12 +206,22 @@ def sync(term):
     return 0
 
 
-def _bereiche_text(ids):
-    if ids is None:
+def _apps_text(entscheidungen, tabelle):
+    if entscheidungen is None:
         return t("st_areas_all")
-    if not ids:
-        return t("st_areas_none")
-    return ", ".join(t("area")[i][0] for i in ids)
+    an = [app_name(n, tabelle)[0] for n in tabelle if entscheidungen.get(n)]
+    return ", ".join(an) if an else t("st_areas_none")
+
+
+def _apps_zeilen(z, tabelle):
+    """Die Apps des Abgleichs, zuerst die Cloud selbst (core/eingebaute_apps.py)."""
+    zeilen = [(app_name("cloud")[0], t("st_app_cloud_on") if z["cloud"] else t("st_app_cloud_off"))]
+    e = z["apps"]
+    for n in tabelle:
+        stand = ("st_app_on" if e is None or e.get(n) else
+                 "st_app_off" if n in e else "st_app_open")
+        zeilen.append((app_name(n, tabelle)[0], t(stand)))
+    return zeilen
 
 
 def status(term):
@@ -187,13 +231,14 @@ def status(term):
     except konto.KontoFehler as e:
         term.sag(str(e), "warn")
     z = abgleich.zustand()
+    tabelle = abgleich_apps.tabelle()
     zeilen = [
         (t("st_account"), d["name"] if d else t("st_account_none")),
         (t("st_server"), (d or {}).get("server") or cloud_api.adresse()),
         (t("st_device"), dateien.knoten()),
         (t("st_version"), f"{knoten.fassung(WURZEL)} ({t('kanal')[kanal(WURZEL)]})"),
         (t("st_way"), f"{z['weg']} / {z['mitte_art']}"),
-        (t("st_areas"), _bereiche_text(z["bereiche"])),
+        (t("st_areas"), _apps_text(z["apps"], tabelle)),
         (t("st_sync"), (z["letzter_erfolg"] or t("st_sync_never")).replace("T", " ")),
     ]
     if z["fehler"]:
@@ -201,6 +246,12 @@ def status(term):
     breite = max(len(k) for k, _v in zeilen) + 2
     for k, v in zeilen:
         term.sag("  " + term.f(k.ljust(breite), "blass") + str(v))
+    term.sag()
+    term.sag(t("st_apps"), "fett")
+    apps_zeilen = _apps_zeilen(z, tabelle)
+    breite = max(len(k) for k, _v in apps_zeilen) + 2
+    for k, v in apps_zeilen:
+        term.sag("  " + term.f(k.ljust(breite), "blass") + v)
     if z["hinweise"]:
         term.sag()
         term.sag(t("st_notes"), "fett")

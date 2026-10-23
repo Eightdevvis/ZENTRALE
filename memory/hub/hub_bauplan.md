@@ -174,9 +174,12 @@ parameter = "kachel/liste.schema.json"    # JSON Schema (Datei im App-Ordner ode
 kann = ["aktion", "parameter_jetzt", "pruefen", "bevorzugt"]   # optionale Fragen
 ```
 
+- **Daten** `[daten]` (`muster`, `abgleichen`; seit 2026-10-23): was der App
+  gehört und abgeglichen werden darf — nur, was genau so auf der Positivliste
+  steht. Form und Regeln: [cloud_app.md](cloud_app.md).
 - **Liste** `GET /api/apps`: alle installierten Apps aus ihren Manifesten
   (Prozess- und selbst gebaute), je `laeuft` (parallel `GET
-  <adresse>/hub/gesund`, kurz), `gestartet_vom_hub`, `routen` …
+  <adresse>/hub/gesund`, kurz), `gestartet_vom_hub`, `routen`, `daten` …
 - **Start/Stopp** `POST /api/apps/<name>/start|stop` (`core/app_verwaltung.py`).
   Start: läuft sie schon — egal, wer sie gestartet hat —, passiert nichts;
   sonst `start` im App-Ordner, Python der App, Log `/tmp/zentrale-app-<name>.log`,

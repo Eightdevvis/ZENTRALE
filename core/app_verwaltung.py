@@ -142,6 +142,7 @@ def _eintrag(m, laeuft):
         "rechte": [str(r) for r in (m.get("rechte") or [])],
         "liefert": [str(x) for x in (m.get("liefert") or [])],
         "routen": apps.routen(m),
+        "daten": apps.daten(m),
     }
 
 
