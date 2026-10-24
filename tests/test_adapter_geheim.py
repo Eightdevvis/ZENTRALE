@@ -111,12 +111,14 @@ def test_neues_geraet_hat_nach_dem_einspielen_eine_ki(einst, monkeypatch):
     """Ein Gerät, das gerade beigetreten ist: kein ai_config-Key, nur der
     Adapter aus der Cloud — providers findet einen Anbieter."""
     import providers
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # setenv vor delenv: so merkt sich monkeypatch „vorher nicht gesetzt" und
+    # räumt auch den Wert weg, den schluessel_einspielen selbst hineinlegt.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
     assert providers.configured() is None
     geheim.setzen("ki/ANTHROPIC_API_KEY", "sk-ant-bbbbbbbbbbbbbbbb")
     geheim.schluessel_einspielen()
     assert providers.configured() == "claude"
-    monkeypatch.delenv("ANTHROPIC_API_KEY")
 
 
 # ── Nie in die Datensicherung ──────────────────────────────────────────
