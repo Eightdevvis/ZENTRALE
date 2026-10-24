@@ -86,9 +86,9 @@ Armlänge und weiter weg.
 **Die Installation erkennt, wo sie ist.** Sasha: AR ist *„quasi ein
 spezialisierter oberflächentyp, nodetyp"*, und die Installation soll
 *„direkt versuchen zu erkennen wo man sie grad installiert und dementsprechend
-sowas vorschlagen"* — Brille angesteckt → AR-Fassung anbieten; Pi mit
-Bildschirm an der Wand → Vollansicht; Mikro/Lautsprecher da → Sprach-Knoten;
-kein Bildschirm → Dienst. Grundlage: die Hardware-Erkennung der
+sowas vorschlagen"* — Brille angesteckt → AR anbieten; Pi 3 mit 1 GB → TUI
+(Browser oder Fenster erst mit mehr RAM); Mikro/Lautsprecher da →
+Sprach-Knoten; kein Bildschirm → Dienst. Grundlage: die Hardware-Erkennung der
 Knoten-Beschreibung (`core/knoten.py`, [hub/knoten_beitritt.md](hub/knoten_beitritt.md)).
 
 **Das System sehen.** *„du bist auf einer app drauf, in der siehst du das
@@ -197,8 +197,9 @@ Schaltpläne. Die Seite, die in der Doku bisher fast fehlt
   entscheiden), ein Mikro + Lautsprecher je Raum, mehrere Räume synchron.
 - **Sehen:** Kamera(s), lokal ausgewertet (Anwesenheit, wer ist da), keine
   Aufzeichnung ohne ausdrücklichen Wunsch.
-- **Bildschirme:** die Pi-Vollansicht an der Wand („ich will Linux nicht
-  sehen", README vom 07.03.2026) als eigener Knoten.
+- **Bildschirme:** der Pi an der Wand als Vollansicht („ich will Linux nicht
+  sehen", README vom 07.03.2026) — heute als TUI, mit mehr RAM Browser oder
+  Fenster.
 
 ### Etappe 4 — Analysieren
 
@@ -246,7 +247,7 @@ anderen bildschirm dran, alles verbuggt sich. mit zentrale terminal kommandos
 hat man immer direkten zugang zum programm."* Jede Installation, jeder
 Knotentyp hat den Befehl `zentrale` mit allen Unterbefehlen (`status`,
 `sync`, `setup`, `adapter` …) — das ist der Rückfall. **Die TUI ist eine
-Oberfläche** wie AR, Wand, Fenster und Handy: **Zusätze**, nie Ersatz; auch
+Oberfläche** wie Browser, natives Fenster und AR: **Zusätze**, nie Ersatz; auch
 sie kann ausfallen, die Unterbefehle nicht. Die Erkennung beim Installieren
 schlägt Oberflächen nur vor; sie entfernt nie das Terminal, und jede
 Oberfläche lässt sich per Befehl ab- und umschalten.
@@ -257,7 +258,15 @@ schlägt dann vor, welche man haben will, wobei man zentrale auch direkt mit
 einer preinstallen kann."* Oberflächen, die es geben soll: **TUI**,
 **Browser** (*„voll browserfähig … wer es nich im terminal haben will"* —
 die heutige Browser-Front braucht dafür einen großen Nachzug),
-**natives Fenster, selbst gemalt**, **AR**, **Wand** (Pi-Vollansicht).
+**natives Fenster, selbst gemalt**, **AR**.
+
+**Oberflächen sind Grafikmöglichkeiten, keine Orte** (Sasha): *„wand ist
+keine oberfläche. oberflächen sind digitale graphikmöglichkeiten, nicht
+platziermöglichkeiten … die platziermöglichkeit resultiert aus den
+graphikmöglichkeiten. pi vollansicht ist momentan TUI, wenn er mehr RAM last
+packen würde wäre browser oder natives fenster dort die anderen
+möglichkeiten."* Darum prüft der Scan nicht nur, was **möglich** ist, sondern
+was mit den Specs **Sinn macht** (RAM, GPU, Bildschirm, Brille).
 Vorschlag fürs Bauen: beim ersten Mal fragen und merken; beim Installieren
 eine Vorgabe setzbar; direkt wählbar mit `zentrale <oberfläche>`.
 
