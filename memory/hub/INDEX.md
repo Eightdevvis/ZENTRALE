@@ -17,6 +17,7 @@ Topologie): [../system/INDEX.md](../system/INDEX.md).
 | **Kern-Auszug: Inventur** (2026-10-22) — Logik, die nur in der TUI steckt (mit Stellen und fehlenden Routen), App-Kandidaten mit Fan-in/Fan-out, was der leere Kern behält, Reihenfolge (Karte zuerst, dann Listen; Graphen erst entflechten), Grenz-Wächter | [kern_auszug_inventur.md](kern_auszug_inventur.md) |
 | **Altlast: Routen ohne Beschreibung** (Wächter E4, seit 2026-10-22) — welche Routen der TUI noch nicht in `openapi.yaml` stehen; die Liste darf nur schrumpfen | [routen_altlast.md](routen_altlast.md) |
 | **Die Cloud als App** — Apps sagen im Manifest (`[daten]`), was sie haben; die Auswahl beim Abgleich entsteht aus den installierten Apps; eingebaute Apps im Übergang | [cloud_app.md](cloud_app.md) |
+| **Adapter** — die eine Tür zu fremden Diensten (Google, KI-Anbieter): Anschlüsse mit Beschreibung + verschlüsselten Zugangsdaten, überall abgeglichen; ein Brücken-Gerät je Anschluss; immer installiert | [adapter.md](adapter.md) |
 | **Produkt-Inventur** — welche App/welcher Hub-Teil wie weit ist, Lizenz-Ecke, was vor dem Verkauf fehlt | [produkt_inventur.md](produkt_inventur.md) |
 
 Routen-Überblick (Kachel, Desk, Shop, Werkstatt, Apps):
