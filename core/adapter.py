@@ -184,6 +184,13 @@ def vor_abgleich(wurzel, abgleich_ordner, muster) -> str | None:
                         datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S"))
     os.makedirs(os.path.dirname(ziel), exist_ok=True)
     shutil.move(vdir, ziel)
+    # Die Grabsteine des alten Kalenders (data/kalender_verlauf/grabsteine,
+    # für den rsync-Weg) gehören zu ihm: sie hielten sonst Termine aus der
+    # Cloud für Geister und räumten sie weg — eine Löschung, die über die
+    # Brücke bis zu Google liefe.
+    steine = os.path.join(str(wurzel), "data", "kalender_verlauf", "grabsteine")
+    if os.path.isdir(steine):
+        shutil.move(steine, os.path.join(ziel, ".grabsteine"))
     print(f"[adapter] Kalender kommt jetzt aus der Cloud — der bisherige liegt in {ziel}")
     return ziel
 

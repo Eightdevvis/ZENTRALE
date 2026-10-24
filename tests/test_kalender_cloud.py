@@ -393,8 +393,17 @@ def test_alter_eigener_kalender_wandert_beiseite_statt_geister_zu_bringen(welt):
     mini = welt.minipc.ich()
     (mini.vdir / "termine").mkdir(parents=True)
     (mini.vdir / "termine" / "geist.ics").write_text(_ics("geist", "Längst gelöscht"))
+    # Ein alter Grabstein für einen Termin, den es in der Cloud gibt.
+    steine = mini.wurzel / "data" / "kalender_verlauf" / "grabsteine"
+    steine.mkdir(parents=True)
+    (steine / "g1.json").write_text(json.dumps({"uid": "g1", "ebene": "termine", "knoten": "minipc",
+                                                "geloescht_um": "2099-01-01T00:00:00+00:00"}))
     _einrichten_und_verteilen(welt)
     assert "geist" not in _uids(mini.termine())
+    assert "g1" in _uids(mini.termine()) and not steine.exists()
+    mini.ich()
+    tage = kalender.entries_in_range(datetime.date(2026, 11, 2), datetime.date(2026, 11, 2))
+    assert "Geige" in {e["label"] for d in tage.values() for e in d}     # kein Geist
     beiseite = list((mini.ordner / "abgleich" / "kalender-vor-cloud").rglob("geist.ics"))
     assert len(beiseite) == 1
     welt.laptop.google_lauf()
