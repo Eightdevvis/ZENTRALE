@@ -44,6 +44,50 @@ Das Leitbild widerspricht den Grundpfeilern nicht — es braucht sie.
 gehören Mikros, Kameras und Daten dem Menschen, dessen Zuhause es ist. Das
 kann kein Alexa- und kein Google-Gerät versprechen.
 
+## Szenen (Sasha, 2026-10-24)
+
+So soll es sich anfühlen. Jede Szene ist ein Prüfstein: ist sie echt, ist
+ZENTRALE ein Stück weiter.
+
+**Heimkommen mit Einkäufen.** *„ich komme heim und zentrale grüßt, macht
+lichter an. ich war draußen und hab sachen gekauft. ich sage zentrale
+bescheid was ich so gekauft habe. alles per sprache. ich lege ihr quittungen
+in meinen scanner. sie kann dort automatisch die quittungen auslesen. sie
+sammelt die infos und managed mein budget. sie trägt die ausgaben ein, sieht
+zu, dass alles auch in den graphen für die übersicht landet und adjustiert das
+offenstehende budget, was auch auf kategorie gefiltert werden kann."*
+
+**Der Drucker gehört ihr.** *„der scanner — das ist mein druckergerät. von
+hp. zentrale hat volle macht über ihn. kann dort auf mein kommando scannen
+oder mir über den drucker dokumente direkt in die hand spucken."*
+
+**Ein schwerer Tag.** *„ich bin daheim. ich bin traurig. mir gehts mental
+etwas schwierig. zentrale spricht mit mir. aber sie nimmt nichts vorweg. sie
+weiß ich sorge schon für mich selbst und dass ich das hinkriege. sie spuckt mir
+aus dem drucker ein zu meiner situation passendes meme aus zur begleitenden
+aufmunterung. sie tut das — nicht weil es explizit in ihrem prompt steht.
+nein, stattdessen soll zentrale so selbstständig sein, dass sie meinen zustand
+vermerkt, zugriff auf die tools hat, und eine kleine aufmunterung ohne mein
+vorwissen einplanen kann. passend dem scheming konzept. weil zentrale nich die
+druckerpatronen zu sehr wasten will druckt sie ein meme was eher auf zeichen
+auf weiß basiert."*
+
+Was in den Szenen steckt (für die Etappen):
+
+| Szene braucht | Tätigkeit | Etappe |
+|---|---|---|
+| Sprache als Haupteingabe (Einkäufe erzählen) | lauscht | 3 |
+| Scanner + Drucker als Werkzeuge der KI (HP-Gerät, lokal über offene Standards — eSCL/AirScan, IPP; keine HP-Cloud) | handelt | 1–3 |
+| Quittungen lesen (OCR), Ausgaben, Budget je Kategorie, Graphen | analysiert | 4 |
+| Zustand vermerken (Stimmung) — Gesundheitsdaten, **nur lokal** | überwacht / analysiert | 4 |
+| Eine Aufmerksamkeit selbst einplanen, ohne Vorwegnehmen, ohne dass es im Prompt steht | stellt bereit (Schemen) | 5 |
+| Sparsam mit Tinte: Linien und Zeichen auf Weiß | Stil, Rücksicht | — |
+
+Haltung daraus: ZENTRALE **traut dem Menschen** (nimmt nichts vorweg, keine
+Ratschläge von oben), handelt **selbstständig** aus Werkzeugen und
+Gedächtnis statt aus Regeln im Prompt, und ist **sparsam** mit dem, was
+etwas kostet.
+
 ## Die Grundpfeiler (Sasha, 2026-10-23)
 
 *„leg das prinzip von anonymität als grundpfeiler fest — anonymität,
