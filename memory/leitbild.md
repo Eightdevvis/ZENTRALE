@@ -251,6 +251,16 @@ sie kann ausfallen, die Unterbefehle nicht. Die Erkennung beim Installieren
 schlägt Oberflächen nur vor; sie entfernt nie das Terminal, und jede
 Oberfläche lässt sich per Befehl ab- und umschalten.
 
+**`zentrale` allein fragt, welche Oberfläche** (Sasha, 2026-10-24): *„zentrale
+ohne zusatz scannt umgebung auf vorhandene oberflächen möglichkeiten und
+schlägt dann vor, welche man haben will, wobei man zentrale auch direkt mit
+einer preinstallen kann."* Oberflächen, die es geben soll: **TUI**,
+**Browser** (*„voll browserfähig … wer es nich im terminal haben will"* —
+die heutige Browser-Front braucht dafür einen großen Nachzug),
+**natives Fenster, selbst gemalt**, **AR**, **Wand** (Pi-Vollansicht).
+Vorschlag fürs Bauen: beim ersten Mal fragen und merken; beim Installieren
+eine Vorgabe setzbar; direkt wählbar mit `zentrale <oberfläche>`.
+
 ### Was ruht
 
 Werkstatt, Shop, Desk-Ausbau, Karte, News, Verkaufen/Abo. Nicht gestrichen —
