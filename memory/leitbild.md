@@ -239,6 +239,16 @@ Schema und mit **Testvektoren**, damit eine Dart-, JS- oder Rust-Fassung sie
 allein aus der Doku nachbauen und Byte für Byte prüfen kann. Keine Logik in
 einer Oberfläche — Terminal und TUI rufen nur auf.
 
+**Das Terminal bleibt immer** (Sasha, 2026-10-24): *„der rückfall auf die
+commands in nem terminal für zentrale bedienung muss immer da sein … stell dir
+vor ich schließe ar brille an, installiere nur dafür, und hab später nen
+anderen bildschirm dran, alles verbuggt sich. mit zentrale terminal kommandos
+hat man immer direkten zugang zum programm."* Jede Installation, jeder
+Knotentyp hat den Befehl `zentrale` mit allen Unterbefehlen — AR, Wand,
+Fenster, Handy sind **Zusätze**, nie Ersatz. Die Erkennung beim Installieren
+schlägt Oberflächen nur vor; sie entfernt nie das Terminal, und jede
+Oberfläche lässt sich per Befehl ab- und umschalten.
+
 ### Was ruht
 
 Werkstatt, Shop, Desk-Ausbau, Karte, News, Verkaufen/Abo. Nicht gestrichen —
