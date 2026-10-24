@@ -46,13 +46,8 @@ die umgeschriebenen SSH-Config-Blöcke fallen weg.
 |---|---|---|
 | **Vollknoten** | Laptop, Mini-PC mit AR-Brille | LAN oder VPN → SSH, Moonlight (ganzer Desktop), TUI direkt gegen das Backend. Beide gleichwertig. |
 
-**Die AR-Brille ist eine XREAL Air 2 Pro** (Sasha, 2026-10-24): Birdbath-Optik
-mit fester Bildebene in einigen Metern Entfernung — virtuelle Objekte werden
-beim Näherkommen größer und räumlich nah (Stereo), aber nie schärfer oder
-unschärfer (Vergenz-Akkommodations-Konflikt). Für StardustXR heißt das:
-Fenster auf Armlänge und weiter weg, nichts dauerhaft unter ~0,5 m.
-Kurzsichtig → Einsatz mit Sehstärke zum Einklipsen (vorhanden, Gläser noch
-zu kaufen). Mini-PC läuft mit EndeavourOS + Sway.
+Mini-PC (MeLE Quieter) mit XREAL Air 2 Pro — Ausrüstung, Brillen-Optik und
+der geplante Rendering-Split: [../betrieb/mobiler_knoten.md](../betrieb/mobiler_knoten.md).
 
 Wie ein neues Gerät zum Knoten wird (beitreten statt kopieren): [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md).
 | **Außenposten** | Pi mit ZENTRALE/Tutor | LAN; holt sich sein Paket selbst (`topologie.md` → Aussenposten) |

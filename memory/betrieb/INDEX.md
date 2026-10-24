@@ -22,6 +22,7 @@ hier ist „Maschine", nicht „Feature".
 
 | Was du wissen willst | Datei |
 |---|---|
+| **Mobiler Knoten:** Mini-PC (MeLE Quieter, EndeavourOS/KDE, Sway für StardustXR), XREAL Air 2 Pro, Strom, Eingabe, Tablet; Rendering-Split (Plan); was die Brillen-Optik für StardustXR heißt | [mobiler_knoten.md](mobiler_knoten.md) |
 | Bedrohungsmodell, LUKS, Evil-Maid, was verschlüsselt ist | [sicherheit.md](sicherheit.md) |
 | **Zugang zum Backend:** von anderen Geräten nur mit Schlüssel; Stellungen aus/melden/an, Schlüssel anlegen, auf Pi und Handy bringen, Browser-Link | [zugang.md](zugang.md) |
 | Welche Dateien die KI lesen darf (Whitelist) und was nie in git gehört | [datei_zugriffe.md](datei_zugriffe.md) |
