@@ -72,6 +72,17 @@ vorwissen einplanen kann. passend dem scheming konzept. weil zentrale nich die
 druckerpatronen zu sehr wasten will druckt sie ein meme was eher auf zeichen
 auf weiß basiert."*
 
+**ZENTRALE im Raum.** *„ich ziehe die AR brille auf und es gibt optionen,
+die AR version von zentrale zu installieren.. und jeweils für einzelne apps.
+alles sachen die einzeln ausgearbeitet werden müssen. aber es wäre cool
+zentrale anzumachen und direkt den AR modus anzuschalten. die einzelnen teile
+von zentrale 3D im raum. das rad zum beispiel wäre eine hammer 3D ansicht."*
+— AR ist eine weitere Oberfläche (Knoten, „überall deploybar" unten): der
+Hub bietet eine AR-Fassung an, jede App ihre eigene AR-Ansicht zum Dazuholen;
+ein Schalter „AR-Modus" beim Start. Brille: XREAL Air 2 Pro über StardustXR
+([betrieb/mobiler_knoten.md](betrieb/mobiler_knoten.md)) — Fenster auf
+Armlänge und weiter weg.
+
 Was in den Szenen steckt (für die Etappen):
 
 | Szene braucht | Tätigkeit | Etappe |
@@ -82,6 +93,7 @@ Was in den Szenen steckt (für die Etappen):
 | Zustand vermerken (Stimmung) — Gesundheitsdaten, **nur lokal** | überwacht / analysiert | 4 |
 | Eine Aufmerksamkeit selbst einplanen, ohne Vorwegnehmen, ohne dass es im Prompt steht | stellt bereit (Schemen) | 5 |
 | Sparsam mit Tinte: Linien und Zeichen auf Weiß | Stil, Rücksicht | — |
+| AR-Fassung des Hubs + AR-Ansicht je App, Rad in 3D | spricht / zeigt | 3 (Bildschirme) |
 
 Haltung daraus: ZENTRALE **traut dem Menschen** (nimmt nichts vorweg, keine
 Ratschläge von oben), handelt **selbstständig** aus Werkzeugen und
