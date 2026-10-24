@@ -28,8 +28,8 @@ openapi.yaml
 scripts/start_tui.sh
 scripts/abgleich.py
 scripts/kalender_sync.py
-deploy/zentrale-abgleich.service
-deploy/zentrale-abgleich.timer
+# Die Timer rendert `zentrale timers install` (zentrale_cli/timer.py) mit dem
+# Befehl des Geräts — die Einheiten in deploy/ tragen Sashas Checkout-Pfad.
 
 # ── Einrichtung, Updates ────────────────────────────────────────────────
 deploy/install.sh

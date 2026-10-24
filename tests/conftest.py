@@ -392,6 +392,17 @@ def _adapter_frisch(_test_ordner, monkeypatch):
     yield
 
 
+# 7e1a2. Kein Test schaltet Sashas echte systemd-Timer um (zentrale_cli/
+# timer.py, 2026-10-24): `zentrale setup` installiert sie. „aus" = systemd
+# nicht da; Tests mit einem falschen systemctl setzen beides selbst. Nur
+# Pfade, kein Ordner — kostet nichts.
+@pytest.fixture(autouse=True)
+def _timer_nie_echt(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_SYSTEMCTL", "aus")
+    monkeypatch.setenv("ZENTRALE_SYSTEMD_USER_DIR", str(_test_ordner / "systemd-user"))
+    yield
+
+
 # 7e1b. Jedes Gerät eines Tests hat seine eigene konto.json (core/konto.py,
 # 2026-10-22): sonst wäre ein Test noch „angemeldet", weil der vorige es war.
 # Nur ein Pfad, kein Ordner — kostet nichts.

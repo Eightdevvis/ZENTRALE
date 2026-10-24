@@ -29,11 +29,15 @@ EN = {
     "cmd_account_create": ("account create", "create an account (needs an invite code)"),
     "cmd_account_recover": ("account recover", "set a new password with your emergency key"),
     "cmd_account_password": ("account password", "change your password"),
-    "cmd_sync": ("sync", "sync now with your account"),
+    "cmd_sync": ("sync", "sync now with your account (--automatic: quiet, for the timer)"),
     "cmd_status": ("status", "account, device, last sync, what is synced"),
     "cmd_devices": ("devices", "list all devices of your account"),
     "cmd_adapter": ("adapter", "connected services (AI keys, calendar) and which device bridges"),
     "cmd_adapter_setup": ("adapter setup", "bring in what this device already has connected"),
+    "cmd_adapter_run": ("adapter run", "run the calendar bridge once (what the timer does)"),
+    "cmd_timers": ("timers", "the background timers: sync and calendar bridge"),
+    "cmd_timers_install": ("timers install", "install or repair the timers and start them"),
+    "cmd_timers_remove": ("timers remove", "stop the timers and remove them"),
     "cmd_cloud_usage": ("cloud usage", "how close the cloud is to its free limits (operator only)"),
     "cmd_update": ("update", "download and install the newest version"),
     "cmd_version": ("version", "show the installed version"),
@@ -148,6 +152,9 @@ EN = {
     "sync_result": "Fetched {geholt} · sent {gesendet} · moved aside {beiseite}",
     "sync_note": "  Note: {text}",
     "sync_busy": "Another sync is running right now. Try again in a moment.",
+    "sync_keys_new": "AI keys arrived or changed: {liste}.",
+    "sync_keys_restarted": "The backend reads keys only when it starts — restarted {unit}.",
+    "sync_keys_restart": "The backend reads keys only when it starts: if ZENTRALE is open, quit and start it again.",
     "sync_conflicts_dir": "Kept versions: {ordner}",
 
     # ── Status ──────────────────────────────────────────────────────
@@ -201,6 +208,33 @@ EN = {
     "ad_setup_cal_none": "No vdirsyncer setup on this device ({pfad}) — no calendar connection.",
     "ad_setup_cal_nopair": "The vdirsyncer setup has no pair writing into ZENTRALE's calendar folder — nothing created.",
     "ad_setup_next": "Next: 'zentrale sync' — then every device of your account has it.",
+    "ad_run_nothing": "No calendar connection and no vdirsyncer setup on this device — nothing to do.",
+
+    # ── Timer (zentrale_cli/timer.py) ───────────────────────────────
+    "tm_title": "Timers — run in the background while you are logged in",
+    "tm_none": ("systemd for your user is not available here, so there are no background timers.\n"
+                "Sync by hand with 'zentrale sync'; the calendar bridge stays with your other devices."),
+    "tm_on": "Timers on: sync every 5 min, calendar bridge every 3 min.",
+    "tm_written": "Timer files written: {liste}",
+    "tm_replaced": "Replaced old timer files (developer links or hand-made): {liste}",
+    "tm_up_to_date": "Timer files already up to date.",
+    "tm_error": "systemd did not start the timers: {text}",
+    "tm_removed": "Timers stopped and removed: {liste}",
+    "tm_left": "Stopped but left in place (not written by zentrale): {liste}",
+    "tm_nothing_removed": "Timers stopped; no timer files of zentrale here.",
+    "tm_command": "Command in the timers: {pfad}",
+    "tm_head": ("Timer", "Files", "Enabled", "Active", "Next run", "Last result"),
+    "tm_file": {"fehlt": "missing", "eigen": "ok", "alt": "outdated",
+                "verweis": "old link", "fremd": "not from zentrale"},
+    "tm_fix": "Install or repair: 'zentrale timers install'.",
+    "tm_usage": "Use 'zentrale timers', 'zentrale timers install' or 'zentrale timers remove'.",
+    "vd_ok": "Calendar bridge: vdirsyncer found — this device can take the bridge to Google.",
+    "vd_missing": ("Calendar bridge: vdirsyncer is not installed. This device gets the calendar\n"
+                   "through the cloud but never talks to Google itself. To let it take the bridge,\n"
+                   "{wie}."),
+    "vd_how": {"pacman": "install the package 'vdirsyncer' with pacman",
+               "apt": "install the package 'vdirsyncer' with apt",
+               "sonst": "install vdirsyncer with your package manager (or pipx)"},
 
     # ── Cloud-Nutzung (core/cloud_nutzung.py) ───────────────────────
     "use_title": "Cloud usage — Cloudflare free tier",

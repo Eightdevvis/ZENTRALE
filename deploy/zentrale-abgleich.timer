@@ -1,3 +1,6 @@
+# ALT (Entwickler-Checkout, Pfad %h/codicus/ZENTRALE). Seit 24.10.2026 rendert
+# `zentrale timers install` gleichnamige Einheiten mit dem Befehl `zentrale`
+# und ersetzt einen Verweis hierher (memory/betrieb/setup.md, „Timer“).
 # Alle 5 Minuten nach der Uhr mit der Mitte abgleichen.
 # Dazu stößt jede Änderung in der App selbst einen Abgleich an
 # (core/datasync.py) — der Timer fängt ab, was dabei nicht ankam, und holt,

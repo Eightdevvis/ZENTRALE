@@ -43,7 +43,42 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 bleiben. Mit Konto zeigt er nur Apps, die auf dem Gerät oder in der Cloud
 schon Daten haben (alle / einzeln / keine); ein frisches Konto sieht „Nothing
 to sync yet — new apps will ask when they have data." Die Cloud wird so oder
-so eingeschaltet; später fragt jede neue App mit Daten einmal selbst.
+so eingeschaltet; später fragt jede neue App mit Daten einmal selbst. Zum
+Schluss schaltet er die **Timer** ein (nächster Abschnitt).
+
+## Timer (seit 2026-10-24)
+
+Ohne Timer gleicht ein Gerät nur bei `zentrale sync` ab und nimmt nie die
+Kalender-Brücke ([../hub/adapter.md](../hub/adapter.md)). Zwei
+systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
+`~/.config/systemd/user/`:
+
+| Timer | wann | ruft |
+|---|---|---|
+| `zentrale-abgleich` | alle 5 min | `zentrale sync --automatic` (nur mit Weg `mitte`, still, nie eine Frage) |
+| `zentrale-kalender-sync` | alle 3 min | `zentrale adapter run` (= `scripts/kalender_sync.py zentrale`) |
+
+- **Pfad in der Einheit je Kanal**, überlebt jedes Update: install.sh →
+  `~/.local/share/zentrale/hub/aktuell/bin/zentrale`; apt/pacman →
+  `/usr/bin/zentrale` (Starter); Checkout → `<checkout>/bin/zentrale`.
+- `zentrale setup` (mit Cloud) installiert und schaltet ein; ohne
+  systemd --user ein Satz, die Einrichtung geht weiter. Nie sudo.
+- `zentrale timers` zeigt Dateien, an/aus, nächster Lauf, letztes Ergebnis;
+  `zentrale timers install` repariert (idempotent, schreibt nur Geändertes),
+  `zentrale timers remove` schaltet ab und löscht nur eigene Dateien
+  (erkannt an der Kopfzeile „Rendered by `zentrale timers install`").
+- Laufen nur, solange Sasha angemeldet ist (User-systemd); kein linger.
+- `adapter run` ohne Kalender-Anschluss und ohne eigene
+  vdirsyncer-Konfiguration: still nichts. Ohne vdirsyncer bleibt das Gerät
+  Verbraucher; `setup`, `status` und `timers` nennen das Paket
+  (pacman: `vdirsyncer`, apt: `vdirsyncer`), installiert wird nichts.
+- **Sashas Laptop (Umstieg):** die alten Einheiten in `deploy/` (Pfad
+  `%h/codicus/ZENTRALE`) heißen genauso. `zentrale timers install` ersetzt den
+  Verweis nach `deploy/` durch die gerenderte Datei (nie durch den Verweis
+  hindurch) und schaltet den Timer neu ein (`reenable`). Wer nichts tut,
+  behält die alten — sie laufen weiter wie bisher.
+- Tests: `tests/test_timer.py` (falsches systemctl); conftest setzt
+  `ZENTRALE_SYSTEMCTL=aus`, unter pytest ohne Umlenkung gilt systemd als nicht da.
 
 **Aufbau auf dem Gerät:**
 

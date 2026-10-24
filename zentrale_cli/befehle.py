@@ -192,17 +192,72 @@ def neue_apps_beim_start(term):
         neue_apps_fragen(term, cloud=False)
 
 
-def sync(term):
+def _ki_werte() -> dict:
+    """Die im Adapter lesbaren KI-Schlüssel (Name → Wert), um nach einem
+    Abgleich zu sehen, ob neue gekommen sind."""
+    try:
+        return {n: adapter_geheim.lesen(adapter_geheim.KI + n) for n in adapter_geheim.ki_namen()}
+    except Exception:       # noqa: BLE001 — nur für einen Hinweis
+        return {}
+
+
+def _ki_neu_melden(term, vorher, automatisch):
+    """Kamen mit dem Abgleich KI-Schlüssel an (oder änderten sich), muss das
+    Backend sie neu lesen: es legt sie nur beim Start in die Umgebung, und
+    die SDK-Clients behalten den Schlüssel (core/main.py, core/cloud.py,
+    core/cloud_openai.py). Läuft der Kern als Dienst, neu starten."""
+    timer = timer_modul()
+    nachher = _ki_werte()
+    neu = sorted(n for n, w in nachher.items() if w and vorher.get(n) != w)
+    if not neu:
+        return
+    term.sag(t("sync_keys_new", liste=", ".join(neu)), "gut")
+    if timer.kern_neu_starten():
+        term.sag(t("sync_keys_restarted", unit=timer.KERN))
+    elif not automatisch:
+        term.sag(t("sync_keys_restart"), "blass")
+
+
+def _kontext_schreiben():
+    """Das Kontextpaket fürs Handy auffrischen (wie scripts/abgleich.py) —
+    nur ein Zusatz, darf den Abgleich nie aufhalten."""
+    try:
+        import mobil_kontext
+        mobil_kontext.schreiben(WURZEL)
+    except Exception:       # noqa: BLE001
+        pass
+
+
+def sync(term, args=()):
+    """`zentrale sync [--automatic]`. --automatic ist der Timer
+    (zentrale_cli/timer.py): nur mit Cloud bzw. Weg „mitte", still, wenn
+    nichts geschah, nie eine Frage — wie scripts/abgleich.py --automatisch."""
+    automatisch = "--automatic" in args
+    if set(args) - {"--automatic"}:
+        term.fehler(t("unknown_command", cmd="sync " + " ".join(args)))
+        return 2
     if abgleich.mitte_art() == "http" and not konto.angemeldet():
+        if automatisch:
+            return 0
         term.sag(t("not_logged_in"))
         return 1
+    if automatisch and abgleich.weg() != "mitte":
+        return 0                         # Timer läuft, Gerät gleicht (noch) nicht so ab
     _ki_uebernehmen(term, still=True)
+    vorher = _ki_werte()
     neue_apps_fragen(term)
+    if automatisch:
+        _kontext_schreiben()
     try:
-        b = abgleich.abgleichen(WURZEL)
+        b = abgleich.abgleichen(WURZEL, warten=60.0 if automatisch else 120.0)
     except abgleich.Besetzt:
+        if automatisch:
+            return 0
         term.sag(t("sync_busy"))
         return 1
+    _ki_neu_melden(term, vorher, automatisch)
+    if automatisch and not (b.geholt or b.gesendet or b.hinweise or b.beiseite):
+        return 0
     if b.art == "erstbefuellung":
         term.sag(t("sync_first_fill"))
     elif b.art == "erstabgleich":
@@ -269,6 +324,9 @@ def status(term):
         for h in z["hinweise"][-10:]:
             term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
+    if adapter.kalender_anschluss() and not timer_modul().vdirsyncer_da():
+        term.sag()
+        vdirsyncer_hinweis(term)
     nutzung_warnung(term)
     return 0
 
@@ -355,6 +413,104 @@ def adapter_setup(term):
     else:
         term.sag(t("ad_setup_cal_none", pfad=adapter_vdirsyncer.vorgabe_config()))
     term.sag(t("ad_setup_next"), "blass")
+    return 0
+
+
+def adapter_lauf(term):
+    """`zentrale adapter run`: ein Lauf der Kalender-Brücke (das, was der
+    Timer alle 3 min tut) — scripts/kalender_sync.py mit dem Paar „zentrale".
+    Ohne Kalender-Anschluss und ohne eigene vdirsyncer-Konfiguration gibt es
+    nichts zu tun: dann still 0, damit ein frisches Gerät keinen Fehler
+    sammelt. Ohne vdirsyncer bleibt das Gerät Verbraucher (adapter_ablauf)."""
+    import importlib.util
+    import adapter_vdirsyncer
+    if adapter.kalender_anschluss() is None and not os.path.exists(adapter_vdirsyncer.vorgabe_config()):
+        term.sag(t("ad_run_nothing"))
+        return 0
+    pfad = os.path.join(WURZEL, "scripts", "kalender_sync.py")
+    spec = importlib.util.spec_from_file_location("kalender_sync", pfad)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul.main(["zentrale"])
+
+
+# ── Timer (zentrale_cli/timer.py) ──────────────────────────────────────
+
+def timer_modul():
+    from zentrale_cli import timer
+    return timer
+
+
+def vdirsyncer_hinweis(term):
+    tm = timer_modul()
+    if tm.vdirsyncer_da():
+        term.sag(t("vd_ok"))
+    else:
+        term.sag(t("vd_missing", wie=t("vd_how")[tm.paketverwaltung()]), "warn")
+
+
+def timers_installieren(term, leise=False):
+    """Timer schreiben und einschalten; ohne systemd --user ein Satz. → 0/1"""
+    tm = timer_modul()
+    r = tm.installieren(WURZEL)
+    if not r["da"]:
+        term.sag(t("tm_none"), "warn")
+        return 0
+    if r["ersetzt"]:
+        term.sag(t("tm_replaced", liste=", ".join(r["ersetzt"])), "warn")
+    if r["geschrieben"] and not leise:
+        term.sag(t("tm_written", liste=", ".join(r["geschrieben"])), "blass")
+    elif not r["geschrieben"] and not leise:
+        term.sag(t("tm_up_to_date"), "blass")
+    if r["fehler"]:
+        term.sag(t("tm_error", text=r["fehler"]), "fehler")
+        return 1
+    term.sag(t("tm_on"), "gut")
+    return 0
+
+
+def timers(term, args=()):
+    """`zentrale timers [install|remove]`."""
+    if args and args[0] == "install" and len(args) == 1:
+        rc = timers_installieren(term)
+        vdirsyncer_hinweis(term)
+        return rc
+    if args and args[0] == "remove" and len(args) == 1:
+        r = timer_modul().entfernen()
+        if not r["da"]:
+            term.sag(t("tm_none"), "warn")
+            return 0
+        term.sag(t("tm_removed", liste=", ".join(r["entfernt"])) if r["entfernt"]
+                 else t("tm_nothing_removed"), "gut")
+        if r["liegen"]:
+            term.sag(t("tm_left", liste=", ".join(r["liegen"])), "warn")
+        return 0
+    if args:
+        term.fehler(t("tm_usage"))
+        return 2
+    z = timer_modul().zustand(WURZEL)
+    term.sag(t("tm_title"), "fett")
+    if not z["da"]:
+        term.sag(t("tm_none"), "warn")
+        vdirsyncer_hinweis(term)
+        return 0
+    datei = t("tm_file")
+    kopf = t("tm_head")
+    zeilen = []
+    for name, d in z["timer"].items():
+        arten = {d["service"], d["timer"]}
+        art = next((a for a in ("fehlt", "fremd", "verweis", "alt") if a in arten), "eigen")
+        naechster = d.get("naechster", "?")
+        zeilen.append((name, datei[art], d.get("an", "?"), d.get("aktiv", "?"),
+                       naechster if naechster not in ("", "n/a") else "—", d.get("ergebnis", "?")))
+    breiten = [max(len(str(r[i])) for r in zeilen + [kopf]) + 2 for i in range(5)]
+    term.sag("  " + term.f("".join(k.ljust(b) for k, b in zip(kopf, breiten)) + kopf[5], "blass"))
+    for r in zeilen:
+        term.sag("  " + "".join(str(v).ljust(b) for v, b in zip(r, breiten)) + str(r[5]))
+    term.sag(t("tm_command", pfad=z["befehl"]), "blass")
+    if any(r[1] != datei["eigen"] or r[2] != "enabled" for r in zeilen):
+        term.sag(t("tm_fix"), "warn")
+    vdirsyncer_hinweis(term)
     return 0
 
 

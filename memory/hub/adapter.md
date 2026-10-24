@@ -70,7 +70,11 @@ ein neues Gerät (Mini-PC) sonst ohne Kalender und ohne KI dasteht.
 
 ## Ein Lauf des Kalender-Timers (jedes Gerät, alle 3 min)
 
-`scripts/kalender_sync.py` → `adapter_ablauf.bruecke_lauf`:
+Timer `zentrale-kalender-sync` → `zentrale adapter run` →
+`scripts/kalender_sync.py zentrale` → `adapter_ablauf.bruecke_lauf`. Den
+Timer legt `zentrale setup` bzw. `zentrale timers install` auf jedem Gerät an
+([../betrieb/setup.md](../betrieb/setup.md) „Timer"); vorher hatte nur
+Sashas Checkout ihn, ein neues Gerät nahm die Brücke nie.
 
 1. kein vdirsyncer → nichts. Ohne Mitte (kein Konto/Schlüssel, rsync-Weg) →
    eigene Brücke, ohne Vertrag.
@@ -105,6 +109,14 @@ wird neu entdeckt.
   `ki_uebernehmen()` beim Start des Backends, bei `zentrale sync` und
   `zentrale adapter setup` — ein Schlüssel verlässt ai_config.json erst,
   wenn er im Adapter lesbar ist; ein abweichender bleibt dort (Rückfall).
+- **Neue KI-Schlüssel und das laufende Backend** (geprüft 24.10.): das
+  Backend liest sie nur beim Start (`core/main.py`, Import von
+  `providers`), die SDK-Clients behalten den Schlüssel (`cloud.py`,
+  `cloud_openai.py`); `zentrale sync` läuft in einem eigenen Prozess. Deshalb
+  vergleicht `zentrale sync` die lesbaren Schlüssel vor/nach dem Abgleich:
+  neu oder geändert → eine Zeile, und läuft `zentrale-kern.service`, wird er
+  per `try-restart` neu gestartet (auch vom Timer); sonst der Rat, ZENTRALE
+  neu zu starten.
 - `kalender_speicher.modus`: nicht eingestellt + `migriert_am` in den
   Nebendaten → `ics` (sonst stünde ein neues Gerät auf `json`).
 - CLI: `zentrale adapter` (Anschluss, Art, speist, Brücke = Inhaber + bis

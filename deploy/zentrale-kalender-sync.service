@@ -1,3 +1,6 @@
+# ALT (Entwickler-Checkout, Pfad %h/codicus/ZENTRALE). Seit 24.10.2026 rendert
+# `zentrale timers install` gleichnamige Einheiten mit dem Befehl `zentrale`
+# und ersetzt einen Verweis hierher (memory/betrieb/setup.md, „Timer“).
 # ZENTRALE-Kalender <-> Google abgleichen (vdirsyncer über scripts/kalender_sync.py).
 #
 # Seit 24.10.2026 mit dem Adapter (memory/hub/adapter.md): der Timer läuft auf

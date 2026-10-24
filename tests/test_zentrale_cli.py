@@ -139,6 +139,26 @@ def test_frisch_nichts_abzugleichen_cloud_trotzdem_an(geraet):
     assert "Cloud" in term.text and "on — syncs over your account" in term.text
 
 
+def test_assistent_ohne_systemd_ein_satz_und_fertig(geraet):
+    term = _frisches_konto_eingerichtet(geraet)
+    assert "systemd for your user is not available" in term.text
+    assert "Calendar bridge:" in term.text and term.text.rstrip().endswith("'zentrale'.")
+
+
+def test_assistent_schaltet_die_timer_ein(geraet, monkeypatch, tmp_path):
+    log = tmp_path / "systemctl.log"
+    prog = tmp_path / "systemctl"
+    prog.write_text(f'#!/bin/bash\necho "$*" >> "{log}"\nexit 0\n')
+    prog.chmod(0o755)
+    monkeypatch.setenv("ZENTRALE_SYSTEMCTL", str(prog))
+    monkeypatch.setenv("ZENTRALE_SYSTEMD_USER_DIR", str(tmp_path / "user"))
+    term = _frisches_konto_eingerichtet(geraet)
+    assert "Timers on" in term.text
+    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in log.read_text()
+    dienst = (tmp_path / "user" / "zentrale-abgleich.service").read_text()
+    assert f"ExecStart={geraet.wurzel}/bin/zentrale sync --automatic" in dienst
+
+
 def test_neue_app_mit_daten_fragt_einmal_und_die_antwort_bleibt(geraet):
     _frisches_konto_eingerichtet(geraet)
     (geraet.wurzel / "data" / "lists.json").write_text("[]")

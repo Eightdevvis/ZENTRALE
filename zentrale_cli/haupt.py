@@ -20,11 +20,16 @@ BEFEHLE = {
     ("devices",): befehle.devices,
     ("adapter",): befehle.adapter_liste,
     ("adapter", "setup"): befehle.adapter_setup,
+    ("adapter", "run"): befehle.adapter_lauf,
+    ("timers",): befehle.timers,
     ("cloud", "usage"): befehle.cloud_usage,
     ("update",): aktualisieren.update,
     ("version",): befehle.version,
     ("--version",): befehle.version,
 }
+
+# Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers}
 
 
 def _entwickler_checkout() -> bool:
@@ -48,11 +53,13 @@ def main(argv=None, term=None):
             befehle.nutzung_warnung(term)      # eine Zeile, nur Betreiber; nie blockierend
             befehle.neue_apps_beim_start(term)
             return befehle.tui(term)
-        fn = BEFEHLE.get(tuple(argv[:2])) or BEFEHLE.get(tuple(argv[:1]))
-        if fn is None:
+        schluessel = tuple(argv[:2]) if tuple(argv[:2]) in BEFEHLE else tuple(argv[:1])
+        fn = BEFEHLE.get(schluessel)
+        rest = argv[len(schluessel):]
+        if fn is None or (rest and fn not in MIT_ARGUMENTEN):
             term.fehler(t("unknown_command", cmd=" ".join(argv)))
             return 2
-        return fn(term)
+        return fn(term, rest) if fn in MIT_ARGUMENTEN else fn(term)
     except befehle.FEHLER as e:
         term.fehler(str(e))
         return 1

@@ -51,7 +51,7 @@ deploy/install.sh.in ─► scripts/verteilung.py ─► deploy/install.sh (eing
 |---|---|---|
 | `apt` | Datei `KANAL` = apt (legt nur das .deb an) | apt; `zentrale update` verweigert und nennt den Weg |
 | `pacman` | `KANAL` = pacman (PKGBUILD) | pacman/AUR-Helfer; `update` verweigert |
-| `script` | liegt unter `~/.local/share/zentrale/hub/` | `zentrale update` (Cloud mit Konto, öffentlich ohne) |
+| `script` | liegt unter `~/.local/share/zentrale/hub/` | `zentrale update` (Cloud mit Konto, öffentlich ohne); Timer zeigen auf `hub/aktuell`, bleiben gültig |
 | `dev` | sonst (Checkout) | git |
 
 `zentrale version` und `zentrale status` zeigen den Kanal.
@@ -70,6 +70,10 @@ deploy/install.sh.in ─► scripts/verteilung.py ─► deploy/install.sh (eing
   kein Netz während apt/pacman, kein Root für Python-Pakete.
   `~/.local/share/zentrale/paket/venv` entsteht beim ersten Start, neu nur bei
   geänderter `requirements-basis.txt` oder neuem Python (Stempel).
+- **Timer:** keine Einheit im Paket — `zentrale setup` / `zentrale timers
+  install` rendert sie für den Nutzer mit `/usr/bin/zentrale`
+  ([setup.md](setup.md) „Timer"). Die Kopie unter `paket/<fassung>/` taugt
+  dafür nicht, sie fliegt beim nächsten Update.
 - Deinstallieren lässt `~/.local/share/zentrale` stehen (Paketverwaltung fasst
   keine Heimordner an).
 - .deb: nur `dpkg-deb` (kein debhelper), `Depends: python3 (>= 3.11),

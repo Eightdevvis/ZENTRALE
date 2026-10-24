@@ -1,3 +1,6 @@
+# ALT (Entwickler-Checkout, Pfad %h/codicus/ZENTRALE). Seit 24.10.2026 rendert
+# `zentrale timers install` gleichnamige Einheiten mit dem Befehl `zentrale`
+# und ersetzt einen Verweis hierher (memory/betrieb/setup.md, „Timer“).
 # Daten über die Mitte abgleichen (scripts/abgleich.py).
 # systemd-USER-Einheit, gehört zu zentrale-abgleich.timer.
 # Tut nur etwas, wenn die Einstellung abgleich_weg = mitte ist (--automatisch);

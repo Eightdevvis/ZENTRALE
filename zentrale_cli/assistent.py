@@ -1,6 +1,6 @@
 """`zentrale setup` — der Einrichtungs-Assistent (Bauplan v1, seit 2026-10-23
 je App: memory/hub/cloud_app.md): Login ja/nein → welche Apps mit Daten
-abgleichen (alle / auswählen / keine) → holen. Angeboten werden nur Apps, die
+abgleichen (alle / auswählen / keine) → holen → Timer an. Angeboten werden nur Apps, die
 hier oder in der Cloud schon Daten haben; ein frisches Konto sieht keine.
 Die Wahl gilt je Gerät (core/abgleich_apps.py)."""
 
@@ -72,5 +72,11 @@ def setup(term, erster_start=False):
     if any((abgleich_apps.entscheidungen() or {}).values()):
         term.sag(t("setup_sync_now"), "blass")
         befehle.sync(term)
+    # Die Timer (zentrale_cli/timer.py): ohne sie gleicht ein frisches Gerät
+    # nur von Hand ab und nimmt nie die Kalender-Brücke. Ohne systemd --user
+    # ein Satz — die Einrichtung geht trotzdem zu Ende.
+    term.sag()
+    befehle.timers_installieren(term, leise=True)
+    befehle.vdirsyncer_hinweis(term)
     term.sag(t("setup_done"), "gut")
     return 0

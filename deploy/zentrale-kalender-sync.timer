@@ -1,3 +1,6 @@
+# ALT (Entwickler-Checkout, Pfad %h/codicus/ZENTRALE). Seit 24.10.2026 rendert
+# `zentrale timers install` gleichnamige Einheiten mit dem Befehl `zentrale`
+# und ersetzt einen Verweis hierher (memory/betrieb/setup.md, „Timer“).
 # Alle 3 Minuten nach der Uhr (:00, :03, :06 …) den Kalender mit Google
 # abgleichen. Ein oneshot-Dienst läuft nie doppelt: hängt ein Lauf, wartet
 # der nächste.

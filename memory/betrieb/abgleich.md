@@ -332,8 +332,9 @@ und Sasha bekommt einen Hinweis.
   Hintergrund an — **gedrosselt**: höchstens einer alle 20 Sekunden, eine
   Änderung dazwischen wird nicht vergessen, sondern beim nächsten Fenster
   mitgenommen. Wie bisher nur mit `ZENTRALE_AUTOPUSH=1` (Start-Skripte).
-- **Alle 5 Minuten:** `deploy/zentrale-abgleich.timer` (systemd-Benutzer-
-  Timer wie beim Kalender). Sasha schaltet ihn ein.
+- **Alle 5 Minuten:** Timer `zentrale-abgleich` → `zentrale sync --automatic`
+  (seit 24.10. von `zentrale setup` / `zentrale timers install` gerendert,
+  [setup.md](setup.md) „Timer"; vorher `deploy/zentrale-abgleich.timer`).
 - Beide laufen nur, wenn `abgleich_weg` = `mitte` ist. Zwei Läufe
   gleichzeitig gibt es nicht (Sperre); der zweite wartet.
 
@@ -591,5 +592,5 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |
 | `scripts/abgleich.py` | der Befehl |
 | `ui/routen/abgleich.py` | `GET /api/abgleich` |
-| `deploy/zentrale-abgleich.{service,timer}` | alle 5 Minuten |
+| `zentrale_cli/timer.py` | Timer alle 5 Minuten (`deploy/zentrale-abgleich.*` = alter Checkout-Weg) |
 | `tests/test_abgleich*.py` | zwei gespielte Rechner gegen eine Wegwerf-Mitte |

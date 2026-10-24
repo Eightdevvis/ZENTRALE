@@ -326,8 +326,10 @@ den Termin (seinen Container/Kasten im Kalender) angewendet."
 - **Sichtbar** (seit 16.10.): jeder Lauf schreibt seinen Stand (Zugang
   abgelaufen, kein Netz, …), TUI und Alarm-Kanal zeigen Probleme —
   [kalender_sync_zustand.md](kalender_sync_zustand.md).
-- **Automatisch:** `deploy/zentrale-kalender-sync.{service,timer}` (alle
-  3 min, 1 min nach Anmeldung), in `~/.config/systemd/user/` verlinkt.
+- **Automatisch:** Timer `zentrale-kalender-sync` (alle 3 min) →
+  `zentrale adapter run`, seit 24.10. gerendert von `zentrale timers install`
+  ([../betrieb/setup.md](../betrieb/setup.md) „Timer"); früher
+  `deploy/zentrale-kalender-sync.{service,timer}` verlinkt.
 - **Erster Sync:** ZENTRALE 48 → 518 Dateien, Google 470 → 518, von den 470
   alten Google-Terminen fehlt keiner (gegen das Archiv geprüft).
 - **Was Google mit unseren Feldern macht (gemessen):** Termine ohne Ende
