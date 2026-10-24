@@ -83,6 +83,30 @@ ein Schalter „AR-Modus" beim Start. Brille: XREAL Air 2 Pro über StardustXR
 ([betrieb/mobiler_knoten.md](betrieb/mobiler_knoten.md)) — Fenster auf
 Armlänge und weiter weg.
 
+**Die Installation erkennt, wo sie ist.** Sasha: AR ist *„quasi ein
+spezialisierter oberflächentyp, nodetyp"*, und die Installation soll
+*„direkt versuchen zu erkennen wo man sie grad installiert und dementsprechend
+sowas vorschlagen"* — Brille angesteckt → AR-Fassung anbieten; Pi mit
+Bildschirm an der Wand → Vollansicht; Mikro/Lautsprecher da → Sprach-Knoten;
+kein Bildschirm → Dienst. Grundlage: die Hardware-Erkennung der
+Knoten-Beschreibung (`core/knoten.py`, [hub/knoten_beitritt.md](hub/knoten_beitritt.md)).
+
+**Das System sehen.** *„du bist auf einer app drauf, in der siehst du das
+zentrale system. und wie es funktioniert. du siehst den hauptknoten. oder
+einzelne kleine knoten. ganz nach dem wie dein system aufgebaut ist. es zeigt
+einfach nur die verbindungen von zentrale an. zwischen den knoten wird die art
+des traffics angezeigt. an den knotentypen sieht man mit kleinen symbolen was
+dort stattfindet, welche sensorik aktiv, angeschlossen, inaktiv ist. man hat
+hier vollen überblick. wo internet reinfließt, wo sachen in die cloud gehen,
+was nicht am internet steht, welche daten wo liegen und liegen bleiben oder
+weiterwandern, wo die ki sachen zieht, wo autobahnen switchen, wo welcher
+schutz draufliegt, welches system woraufliegt, was womit bedient wird, usw."*
+— Das ist der Datenschutz-Grundpfeiler zum Anschauen: der Mensch sieht
+selbst, wohin seine Daten gehen. Speist sich aus dem, was es schon gibt
+(Knoten-Beschreibungen in der Cloud, `[daten]` der Apps, Adapter-Anschlüsse,
+Positivliste, Brücken-Vertrag) — die Karte zeigt die Originale, sie führt
+keine eigene Liste ([dasselbe Objekt, nicht kopiert]).
+
 Was in den Szenen steckt (für die Etappen):
 
 | Szene braucht | Tätigkeit | Etappe |
@@ -94,6 +118,8 @@ Was in den Szenen steckt (für die Etappen):
 | Eine Aufmerksamkeit selbst einplanen, ohne Vorwegnehmen, ohne dass es im Prompt steht | stellt bereit (Schemen) | 5 |
 | Sparsam mit Tinte: Linien und Zeichen auf Weiß | Stil, Rücksicht | — |
 | AR-Fassung des Hubs + AR-Ansicht je App, Rad in 3D | spricht / zeigt | 3 (Bildschirme) |
+| Installation erkennt die Hardware und schlägt Knotentyp + Oberflächen vor | — | Unterbau, mit 3 |
+| App „das System sehen": Knoten, Verbindungen, Art des Verkehrs, Sinne an/aus, Internet/Cloud/offline, wo Daten liegen, wo die KI zieht, Schutz | überwacht (sich selbst) | 2 (Hardware-Karte) |
 
 Haltung daraus: ZENTRALE **traut dem Menschen** (nimmt nichts vorweg, keine
 Ratschläge von oben), handelt **selbstständig** aus Werkzeugen und
