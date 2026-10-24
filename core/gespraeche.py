@@ -15,6 +15,7 @@
 #   data/gespraeche/<id>/kopf.json        Titel, erstellt, archiviert, projekt
 #   data/gespraeche/<id>/<knoten>.jsonl   nur dieser Rechner schreibt, nur anhängen
 #   data/gespraeche/_knoten/<knoten>.json welches Gespräch hier offen ist, was gelesen
+#                                         (basis: Antworten davor gelten als gelesen)
 #
 # Eine Rechner-Datei wird nur von ihrem Rechner geschrieben; auf dem anderen
 # liegt höchstens eine ältere Kopie — „neueste gewinnt" ist dort immer
@@ -533,6 +534,25 @@ def gelesen_setzen(gid):
         _knoten_schreiben(d)
 
 
+def _gelesen_basis(d) -> str:
+    """Ab wann dieser Rechner mitzählt: Antworten davor gelten als gelesen.
+
+    Ein neuer Rechner (Mini-PC, 24.10.2026) zieht beim Beitritt alle
+    Gespräche, hat aber noch kein „gelesen" — ohne Basis stand dann jedes
+    alte Gespräch als ungelesen da („neues in einem anderen gespräch").
+    Beim ersten Blick auf die Liste wird die Basis einmal festgeschrieben:
+    jetzt, oder — hat der Rechner schon etwas gelesen (Datei von vor dieser
+    Regel) — sein frühestes gelesen; so verliert ein alter Rechner keinen
+    echten Punkt. Unter _lock aufrufen. -> ts"""
+    b = d.get("basis")
+    if isinstance(b, str) and b:
+        return b
+    werte = [t for t in (d.get("gelesen") or {}).values() if isinstance(t, str) and t]
+    d["basis"] = min(werte) if werte else jetzt_ts()
+    _knoten_schreiben(d)
+    return d["basis"]
+
+
 # ── Liste ───────────────────────────────────────────────────────────────
 
 def liste(archivierte=False, projekt=None) -> list:
@@ -545,7 +565,10 @@ def liste(archivierte=False, projekt=None) -> list:
         namen = os.listdir(_DIR)
     except OSError:
         return []
-    gelesen = _knoten_lesen().get("gelesen") or {}
+    with _lock:
+        d = _knoten_lesen()
+        basis = _gelesen_basis(d)
+    gelesen = d.get("gelesen") or {}
     raus = []
     for gid in namen:
         if not gibt_es(gid):
@@ -567,7 +590,7 @@ def liste(archivierte=False, projekt=None) -> list:
             "letzte": letzte,
             "anzahl": len(ns),
             "archiviert": bool(k.get("archiviert")),
-            "ungelesen": bool(letzte_ki and letzte_ki > (gelesen.get(gid) or "")),
+            "ungelesen": bool(letzte_ki and letzte_ki > max(gelesen.get(gid) or "", basis)),
             "projekt": k.get("projekt") or None,
         })
     raus.sort(key=lambda g: g["letzte"] or "", reverse=True)

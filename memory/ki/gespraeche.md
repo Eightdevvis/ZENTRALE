@@ -17,7 +17,7 @@ data/gespraeche/
   <id>/kopf.json          {titel, titel_von, erstellt, archiviert, projekt}
   <id>/<knoten>.jsonl     Ereignisse DIESES Rechners, nur angehängt
   erinnerungen/…          das feste Gespräch „Erinnerungen"
-  _knoten/<knoten>.json   {aktiv, gelesen: {id: ts}, neu_projekt} — nur für diesen Rechner
+  _knoten/<knoten>.json   {aktiv, gelesen: {id: ts}, basis, neu_projekt} — nur für diesen Rechner
 ```
 
 - **id**: `JJJJMMTT-hhmmss-<6 hex>` (sortiert nach Erstellzeit, auf zwei
@@ -79,6 +79,11 @@ Der Sync ist rsync, additiv, „neueste Datei gewinnt"
   Umbenennung harmlos.
 - **Aktiv und gelesen pro Rechner** (`_knoten/`): sonst schalteten sich PC und
   Laptop gegenseitig das offene Gespräch um.
+- **basis** (24.10.2026, Mini-PC): ab wann der Rechner mitzählt. Antworten
+  davor gelten als gelesen. Einmal gesetzt beim ersten `liste()` — jetzt, bei
+  alter Datei ohne basis das früheste `gelesen`. Sonst sieht ein neuer Rechner
+  jedes gezogene Gespräch als ungelesen („neues in einem anderen gespräch").
+  Ungelesen = letzte KI-Antwort > max(gelesen[id], basis).
 - Uhren: die Reihenfolge über Rechner hinweg hängt an der Systemzeit. Laufen
   die Uhren Sekunden auseinander, kann eine Nachricht vom anderen Rechner an
   der falschen Stelle stehen — verloren geht nichts.

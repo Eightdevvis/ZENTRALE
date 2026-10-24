@@ -149,6 +149,44 @@ def test_ungelesen_bis_gelesen():
     assert gespraeche.liste()[0]["ungelesen"] is False
 
 
+# ── Neuer Rechner zieht alte Gespräche (Mini-PC, 24.10.2026) ──────────
+# Ohne eigenes „gelesen" stand jedes gezogene Gespräch als ungelesen da.
+
+def test_neuer_rechner_sieht_gezogene_gespraeche_als_gelesen(monkeypatch):
+    monkeypatch.setattr(gespraeche, "knoten", lambda: "pc")
+    alt = gespraeche.neu("alt")
+    gespraeche.anhaengen(alt, "user", "frage")
+    gespraeche.liste()                                      # der PC zählt schon mit
+    gespraeche.anhaengen(alt, "assistant", "antwort")       # auf dem PC nie gelesen
+    monkeypatch.setattr(gespraeche, "knoten", lambda: "minipc")
+    assert [g["ungelesen"] for g in gespraeche.liste()] == [False]
+    gespraeche.anhaengen(alt, "assistant", "nachtrag", knoten="pc")
+    neu = gespraeche.neu("neu")
+    gespraeche.anhaengen(neu, "assistant", "hallo", knoten="pc")
+    assert {g["id"]: g["ungelesen"] for g in gespraeche.liste()} == {alt: True, neu: True}
+    monkeypatch.setattr(gespraeche, "knoten", lambda: "pc")  # der PC behält seinen Punkt
+    assert all(g["ungelesen"] for g in gespraeche.liste())
+
+
+def test_alte_knoten_datei_ohne_basis_nimmt_fruehestes_gelesen(monkeypatch):
+    monkeypatch.setattr(gespraeche, "knoten", lambda: "pc")
+    vorher = gespraeche.neu("vorher")
+    gespraeche.anhaengen(vorher, "assistant", "alt")
+    gelesen_eins = gespraeche.neu("eins")
+    gespraeche.anhaengen(gelesen_eins, "assistant", "x")
+    nachher = gespraeche.neu("nachher")
+    gespraeche.anhaengen(nachher, "assistant", "noch nicht gelesen")
+    # Datei wie vor der Regel: gelesen ohne basis, das Früheste nach „vorher".
+    d = gespraeche._knoten_lesen()
+    d["gelesen"] = {gelesen_eins: gespraeche.jetzt_ts()}
+    d.pop("basis", None)
+    gespraeche._knoten_schreiben(d)
+    gespraeche.anhaengen(nachher, "assistant", "neu")
+    ung = {g["id"]: g["ungelesen"] for g in gespraeche.liste()}
+    assert ung == {vorher: False, gelesen_eins: False, nachher: True}
+    assert gespraeche._knoten_lesen()["basis"] == d["gelesen"][gelesen_eins]
+
+
 def test_aktiv_ist_pro_rechner(monkeypatch):
     a, b = gespraeche.neu("a"), gespraeche.neu("b")
     monkeypatch.setattr(gespraeche, "knoten", lambda: "pc")

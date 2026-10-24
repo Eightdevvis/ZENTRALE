@@ -455,7 +455,9 @@ Ereignis-Zeilen JSON je Zeile mit `id` (uuid4-hex), `ts` (UTC, ISO mit
 Mikrosekunden und `+00:00`), `knoten: "handy"`; `kopf.json` mit `titel`,
 `titel_von` (`"sasha"` | `"modell"` | `"woerter"` | null), `erstellt`,
 `archiviert`, `projekt`; `_knoten/handy.json` mit `aktiv`, `gelesen` {id:
-ts}, `neu_projekt`. Eine Antwort (`rolle: assistant`) kann seit 09.10.
+ts}, `neu_projekt`; optional `basis` (ts: Antworten davor gelten als gelesen —
+ein Knoten setzt sie beim ersten Start, damit gezogene Gespräche nicht
+ungelesen dastehen; Rechner seit 24.10.2026). Eine Antwort (`rolle: assistant`) kann seit 09.10.
 zusätzlich `erledigt` ({`zeile`, `schritte`}), `pruefung` und `offen` (Liste
 von Sätzen) tragen ([../ki/ehrlichkeit_live.md](../ki/ehrlichkeit_live.md));
 wer sie nicht kennt, übergeht sie. Seit 09.10. (spät) außerdem `warnungen`

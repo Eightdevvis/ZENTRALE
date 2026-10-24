@@ -197,6 +197,7 @@ def test_erinnerung_landet_im_eigenen_gespraech(monkeypatch):
     thema = gespraeche.neu("Fahrrad")
     gespraeche.anhaengen(thema, "user", "wie flicke ich einen schlauch?")
     gespraeche.aktiv_setzen(thema)
+    gespraeche.liste()          # der Rechner zählt schon (basis vor der Erinnerung)
 
     monkeypatch.setattr(ai_backends, "chat_available", lambda: "local")
     monkeypatch.setattr(ai, "chat_stream", fake_stream)
