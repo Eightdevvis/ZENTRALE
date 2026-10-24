@@ -244,8 +244,10 @@ commands in nem terminal für zentrale bedienung muss immer da sein … stell di
 vor ich schließe ar brille an, installiere nur dafür, und hab später nen
 anderen bildschirm dran, alles verbuggt sich. mit zentrale terminal kommandos
 hat man immer direkten zugang zum programm."* Jede Installation, jeder
-Knotentyp hat den Befehl `zentrale` mit allen Unterbefehlen — AR, Wand,
-Fenster, Handy sind **Zusätze**, nie Ersatz. Die Erkennung beim Installieren
+Knotentyp hat den Befehl `zentrale` mit allen Unterbefehlen (`status`,
+`sync`, `setup`, `adapter` …) — das ist der Rückfall. **Die TUI ist eine
+Oberfläche** wie AR, Wand, Fenster und Handy: **Zusätze**, nie Ersatz; auch
+sie kann ausfallen, die Unterbefehle nicht. Die Erkennung beim Installieren
 schlägt Oberflächen nur vor; sie entfernt nie das Terminal, und jede
 Oberfläche lässt sich per Befehl ab- und umschalten.
 
