@@ -30,6 +30,10 @@ def _app(ordner, name, daten_toml):
     return d
 
 
+# Der Adapter ist Pflicht (memory/hub/adapter.md); ohne Konto ohne Zugangsdaten.
+NUR_ADAPTER = ["data/adapter/anschluesse/*.json", "data/adapter/bruecke/**"]
+
+
 # ── Die Tabelle ────────────────────────────────────────────────────────
 
 def test_jedes_muster_der_positivliste_gehoert_genau_einer_app():
@@ -97,7 +101,9 @@ def test_api_apps_ohne_daten_ist_null():
 
 def test_nicht_gesetzt_heisst_alles(einst):
     assert abgleich_apps.entscheidungen() is None
-    assert abgleich_apps.muster() == list(auswahl.ABGLEICH)
+    # Ohne Kalender-Anschluss und ohne Konto: keine Termine, keine Zugangsdaten.
+    assert abgleich_apps.muster() == [m for m in auswahl.ABGLEICH
+                                      if m not in ("data/kalender/**", "data/adapter/geheim.enc")]
     assert abgleich_apps.offen("/gibt/es/nicht") == []
 
 
@@ -106,8 +112,8 @@ def test_alte_wahl_alles_wird_zu_allen_apps_und_gleicht_dasselbe_ab(einst):
     einst.update(abgleich_bereiche=list(ALLE_BEREICHE), abgleich_weg="mitte",
                  abgleich_mitte_art="http")
     e = abgleich_apps.entscheidungen()
-    assert e == {n: True for n in abgleich_apps.tabelle()}
-    assert sorted(abgleich_apps.muster()) == sorted(auswahl.ABGLEICH)
+    assert e == {n: True for n, a in abgleich_apps.tabelle().items() if not a["pflicht"]}
+    assert sorted(abgleich_apps.muster()) == sorted(abgleich_apps.jetzt_erlaubt(auswahl.ABGLEICH))
     assert abgleich_apps.offen("/gibt/es/nicht", lambda: pytest.fail("nicht fragen")) == []
 
 
@@ -123,7 +129,7 @@ def test_alte_wahl_teilweise(einst):
 def test_alte_wahl_leer_ist_nichts(einst):
     einst["abgleich_bereiche"] = []
     assert set(abgleich_apps.entscheidungen().values()) == {False}
-    assert abgleich_apps.muster() == []
+    assert abgleich_apps.muster() == NUR_ADAPTER      # Pflicht: der Adapter gleicht immer ab
 
 
 def test_neue_wahl_gilt_vor_der_alten_und_die_alte_bleibt_stehen(einst):
@@ -160,4 +166,4 @@ def test_offen_nur_unentschiedene_mit_daten(einst, tmp_path):
     assert abgleich_apps.offen(str(tmp_path), lambda: {"data/melodies.json"}) == ["fokus", "klavier"]
     abgleich_apps.setzen({"fokus": False})
     assert abgleich_apps.offen(str(tmp_path)) == []
-    assert abgleich_apps.muster() == []
+    assert abgleich_apps.muster() == NUR_ADAPTER

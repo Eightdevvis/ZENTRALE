@@ -10,8 +10,7 @@ werden müssen".
 ## Die Datei
 
 `scripts/kalender_sync.py` schreibt nach **jedem** Lauf (Exit 0/1/2/3 und
-bei einer Ausnahme) eine kleine JSON-Datei, pro Rechner (jeder Rechner synct
-selbst mit Google):
+bei einer Ausnahme) eine kleine JSON-Datei, pro Rechner:
 
 - Pfad `~/.local/share/zentrale/kalender_sync.json`, umlenkbar über
   `ZENTRALE_KALENDER_SYNC_ZUSTAND` (Tests: `tests/conftest.py` und der
@@ -32,6 +31,16 @@ selbst mit Google):
 
 Code: `core/kalender_sync_zustand.py` (Schicht 1: lesen, schreiben,
 erkennen, bewerten, alarme).
+
+## Mit dem Adapter (seit 24.10.2026)
+
+Google fährt nur das Gerät mit dem Mietvertrag ([../hub/adapter.md](../hub/adapter.md)).
+Es legt seinen Stand nach jedem Lauf mit `bruecke: <gerät>` in den Vertrag;
+jedes andere Gerät übernimmt ihn bei seinem Timer-Lauf in die eigene Datei
+(`kalender_sync_zustand.uebernehmen`) — so zeigt jedes Gerät denselben Stand,
+ohne Problem leise „google ✓ 16:31 · laptop". Hält niemand den Vertrag,
+altert der übernommene Stand und wird nach `ALT_MIN` zur Warnung „läuft
+nicht" — auf allen Geräten.
 
 ## Urteil
 

@@ -211,7 +211,8 @@ def configured() -> str | None:
     """Name des bevorzugten Cloud-Providers, dessen Key in der Env liegt — oder
     None. Reine Vorrang-Liste: OHNE Vorwahl und OHNE Budget-Rückfall — wer
     wissen will, wer JETZT redet, fragt ai_backends.cloud_provider().
-    Keys kommen über ai_config NUR aus data/ai_config.json."""
+    Keys kommen aus dem Adapter (core/adapter_geheim.py), Rückfall
+    data/ai_config.json (core/ai_config.py)."""
     import os
 
     def has_key(name: str) -> bool:
@@ -223,3 +224,20 @@ def configured() -> str | None:
         if has_key(name):
             return name
     return None
+
+
+# ── Die Keys aus dem Adapter (seit 2026-10-24, memory/hub/adapter.md) ──
+# Wer einen Anbieter fragt, importiert diese Tabelle — hier also einmal die
+# Schlüssel aus dem Adapter in die Umgebung legen (vor denen aus
+# ai_config.json, nach einer echten Umgebung). Nach jedem Abgleich legt
+# core/abgleich.py nach, damit ein frisch beigetretenes Gerät ohne Neustart
+# eine KI hat. Ein Fehler hier darf nie den Import kippen.
+def _adapter_einspielen():
+    try:
+        import adapter_geheim
+        adapter_geheim.schluessel_einspielen()
+    except Exception as e:      # noqa: BLE001 — ohne Adapter gilt der Rückfall
+        print(f"[providers] Schlüssel aus dem Adapter nicht lesbar: {e}")
+
+
+_adapter_einspielen()

@@ -71,6 +71,20 @@ def main():
                      name="apps-autostart").start()
     atexit.register(app_verwaltung.eigene_stoppen)
 
+    # Der Adapter (memory/hub/adapter.md): KI-Schlüssel, die noch in
+    # data/ai_config.json stehen, einmal verschlüsselt hinüber (beliebig oft,
+    # ändert nur, was fehlt) und in die Umgebung. Den Kalender richtet nur
+    # `zentrale adapter setup` ein — der Umstieg ist bewusst.
+    try:
+        import adapter_ablauf
+        import adapter_geheim
+        r = adapter_ablauf.einrichten(kalender=False)
+        if r["ki"]["uebernommen"]:
+            log("ADAPTER: KI-Schlüssel übernommen: " + ", ".join(r["ki"]["uebernommen"]))
+        adapter_geheim.schluessel_einspielen()
+    except Exception as e:
+        log(f"ADAPTER: Einrichten fehlgeschlagen: {e}")
+
     # ── Lokale KI nur dort hochfahren, wo sie hingehört ────────────────
     # Ein Knoten ohne lokale KI (ZENTRALE_LOKALE_KI=aus, der Laptop) bootet
     # KEINE KI: kein Warmup, kein News-Fetcher -> Ollama wird NIE angesprochen

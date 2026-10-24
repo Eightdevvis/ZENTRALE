@@ -18,6 +18,8 @@ BEFEHLE = {
     ("sync",): befehle.sync,
     ("status",): befehle.status,
     ("devices",): befehle.devices,
+    ("adapter",): befehle.adapter_liste,
+    ("adapter", "setup"): befehle.adapter_setup,
     ("cloud", "usage"): befehle.cloud_usage,
     ("update",): aktualisieren.update,
     ("version",): befehle.version,

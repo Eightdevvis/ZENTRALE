@@ -126,6 +126,12 @@ def anwenden(umgebung, kommandozeile, tempdir, pid, cwd=""):
     umgebung.setdefault("ZENTRALE_KALENDER_SYNC_STAND", ziel + "/sync_stand.json")
     umgebung.setdefault("ZENTRALE_KALENDER_SYNC_ZUSTAND", ziel + "/sync_zustand.json")
     umgebung.setdefault("ZENTRALE_KALENDER_FARBEN", ziel + "/kalender_farben.json")
+    # Der Adapter (core/adapter.py, 2026-10-24): nie Sashas Anschlüsse,
+    # Zugangsdaten, Geräteschlüssel oder vdirsyncer-Konfiguration.
+    umgebung.setdefault("ZENTRALE_ADAPTER_ORDNER", ziel + "/adapter")
+    umgebung.setdefault("ZENTRALE_ADAPTER_LAUF", ziel + "/adapter_lauf")
+    umgebung.setdefault("ZENTRALE_ADAPTER_SCHLUESSEL", ziel + "/adapter.schluessel")
+    umgebung.setdefault("ZENTRALE_VDIRSYNCER_CONFIG", ziel + "/keine-vdirsyncer-config")
     # Kein Testlauf meldet sich auf Sashas Desktop.
     #
     # Die Umlenkungen darueber schuetzen DATEIEN. Eine Benachrichtigung ist

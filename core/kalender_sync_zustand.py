@@ -116,6 +116,25 @@ def schreiben(code: int, art: str, fehler: str | None, jetzt: datetime | None = 
     return z
 
 
+def uebernehmen(z: dict | None) -> None:
+    """Auf einem Gerät, das gerade NICHT die Brücke ist (memory/hub/adapter.md):
+    den Stand der Brücke hierher legen (er reist im Mietvertrag mit). Kein
+    Stand → die eigene Datei weg (sonst warnte ein alter eigener Stand
+    „läuft nicht", obwohl ein anderes Gerät längst fährt)."""
+    p = pfad()
+    if not z:
+        try:
+            os.remove(p)
+        except FileNotFoundError:
+            pass
+        return
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(z, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, p)
+
+
 def _zeit(iso) -> datetime | None:
     try:
         return datetime.fromisoformat(iso) if iso else None
@@ -156,6 +175,8 @@ def bewerten(z: dict | None = None, jetzt: datetime | None = None) -> dict:
             aus["hinweis"] = "⚠ google-sync: %s — seit %s" % (ARTEN[art][0], _wann(seit))
     if not aus["problem"] and erfolg:
         aus["kurz"] = "google ✓ %s" % erfolg.strftime("%H:%M")
+        if z.get("bruecke"):
+            aus["kurz"] += " · " + str(z["bruecke"])
     return aus
 
 

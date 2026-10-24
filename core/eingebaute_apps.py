@@ -20,9 +20,12 @@ EINGEBAUT = {
     "notizen": {"titel": "Notizen",
                 "daten": {"muster": ["data/notes.json"], "abgleichen": True}},
     "kalender": {"titel": "Kalender",
-                 # Termine gleicht vdirsyncer mit Google ab, nie die Mitte
-                 # (auswahl.NICHT_ABGLEICHEN) — hier nur das, was Google nicht kennt.
-                 "daten": {"muster": ["data/kalender_neben.json"], "abgleichen": True}},
+                 # Seit 2026-10-24 auch die Termine (data/kalender/**) — aber nur,
+                 # wenn der Adapter einen Kalender-Anschluss hat (abgleich_apps
+                 # schneidet sie sonst heraus): dann fährt EIN Gerät die Brücke
+                 # zu Google, alle anderen bekommen sie aus der Cloud.
+                 "daten": {"muster": ["data/kalender_neben.json", "data/kalender/**"],
+                           "abgleichen": True}},
     "graph": {"titel": "Graphen",
               "daten": {"muster": ["data/graphs.json", "data/g_*.json", "data/sleep_quality.json"],
                         "abgleichen": True}},
@@ -41,6 +44,14 @@ EINGEBAUT = {
              "daten": {"muster": ["data/mail_rules.json"], "abgleichen": True}},
     "klavier": {"titel": "Klavier",
                 "daten": {"muster": ["data/melodies.json"], "abgleichen": True}},
+    # Der Adapter (core/adapter.py, memory/hub/adapter.md): die eine Tür zu
+    # fremden Diensten. Immer installiert, immer abgeglichen („pflicht": wird
+    # nie gefragt und nie abgewählt) — sonst hätte ein neues Gerät weder KI
+    # noch Kalender. Die Zugangsdaten gleichen nur angemeldet ab (abgleich_apps).
+    "adapter": {"titel": "Adapter", "pflicht": True,
+                "daten": {"muster": ["data/adapter/anschluesse/*.json", "data/adapter/bruecke/**",
+                                     "data/adapter/geheim.enc"],
+                          "abgleichen": True}},
     # Die Cloud selbst (Konto, Abgleich, Geräte, Nutzungs-Wächter): ein Dienst
     # ohne eigene Daten. Ob sie an ist, sagt abgleich.cloud_an().
     "cloud": {"titel": "Cloud", "dienst": True},

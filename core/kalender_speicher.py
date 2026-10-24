@@ -25,10 +25,21 @@ DEFAULT_LOESCHSPERRE = 5
 DEFAULT_GIT_SPIEGEL = Path.home() / ".local" / "share" / "zentrale" / "kalender-git"
 
 
-def modus() -> str:
+def modus(cal_path: Path | None = None) -> str:
     """"json" oder "ics". Ein unbekannter Wert fällt auf "json" zurück — der
-    bisherige, bewährte Weg — statt auf einen halben Zustand."""
-    wert = str(ai_config.setting("kalender_speicher", "json") or "json").strip().lower()
+    bisherige, bewährte Weg — statt auf einen halben Zustand.
+
+    Nicht eingestellt, aber der Kalender ist umgezogen (Marker `migriert_am`
+    in den Nebendaten, die abgleichen) → "ics". Seit 2026-10-24 kommt der
+    Kalender über die Cloud (memory/hub/adapter.md): ein neues Gerät hat die
+    Einstellung nie gesetzt und stünde sonst auf "json" — leerer Kalender,
+    und die Rückfall-Sperre verweigerte jedes Schreiben."""
+    wert = ai_config.setting("kalender_speicher")
+    if wert in (None, "") and cal_path is not None:
+        from kalender_json import migriert_marker
+        if migriert_marker(pfade(cal_path)["neben"]):
+            return "ics"
+    wert = str(wert or "json").strip().lower()
     return wert if wert in MODI else "json"
 
 
@@ -90,6 +101,6 @@ def json_speicher(cal_path: Path, ics_dir: Path | None = None) -> JsonSpeicher:
 def speicher_fuer(cal_path: Path, ics_dir: Path | None = None,
                   art: str | None = None):
     """Der Speicher, den die Einstellung gerade verlangt."""
-    if (art or modus()) == "ics":
+    if (art or modus(cal_path)) == "ics":
         return ics_speicher(cal_path, ics_dir)
     return json_speicher(cal_path, ics_dir)

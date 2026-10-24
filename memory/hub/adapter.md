@@ -1,7 +1,7 @@
 # Der Adapter — die eine Tür zu fremden Diensten
 
-**Stand 2026-10-24: Plan, Bau läuft.** Sasha, als der Mini-PC beitrat und der
-Kalender fehlte:
+**Stand 2026-10-24: gebaut** (Branch `adapter`; was echt ist: „Gebaut“ unten).
+Sasha, als der Mini-PC beitrat und der Kalender fehlte:
 
 > *„bleib beim gedanken dass der kalender eigentlich über zentrale komplett
 > laufen soll und google nur da ist weil es noch keine app gibt. man soll auch
@@ -13,53 +13,120 @@ Kalender fehlte:
 > zentrale hat würde der adapter immer mit installiert. er ist quasi neben dem
 > internen shop die zweite stelle wie man an apps und schnittstellen kommt."*
 
+Nachgeschärft am selben Tag: ein festes Brücken-Gerät fällt aus, wenn es aus
+ist — **der Wechsel muss nahtlos sein**, das ist der Sinn einer
+abgeglichenen App. Also kein bevorzugtes Gerät, keine Anmeldung je Gerät.
+
 Messlatte ([../leitbild.md](../leitbild.md)): Unterbau — jetzt nötig, weil
-ein neues Gerät (Mini-PC) sonst ohne Kalender und ohne KI dasteht. „Ein
-Login, alles da" ist die Voraussetzung dafür, dass Räume Knoten werden.
+ein neues Gerät (Mini-PC) sonst ohne Kalender und ohne KI dasteht.
 
 ## Das Modell
 
-1. **ZENTRALE ist die Wahrheit.** Kalender, Listen, … leben in ZENTRALE und
-   gleichen über die Cloud ab wie alles andere. Ein fremder Dienst ist nur
-   ein **Anschluss**, nie die Quelle.
-2. **Der Adapter ist eine App**, immer installiert (auch bei clean slate).
-   Neben dem Shop die zweite Stelle, an der Apps und Schnittstellen
-   hereinkommen. Er gehört zur Werkstatt-Familie: die Anbindungs-Pipe
-   ([hub_bauplan.md](hub_bauplan.md) „Anbindungs-Pipe der Werkstatt",
-   Format `core/werkzeug_erzeuger/anbindung.schema.json`) ist seine
-   Maschine für Dienste mit API.
-3. **Ein Anschluss** = eine Beschreibung (was, wohin, welche App er speist)
-   plus seine **Zugangsdaten**. Die Beschreibung gleicht überall ab
-   (`data/adapter/`), die Zugangsdaten auch — **nur verschlüsselt** über die
-   Cloud (Zero-Knowledge), nie im Klartext irgendwohin.
-4. **Ein Gerät fährt die Brücke.** Ein Anschluss, der mit einem fremden
-   Dienst abgleicht (Google-Kalender), läuft auf genau **einem** Gerät — dem
-   **Brücken-Gerät**, das in der Beschreibung steht. Alle anderen bekommen die
-   Daten über die Cloud. So gibt es nie zwei Wege für dieselben Termine
-   (die Doppelten und Geister von früher).
-5. **KI-Anbieter sind Anschlüsse.** Die Schlüssel für Anthropic & Co.
-   (bisher `data/ai_config.json`, wanderte nie mit) ziehen in die
-   Zugangsdaten des Adapters — damit hat ein neues Gerät nach dem Login
-   sofort eine KI. Langfristig (Hub-Plan) liegen sie auf Sashas Server, dann
-   zeigt der Anschluss dorthin.
+1. **ZENTRALE ist die Wahrheit.** Kalender, Listen … gleichen über die Cloud
+   ab. Ein fremder Dienst ist nur ein **Anschluss**, nie die Quelle.
+2. **Der Adapter ist eine App** (`adapter`, eingebaut, `pflicht`: immer
+   abgeglichen, nie gefragt, nie abgewählt). Werkstatt-Familie: die
+   Anbindungs-Pipe ([hub_bauplan.md](hub_bauplan.md)) bleibt seine Maschine
+   für Dienste mit API.
+3. **Ein Anschluss** = Beschreibung (gleicht ab, nie ein Geheimnis) +
+   **Zugangsdaten** (gleichen nur verschlüsselt mit dem Kontoschlüssel ab).
+4. **Die Brücke ist ein Mietvertrag.** Ein Anschluss mit fremdem Dienst
+   (Google-Kalender) läuft immer auf genau einem Gerät: wer den Vertrag hält.
+   Jedes Gerät mit Adapter und vdirsyncer kann ihn nehmen, sobald er frei
+   oder abgelaufen ist. Unsichtbar — niemand stellt etwas ein.
+5. **Alles, was eine Brücke braucht, kommt über den Abgleich:** die
+   vdirsyncer-Konfiguration wird je Gerät aus dem Anschluss erzeugt;
+   Client-Geheimnis und OAuth-Token liegen in den Zugangsdaten; erneuert
+   Google den Token, schreibt die Brücke ihn zurück.
+6. **KI-Anbieter sind Anschlüsse** (`ki-anbieter`, ohne Brücke): die
+   Schlüssel ziehen aus `data/ai_config.json` in die Zugangsdaten — ein neues
+   Gerät hat nach dem Login und einem Abgleich eine KI.
+7. **Ist keine Brücke online**, läuft ZENTRALEs Kalender weiter (Cloud);
+   nur die Google-Seite hinkt hinterher und holt beim nächsten Lauf auf.
 
-## Erste Anschlüsse
+## Dateien
 
-| Anschluss | speist | Brücke |
-|---|---|---|
-| Google-Kalender (vdirsyncer, bisher je Gerät) | `kalender` | ein Gerät (Vorgabe: das, auf dem er eingerichtet wurde) |
-| KI-Anbieter (Anthropic, Mistral, …) | `assistent` | keine — jedes Gerät nutzt den Schlüssel selbst |
+| Datei | was | gleicht ab | Sicherung (GitHub, Klartext) |
+|---|---|---|---|
+| `data/adapter/anschluesse/<id>.json` | Beschreibung, Schema `core/adapter_anschluss.schema.json` | ja | ja |
+| `data/adapter/geheim.enc` | Zugangsdaten, JSON, **je Eintrag** Fernet (`zu: konto` / `geraet`) | nur angemeldet | **nie** (`GEHEIM`, Test) |
+| `data/adapter/bruecke/<id>.json` | Mietvertrag `{inhaber, ablauf, seit, zustand}` | ja | nein |
+| `data/adapter/bruecke/<id>.status.json` | Stand von vdirsyncer (`*.items`) + Liste der Löschsperre | ja | nein |
+| `~/.config/zentrale/adapter.schluessel` | Geräteschlüssel (ohne Konto) | nie | nie |
+| `~/.local/share/zentrale/adapter/<id>/` | erzeugte `vdirsyncer.config` (600), Merkzettel | nie | nie |
 
-## Sicherheitsregeln
+- **Je Eintrag verschlüsselt, nicht ein Block:** so gewinnen zwei Geräte, die
+  verschiedene Einträge ändern (KI-Schlüssel hier, Token dort) — die
+  JSON-Regel führt Eintrag für Eintrag zusammen. Lesbar bleiben nur die
+  Namen (Datei 600; in der Cloud ohnehin noch einmal verschlüsselt).
+- **Ohne Konto: Geräteschlüssel statt Klartext mit 600** — data/ wird an
+  mehr Orte kopiert als ~/.config (alter rsync-Weg, Sicherungen, Stick).
+  Anmelden → beim nächsten Abgleich auf `konto` umgeschlüsselt; vor
+  `zentrale logout` zurück auf `geraet`.
+- **Vertrag: „wer zuerst in der Mitte war"** — eigene Regel im Abgleich
+  (Art `mitte`): beide geändert → die Mitte gilt, nie Feld für Feld (sonst
+  bekäme einer den Namen, der andere die Ablaufzeit, und beide führen). Die
+  Mitte nimmt nur an, was auf ihrem letzten Stand aufbaut (409 → neu holen).
 
-- Zugangsdaten nur verschlüsselt mit dem Kontoschlüssel in der Cloud.
-- **Nie** in die alte Datensicherung (`scripts/daten_sichern.py` schickt
-  ihre Liste im Klartext ins private GitHub-Daten-Repo) — eigene Liste, Test.
-- Ohne Konto (rein lokal) bleiben Zugangsdaten nur auf dem Gerät.
-- Der Kalender über die Cloud: `data/kalender/**` aus `NICHT_ABGLEICHEN`
-  heraus, sobald es ein Brücken-Gerät gibt — vorher bewusst umstellen, nicht
-  still.
+## Ein Lauf des Kalender-Timers (jedes Gerät, alle 3 min)
+
+`scripts/kalender_sync.py` → `adapter_ablauf.bruecke_lauf`:
+
+1. kein vdirsyncer → nichts. Ohne Mitte (kein Konto/Schlüssel, rsync-Weg) →
+   eigene Brücke, ohne Vertrag.
+2. Kalender noch nicht hier (erstes Mal) → erst abgleichen.
+3. Vertrag gehört jemand anderem und läuft noch → nichts tun; dessen Stand
+   (`zustand`) hierher, damit die TUI „google ✓ 16:31 · laptop" zeigt.
+4. Sonst: Vertrag auf mich (15 min), **abgleichen**. Kam mein Name zurück →
+   Stand von vdirsyncer auspacken (wenn er von einem anderen Gerät stammt),
+   Konfiguration bauen, bei geänderter Konfiguration `vdirsyncer discover`
+   (liest nur), Google abgleichen (mit allen alten Sicherungen), Token und
+   Stand zurück, verlängern, abgleichen.
+
+Gemessen (vdirsyncer 0.21.0): ein kopierter Stand mit anderen Datei-Zeiten,
+Inodes und Pfaden löst keine Übertragung aus — vdirsyncer vergleicht den
+Inhalt. Nur `<paar>.collections` hängt an der Konfiguration des Geräts und
+wird neu entdeckt.
+
+## Gebaut (2026-10-24)
+
+- Module (Schicht 1): `core/adapter.py` (Anschlüsse, Kalender-Schalter,
+  Kalender kommt einmal je Gerät dazu), `adapter_geheim.py`,
+  `adapter_bruecke.py`, `adapter_vdirsyncer.py` (Vorlage ↔ Konfiguration:
+  `{"$geheim"}`, `{"$datei"}` für token_file, `{"$ort": "kalender"}` für
+  den Kalender-Ordner, ~-Pfade bleiben ~), `adapter_ablauf.py` (einrichten,
+  bruecke_lauf), `abgleich_ics.py` (Termine je UID zusammenführen).
+- Abgleich: `abgleich_apps.jetzt_erlaubt` schneidet `data/kalender/**` ohne
+  Kalender-Anschluss und `geheim.enc` ohne Konto heraus. Vor dem Abgleich
+  umschlüsseln und `adapter.vor_abgleich`; danach Merkzettel
+  `kalender_dabei.json` und KI-Schlüssel in die Umgebung.
+- KI: Rangfolge echte Umgebung > Adapter > `ai_config.json`
+  (`ai_config.injiziert`); `providers` legt beim Import ein;
+  `ki_uebernehmen()` beim Start des Backends, bei `zentrale sync` und
+  `zentrale adapter setup` — ein Schlüssel verlässt ai_config.json erst,
+  wenn er im Adapter lesbar ist; ein abweichender bleibt dort (Rückfall).
+- `kalender_speicher.modus`: nicht eingestellt + `migriert_am` in den
+  Nebendaten → `ics` (sonst stünde ein neues Gerät auf `json`).
+- CLI: `zentrale adapter` (Anschluss, Art, speist, Brücke = Inhaber + bis
+  wann, Status), `zentrale adapter setup` (KI-Schlüssel + vorhandene
+  vdirsyncer-Konfiguration → Anschluss `google-kalender`; **der bewusste
+  Umstieg**), `zentrale status` zeigt „Adapter — always synced".
+- Tests: `tests/test_adapter.py`, `test_adapter_geheim.py`,
+  `test_abgleich_ics.py`, `test_kalender_cloud.py` (zwei Geräte, Cloud,
+  echtes vdirsyncer gegen einen Ordner als „Google").
+
+## Offen
+
+- Uhren: der Vertrag vergleicht Uhrzeiten zweier Geräte; mehr als ein paar
+  Minuten Abweichung verkürzen ihn.
+- `vdirsyncer discover` fragt bei einer fehlenden Sammlung nach — die
+  Brücke bricht dann ab (Zustand „nicht eingerichtet") statt anzulegen.
+- `password.fetch` (CalDAV mit Passwort-Programm) reist nicht — das
+  Programm müsste auf jedem Gerät sein.
+- Langfristig (Hub-Plan) liegen KI-Schlüssel auf Sashas Server; dann zeigt
+  der Anschluss dorthin.
 
 ## Historie
 
-- **2026-10-24** — Plan nach dem Beitritt des Mini-PCs.
+- **2026-10-24** — Plan nach dem Beitritt des Mini-PCs; gebaut, die Brücke
+  als Mietvertrag mit nahtlosem Wechsel (Sasha: kein festes Gerät).

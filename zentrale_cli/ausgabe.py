@@ -156,7 +156,7 @@ GRUPPEN = [
     ("group_start", ["cmd_tui", "cmd_welcome", "cmd_setup"]),
     ("group_account", ["cmd_login", "cmd_logout", "cmd_account_create",
                        "cmd_account_recover", "cmd_account_password"]),
-    ("group_sync", ["cmd_sync", "cmd_status", "cmd_devices"]),
+    ("group_sync", ["cmd_sync", "cmd_status", "cmd_devices", "cmd_adapter", "cmd_adapter_setup"]),
     ("group_program", ["cmd_cloud_usage", "cmd_update", "cmd_version", "cmd_help"]),
 ]
 

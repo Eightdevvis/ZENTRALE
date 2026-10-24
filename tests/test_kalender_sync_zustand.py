@@ -123,7 +123,7 @@ def ks(tmp_path, monkeypatch, zpfad):
     vdir.mkdir()
     sp = SimpleNamespace(vdir=vdir, loeschsperre=5, aufraeumen=lambda: 0, snapshot=lambda: None)
     monkeypatch.setattr(m, "STAND", str(tmp_path / "stand.json"))
-    monkeypatch.setattr(m.kalender_speicher, "modus", lambda: "ics")
+    monkeypatch.setattr(m.kalender_speicher, "modus", lambda *a: "ics")
     monkeypatch.setattr(m.kalender_speicher, "ics_speicher", lambda *a, **k: sp)
     monkeypatch.setattr(m, "_spiegeln", lambda grund: None)
     monkeypatch.setattr(m.shutil, "which", lambda n: "/x/vdirsyncer")
@@ -167,7 +167,7 @@ def test_loeschsperre(ks, monkeypatch):
 
 
 def test_nicht_eingerichtet(ks, monkeypatch):
-    monkeypatch.setattr(ks.kalender_speicher, "modus", lambda: "json")
+    monkeypatch.setattr(ks.kalender_speicher, "modus", lambda *a: "json")
     assert ks.main(["zentrale"]) == 1
     assert zs.lesen()["art"] == "einrichtung"
 

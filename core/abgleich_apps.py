@@ -27,6 +27,8 @@ import json
 import os
 
 import abgleich_auswahl as auswahl
+import adapter
+import adapter_geheim
 import ai_config
 import apps
 import eingebaute_apps
@@ -58,7 +60,7 @@ def tabelle() -> dict:
     DÜRFEN (`abgleichen = true`), nur mit Mustern von der Positivliste. Apps
     ohne ein einziges erlaubtes Muster fehlen."""
     manifeste = _manifeste()
-    roh = []                     # (name, titel, daten)
+    roh = []                     # (name, titel, daten, pflicht)
     for quelle in (eingebaute_apps.EINGEBAUT, eingebaute_apps.ERSATZ):
         for n, e in quelle.items():
             if "daten" not in e:
@@ -66,19 +68,35 @@ def tabelle() -> dict:
             m = manifeste.pop(n, None)
             d = apps.daten(m) if m else None     # zieht sie aus, gilt ihr Manifest
             titel = str((m or {}).get("titel") or e["titel"])
-            roh.append((n, titel, d if d is not None else e["daten"]))
+            roh.append((n, titel, d if d is not None else e["daten"], bool(e.get("pflicht"))))
     for n, m in sorted(manifeste.items()):
         d = apps.daten(m)
         if d is not None:
-            roh.append((n, str(m.get("titel") or n), d))
+            roh.append((n, str(m.get("titel") or n), d, False))
     vergeben, raus = set(), {}
-    for n, titel, d in roh:
+    for n, titel, d, pflicht in roh:
         if not d.get("abgleichen"):
             continue
         muster = [x for x in d["muster"] if x in auswahl.ABGLEICH and x not in vergeben]
         vergeben.update(muster)
         if muster:
-            raus[n] = {"titel": titel, "muster": muster}
+            raus[n] = {"titel": titel, "muster": muster, "pflicht": pflicht}
+    return raus
+
+
+def jetzt_erlaubt(muster_liste) -> list:
+    """Muster, die gerade gar nicht abgleichen dürfen, herausschneiden
+    (memory/hub/adapter.md):
+      data/kalender/**        nur mit einem Kalender-Anschluss — sonst gleicht
+                              jedes Gerät selbst mit Google ab, und ein zweiter
+                              Weg brächte Doppelte und Geister
+      data/adapter/geheim.enc nur angemeldet — verschlüsselt mit dem
+                              Kontoschlüssel; ohne Konto bleibt sie hier"""
+    raus = list(muster_liste)
+    if adapter.KALENDER_MUSTER in raus and not adapter.kalender_ueber_cloud():
+        raus.remove(adapter.KALENDER_MUSTER)
+    if adapter.GEHEIM_MUSTER in raus and not adapter_geheim.darf_abgleichen():
+        raus.remove(adapter.GEHEIM_MUSTER)
     return raus
 
 
@@ -137,11 +155,13 @@ def setzen(neu: dict):
 
 
 def muster() -> list:
-    """Die Muster der Positivliste, die dieses Gerät abgleicht."""
+    """Die Muster der Positivliste, die dieses Gerät abgleicht. Pflicht-Apps
+    (der Adapter) immer, egal, was gewählt ist."""
     e = entscheidungen()
     if e is None:
-        return list(auswahl.ABGLEICH)
-    return [x for n, a in tabelle().items() if e.get(n) for x in a["muster"]]
+        return jetzt_erlaubt(auswahl.ABGLEICH)
+    return jetzt_erlaubt([x for n, a in tabelle().items()
+                          if e.get(n) or a["pflicht"] for x in a["muster"]])
 
 
 def app_von(rel: str):
@@ -178,7 +198,8 @@ def hat_daten(wurzel, muster_liste, cloud=None) -> bool:
 def mit_daten(wurzel, cloud=None) -> list:
     """Apps, die hier (oder laut `cloud` = Pfade aus dem Inhaltsverzeichnis
     der Mitte) schon Daten haben — in der Reihenfolge der Tabelle."""
-    return [n for n, a in tabelle().items() if hat_daten(wurzel, a["muster"], cloud)]
+    return [n for n, a in tabelle().items()
+            if not a["pflicht"] and hat_daten(wurzel, a["muster"], cloud)]
 
 
 def offen(wurzel, cloud_holen=None) -> list:
@@ -188,7 +209,7 @@ def offen(wurzel, cloud_holen=None) -> list:
     e = entscheidungen()
     if e is None:
         return []
-    kandidaten = {n: a for n, a in tabelle().items() if n not in e}
+    kandidaten = {n: a for n, a in tabelle().items() if n not in e and not a["pflicht"]}
     if not kandidaten:
         return []
     cloud = cloud_holen() if cloud_holen else None

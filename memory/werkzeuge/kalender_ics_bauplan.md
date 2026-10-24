@@ -306,12 +306,11 @@ den Termin (seinen Container/Kasten im Kalender) angewendet."
   (`scripts/kalender_ebenen_vereinen.py`, Probe an Kopie, 715 Tage ohne
   Abweichung). Neue Routinen landen in `termine`; sagt die KI „routinen",
   leitet `ki_werkzeuge` um (Werkzeugtexte bewusst byte-gleich gelassen).
-- **Jeder Rechner synct selbst gegen Google** (Sasha: „sauber jeder synct
-  gegen die cloud"; später nimmt der PC als Server die Rolle von Google ein).
-  Damit ist die frühere Regel „vdirsyncer nur auf dem PC" überholt:
-  `data/kalender/` ist aus `zentrale-sync` (~/.local/bin, nicht in git)
-  herausgenommen — ein zweiter Weg daneben brächte Doppelte/Geister. ⚠ Auf
-  dem PC muss dieselbe Ausnahme in sein `zentrale-sync`, bevor er synct.
+- **Seit 24.10.2026 über die Cloud** ([../hub/adapter.md](../hub/adapter.md)):
+  Google fährt nur EIN Gerät (wer den Mietvertrag des Adapters hält), die
+  Termine gleichen über die Cloud ab (`data/kalender/**`, je Termin
+  zusammengeführt). Vorher (07.10.) synchte jeder Rechner selbst; ein zweiter
+  Weg daneben brachte Doppelte/Geister.
 - **Paar** `zentrale`: `data/kalender/termine` ↔ Google-Hauptkalender
   `fyyres@gmail.com`; bewusst OHNE `metadata` (sonst hieße der
   Google-Hauptkalender danach „Termine"). „Feiertage in Deutschland"
@@ -562,8 +561,8 @@ Auffällig: sechs Termine haben Uhrzeiten ohne Minuten oder führende Null
    kopieren und die Platzhalter füllen; vdirsyncer die Kalender entdecken
    lassen (beim ersten Mal öffnet sich der Browser für die Anmeldung); danach
    immer über `scripts/kalender_sync.py` synchronisieren, nicht vdirsyncer
-   direkt. vdirsyncer nur auf dem PC; sein Status-Ordner liegt außerhalb von
-   `data/`. Einen regelmäßigen Lauf (Timer) gibt es noch nicht.
+   direkt. Danach einmal `zentrale adapter setup`: ab dann reisen Zugang und
+   Stand über die Cloud, jedes Gerät mit Timer kann die Brücke sein.
 8. git-Remote (optional): auf der GitHub-Weboberfläche ein **privates**,
    leeres Repo anlegen; im Spiegel-Repo (`~/.local/share/zentrale/kalender-git`)
    dieses Repo als Remote eintragen, mit dem vorhandenen SSH-Zugang, und von

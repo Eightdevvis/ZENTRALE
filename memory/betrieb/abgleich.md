@@ -111,10 +111,10 @@ Daten haben nur Apps ([../hub/cloud_app.md](../hub/cloud_app.md)). Jede sagt
 in `[daten]` (app.toml; eingebaute: `core/eingebaute_apps.py`), welche
 Muster ihr gehören; `core/abgleich_apps.py` schneidet sie mit der
 Positivliste (nur was dort **genau so** steht, deny by default) und gibt
-jedes Muster nur einer App. Eingebaut: fokus, notizen, kalender (nur
-`kalender_neben.json`), graph, assistent (Gedächtnis, Gespräche, Transkripte,
+jedes Muster nur einer App. Eingebaut: fokus, notizen, kalender (`kalender_neben.json`; Termine nur mit
+Kalender-Anschluss), graph, assistent (Gedächtnis, Gespräche, Transkripte,
 Rückmeldungen, Kontextpaket, Kosten), ablage, desk, werkstatt (eigene Apps +
-Schaufenster), mail (Regeln), klavier; dazu tutor (Ersatz-Eintrag, bis sein
+Schaufenster), mail (Regeln), klavier, adapter (Pflicht: immer, nie gefragt); dazu tutor (Ersatz-Eintrag, bis sein
 app.toml `[daten]` hat). Test: jedes Muster der Positivliste gehört genau
 einer App.
 
@@ -209,25 +209,52 @@ behandeln.
 ## Was abgeglichen wird
 
 **Dieselbe Positivliste wie die Datensicherung** (eine Stelle:
-`core/abgleich_auswahl.py`), ohne den Kalender. Nur was dort steht, verlässt
+`core/abgleich_auswahl.py`), ohne `ai_calendar.json`, dazu `NUR_ABGLEICH`
+(Kontextpaket, Brücke, Zugangsdaten). Nur was dort steht, verlässt
 den Rechner. Nie dabei: `ai_config.json` (Keys), `mail_secrets*`,
 Zwischenspeicher (Mail-Zähler, News), Sandbox, `_beiseite/`. Seit 2026-10-10
 dabei: `data/apps/**` — die selbst gebauten Apps der Werkstatt
 (`app.toml` + `icon.png`, [../hub/werkstatt.md](../hub/werkstatt.md));
 ihr Desk liegt ohnehin in `data/desk/`.
 
-**Kalender: bleibt bei seinem eigenen Weg.** Jeder Rechner gleicht seinen
-Kalender selbst mit Google ab (vdirsyncer, seit 07.10.2026,
-[../werkzeuge/kalender_ics_bauplan.md](../werkzeuge/kalender_ics_bauplan.md)).
-Liefe `data/kalender/` zusätzlich über die Mitte, gäbe es zwei Wege für
-dieselben Termine — genau die Doppelten und Geister, die der Kalender schon
-einmal hatte. Draußen also: `data/kalender/**`, `ai_calendar.json`, Verlauf
-und Snapshots (die sind ohnehin pro Rechner). **Drin bleibt
-`kalender_neben.json`** (Reisezeiten, Puffer, Ebenen): Google kennt sie nicht,
-ohne Mitte hätte jeder Rechner seine eigenen.
+**Kalender: über die Cloud, seit 2026-10-24** ([../hub/adapter.md](../hub/adapter.md)).
+Bis dahin glich jeder Rechner selbst mit Google ab, `data/kalender/**` stand
+in `NICHT_ABGLEICHEN` (ein zweiter Weg brächte Doppelte und Geister). Jetzt:
+`data/kalender/**` gehört zur App `kalender` und gleicht ab, **sobald es einen
+Kalender-Anschluss gibt** (`zentrale adapter setup`, bewusst; ohne Anschluss
+schneidet `abgleich_apps.jetzt_erlaubt` es heraus). Google fährt immer nur
+**ein** Gerät — wer den Mietvertrag hält. Gegen Geister und Doppelte:
+
+- **Ein Weg je Termin:** Google ↔ Brücke ↔ Cloud ↔ alle anderen. Dateiname
+  bleibt (vdirsyncer benennt nichts um) → keine Doppelten durch Runden.
+- **Erstes Mal je Gerät:** wer nicht der Ursprung des Anschlusses ist, legt
+  seinen alten `data/kalender/` vorher nach
+  `<abgleich_dir>/kalender-vor-cloud/<zeit>/` (nie gelöscht) und übernimmt
+  die Cloud — sonst gingen dort längst gelöschte Termine als „neu" hoch, und
+  die Brücke trüge sie zu Google. Merkzettel `kalender_dabei.json`; erst
+  danach darf das Gerät die Brücke nehmen.
+- **.ics je Termin zusammenführen** (`core/abgleich_ics.py`, Art `ics`): je
+  VEVENT (UID + RECURRENCE-ID) über die Basis; beide geändert → späterer
+  LAST-MODIFIED, sonst die Mitte, mit Hinweis. Nie die Text-Regel (zwei
+  Fassungen in einer Datei wären kein iCalendar mehr).
+- **Nur Termine wandern:** im Kalender-Ordner nur `*.ics`, `displayname`,
+  `color` — nie `.zentrale.lock` oder Zwischendateien.
+- **Je Gerät bleiben:** `ai_calendar.json` (alter Speicher), Verlauf und
+  Grabsteine (`kalender_verlauf/`), Snapshots — Löschen trägt der Abgleich
+  selbst (Grabsteine der Mitte), die Kalender-Grabsteine waren für rsync.
+- Die Löschsperre der Brücke bleibt: fehlen seit dem letzten Lauf mehr als 5
+  Termine, fährt sie nicht (ihre Liste reist mit dem Vertrag).
+
+**Zugangsdaten: nur im Abgleich, nie in der Sicherung.** `data/adapter/geheim.enc`
+steht in `GEHEIM` ⊂ `NUR_ABGLEICH`, nie in `SICHERN` (das Sicherungs-Skript
+schickt Klartext nach GitHub; Test `tests/test_adapter_geheim.py`). Sie
+gleicht nur angemeldet ab — Einträge mit dem Kontoschlüssel verschlüsselt,
+die Mitte verschlüsselt sie noch einmal. Regel: Art `json` (Eintrag für
+Eintrag). Vertrag und vdirsyncer-Stand (`data/adapter/bruecke/**`): Art
+`mitte` (beide geändert → die Mitte, ohne Hinweis).
 
 **Was mit der Umstellung NICHT mehr mitwandert** (rsync nahm es mit):
-`ai_config.json` — die Keys trägt Sasha auf jedem Rechner selbst ein;
+`ai_config.json` — die KI-Schlüssel kommen seit 2026-10-24 über den Adapter;
 `mail_secrets.enc`; der Konzept-Graph `ai_graph*.json` (seit 18.08. aus,
 groß, wäre eine Zeile in der Liste); Takt-Merkzettel und Caches (pro Rechner,
 werden neu erzeugt).
@@ -244,6 +271,8 @@ Inventar über `data/` (08.10.2026) und die Regel je Art:
 | **JSON mit Einträgen** | `lists.json`, `features.json`, `notes.json`, `graphs.json`, `g_*.json`, `melodies.json`, `sleep_quality.json`, `mail_rules.json`, `kalender_neben.json`, `gespraeche/*/kopf.json`, `ablage/*/kopf.json`, Tutor-Stände, `desk/*.canvas` (seit 2026-10-09: JSON Canvas, `nodes`/`edges` nach `id`) | Eintrag für Eintrag, Feld für Feld (unten). |
 | **Zähler-JSON** | `ai_usage.json` (Kostenbuch) | Wie JSON, aber haben beide eine Zahl verändert, werden beide Zuwächse addiert — sonst verschluckt der eine Rechner die Kosten des anderen. |
 | **Text** | `gedaechtnis/**/*.md`, Skills, Ablage-Fassungen `.md`, `apps/*/app.toml` (selbst gebaute Apps, seit 2026-10-10: ein Schlüssel je Zeile) | Zeilen-Zusammenführen über die Basis (Drei-Wege). |
+| **Termine** (seit 2026-10-24) | `kalender/**/*.ics` | Je VEVENT (UID + RECURRENCE-ID) über die Basis, `core/abgleich_ics.py` (oben „Kalender"). |
+| **Wer zuerst kam** | `adapter/bruecke/**` (Mietvertrag, vdirsyncer-Stand) | Beide geändert → die Mitte, ohne Hinweis. |
 | **Sonstiges** (Bilder, PDFs, kaputtes JSON) | Anhänge in der Ablage, Symbole `apps/*/icon.png` | Als Ganzes. |
 
 ### JSON, Eintrag für Eintrag
@@ -553,7 +582,8 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 |---|---|
 | `core/abgleich_auswahl.py` | die Positivliste (auch für die Datensicherung) |
 | `core/abgleich_schluessel.py` | Schlüssel anlegen, laden, ver-/entschlüsseln, versteckte Namen |
-| `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes |
+| `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes, Wer-zuerst-kam |
+| `core/abgleich_ics.py` | Termine je VEVENT (seit 2026-10-24) |
 | `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git und http (`HttpMitte`) |
 | `core/abgleich_apps.py`, `core/eingebaute_apps.py` | Apps mit Daten, die Wahl je App und Gerät, Übernahme der alten Bereiche |
 | `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |

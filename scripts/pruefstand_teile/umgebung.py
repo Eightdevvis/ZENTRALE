@@ -63,6 +63,16 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
     for name, wert in (echt.get("keys") or {}).items():
         if wert and not os.environ.get(name):
             os.environ[name] = str(wert)
+    # Seit 2026-10-24 liegen die Keys im Adapter (core/adapter_geheim.py) —
+    # ai_config.json ist nur noch Rückfall. Echte Keys, echte Kosten, wie oben.
+    try:
+        import adapter_geheim
+        for name in adapter_geheim.ki_namen(daten):
+            wert = adapter_geheim.lesen(adapter_geheim.KI + name, daten)
+            if wert and not os.environ.get(name):
+                os.environ[name] = wert
+    except Exception as e:      # noqa: BLE001
+        print(f"[prüfstand] Keys aus dem Adapter nicht lesbar: {e}")
     # Ohne Monatsdeckel: ab Sashas Deckel wechselte der Chat auf den billigsten
     # Anbieter — mitten in einem Durchgang wäre die Messung dann keine. Der
     # Prüfstand hat seine eigene Grenze (pruefstand_budget_monat, geprüft in

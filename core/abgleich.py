@@ -39,6 +39,8 @@ import abgleich_auswahl as auswahl
 import abgleich_mitte
 import abgleich_schluessel as schluessel
 import abgleich_zusammenfuehren as regeln
+import adapter
+import adapter_geheim
 import ai_config
 import dateien
 import konto
@@ -488,6 +490,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
             muster = abgleich_apps.muster()
             if not trocken:
                 _vorhaben_nachholen(wurzel, mitte)
+                _adapter_vorher(wurzel, muster)
             for _versuch in range(4):
                 stand, lesen, namen = mitte.holen()
                 basis_stand, basis = _basis_lesen()
@@ -533,6 +536,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 kennung = getattr(mitte, "echte_kennung", lambda k: k)(kennung)
                 _vorhaben_abschliessen(wurzel, bericht)
                 _zustand_erfolg(bericht, kennung)
+                _adapter_nachher(wurzel, muster)
                 return bericht
             raise abgleich_mitte.MitteFehler(
                 "Die Mitte hat sich viermal hintereinander geändert — später nochmal.")
@@ -540,6 +544,30 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
         if not trocken:
             _zustand_fehler(str(e))
         raise
+
+
+# ── Der Adapter (memory/hub/adapter.md) ────────────────────────────────
+
+def _adapter_vorher(wurzel, muster):
+    """Zugangsdaten auf den Schlüssel bringen, der jetzt gilt (angemeldet →
+    Konto), und einen Kalender, der zum ersten Mal über die Cloud kommt,
+    sauber übernehmen (adapter.vor_abgleich). Ein Fehler beim Beiseitelegen
+    bricht den Abgleich ab — lieber kein Abgleich als Geister."""
+    try:
+        adapter_geheim.umschluesseln(wurzel=wurzel)
+    except Exception as e:      # noqa: BLE001 — Zugangsdaten sind Beiwerk des Abgleichs
+        print(f"[abgleich] Zugangsdaten nicht umgeschlüsselt: {e}")
+    adapter.vor_abgleich(wurzel, ordner(), muster)
+
+
+def _adapter_nachher(wurzel, muster):
+    """Merken, dass der Kalender mitläuft; frisch angekommene KI-Schlüssel
+    gleich in die Umgebung (ein neues Gerät hat so ohne Neustart eine KI)."""
+    try:
+        adapter.nach_abgleich(ordner(), muster)
+        adapter_geheim.schluessel_einspielen(wurzel)
+    except Exception as e:      # noqa: BLE001
+        print(f"[abgleich] Adapter nach dem Abgleich: {e}")
 
 
 # ── Zustand ────────────────────────────────────────────────────────────

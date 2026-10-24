@@ -22,6 +22,13 @@ Warum nicht vdirsyncer direkt (memory/werkzeuge/kalender_ics_bauplan.md):
      kalender_sync_zustand.py): letzter Versuch, letzter Erfolg, Fehler im
      Klartext („Google-Zugang abgelaufen — neu anmelden"). ZENTRALE zeigt ihn
      an — ein abgelaufener Zugang blieb vorher tagelang unbemerkt.
+  6. (24.10.2026, der Adapter — memory/hub/adapter.md) Gibt es einen
+     Kalender-Anschluss, fährt immer nur EIN Gerät die Brücke zu Google: wer
+     den Mietvertrag hält (core/adapter_bruecke.py). Jeder Lauf auf jedem
+     Gerät: Brücke frei oder meine? → nehmen → abgleichen → kam mein Name
+     zurück, Google abgleichen, sonst nichts tun. Die Konfiguration erzeugt
+     der Adapter aus dem Anschluss (core/adapter_vdirsyncer.py), Zugang und
+     Token kommen verschlüsselt aus der Cloud. Ohne Anschluss: wie bisher.
 Alle Argumente werden an `vdirsyncer sync` durchgereicht (z. B. ein Paar).
 Exit-Code = der von vdirsyncer (1, wenn ZENTRALE nicht auf ics steht;
 2 Löschsperre; 3 Google-Sicherung fehlgeschlagen).
@@ -126,6 +133,45 @@ def _google_sichern(exe) -> bool:
 
 
 def main(argv=None) -> int:
+    """Ein Lauf. Mit Kalender-Anschluss über den Adapter (nur die Brücke
+    fährt), sonst wie bisher mit der eigenen Konfiguration."""
+    a = _anschluss()
+    if a is None:
+        return _ein_lauf(argv)
+    return _ueber_adapter(a, argv)
+
+
+def _anschluss():
+    try:
+        import adapter
+        return adapter.kalender_anschluss()
+    except Exception as e:      # noqa: BLE001 — ohne Adapter gilt der alte Weg
+        print("Adapter nicht lesbar:", e)
+        return None
+
+
+def _ueber_adapter(a, argv) -> int:
+    import adapter_ablauf
+    from pathlib import Path
+    cal = Path(kalender.CAL_PATH)
+    vdir = kalender_speicher.pfade(cal, kalender.ICS_DIR)["vdir"]
+    lauf = adapter_ablauf.bruecke_lauf(a, cal.parent.parent, vdir, lambda _cfg: _ein_lauf(argv))
+    if lauf.art == "gefahren":
+        return lauf.code
+    if lauf.art == "andere":
+        m = lauf.miete or {}
+        print(f"Google-Seite fährt {m.get('inhaber')} (bis {m.get('ablauf')}) — hier nichts zu tun.")
+        kalender_sync_zustand.uebernehmen(m.get("zustand"))
+        return 0
+    if lauf.art == "fehlt":
+        print("Nicht gesynct:", lauf.text)
+        kalender_sync_zustand.schreiben(1, "einrichtung", lauf.text)
+        return 1
+    print(f"Nicht gesynct ({lauf.art}): {lauf.text}")
+    return 0
+
+
+def _ein_lauf(argv=None) -> int:
     """Ein Lauf; danach steht sein Ergebnis im Sync-Zustand — auch bei einer
     Ausnahme (die danach weiterfliegt, damit das Journal sie zeigt)."""
     _AUSGABE.clear()
@@ -156,7 +202,7 @@ def _zustand(code, stufe, fehler=None) -> None:
 
 def _lauf(argv, stufe) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if kalender_speicher.modus() != "ics":
+    if kalender_speicher.modus(kalender.CAL_PATH) != "ics":
         print("Kalender steht nicht auf 'ics' (Einstellung kalender_speicher) — "
               "kein Sync. Erst umziehen: scripts/kalender_migrieren.py.")
         stufe[0] = "einrichtung"

@@ -16,6 +16,8 @@ import difflib
 import json
 from collections import Counter
 
+import abgleich_ics
+
 FEHLT = None   # „gibt es auf dieser Seite nicht" (Datei oder Wert)
 
 # Felder, bei denen der spätere Wert ohne Hinweis gewinnt: es sind
@@ -36,9 +38,24 @@ class Ergebnis:
 
 
 def art(rel: str, *fassungen) -> str:
-    """json | zaehler | zeilen | text | ganz | abgeleitet — nach Pfad, Endung, Inhalt."""
+    """json | zaehler | zeilen | text | ganz | abgeleitet | ics | mitte — nach
+    Pfad, Endung, Inhalt."""
     if rel.startswith("data/mobil/"):
         return "abgeleitet"
+    # Der Mietvertrag der Brücke (core/adapter_bruecke.py) und der Stand von
+    # vdirsyncer, der mit ihm reist: wer zuerst in der Mitte war, hat ihn.
+    # Feld für Feld zusammengeführt bekäme ein Gerät den Namen, das andere die
+    # Ablaufzeit — und beide führen.
+    if rel.startswith("data/adapter/bruecke/"):
+        return "mitte"
+    # Die Zugangsdaten des Adapters (core/adapter_geheim.py): JSON mit je
+    # Eintrag verschlüsseltem Wert — Eintrag für Eintrag wie jede JSON-Datei.
+    if rel == "data/adapter/geheim.enc":
+        return "json"
+    # Termine (seit 2026-10-24 über die Cloud): je VEVENT, nie als Text — die
+    # Text-Regel schriebe zwei Fassungen in die Datei, kein iCalendar mehr.
+    if rel.startswith("data/kalender/") and rel.endswith(".ics"):
+        return "ics"
     if rel.endswith("ai_usage.json"):
         return "zaehler"
     # .canvas (Desk View, JSON Canvas, 2026-10-09) ist JSON: nodes/edges mit
@@ -81,7 +98,12 @@ def zusammenfuehren(rel, basis, lokal, mitte, name_lokal="hier") -> Ergebnis:
         # Neu erzeugt aus den Daten dieses Rechners (Kontextpaket fürs Handy):
         # die frische Fassung von hier gilt, ein Widerspruch ist keiner.
         return Ergebnis(lokal)
+    if a == "mitte":
+        return Ergebnis(mitte)
     try:
+        if a == "ics":
+            inhalt, hinweise = abgleich_ics.zusammenfuehren(basis, lokal, mitte)
+            return Ergebnis(inhalt, hinweise)
         if a in ("json", "zaehler"):
             return _json_datei(basis, lokal, mitte, zaehler=(a == "zaehler"))
         if a == "zeilen":
@@ -89,7 +111,7 @@ def zusammenfuehren(rel, basis, lokal, mitte, name_lokal="hier") -> Ergebnis:
         if a == "text":
             return _text(basis, lokal, mitte, name_lokal)
     except (ValueError, UnicodeDecodeError):
-        pass   # kaputtes JSON o. ä.: als Ganzes behandeln
+        pass   # kaputtes JSON/iCalendar o. ä.: als Ganzes behandeln
     return Ergebnis(mitte, ["beide Fassungen verschieden — die aus der Mitte bleibt"])
 
 

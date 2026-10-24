@@ -13,6 +13,10 @@ import abgleich            # noqa: E402  (Kern, über zentrale_cli/__init__ im P
 import abgleich_apps       # noqa: E402
 import abgleich_mitte      # noqa: E402
 import abgleich_schluessel  # noqa: E402
+import adapter             # noqa: E402
+import adapter_ablauf      # noqa: E402
+import adapter_bruecke     # noqa: E402
+import adapter_geheim      # noqa: E402
 import ai_config           # noqa: E402
 import cloud_api           # noqa: E402
 import cloud_nutzung       # noqa: E402
@@ -90,6 +94,9 @@ def login(term):
 
 
 def logout(term):
+    # Vor dem Abmelden die Zugangsdaten auf den Geräteschlüssel — mit dem
+    # Kontoschlüssel verschwände sonst auch ihr Schlüssel (core/adapter_geheim.py).
+    adapter_geheim.vor_abmelden()
     term.sag(t("logout_ok") if konto.abmelden() else t("logout_none"))
     return 0
 
@@ -189,6 +196,7 @@ def sync(term):
     if abgleich.mitte_art() == "http" and not konto.angemeldet():
         term.sag(t("not_logged_in"))
         return 1
+    _ki_uebernehmen(term, still=True)
     neue_apps_fragen(term)
     try:
         b = abgleich.abgleichen(WURZEL)
@@ -218,6 +226,9 @@ def _apps_zeilen(z, tabelle):
     zeilen = [(app_name("cloud")[0], t("st_app_cloud_on") if z["cloud"] else t("st_app_cloud_off"))]
     e = z["apps"]
     for n in tabelle:
+        if tabelle[n].get("pflicht"):
+            zeilen.append((app_name(n, tabelle)[0], t("st_app_adapter", n=len(adapter.alle()))))
+            continue
         stand = ("st_app_on" if e is None or e.get(n) else
                  "st_app_off" if n in e else "st_app_open")
         zeilen.append((app_name(n, tabelle)[0], t(stand)))
@@ -259,6 +270,91 @@ def status(term):
             term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
     nutzung_warnung(term)
+    return 0
+
+
+# ── Adapter (core/adapter.py, memory/hub/adapter.md) ───────────────────
+
+def _uhr_kurz(iso):
+    import datetime
+    try:
+        return datetime.datetime.fromisoformat(iso).astimezone().strftime("%d.%m. %H:%M")
+    except (TypeError, ValueError):
+        return str(iso)
+
+
+def _bruecke_text(a):
+    if not adapter.braucht_bruecke(a):
+        return t("ad_bridge_none")
+    if adapter_ablauf.nur_lokal():
+        return t("ad_bridge_local")
+    m = adapter_bruecke.lesen(a["id"])
+    if not m:
+        return t("ad_bridge_free")
+    bis = _uhr_kurz(m.get("ablauf"))
+    if adapter_bruecke.abgelaufen(m):
+        return t("ad_bridge_expired", wer=m.get("inhaber"), bis=bis)
+    return t("ad_bridge_holds", wer=m.get("inhaber"), bis=bis)
+
+
+def _anschluss_status(a):
+    if a.get("art") == "ki-anbieter":
+        namen = adapter_geheim.ki_namen()
+        lesbar = [n for n in namen if adapter_geheim.lesen(adapter_geheim.KI + n)]
+        if len(lesbar) == len(namen):
+            return t("ad_keys", n=len(lesbar))
+        return t("ad_keys_unreadable", n=len(lesbar), m=len(namen) - len(lesbar))
+    if a.get("speist") == "kalender":
+        import kalender_sync_zustand
+        b = kalender_sync_zustand.bewerten()
+        return b.get("hinweis") or b.get("kurz") or t("ad_cal_unknown")
+    return ""
+
+
+def adapter_liste(term):
+    """`zentrale adapter`: die Anschlüsse, wer die Brücke fährt (nur lesen —
+    die Brücke wechselt von selbst)."""
+    alle = adapter.alle()
+    term.sag(t("ad_title"), "fett")
+    if not alle:
+        term.sag(t("ad_none"))
+        return 0
+    kopf = t("ad_head")
+    zeilen = [(a["id"], a["art"], a["speist"], _bruecke_text(a), _anschluss_status(a))
+              for a in alle.values()]
+    breiten = [max(len(str(z[i])) for z in zeilen + [kopf]) + 2 for i in range(4)]
+    term.sag("  " + term.f("".join(k.ljust(b) for k, b in zip(kopf, breiten)) + kopf[4], "blass"))
+    for z in zeilen:
+        term.sag("  " + "".join(str(v).ljust(b) for v, b in zip(z, breiten)) + str(z[4]))
+    return 0
+
+
+def _ki_uebernehmen(term, still=False):
+    r = adapter_ablauf.einrichten(kalender=False)["ki"]
+    if r["uebernommen"]:
+        term.sag(t("ad_setup_ki", liste=", ".join(r["uebernommen"])), "gut")
+    elif not still:
+        term.sag(t("ad_setup_ki_none"))
+    if r["behalten"]:
+        term.sag(t("ad_setup_ki_kept", liste=", ".join(r["behalten"])), "warn")
+
+
+def adapter_setup(term):
+    """`zentrale adapter setup`: was dieses Gerät schon angekabelt hat in den
+    Adapter holen. Der Kalender-Umstieg passiert genau hier, bewusst."""
+    import adapter_vdirsyncer
+    _ki_uebernehmen(term)
+    r = adapter_ablauf.einrichten(vdir=os.path.join(WURZEL, "data", "kalender"))
+    k = r["kalender"]
+    if k == "angelegt":
+        term.sag(t("ad_setup_cal_created"), "gut")
+    elif k == "vorhanden":
+        term.sag(t("ad_setup_cal_exists"))
+    elif k == "kein_paar":
+        term.sag(t("ad_setup_cal_nopair"), "warn")
+    else:
+        term.sag(t("ad_setup_cal_none", pfad=adapter_vdirsyncer.vorgabe_config()))
+    term.sag(t("ad_setup_next"), "blass")
     return 0
 
 
@@ -385,4 +481,5 @@ def tui(term):
 
 
 FEHLER = (konto.KontoFehler, cloud_api.CloudFehler, abgleich_mitte.MitteFehler,
-          abgleich_schluessel.SchluesselFehler, ValueError)
+          abgleich_schluessel.SchluesselFehler, adapter.AdapterFehler,
+          adapter_geheim.GeheimFehler, ValueError)

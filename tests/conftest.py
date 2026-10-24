@@ -109,6 +109,12 @@ os.environ.setdefault("ZENTRALE_APPS_ORDNER", os.path.join(_DATEN_TMP, "apps"))
 # Anbindungs-Beschreibungen (core/werkzeug_erzeuger/anbindung.py, 2026-10-11):
 # im Betrieb data/anbindungen/. Dazu unten pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_ANBINDUNGEN_DIR", os.path.join(_DATEN_TMP, "anbindungen"))
+# Der Adapter (core/adapter.py, 2026-10-24) schon beim Einsammeln: providers
+# legt beim Import die Schlüssel aus dem Adapter in die Umgebung — nie Sashas.
+os.environ.setdefault("ZENTRALE_ADAPTER_ORDNER", os.path.join(_DATEN_TMP, "adapter"))
+os.environ.setdefault("ZENTRALE_ADAPTER_LAUF", os.path.join(_DATEN_TMP, "adapter_lauf"))
+os.environ.setdefault("ZENTRALE_ADAPTER_SCHLUESSEL", os.path.join(_DATEN_TMP, "adapter.schluessel"))
+os.environ.setdefault("ZENTRALE_VDIRSYNCER_CONFIG", os.path.join(_DATEN_TMP, "keine-vdirsyncer-config"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -371,6 +377,18 @@ def _desk_frisch(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _anbindungen_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_ANBINDUNGEN_DIR", str(_frisch(_test_ordner, "anbindungen")))
+    yield
+
+
+# 7e1a. Jeder Test hat seinen eigenen Adapter (core/adapter.py, 2026-10-24):
+# Anschlüsse, Zugangsdaten, Geräteschlüssel, erzeugte vdirsyncer-Konfiguration
+# — nie Sashas echte, und nie seine ~/.config/vdirsyncer/config.
+@pytest.fixture(autouse=True)
+def _adapter_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ADAPTER_ORDNER", str(_test_ordner / "adapter"))
+    monkeypatch.setenv("ZENTRALE_ADAPTER_LAUF", str(_test_ordner / "adapter_lauf"))
+    monkeypatch.setenv("ZENTRALE_ADAPTER_SCHLUESSEL", str(_test_ordner / "adapter.schluessel"))
+    monkeypatch.setenv("ZENTRALE_VDIRSYNCER_CONFIG", str(_test_ordner / "keine-vdirsyncer-config"))
     yield
 
 

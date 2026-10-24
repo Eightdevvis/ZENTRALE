@@ -47,6 +47,9 @@ data/*.bak*
 # Verschlüsselter Mail-Zugangsdaten-Blob (Ciphertext, aber default-safe nie
 # ins Repo). Entschlüsselt nur mit ZENTRALE_MAIL_KEY. Siehe core/mail_secrets.py.
 data/*.enc
+# Der Adapter (core/adapter.py): Anschlüsse, Brücken-Vertrag, verschlüsselte
+# Zugangsdaten — Sashas Daten, nie ins Code-Repo.
+data/adapter/
 # Der Kalender als iCalendar (memory/werkzeuge/kalender_ics_bauplan.md): der
 # vdir-Ordner, Verlauf, Snapshots und die umbenannte Alt-Datei. Alles davon ist
 # Sashas Terminkalender und gehoert nie ins Code-Repo — die Geschichte haelt

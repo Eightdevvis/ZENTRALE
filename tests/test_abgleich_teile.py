@@ -62,7 +62,13 @@ def test_text_ohne_widerspruch_hat_keine_rahmen():
     ("data/gedaechtnis/dossiers/x.md", True), ("data/gespraeche/g/pc.jsonl", True),
     ("data/kalender_neben.json", True),
     ("data/ai_config.json", False), ("data/mail_secrets.enc", False),
-    ("data/kalender/termine/a.ics", False), ("data/ai_calendar.json", False),
+    # Termine seit 2026-10-24 (nur mit Kalender-Anschluss, abgleich_apps),
+    # aber nie die Sperrdatei oder Zwischendateien im Kalender-Ordner.
+    ("data/kalender/termine/a.ics", True), ("data/kalender/termine/displayname", True),
+    ("data/kalender/.zentrale.lock", False), ("data/kalender/termine/.x.ics.tmp", False),
+    ("data/kalender/termine/notizen.txt", False),
+    ("data/adapter/geheim.enc", True), ("data/adapter/bruecke/google-kalender.json", True),
+    ("data/ai_calendar.json", False),
     ("data/news_digest.json", False), ("data/_beiseite/a.json", False),
     ("data/gedaechtnis/.sasha.md.123.456.tmp", False),
 ])

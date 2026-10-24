@@ -50,21 +50,44 @@ SICHERN = [
     # Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): app.toml + icon.png
     # je App — Sasha baut sie auf einem Rechner und will sie überall im Rad.
     "data/apps/**",
+    # Der Adapter (core/adapter.py, 2026-10-24): die Beschreibungen der
+    # Anschlüsse — nie ein Geheimnis darin (Schema). Die Zugangsdaten
+    # (geheim.enc) stehen bewusst NICHT hier, sondern unten in GEHEIM.
+    "data/adapter/anschluesse/*.json",
     "tutor/data/tutor_config.json",
     "tutor/data/aktiver_stand",
     "tutor/data/staende/**",
     "tutor/data/es/**",
 ]
 
-# Der Kalender gleicht sich auf jedem Rechner selbst mit Google ab
-# (vdirsyncer, seit 2026-10-07). Ein zweiter Weg über die Mitte brächte
-# Doppelte und Geister. kalender_neben.json (Reisezeiten, Puffer, Ebenen)
-# kennt Google nicht — die bleibt drin. Begründung: memory/betrieb/abgleich.md.
-NICHT_ABGLEICHEN = ["data/ai_calendar.json", "data/kalender/**"]
+# Nur abgeglichen, nie gesichert: was die alte Datensicherung im Klartext
+# nach GitHub trüge. Seit 2026-10-24 die Zugangsdaten des Adapters
+# (core/adapter_geheim.py) — sie verlassen das Gerät nur mit dem
+# Kontoschlüssel verschlüsselt, und nur über den Abgleich.
+# tests/test_adapter_geheim.py: daten_sichern greift nie danach.
+GEHEIM = ["data/adapter/geheim.enc"]
+
+# Bis 2026-10-24 stand hier auch data/kalender/**: jeder Rechner glich seinen
+# Kalender selbst mit Google ab. Seitdem fährt immer nur EIN Gerät die Brücke
+# zu Google (core/adapter_bruecke.py), alle anderen bekommen die Termine über
+# die Mitte — data/kalender/** gleicht ab, sobald es einen Kalender-Anschluss
+# gibt (abgleich_apps schneidet es sonst heraus). ai_calendar.json ist der
+# alte Speicher von vor dem .ics-Umzug: bleibt je Gerät.
+# Begründung: memory/betrieb/abgleich.md „Kalender".
+NICHT_ABGLEICHEN = ["data/ai_calendar.json"]
 # Nur im Abgleich: das Kontextpaket fürs Handy (core/mobil_kontext.py) —
-# abgeleitet, eine Sicherung braucht es nicht.
-NUR_ABGLEICH = ["data/mobil/kontext.json"]
+# abgeleitet, eine Sicherung braucht es nicht. Dazu der Mietvertrag der
+# Brücke mit dem Stand von vdirsyncer (core/adapter_bruecke.py) — gilt nur
+# zwischen den Geräten — und die Zugangsdaten (GEHEIM).
+NUR_ABGLEICH = ["data/mobil/kontext.json", "data/adapter/bruecke/**"] + GEHEIM
 ABGLEICH = [m for m in SICHERN if m not in NICHT_ABGLEICHEN] + NUR_ABGLEICH
+assert not set(GEHEIM) & set(SICHERN), "Zugangsdaten gehören nie in die Sicherung"
+
+# Im Kalender-Ordner sind nur Termine und die Namen/Farben der Ebenen Daten.
+# Die Sperrdatei (.zentrale.lock) und was vdirsyncer beim Schreiben kurz
+# hinlegt, wandern nie.
+_KALENDER = "data/kalender/"
+_KALENDER_NAMEN = ("displayname", "color")
 
 
 def passt(rel, muster=SICHERN):
@@ -75,6 +98,9 @@ def passt(rel, muster=SICHERN):
     # Zwischendateien von dateien.atomar_schreiben (".name.pid.ns.tmp"), die
     # ein Absturz liegen ließ, sind nie Daten.
     if name.startswith(".") and name.endswith(".tmp"):
+        return False
+    if rel.startswith(_KALENDER) and (name.startswith(".") or not (
+            name.endswith(".ics") or name in _KALENDER_NAMEN)):
         return False
     for m in muster:
         if m.endswith("/**"):

@@ -1,7 +1,10 @@
 # ZENTRALE-Kalender <-> Google abgleichen (vdirsyncer über scripts/kalender_sync.py).
 #
-# Seit 07.10.2026: jeder Rechner synct seinen Kalender selbst mit Google
-# (data/kalender/ ist aus dem Direktabgleich Laptop<->PC herausgenommen).
+# Seit 24.10.2026 mit dem Adapter (memory/hub/adapter.md): der Timer läuft auf
+# JEDEM Gerät, aber Google fährt nur, wer den Mietvertrag der Brücke hält —
+# alle anderen tun nichts, die Termine kommen über die Cloud. Fällt die
+# Brücke aus, übernimmt nach 15 min das nächste Gerät. Ohne Kalender-
+# Anschluss: wie bisher, jeder Rechner mit eigener vdirsyncer-Konfiguration.
 # Der Wrapper holt vorher eine Nur-Lese-Kopie von Google als Sicherung und
 # bricht ab, wenn lokal auffällig viele Termine fehlen — dann wird NICHTS
 # zu Google getragen. Ohne Netz scheitert er still und versucht es beim

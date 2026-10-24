@@ -32,6 +32,8 @@ EN = {
     "cmd_sync": ("sync", "sync now with your account"),
     "cmd_status": ("status", "account, device, last sync, what is synced"),
     "cmd_devices": ("devices", "list all devices of your account"),
+    "cmd_adapter": ("adapter", "connected services (AI keys, calendar) and which device bridges"),
+    "cmd_adapter_setup": ("adapter setup", "bring in what this device already has connected"),
     "cmd_cloud_usage": ("cloud usage", "how close the cloud is to its free limits (operator only)"),
     "cmd_update": ("update", "download and install the newest version"),
     "cmd_version": ("version", "show the installed version"),
@@ -133,6 +135,7 @@ EN = {
         "klavier": ("Melodies", "the piano"),
         "tutor": ("Tutor", "language tutor progress"),
         "cloud": ("Cloud", "account, sync, devices"),
+        "adapter": ("Adapter", "connected services: AI keys, calendar bridge"),
     },
     "setup_apps_found": "Apps with data (on this device or in your account): {liste}",
     "setup_nothing_yet": "Nothing to sync yet — new apps will ask when they have data.",
@@ -165,6 +168,7 @@ EN = {
     "st_app_on": "synced",
     "st_app_off": "stays on this device",
     "st_app_open": "not decided yet",
+    "st_app_adapter": "always synced — {n} connection(s)",
     "st_way": "Sync way",
     "st_notes": "Notes",
 
@@ -175,6 +179,28 @@ EN = {
     "dev_this": "(this device)",
     "hw": {"gpu": "GPU", "bildschirm": "display", "mikro": "mic", "lautsprecher": "speaker"},
     "dev_seen": "last seen {zeit}",
+
+    # ── Adapter (core/adapter.py) ───────────────────────────────────
+    "ad_title": "Adapter — connected services",
+    "ad_none": "No connections yet. 'zentrale adapter setup' brings in what this device already has.",
+    "ad_head": ("Connection", "Kind", "Feeds", "Bridge", "Status"),
+    "ad_bridge_none": "— (every device uses it itself)",
+    "ad_bridge_local": "this device (no account — local only)",
+    "ad_bridge_free": "free — the next device that runs takes it",
+    "ad_bridge_holds": "{wer} until {bis}",
+    "ad_bridge_expired": "free (was {wer}, expired {bis})",
+    "ad_keys": "{n} key(s) readable here",
+    "ad_keys_unreadable": "{n} key(s) readable, {m} not readable on this device",
+    "ad_cal_unknown": "no Google run seen yet",
+    "ad_setup_ki": "AI keys moved into the Adapter (encrypted): {liste}",
+    "ad_setup_ki_kept": "Kept in ai_config.json (the Adapter has a different value): {liste}",
+    "ad_setup_ki_none": "No AI keys left to move.",
+    "ad_setup_cal_created": ("Calendar connection 'google-kalender' created from this device's vdirsyncer setup.\n"
+                             "Events now sync through your account; only one device at a time talks to Google."),
+    "ad_setup_cal_exists": "Calendar connection already exists.",
+    "ad_setup_cal_none": "No vdirsyncer setup on this device ({pfad}) — no calendar connection.",
+    "ad_setup_cal_nopair": "The vdirsyncer setup has no pair writing into ZENTRALE's calendar folder — nothing created.",
+    "ad_setup_next": "Next: 'zentrale sync' — then every device of your account has it.",
 
     # ── Cloud-Nutzung (core/cloud_nutzung.py) ───────────────────────
     "use_title": "Cloud usage — Cloudflare free tier",

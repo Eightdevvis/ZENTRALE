@@ -14,10 +14,12 @@
 # nicht ins Repo.
 #
 # Drei Regeln, die hier nicht verhandelbar sind:
-#  1. Nur EIN Knoten (der PC) lässt vdirsyncer laufen. Der Laptop bekommt den
-#     Kalender über den gewohnten data/-Abgleich. Zwei vdirsyncer auf einem
-#     gemeinsam abgeglichenen Ordner würden sich gegenseitig für Änderungen
-#     halten.
+#  1. Nur EIN Gerät lässt vdirsyncer zugleich laufen. Seit 24.10.2026 regelt
+#     das der Adapter (memory/hub/adapter.md): diese Datei wird einmal mit
+#     `zentrale adapter setup` übernommen, danach erzeugt jedes Gerät seine
+#     Konfiguration selbst, und nur der Inhaber der Brücke fährt. Zwei
+#     vdirsyncer auf einem gemeinsam abgeglichenen Ordner würden sich
+#     gegenseitig für Änderungen halten.
 #  2. status_path liegt AUSSERHALB von data/. Der Status beschreibt, was DIESER
 #     Knoten zuletzt gesehen hat; vom Sync auf einen anderen Knoten kopiert,
 #     wäre er falsch.

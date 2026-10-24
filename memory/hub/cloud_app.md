@@ -57,7 +57,7 @@ Zieht eine App aus (wie Tutor, Karte), kommt ihr `[daten]` aus ihrem
 |---|---|
 | lists | `fokus` |
 | notes | `notizen` |
-| calendar | `kalender` |
+| calendar | `kalender` (Termine seit 2026-10-24 mit, sobald es einen Kalender-Anschluss gibt) |
 | graphs | `graph` |
 | memory, conversations | `assistent` |
 | documents | `ablage` |
@@ -66,6 +66,7 @@ Zieht eine App aus (wie Tutor, Karte), kommt ihr `[daten]` aus ihrem
 | mail | `mail` |
 | music | `klavier` |
 | tutor | `tutor` (echtes `app.toml`) |
+| — (neu 2026-10-24) | `adapter` — Pflicht: immer abgeglichen, nie gefragt ([adapter.md](adapter.md)) |
 
 Die Positivliste `core/abgleich_auswahl.py` bleibt der Schutz: ein Muster aus
 einem Manifest wird nur abgeglichen, wenn es auch dort steht (deny by

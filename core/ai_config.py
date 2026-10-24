@@ -25,6 +25,15 @@
 # noch ein keys-Block, wird er IGNORIERT und laut angemahnt (siehe _inject_keys)
 # — dort gehört kein Secret mehr hin.
 #
+# ── Seit 2026-10-24: der Adapter hält die Keys ──────────────────────────
+# Die Schlüssel ziehen verschlüsselt in den Adapter (core/adapter_geheim.py,
+# memory/hub/adapter.md) und gleichen so mit dem Konto auf jedes Gerät ab.
+# Die Rangfolge ist jetzt: echte Umgebung > Adapter > ai_config.json. Diese
+# Datei bleibt nur Rückfall: was hier noch steht, wird injiziert wie bisher,
+# und adapter_geheim.ki_uebernehmen() trägt es hinüber (und hier aus, sobald
+# es dort lesbar ist). `injiziert` sagt, welche Umgebungs-Namen von hier oder
+# vom Adapter stammen — die darf der Adapter überschreiben, echte nicht.
+#
 # ── Migration der SWITCHES (kein Secret) ────────────────────────────────
 # cloud_enabled/local_enabled werden weiter aus ai_config.json gelesen, mit
 # data/tutor_config.json als Fallback (setting()). Das ist harmlos (kein Key)
@@ -51,6 +60,7 @@ _LEGACY_PATH  = os.path.join(_DIR, "tutor_config.json")   # Migrations-Fallback
 
 _config = {}
 _legacy = {}
+injiziert = set()
 
 
 def _read(path: str) -> dict:
@@ -77,6 +87,7 @@ def _inject_keys():
     for name, val in (_config.get("keys") or {}).items():
         if val and not os.environ.get(name):
             os.environ[name] = str(val)
+            injiziert.add(name)
 
     stale = [k for k, v in (_legacy.get("keys") or {}).items() if v]
     if stale:
@@ -89,6 +100,24 @@ _overrides = {}   # Runtime-Overrides (Live-Umschalten, ohne Neustart)
 
 _load()
 _inject_keys()
+
+
+def alte_schluessel() -> dict:
+    """Die nicht-leeren Keys, die noch in data/ai_config.json stehen."""
+    return {k: v for k, v in (_config.get("keys") or {}).items() if v}
+
+
+def alte_schluessel_entfernen(namen) -> None:
+    """Keys aus data/ai_config.json austragen (sie liegen jetzt im Adapter).
+    Die Umgebung dieses Prozesses bleibt, wie sie ist."""
+    keys = dict(_config.get("keys") or {})
+    for n in namen:
+        keys.pop(n, None)
+    if keys:
+        _config["keys"] = keys
+    else:
+        _config.pop("keys", None)
+    _save()
 
 
 def setting(name: str, default=None):

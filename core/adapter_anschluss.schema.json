@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zentrale:adapter-anschluss:1",
+  "title": "Anschluss des Adapters (zentrale-anschluss/1)",
+  "description": "Ein fremder Dienst, an ZENTRALE angekabelt (memory/hub/adapter.md). Die Datei gleicht auf alle Geräte ab und enthält NIE ein Geheimnis: Zugangsdaten liegen verschlüsselt in data/adapter/geheim.enc, hier stehen nur Verweise darauf. Welches Gerät die Brücke zu einem Dienst fährt, steht hier nicht — das entscheidet der Mietvertrag (data/adapter/bruecke/<id>.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "id", "art", "speist"],
+  "properties": {
+    "format": {"const": "zentrale-anschluss/1"},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,40}$",
+           "description": "Auch der Dateiname: data/adapter/anschluesse/<id>.json."},
+    "art": {"enum": ["kalender-vdirsyncer", "ki-anbieter"],
+            "description": "kalender-vdirsyncer: Kalender über vdirsyncer (heute Google, später CalDAV) — eine Brücke. ki-anbieter: Schlüssel für KI-Anbieter — jedes Gerät nutzt sie selbst, keine Brücke."},
+    "titel": {"type": "string", "maxLength": 80},
+    "speist": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,40}$",
+               "description": "Die App, deren Daten der Anschluss füllt (kalender, assistent …)."},
+    "eingerichtet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"am": {"type": "string"}, "auf": {"type": "string"}},
+      "description": "Wann und auf welchem Gerät angelegt. Das Gerät 'auf' brachte die Daten mit; alle anderen übernehmen beim ersten Abgleich den Stand der Cloud."
+    },
+    "einstellungen": {"type": "object",
+                      "description": "Je Art. kalender-vdirsyncer: {vdirsyncer: {abschnitte: [...]}} — die Vorlage der vdirsyncer-Konfiguration, Geheimnisse und Pfade als Platzhalter ({\"$geheim\": …}, {\"$datei\": …}, {\"$ort\": \"kalender\"})."}
+  }
+}
