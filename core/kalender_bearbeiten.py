@@ -105,7 +105,7 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
                 ende: str | None = None, ort: str | None = None,
                 kategorie: str | None = None, kategorie_name: str | None = None,
                 quelle: dict | None = None, stil: dict | None = None,
-                typ: str | None = None, vorwarnung=None) -> bool:
+                typ: str | None = None, vorwarnung=None, soll_abstand=None) -> bool:
     """Neue Routine ab `seit` (dem gewählten Tag), wie calcurse „r".
     `typ`/`vorwarnung`: Termintyp deadline (kalender_deadline, 20.10.2026 —
     z. B. jede Woche Abgabe Fr 23:59), geprüft in kalender.add_routine.
@@ -131,6 +131,8 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
         extras["typ"] = typ
     if vorwarnung is not None:
         extras["vorwarnung"] = vorwarnung
+    if soll_abstand not in (None, ""):
+        extras["soll_abstand"] = soll_abstand          # Soll-Zeit (24.10.2026)
     return kalender.add_routine(layer or "termine", label.strip(), regel,
                                 time=_hhmm(time) if time else None, **extras)
 

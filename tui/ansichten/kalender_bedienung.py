@@ -18,7 +18,7 @@ import urllib.parse
 from datetime import date, timedelta
 
 from .basis import BEENDEN, api_call, kern_pfad
-from . import kalender_advanced, kalender_gruppen, kalender_motive, kalender_phasen
+from . import kalender_advanced, kalender_deadline, kalender_gruppen, kalender_motive, kalender_phasen
 from . import kalender_quellen as kq
 from . import kalender_kasten, kalender_stil
 from . import kalender_werkzeuge as kw
@@ -47,8 +47,9 @@ def _rest(esc="close", kasten=False, spruenge=True):
     """Was jede Ansicht hat: springen, gehe zu, erledigte, Rhythmus, (Tab),
     v, Esc, q. Ohne Text = geht, steht aber nicht in der Leiste."""
     t = list(_SPRUENGE) if spruenge else [(k, a) for k, a, *_x in _SPRUENGE]
+    # S = Modus Muss|Soll der Deadlines (24.10.2026), in A, B und C gleich
     t += [("g", "gehe_zu", "go to"), ("x", "erledigte", "show done"), ("X", "erledigte"),
-          ("R", "rhythmus", "rhythm")]
+          ("R", "rhythmus", "rhythm"), ("S", "modus", "must/should")]
     if kasten:
         t += [("tab", "kasten", "box"), ("shift+tab", "kasten")]
     return t + [("v", "ansicht", "view"), ("V", "ansicht"), ("esc", "schliessen", esc),
@@ -154,7 +155,7 @@ class Bedienung:
         ref = date.fromisoformat(K["ref"])
         # Mit dem Tag im Schlüssel: die Antwort trägt `today` (die Heute-
         # Markierung) — über Mitternacht darf sie nicht kleben bleiben.
-        schluessel = (K["stil"], K["ref"], uhr.heute().isoformat())
+        schluessel = (K["stil"], K["ref"], uhr.heute().isoformat(), self.modus())
         d = K.get("sdata")
         if d and d.get("_for") == schluessel:
             # Ein Fehlschlag bleibt nicht kleben: nach ein paar Sekunden neu
@@ -178,6 +179,8 @@ class Bedienung:
             self._vortag_phasen(d, ref)
         if not d.get("failed"):
             self._katalog_laden()
+            spaeter = self._soll_vorlauf(d) if self.modus() == kalender_deadline.SOLL else None
+            kalender_deadline.modus_anwenden(d, self.modus(), spaeter)
         d["_for"] = schluessel
         d["_um"] = time.monotonic()
         K["sdata"] = d
@@ -198,6 +201,53 @@ class Bedienung:
                  if kalender_motive.ist_phase(e)]
         if nacht:
             tage[vortag.isoformat()] = nacht
+
+    # ── Modus Muss | Soll der Deadlines (Taste S, 24.10.2026) ──────────
+    # Gilt pro Sitzung (K["modus"]) und reist beim Hot Reload mit
+    # (kalender.stand_fuer_neustart). Umschalten lädt neu: die Daten werden
+    # beim Holen umgelegt (kalender_deadline.soll_anwenden).
+    def modus(self) -> str:
+        return kalender_deadline.SOLL if self.K.get("modus") == kalender_deadline.SOLL \
+            else kalender_deadline.MUSS
+
+    def aktion_modus(self, _t):
+        soll = self.modus() != kalender_deadline.SOLL
+        self.K["modus"] = kalender_deadline.SOLL if soll else kalender_deadline.MUSS
+        self.W["idx"] = 0
+        self.W["msg"] = ("deadlines: soll (eigene abgabe)" if soll
+                         else "deadlines: muss (echte abgabe)")
+
+    def _soll_vorlauf(self, d) -> dict:
+        """Soll-Modus: die Tage NACH den Daten, bis SOLL_TAGE über ihr Ende —
+        eine Deadline nächste Woche kann ihr Soll noch in dieser haben."""
+        tage = {}
+        try:
+            ende = date.fromisoformat(d.get("end", ""))
+        except ValueError:
+            return tage
+        ziel, weiter = ende + timedelta(days=kalender_deadline.SOLL_TAGE), ende
+        for _ in range(3):
+            if weiter >= ziel:
+                break
+            d2 = self._holen("month", weiter + timedelta(days=1))
+            if d2.get("failed"):
+                break
+            tage.update({k: v for k, v in (d2.get("days") or {}).items() if k > ende.isoformat()})
+            try:
+                weiter = max(weiter + timedelta(days=1), date.fromisoformat(d2.get("end", "")))
+            except ValueError:
+                break
+        return tage
+
+    def roh_tag(self) -> date:
+        """Der Tag, zu dem der gewählte Termin gehört: im Soll-Modus steht
+        eine Deadline am Soll-Tag, geändert wird sie an ihrem Muss-Tag."""
+        ts = self.termine()
+        if ts:
+            t = ts[max(0, min(self.W["idx"], len(ts) - 1))]
+            if t.get("muss_tag"):
+                return date.fromisoformat(t["muss_tag"])
+        return self.tag()
 
     def _katalog_laden(self):
         """Die Namen der Gruppen einmal je Sitzung vom Backend (Rückfall:
@@ -366,24 +416,24 @@ class Bedienung:
     def aktion_ansehen(self, _t):
         roh = self.gewaehlt()
         if roh:
-            self.W["popup"] = kw.details(roh, self.tag(), self._quelle_vorschau(roh))
+            self.W["popup"] = kw.details(roh, self.roh_tag(), self._quelle_vorschau(roh))
 
     def aktion_aendern(self, _t):
         roh = self._termin()
         if roh:
-            self._starte(kw.formular_bearbeiten(roh, self.tag(), uhr.heute(),
+            self._starte(kw.formular_bearbeiten(roh, self.roh_tag(), uhr.heute(),
                                                 quellen=self._quellen_holen))
 
     def aktion_loeschen(self, _t):
         roh = self._termin()
         if roh:
-            self._starte(kw.dialog_loeschen(roh, self.tag()))
+            self._starte(kw.dialog_loeschen(roh, self.roh_tag()))
 
     def aktion_wiederholen(self, _t):
         roh = self._termin()
         if not roh:
             return
-        dl = kw.formular_wiederholen(roh, self.tag(), uhr.heute(), self._quellen_holen)
+        dl = kw.formular_wiederholen(roh, self.roh_tag(), uhr.heute(), self._quellen_holen)
         if dl is None:
             self.W["msg"] = "eine spanne wiederholt sich nicht"
         else:

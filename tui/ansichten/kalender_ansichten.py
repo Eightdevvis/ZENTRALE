@@ -372,6 +372,12 @@ def _sync_kopf(lw, y, links: int, rechts: int, daten) -> None:
         lw.setze(y, rechts - text_breite(text), text, ROLLE["sync_warn"])
 
 
+def _modus_kopf(lw, y, x, daten) -> int:
+    """Modus Muss|Soll (kalender_deadline) dezent hinter einen Titel."""
+    m = kalender_deadline.modus_text(daten)
+    return lw.setze(y, x, "· %s " % m, ROLLE["leer"]) if m else x
+
+
 def _zu_klein(breite: int, hoehe: int) -> list:
     lw = Leinwand(breite, hoehe)
     lw.setze(0, 0, kuerzen("zu schmal", breite), ROLLE["leer"])
@@ -483,7 +489,8 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "deadline": deadline,
         # Der API-Eintrag selbst: die Werkzeuge (kalender_werkzeuge.py) arbeiten
         # mit DERSELBEN Liste in DERSELBEN Reihenfolge wie die Ansicht.
-        "roh": e,
+        # Soll-Modus (kalender_deadline.soll_anwenden): roh = Original, dl = Kopie.
+        "roh": e.get("_echt") or e, "dl": e, "muss_tag": e.get("muss_tag"),
     }
 
 
@@ -751,6 +758,9 @@ def _a_liste(lw, y, x, w, h, daten, ab, heute, erledigte, tage, aw=None, jetzt=N
     dem laufenden bzw. nächsten von heute steht ein goldener ► (kalender_jetzt)."""
     aw = aw or {}
     yy = _paneel(lw, y, x, w, h, "Termine", aktiv=aw.get("fokus", "termine") == "termine")
+    m = kalender_deadline.modus_text(daten)
+    if m and w >= 20:                       # Modus Muss|Soll rechts in der Titelzeile
+        lw.setze(y + 1, x + w - 2 - text_breite(m), m, ROLLE["leer"])
     sel_tag, sel_idx = aw.get("tag"), aw.get("idx", 0)
     zeigen = aw.get("fokus", "termine") == "termine" and sel_tag is not None
     cx, cw = x + 2, w - 4
@@ -839,7 +849,7 @@ def _a_deadline(lw, y, cx, cw, t, gewaehlt):
     if gewaehlt:
         lw.setze(y, cx + 1, txt + " " * (cw - 1 - text_breite(txt)), _a_rolle("a_akzent") + INV)
         return
-    st = kalender_deadline.stufe(t["roh"], t["tag"])
+    st = kalender_deadline.stufe(kalender_deadline.dl(t), t["tag"])
     r = ROLLE["aus"] if t["aus"] else kalender_deadline.rolle(st, t["unv"])
     if kalender_deadline.flaeche(st) and not t["unv"] and not t["aus"]:
         r += INV
@@ -976,8 +986,10 @@ def ansicht_b(daten, breite: int, hoehe: int, erledigte: bool = False,
     lw.setze(0, 1, kuerzen("KALENDER · %s %d" % (MONATE[erster.month - 1].upper(),
                                                    erster.year), breite - 1),
              ROLLE["titel"])
-    _sync_kopf(lw, 0, 2 + text_breite("KALENDER · %s %d" % (
-        MONATE[erster.month - 1].upper(), erster.year)) + 2, breite - 1, daten)
+    x_modus = 2 + text_breite("KALENDER · %s %d" % (MONATE[erster.month - 1].upper(), erster.year))
+    if x_modus + 6 < breite:
+        x_modus = _modus_kopf(lw, 0, x_modus, daten)
+    _sync_kopf(lw, 0, x_modus + 2, breite - 1, daten)
     for c, wt in enumerate(WT):
         lw.setze(1, 2 + c * (cw + 1), wt[:cw],
                  ROLLE["wochenende"] if c >= 5 else ROLLE["werktag"])
@@ -1071,7 +1083,7 @@ def _b_woche(lw, y, r, cw, mo, erster, letzter, heute, daten, spannen, erledigte
                 lw.setze(yy, x0, txt + " " * (cw - text_breite(txt)), _a_rolle("a_akzent") + INV)
                 continue
             if t["deadline"]:                # Leucht-Rot mit ⚑ (kalender_deadline)
-                st = kalender_deadline.stufe(t["roh"], t["tag"])
+                st = kalender_deadline.stufe(kalender_deadline.dl(t), t["tag"])
                 r = ROLLE["aus"] if t["aus"] else kalender_deadline.rolle(st, t["unv"])
                 txt = kuerzen(kalender_deadline.b_text(t, cw), cw)
                 if kalender_deadline.flaeche(st) and not t["unv"] and not t["aus"]:
@@ -1255,7 +1267,10 @@ def ansicht_c(daten, breite: int, hoehe: int, erledigte: bool = False,
     else:
         span = "%s–%s" % (mo.strftime("%d.%m."), so.strftime("%d.%m."))
     _kasten(lw, 0, 0, breite, hoehe, "woche %d · %s" % (kw, span))
-    _sync_kopf(lw, 0, 4 + text_breite("woche %d · %s" % (kw, span)) + 2, breite - 2, daten)
+    x_modus = 4 + text_breite("woche %d · %s" % (kw, span))
+    if x_modus + 8 < breite:
+        x_modus = _modus_kopf(lw, 0, x_modus, daten)
+    _sync_kopf(lw, 0, x_modus + 2, breite - 2, daten)
 
     tage = [_c_bloecke(daten, d, erledigte) for d in woche]
     x0 = 1 + g

@@ -137,6 +137,13 @@ CODES = {
     "K-DEADLINE-SPANNE": (
         "Ein mehrtägiger Termin kann keine Deadline sein.",
         "Die Deadline als eigenen Termin am letzten Tag mit Uhrzeit anlegen."),
+    # Soll-Zeit einer Deadline (KALENDER, 2026-10-24)
+    "K-SOLL-UNGUELTIG": (
+        "Der Soll-Abstand ist keine gültige Dauer vor der Muss-Zeit.",
+        "Minuten ≤ 0 oder Text wie -3d18h angeben (höchstens 28 Tage vorher); \"\" entfernt die Soll-Zeit."),
+    "K-SOLL-NACH-MUSS": (
+        "Die Soll-Zeit läge nach der Muss-Zeit.",
+        "Negativen Abstand nehmen (Soll liegt vor der Abgabe), z. B. -3d18h."),
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt.",
         "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),

@@ -88,12 +88,13 @@ class Kalender:
         # sdata     : letzte /api/calendar-Antwort (Bedienung.daten() holt neu)
         # data      : von der Bedienung beim Neuladen mit geleert (Altlast-frei)
         # showhidden: Deaktiviertes/Ausgefallenes zeigen (Taste x)
+        # modus     : Deadlines „muss" (echte Abgabe) | „soll" (eigene), Taste S
         # w         : Zustand der Bedienung (Auswahl, Kasten, Meldung)
         # ref wird hier nur vorbelegt: oeffnen() setzt heute, tageswechsel()
         # rückt nach (Ausnahme im Wächter tests/test_tageswechsel.py).
         self.K = z.K = {"active": False, "ref": uhr.heute().isoformat(),
                         "stil": "A", "sdata": None, "data": None,
-                        "showhidden": False, "msg": ""}
+                        "showhidden": False, "msg": "", "modus": "muss"}
         self.bedienung = Bedienung(self)
         self._farben_daten = None
         self._farben_laden()
@@ -148,7 +149,8 @@ class Kalender:
         auf DEM heutigen, auch wenn Mitternacht dazwischen lag."""
         tag = self.bedienung.tag()
         return {"stil": self.K.get("stil"), "ref": self.K.get("ref"),
-                "tag": tag.isoformat(), "heute": tag == uhr.heute()}
+                "tag": tag.isoformat(), "heute": tag == uhr.heute(),
+                "modus": self.bedienung.modus()}
 
     def stand_nach_neustart(self, d: dict):
         K = self.K
@@ -156,6 +158,8 @@ class Kalender:
             K["stil"] = d["stil"]
         if d.get("ref"):
             K["ref"] = d["ref"]
+        if d.get("modus") in ("muss", "soll"):      # Deadlines Muss|Soll (Taste S)
+            K["modus"] = d["modus"]
         if d.get("tag"):
             alt = date.fromisoformat(d["tag"])
             self.bedienung.setze_tag(alt)

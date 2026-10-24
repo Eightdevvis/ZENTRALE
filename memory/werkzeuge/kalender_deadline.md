@@ -112,3 +112,48 @@ Tests: `tests/test_kalender_deadline.py` (Kern, .ics, Routen),
 `tests/test_kalender_deadline_tui.py` (Stapel, Stufen über die Zeit,
 Formular). Bildschirm-Probe 20.10.2026 im Job-Ordner (Woche/Monat/Liste,
 nachts und tags).
+
+## Soll-Zeit und Modus Muss | Soll (24.10.2026)
+
+Sasha: „eigene deadlines hinzufügen wird mir zu wirr … KEINE DOPPELTEN
+deadlines im kalender, ein modus, in dem man soll und muss umschalten kann."
+EIN Eintrag: `time` ist die **Muss**-Zeit (Uni-Abgabe), `soll_abstand`
+(Minuten ≤ 0, optional) legt die eigene **Soll**-Abgabe davor. Als Abstand,
+damit es bei wöchentlichen Serien jede Woche stimmt.
+
+- **Kern** (`core/kalender_deadline.py`): `soll_pruefen` (Minuten ≤ 0 oder
+  „-3d18h"; höchstens `SOLL_HOECHSTENS` = 28 Tage), `soll_von`,
+  `soll_zeitpunkt`, `soll_muss_text`. Nur bei typ deadline
+  (`UNBEKANNTES-FELD`); `SOLL-NACH-MUSS` (positiv), `SOLL-UNGUELTIG`; typ
+  normal entfernt es mit. `""` entfernt die Soll-Zeit.
+- **.ics**: `X-ZENTRALE-SOLL:-P2DT18H` (ISO-8601-Dauer) am VEVENT; Google
+  ignoriert es, der Speicher liest es verlustfrei zurück.
+- **Schnittstelle**: `soll_abstand` an `POST /api/calendar/entry|routine`,
+  `POST /api/calendar/typ`, `PUT /api/calendar/eintrag|routine` (`new`),
+  Kern `eintrag_aendern/routine_aendern/typ_setzen(..., soll_abstand=)`.
+  `GET /api/calendar` (entries_in_range) liefert `soll_abstand` und
+  `soll_zeit` („2026-10-27T18:00", dieses Vorkommen).
+- **Alarm/KI**: Muss bleibt die Wahrheit. Das Vorwarn-Fenster beginnt die
+  Vorwarnung vor der SOLL-Zeit und endet mit Muss; Text „Deadline Analysis
+  HÜ in 3 Tagen (Soll: Di 27.10. 18:00, Muss: Fr 30.10. 12:00)". Imprint
+  „(in 3 Tagen · Soll: …, Muss: …)" plus ein Satz (Soll = eigene
+  Wunsch-Abgabe, rechne mit Muss); KI-Zeile „Soll -2d18h vor Muss".
+- **TUI, Taste `S`** (A, B, C; Leiste „must/should"): Modus `muss` | `soll`,
+  dezent im Kopf („· soll"; A rechts im Titel „Termine"). Im Soll-Modus
+  legt `kalender_deadline.soll_anwenden` jede Deadline mit Soll-Zeit beim
+  Holen auf Soll-Tag und -Uhrzeit um (Kopie mit `muss_tag`, `_echt` = der
+  API-Eintrag) — alle Ansichten, Auswahl, Linie und Leuchten (relativ zur
+  aktiven Zeit) folgen von selbst, nie zwei Linien. Ohne Soll-Zeit sieht
+  eine Deadline in beiden Modi gleich aus. Die Werkzeuge ändern immer das
+  Original am Muss-Tag (`Bedienung.roh_tag`). Soll-Modus holt
+  `SOLL_TAGE` über das Ende der Daten voraus (Muss nächste Woche, Soll in
+  dieser). Hinweis nur winzig: A „· muss Fr 12:00", Ansehen-Fenster
+  „Soll Di 27.10. 18:00" / „Muss Fr 30.10. 12:00". Modus gilt pro Sitzung
+  (`K["modus"]`) und reist beim Hot Reload mit.
+- **Formular** → Advanced → Zeile **Soll** (feste Plätze, gedämpft „—"
+  außer bei deadline): „Di 18:00" = der letzte Di 18:00 vor/an der
+  Muss-Zeit (aus Tag + Von des Formulars), oder Abstand „-2d18h"/„2d18h";
+  leer = keine. Die Hilfezeile zeigt die andere Schreibweise („= 2d18h vor
+  muss"). Vorbelegt als Wochentag, solange weniger als eine Woche davor.
+
+Tests: `tests/test_kalender_soll.py`.

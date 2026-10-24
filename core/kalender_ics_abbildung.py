@@ -32,6 +32,8 @@
 #                               (Dauer 0); vorwarnung -> VALARM (ACTION:DISPLAY,
 #                               TRIGGER:-P3D, X-ZENTRALE-VORWARNUNG:TRUE), damit
 #                               Handy/Google erinnern (core/kalender_deadline.py)
+#   soll_abstand (Deadline)  -> X-ZENTRALE-SOLL:-P3DT18H (ISO-8601-Dauer,
+#                               negativ = vor der Muss-Zeit; Google ignoriert es)
 #
 # Das Verlust-Prinzip: ein Feld wird nur dann auf eine iCalendar-Property
 # abgebildet, wenn es sich EXAKT zurücklesen lässt ("17:45" ja, "10" nein).
@@ -48,7 +50,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from icalendar import Alarm, Calendar, Event, Timezone, vRecur, vText
+from icalendar import Alarm, Calendar, Event, Timezone, vDuration, vRecur, vText
 
 import kalender_kategorie
 import kalender_quelle
@@ -77,6 +79,7 @@ X_STIL = "X-ZENTRALE-STIL"
 X_TYP = "X-ZENTRALE-TYP"
 X_VORWARNUNG = "X-ZENTRALE-VORWARNUNG"     # Marke an UNSEREM VALARM
 TYP_DEADLINE = "DEADLINE"
+X_SOLL = "X-ZENTRALE-SOLL"                 # Soll-Abstand einer Deadline (24.10.2026)
 ALARM_TEXT = "Deadline: "                  # DESCRIPTION unseres VALARM (Erkennung,
                                            # falls ein Server die Marke verwirft)
 
@@ -289,6 +292,23 @@ def _deadline_abbilden(ev: Event, e: dict, rest: dict) -> None:
         al.add(X_VORWARNUNG, "TRUE")
         ev.add_component(al)
         rest.pop("vorwarnung", None)
+    s = e.get("soll_abstand")
+    if isinstance(s, int) and not isinstance(s, bool) and s <= 0:
+        ev.add(X_SOLL, vText(vDuration(timedelta(minutes=s)).to_ical().decode()))
+        rest.pop("soll_abstand", None)
+
+
+def _soll_lesen(ev) -> int | None:
+    """X-ZENTRALE-SOLL (ISO-8601-Dauer, ≤ 0) → Minuten; Murks → None."""
+    roh = ev.get(X_SOLL)
+    if roh is None:
+        return None
+    try:
+        dt = vDuration.from_ical(str(roh))
+    except (ValueError, TypeError):
+        return None
+    sek = dt.total_seconds()
+    return int(sek // 60) if sek <= 0 and sek % 60 == 0 else None
 
 
 def _alarm_minuten(al) -> int | None:
@@ -957,6 +977,9 @@ def _kopf_lesen(ev, daten: dict) -> None:
         v = _vorwarnung_lesen(ev)
         if v is not None:
             daten["vorwarnung"] = v
+        s = _soll_lesen(ev)
+        if s is not None:
+            daten["soll_abstand"] = s
 
 
 def _roh_anwenden(ev, daten: dict) -> None:

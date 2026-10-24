@@ -592,8 +592,18 @@ class Formular:
     def _box_oeffnen(self, f):
         text = (self.roh_werte().get("titel") or "").strip()
         self.box = kalender_advanced.Advanced(f.adv, quellen=f.quellen, text=text,
-                                              typen=f.typen)
+                                              typen=f.typen, muss=self._muss_jetzt(f))
         self._box_feld = f
+
+    def _muss_jetzt(self, f):
+        """(Wochentag, Minute) der Muss-Zeit, wie sie gerade im Formular
+        steht (Tag + Von); fehlt der Tag: der des Feldes (`f.tag`)."""
+        w = self.roh_werte()
+        try:
+            tag = datetime.strptime(str(w.get("datum") or "").strip(), "%d.%m.%Y").date()
+        except ValueError:
+            tag = getattr(f, "tag", None)
+        return _muss(tag, str(w.get("von") or "").strip() or None)
 
     def _box_taste(self, ch) -> str:
         erg = self.box.taste(ch)
@@ -746,7 +756,10 @@ def _advanced_feld(roh, titel_feld, quellen=None, typen=kalender_advanced.TYPEN)
              lesen=lambda d: (True, {"typ": d.get("typ"), "quelle": kalender_advanced.quelle(d),
                                      "stil": dict(d.get("stil") or {}),
                                      **({"status": d["status"]} if d.get("status") else {}),
-                                     **({"vorwarnung": d.get("vorwarnung")}
+                                     **({"vorwarnung": d.get("vorwarnung"),
+                                         "soll": kalender_advanced.soll_text(d.get(
+                                             "soll_abstand")) if d.get("soll") is None
+                                         else d["soll"]}
                                         if kalender_advanced.ist_deadline(d) else {})}),
              hilfe=ADVANCED_HILFE)
     f.quellen = quellen
@@ -760,15 +773,37 @@ def _advanced_feld(roh, titel_feld, quellen=None, typen=kalender_advanced.TYPEN)
     return f
 
 
-def _typ_body(w) -> dict:
-    """Typ deadline für einen NEUEN Eintrag: {typ, vorwarnung} (leer = normal)."""
+def _muss(tag, von) -> tuple | None:
+    """(Wochentag, Minute) der Muss-Zeit — für „Di 18:00" im Feld Soll."""
+    try:
+        h, m = str(von or DEADLINE_ZEIT).strip().split(":")
+        return tag.weekday(), int(h) * 60 + int(m)
+    except (AttributeError, ValueError):
+        return None
+
+
+def _soll_minuten(w, tag):
+    """Soll-Abstand aus den Formularwerten, mit der Muss-Zeit, die jetzt im
+    Formular steht („Di 18:00" heißt Di 18:00, auch wenn „Von" sich noch
+    geändert hat). None = keine Soll-Zeit."""
+    tag = w.get("datum") or tag
+    return kalender_advanced.soll_lesen(w.get("soll") or "", _muss(tag, w.get("von")))[0]
+
+
+def _typ_body(w, tag=None) -> dict:
+    """Typ deadline für einen NEUEN Eintrag: {typ, vorwarnung, soll_abstand?}
+    (leer = normal)."""
     if w.get("typ") != kalender_advanced.DEADLINE:
         return {}
-    return {"typ": kalender_advanced.DEADLINE,
+    body = {"typ": kalender_advanced.DEADLINE,
             "vorwarnung": w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)}
+    soll = _soll_minuten(w, tag)
+    if soll is not None:
+        body["soll_abstand"] = soll
+    return body
 
 
-def _typ_aufrufe(roh, w) -> tuple:
+def _typ_aufrufe(roh, w, tag=None) -> tuple:
     """Typ eines bestehenden Eintrags geändert → (vorher, nachher): zurück
     zu normal VOR dem Ändern (sonst lehnt der Kern ein neues Ende ab),
     zur Deadline bzw. neue Vorwarnung NACH dem Ändern (dann ist das Ende
@@ -780,9 +815,12 @@ def _typ_aufrufe(roh, w) -> tuple:
     if alt and not neu:
         return [("POST", "/api/calendar/typ", {"kennung": k, "typ": "normal"})], []
     v = w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)
-    if neu and (not alt or kalender_deadline.vorwarnung(roh) != v):
+    soll = _soll_minuten(w, tag) if "soll" in w else kalender_deadline.soll_abstand(roh)
+    if neu and (not alt or kalender_deadline.vorwarnung(roh) != v
+                or kalender_deadline.soll_abstand(roh) != soll):
         return [], [("POST", "/api/calendar/typ",
-                     {"kennung": k, "typ": "deadline", "vorwarnung": v})]
+                     {"kennung": k, "typ": "deadline", "vorwarnung": v,
+                      "soll_abstand": "" if soll is None else soll})]
     return [], []
 
 
@@ -861,6 +899,7 @@ def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
     felder.append(Feld("ort", "Ort", wert=ort))
     if mit_gruppe:
         adv.append(_advanced_feld(roh, felder[0], quellen))
+        adv[0].tag = tag                    # Muss-Tag für „Soll: Di 18:00"
         felder += _gruppe_felder(roh) + adv
     return felder
 
@@ -889,7 +928,7 @@ def _neu_plan(w, tag, layer="termine", quelle=None):
     Body mit; ein leerer Titel wird ihr Name (der Rückfall)."""
     tag = w.get("datum") or tag
     titel, ort = (w.get("titel") or (quelle or {}).get("name") or ""), (w.get("ort") or None)
-    gruppe = {**_gruppe_body(w), **_stil_body(w), **_typ_body(w)}
+    gruppe = {**_gruppe_body(w), **_stil_body(w), **_typ_body(w, tag)}
     if quelle:
         gruppe = {**gruppe, "quelle": {"art": quelle["art"], "id": quelle["id"]}}
     start, e_dt = _zeiten(tag, w)
@@ -1113,7 +1152,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                     "ende": neu["ende"], "ausser": roh.get("kennung")}
                    if neu["time"] and neu["ende"] and zeit_neu
                    and _ziel_ebene(w, layer) != UNVERBINDLICH else None)
-            vor, nach = _typ_aufrufe(roh, w)
+            vor, nach = _typ_aufrufe(roh, w, w["datum"])
             return _plan(vor + [("PUT", "/api/calendar/eintrag",
                                  {"layer": layer, "day": iso, "label": label,
                                   "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
@@ -1158,7 +1197,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                              "wochentage": wochentage(r["wtage"]) or None}
                 if neu_regel != alt_regel:
                     neu["wiederholung"] = neu_regel
-            vor, nach = _typ_aufrufe(roh, w)
+            vor, nach = _typ_aufrufe(roh, w, tag)
             aufrufe = vor + [("PUT", "/api/calendar/routine",
                               {"layer": layer, "label": label, "day": iso,
                                "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
@@ -1306,6 +1345,8 @@ def kopie(roh: dict) -> dict:
     if kalender_deadline.ist(roh):             # eine Deadline bleibt eine (ohne Ende)
         k.pop("ende", None)
         k.update(typ="deadline", vorwarnung=kalender_deadline.vorwarnung(roh))
+        if kalender_deadline.soll_abstand(roh) is not None:     # die Soll-Zeit kommt mit
+            k["soll_abstand"] = kalender_deadline.soll_abstand(roh)
     return k
 
 
@@ -1358,6 +1399,8 @@ def details(roh: dict, tag: date, vorschau: dict | None = None) -> list:
         zeilen.append("Deadline %s · %s" % (t, kalender_deadline.rest_kurz(roh, tag) or "?"))
         zeilen.append("Vorwarn. %s vorher" % kalender_advanced.dauer_text(
             kalender_deadline.vorwarnung(roh)))
+        for z in kalender_deadline.soll_muss_zeilen(roh, tag):   # „soll Di 21.10. 18:00"
+            zeilen.append("%s     %s" % (z[:4].capitalize(), z[5:]))
     elif t or e:
         zeilen.append("Zeit     %s%s" % (t or "..:..", (" -> " + e) if e else ""))
     else:

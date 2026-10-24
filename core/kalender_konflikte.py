@@ -464,10 +464,13 @@ def _ebene_text(e: dict) -> str:
 
 
 def _deadline_rest(e: dict, day_iso: str, stunden: bool = True) -> str:
-    """„ (in 2 Tagen)" hinter einer Deadline — ab der echten Uhr."""
+    """„ (in 2 Tagen)" hinter einer Deadline — ab der echten Uhr; mit
+    Soll-Zeit „ (in 2 Tagen · Soll: Di 21.10. 18:00, Muss: Fr 24.10. 12:00)"."""
     if not kalender_deadline.ist_deadline(e):
         return ""
-    return f" ({kalender_deadline.rest_text(e, day_iso, uhr.jetzt(), stunden)})"
+    rest = kalender_deadline.rest_text(e, day_iso, uhr.jetzt(), stunden)
+    soll = kalender_deadline.soll_muss_text(e, day_iso)
+    return f" ({rest} · {soll})" if soll else f" ({rest})"
 
 
 def render_range_for_tool(start: date, end: date,
@@ -602,7 +605,9 @@ _IMPRINT_LISTE = (
 _IMPRINT_DEADLINE = (
     "\n\n[deadline] ist ein Zeitpunkt (Abgabe, Frist), keine belegte Zeit: "
     "{er} muss bis dahin fertig sein, nicht dort sein. Kollidiert nie. In "
-    "der Klammer steht, wie lange es noch hin ist.")
+    "der Klammer steht, wie lange es noch hin ist (bis zur Muss-Zeit). "
+    "Steht dort „Soll: …, Muss: …\", ist Soll {seine} eigene frühere "
+    "Wunsch-Abgabe, Muss die harte Frist — nenne beide, rechne mit Muss.")
 
 
 def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:

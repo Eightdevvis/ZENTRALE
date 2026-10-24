@@ -789,7 +789,7 @@ def kennung(e: dict) -> str | None:
 # Felder einer Routine, die jedes Vorkommen mitbekommt (zusätzlich zu Zeit,
 # Ende, Ort …): Motiv der Phase, Gruppe, Quelle, Stil des Kastens.
 _MITGEGEBEN = ("motiv", "kategorie", "kategorie_name", "kategorien_weitere", "quelle",
-               "stil", "typ", "vorwarnung")
+               "stil", "typ", "vorwarnung", "soll_abstand")
 
 
 def _ueber_nacht_markieren(e: dict) -> None:
@@ -908,7 +908,7 @@ def entries_in_range(start: date, end: date,
                     # Phase (motiv) und Gruppe (kategorie) mitgeben — die
                     # Ansichten fassen danach zusammen, die KI liest sie.
                     for feld in _MITGEGEBEN:
-                        if r.get(feld) or (feld == "vorwarnung" and feld in r):   # 0 = ohne
+                        if r.get(feld) or (feld in ("vorwarnung", "soll_abstand") and feld in r):  # 0 zählt
                             entry[feld] = copy.deepcopy(r[feld])
                     # absage_noetig: diese Routine muss bei Abwesenheit aktiv
                     # abgesagt werden (z.B. Geige bei der Lehrerin), fällt NICHT
@@ -954,6 +954,8 @@ def entries_in_range(start: date, end: date,
         out[day_iso].sort(key=lambda e: e.get("time", "00:00"))
     # Titel aus Liste/Projekt live auflösen (einmal je Quelle, nie geschrieben).
     kalender_quelle.anreichern([e for es in out.values() for e in es])
+    # Deadline mit Soll-Zeit: Datum+Uhrzeit dieses Vorkommens (24.10.2026)
+    kalender_deadline.soll_anreichern(out)
 
     return dict(sorted(out.items()))
 

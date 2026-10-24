@@ -58,5 +58,6 @@ tag" (`_letzter_pruefen`). Tests: `tests/test_kalender_formular_fest.py`,
 
 Advanced → Typ deadline: „Letzter Tag", „Ganztägig", „Bis" bleiben an ihrem
 Platz und stehen gedämpft „—"; im Fenster advanced die Zeile „Vorwarnung"
-(immer da, gilt nur bei deadline). Alles Weitere:
+(immer da, gilt nur bei deadline), seit 24.10.2026 ebenso „Soll" (eigene
+Abgabe vor der Muss-Zeit, „Di 18:00" oder „-2d18h"). Alles Weitere:
 [kalender_deadline.md](kalender_deadline.md).

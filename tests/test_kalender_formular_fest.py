@@ -115,9 +115,10 @@ def test_advanced_zeile_liste_bleibt_stehen():
     box = ka.Advanced(ka.wert_von({}))
     reihen = [b for b, *_r in box.zeilen()]
     # „Vorwarnung" (Typ deadline, 20.10.2026) steht ebenfalls immer da
-    assert reihen == ["Typ", "Liste", "Vorwarnung", "Stylebox", "Status"]
-    assert box.zeilen()[1][1] == "—" and box.zeilen()[2][1] == "—"
-    assert box.gilt() == [True, False, False, True, True]
+    # „Soll" (Soll-Zeit einer Deadline, 24.10.2026) ebenso
+    assert reihen == ["Typ", "Liste", "Vorwarnung", "Soll", "Stylebox", "Status"]
+    assert box.zeilen()[1][1] == "—" and box.zeilen()[2][1] == "—" and box.zeilen()[3][1] == "—"
+    assert box.gilt() == [True, False, False, False, True, True]
     box.taste(curses.KEY_DOWN)
     assert box.reihe == "stil"                     # Liste und Vorwarnung übersprungen
     box.taste(curses.KEY_UP)

@@ -23,6 +23,15 @@ ab FLAECHE_AB als Fläche); überschritten grau (STUFE_VORBEI). Gerechnet wird
 bei jedem Zeichnen mit der echten Uhr (core/uhr.py) — die TUI zeichnet
 ohnehin periodisch neu, so wird es im Lauf der Zeit von selbst kräftiger.
 Farben: tui/ansichten/farben.py, KAL dl0…dl3, dlx.
+
+Modus Muss | Soll (24.10.2026, Taste S). Sasha: „KEINE DOPPELTEN deadlines
+im kalender, ein modus, in dem man soll und muss umschalten kann". Eine
+Deadline hat ihre Muss-Zeit (`time`) und optional eine Soll-Zeit (API:
+`soll_abstand` Minuten ≤ 0, `soll_zeit` dieses Vorkommens). Im Soll-Modus
+legt soll_anwenden() jede solche Deadline auf ihren Soll-Tag/ihre Soll-Zeit
+um — VOR dem Normieren, so zeichnen A/B/C, Auswahl und Leuchten sie
+überall gleich und nie doppelt. Die Kopie trägt `muss_tag`/`muss_time` und
+`_echt` (den API-Eintrag: die Werkzeuge ändern immer das Original).
 """
 from __future__ import annotations
 
@@ -47,6 +56,9 @@ LINIE = "━"
 LINIE_UNV = "╍"                        # uncommitted: leise, gestrichelt
 LINIE_MIN = 3                          # so viel Linie bleibt immer (der Titel wird gekürzt)
 ROLLEN = {0: "k_dl0", 1: "k_dl1", 2: "k_dl2", 3: "k_dl3", STUFE_VORBEI: "k_dlx"}
+MUSS, SOLL = "muss", "soll"
+SOLL_TAGE = 28                         # wie core SOLL_HOECHSTENS: so weit holt die TUI voraus
+WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 
 def ist(t) -> bool:
@@ -54,6 +66,103 @@ def ist(t) -> bool:
     if not isinstance(t, dict):
         return False
     return bool(t.get("deadline")) or t.get("typ") == TYP
+
+
+def soll_abstand(roh) -> int | None:
+    v = (roh or {}).get("soll_abstand")
+    if isinstance(v, int) and not isinstance(v, bool) and -SOLL_TAGE * 1440 <= v <= 0:
+        return v
+    return None
+
+
+def soll_zeitpunkt(roh, tag) -> datetime | None:
+    """Die Soll-Zeit eines Vorkommens: `soll_zeit` der API, sonst Muss +
+    soll_abstand; None ohne Soll."""
+    if not ist(roh):
+        return None
+    try:
+        return datetime.strptime(str(roh.get("soll_zeit")), "%Y-%m-%dT%H:%M")
+    except ValueError:
+        pass
+    zp, s = _zeitpunkt(roh, tag), soll_abstand(roh)
+    return None if zp is None or s is None else zp + timedelta(minutes=s)
+
+
+def _soll_kopie(e, iso):
+    """(soll_tag, Kopie zur Soll-Zeit) oder None (keine Soll-Zeit)."""
+    if not isinstance(e, dict) or e.get("spanning"):
+        return None
+    zp = soll_zeitpunkt(e, iso)
+    if zp is None or _zeitpunkt(e, iso) is None:
+        return None
+    kopie = dict(e, time=zp.strftime("%H:%M"), muss_tag=iso, muss_time=e.get("time"))
+    kopie["_echt"] = e
+    return zp.date().isoformat(), kopie
+
+
+def soll_anwenden(daten: dict, spaeter: dict | None = None) -> None:
+    """Soll-Modus: jede Deadline mit Soll-Zeit wandert (an Ort und Stelle)
+    von ihrem Muss-Tag auf den Soll-Tag zur Soll-Uhrzeit. `spaeter`: die
+    `days` NACH dem Ende der Daten (die TUI holt SOLL_TAGE voraus) — von
+    dort kommen nur Deadlines, deren Soll-Tag in die Daten fällt."""
+    tage = daten.get("days") if isinstance(daten, dict) else None
+    if not isinstance(tage, dict):
+        return
+    wandern = []
+    for iso, es in list(tage.items()):
+        if not isinstance(es, list):
+            continue
+        bleibt = []
+        for e in es:
+            k = _soll_kopie(e, iso)
+            (wandern.append(k) if k else bleibt.append(e))
+        tage[iso] = bleibt
+    ende = str(daten.get("end") or max(tage, default=""))
+    for iso, es in (spaeter or {}).items():
+        if iso in tage or not isinstance(es, list):
+            continue
+        for e in es:
+            k = _soll_kopie(e, iso)
+            if k and k[0] <= ende:
+                wandern.append(k)
+    for tag, kopie in wandern:
+        tage.setdefault(tag, []).append(kopie)
+
+
+def modus_anwenden(daten: dict, modus: str, spaeter: dict | None = None) -> None:
+    """daten["modus"] setzen (der Kopf zeigt es) und im Soll-Modus umlegen."""
+    if not isinstance(daten, dict):
+        return
+    daten["modus"] = SOLL if modus == SOLL else MUSS
+    if daten["modus"] == SOLL:
+        soll_anwenden(daten, spaeter)
+
+
+def modus_text(daten) -> str:
+    """„muss"/„soll" für den Kopf — leer, wenn die Daten keinen Modus
+    tragen (Vorschau, Tests)."""
+    m = daten.get("modus") if isinstance(daten, dict) else None
+    return m if m in (MUSS, SOLL) else ""
+
+
+def wann(zp: datetime) -> str:
+    """Wochentag, Datum, Uhrzeit: „Di 21.10. 18:00“."""
+    return "%s %s" % (WT[zp.weekday()], zp.strftime("%d.%m. %H:%M"))
+
+
+def soll_muss_zeilen(roh, tag) -> list:
+    """Für das Ansehen-Fenster: [„soll Di 21.10. 18:00", „muss Fr 24.10. 12:00"]
+    — leer ohne Soll-Zeit."""
+    soll, muss = soll_zeitpunkt(roh, tag), _zeitpunkt(roh, tag)
+    if soll is None or muss is None:
+        return []
+    return ["soll %s" % wann(soll), "muss %s" % wann(muss)]
+
+
+def dl(t) -> dict:
+    """Der Eintrag, nach dessen Zeit eine normierte Deadline leuchtet: im
+    Soll-Modus die Kopie zur Soll-Zeit, sonst der API-Eintrag."""
+    return t.get("dl") or t["roh"]
 
 
 def vorwarnung(roh) -> int:
@@ -117,7 +226,7 @@ def rest_kurz(roh, tag, jetzt=None) -> str:
 
 def zeigen(t, jetzt=None) -> bool:
     """Steht die (normierte) Deadline in den Ansichten? (VORBEI_ZEIGEN)"""
-    return VORBEI_ZEIGEN or stufe(t["roh"], t["tag"], jetzt) != STUFE_VORBEI
+    return VORBEI_ZEIGEN or stufe(dl(t), t["tag"], jetzt) != STUFE_VORBEI
 
 
 def _hm(m: int) -> str:
@@ -126,9 +235,12 @@ def _hm(m: int) -> str:
 
 # ── Texte je Ansicht ───────────────────────────────────────────────────
 def a_text(t: dict, jetzt=None) -> str:
-    """A: „⚑ 23:59 Analysis HÜ · in 2 T"."""
-    rest = rest_kurz(t["roh"], t["tag"], jetzt)
-    return "%s %s %s%s" % (ZEICHEN, _hm(t["start"]), t["label"], " · " + rest if rest else "")
+    """A: „⚑ 23:59 Analysis HÜ · in 2 T"; im Soll-Modus dahinter winzig
+    „· muss Fr 12:00" (nie eine zweite Zeile)."""
+    rest = rest_kurz(dl(t), t["tag"], jetzt)
+    aus = "%s %s %s%s" % (ZEICHEN, _hm(t["start"]), t["label"], " · " + rest if rest else "")
+    muss = _zeitpunkt(t["roh"], t.get("muss_tag") or "") if t.get("muss_tag") else None
+    return aus + (" · muss %s %s" % (WT[muss.weekday()], muss.strftime("%H:%M")) if muss else "")
 
 
 def b_text(t: dict, cw: int) -> str:
@@ -171,7 +283,7 @@ def c_zeichnen(lw, y0: int, n: int, lo: int, m: int, x: int, breite: int,
                 break
             k = min(n - 1, max(0, k + schritt))
         belegt.add(k)
-        st = stufe(t["roh"], t["tag"], jetzt)
+        st = stufe(dl(t), t["tag"], jetzt)
         text = c_text(t, breite, zeichen)
         platz = breite - LINIE_MIN if breite > LINIE_MIN + 8 else breite
         text = kuerzen(text, platz) if kuerzen else text[:platz]

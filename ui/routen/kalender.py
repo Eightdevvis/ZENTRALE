@@ -146,6 +146,8 @@ def _typ_extras(body: dict, extras: dict) -> None:
         extras['typ'] = body['typ']
     if body.get('vorwarnung') is not None:
         extras['vorwarnung'] = body['vorwarnung']
+    if body.get('soll_abstand') not in (None, ''):          # Soll-Zeit (24.10.2026)
+        extras['soll_abstand'] = body['soll_abstand']
 
 
 @bp.route('/api/calendar/entry', methods=['POST'])
@@ -330,7 +332,8 @@ def api_calendar_add_routine():
             body.get('ende') or None, body.get('ort') or None,
             body.get('kategorie') or None, body.get('kategorie_name') or None,
             body.get('quelle') or None, stil=body.get('stil') or None,
-            typ=body.get('typ') or None, vorwarnung=body.get('vorwarnung'))
+            typ=body.get('typ') or None, vorwarnung=body.get('vorwarnung'),
+            soll_abstand=body.get('soll_abstand'))
         return (jsonify({"ok": True, "kennung": _neue_kennung(vorher)}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
@@ -490,9 +493,11 @@ def api_calendar_konflikte():
 _EINTRAG_NEU = {'day': 'tag', 'label': 'label', 'time': 'time', 'ende': 'ende',
                 'ort': 'ort', 'von': 'von', 'bis': 'bis', 'times': 'times',
                 'enden': 'enden', 'kategorie': 'kategorie',
-                'kategorie_name': 'kategorie_name', 'typ': 'typ', 'vorwarnung': 'vorwarnung'}
+                'kategorie_name': 'kategorie_name', 'typ': 'typ', 'vorwarnung': 'vorwarnung',
+                'soll_abstand': 'soll_abstand'}
 _ROUTINE_NEU = {k: k for k in ('label', 'time', 'ende', 'ort', 'rrule', 'seit', 'bis',
-                               'motiv', 'kategorie', 'kategorie_name', 'typ', 'vorwarnung')}
+                               'motiv', 'kategorie', 'kategorie_name', 'typ', 'vorwarnung',
+                               'soll_abstand')}
 
 
 def _felder(new: dict, erlaubt: dict) -> dict:
@@ -726,9 +731,10 @@ def api_calendar_stil():
 # kein Ende, nie mehrtägig; leuchtet in den Ansichten, kollidiert nie.
 @bp.route('/api/calendar/typ', methods=['POST'])
 def api_calendar_typ():
-    """Body: {kennung, typ: "deadline"|"normal", vorwarnung?: Minuten|"3d"} —
-    normal entfernt typ und vorwarnung. Antwort: der Eintrag (kennung, art,
+    """Body: {kennung, typ: "deadline"|"normal", vorwarnung?: Minuten|"3d",
+    soll_abstand?: Minuten ≤ 0|"-3d18h"|"" (weg)} — normal entfernt alles. Antwort: der Eintrag (kennung, art,
     layer, typ, vorwarnung …); Ablehnung 400 {error, code}."""
     b = request.get_json(silent=True) or {}
     return jsonify(kalender_kennung.typ_setzen(
-        b.get('kennung') or '', b.get('typ'), vorwarnung=b.get('vorwarnung')))
+        b.get('kennung') or '', b.get('typ'), vorwarnung=b.get('vorwarnung'),
+        soll_abstand=b.get('soll_abstand')))

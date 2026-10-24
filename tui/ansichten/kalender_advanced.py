@@ -17,6 +17,10 @@ dieses Fenster mit diesen Zeilen:
   Vorwarnung  gilt nur bei Typ deadline (20.10.2026): ab wann sie rot
             leuchtet und erinnert — tippen wie „3d", „12h", „1d12h"
             (Vorgabe 3d); sonst gedämpft „—", übersprungen
+  Soll      gilt nur bei Typ deadline (24.10.2026): die eigene Wunsch-Abgabe
+            vor der Muss-Zeit — als Wochentag+Uhrzeit „Di 18:00" (= der
+            letzte Di 18:00 vor/an der Muss-Zeit) ODER als Abstand „-2d18h";
+            leer = keine Soll-Zeit. Gespeichert wird der Abstand (soll_abstand)
   Stylebox  Vorschau; Enter öffnet die Stylebox (tui/bausteine/stylebox.py),
             ⌫/Entf = kein Stil
   Status    ‹ committed › | ‹ uncommitted › (←→/Leertaste). Sasha, 11.10.2026:
@@ -50,6 +54,7 @@ HILFE = {
     "typ": "normal = eigener Titel · liste = Titel ist der oberste offene Punkt"
            " · deadline = ein Zeitpunkt, leuchtet rot",
     "vorwarnung": "ab wann sie leuchtet + erinnert: 3d, 12h, 1d12h",
+    "soll": "eigene abgabe: Di 18:00 oder -2d18h · leer = keine",
     "liste": "die liste oder das projekt, aus dem der titel kommt",
     "stil": "rahmen, farben und muster des kastens",
     "status": "uncommitted = blass, nicht fest",
@@ -64,7 +69,8 @@ def wert_von(roh=None) -> dict:
     status = UNCOMMITTED if (roh or {}).get("layer") == UNCOMMITTED else COMMITTED
     typ = DEADLINE if kalender_deadline.ist(roh) else (LISTE if q else NORMAL)
     return {"typ": typ, "quelle": q, "stil": kalender_stil.von(roh or {}),
-            "status": status, "vorwarnung": kalender_deadline.vorwarnung(roh or {})}
+            "status": status, "vorwarnung": kalender_deadline.vorwarnung(roh or {}),
+            "soll_abstand": kalender_deadline.soll_abstand(roh or {})}
 
 
 def ist_deadline(wert) -> bool:
@@ -94,6 +100,51 @@ def dauer_text(minuten) -> str:
     return "".join([f"{d}d"] * bool(d) + [f"{h}h"] * bool(h) + [f"{m}m"] * bool(m)) or "0m"
 
 
+# ── Soll-Zeit: „Di 18:00" oder „-2d18h" (24.10.2026) ──────────────────
+# muss = (Wochentag 0–6, Minute des Tages) der Muss-Zeit, aus dem Formular.
+_WT = ("mo", "di", "mi", "do", "fr", "sa", "so")
+SOLL_HOECHSTENS = kalender_deadline.SOLL_TAGE * 1440
+
+
+def soll_lesen(text, muss=None):
+    """→ (Minuten ≤ 0 | None, fehler | ""). Leer = keine Soll-Zeit (None, "").
+    „Di 18:00" / „di 18" = der letzte Di 18:00 vor oder an der Muss-Zeit;
+    „-2d18h" oder „2d18h" = so lange vorher; „+…" liegt danach → Fehler."""
+    import re
+    s = str(text or "").strip().lower().replace("\u2212", "-")
+    if not s:
+        return None, ""
+    m = re.match(r"^(mo|di|mi|do|fr|sa|so)[a-z]*\.?\s*(\d{1,2})(?:[:.](\d{2}))?(?:\s*uhr)?$", s)
+    if m:
+        if muss is None:
+            return None, "erst tag und uhrzeit — oder als abstand wie -2d18h"
+        h, mi = int(m.group(2)), int(m.group(3) or 0)
+        if h > 23 or mi > 59:
+            return None, "uhrzeit gibt es nicht"
+        mw, mmin = muss
+        abstand = -(((mw - _WT.index(m.group(1))) % 7) * 1440 + mmin - (h * 60 + mi))
+        return (abstand - 7 * 1440 if abstand > 0 else abstand), ""
+    if s.startswith("+"):
+        return None, "soll liegt vor der muss-zeit (ohne +)"
+    v = _dauer_lesen(s.lstrip("-").strip())
+    if v is None or v > SOLL_HOECHSTENS:
+        return None, "soll wie Di 18:00 oder -2d18h (höchstens %dd vorher)" % (
+            SOLL_HOECHSTENS // 1440)
+    return -v, ""
+
+
+def soll_text(abstand, muss=None) -> str:
+    """Minuten → was im Feld steht: mit Muss-Zeit „Di 18:00" (genau, solange
+    weniger als eine Woche davor), sonst „-2d18h"; None → ""."""
+    if not isinstance(abstand, int) or isinstance(abstand, bool):
+        return ""
+    if muss is not None and -7 * 1440 < abstand <= 0:
+        ges = muss[0] * 1440 + muss[1] + abstand
+        tag, minute = divmod(ges, 1440)
+        return "%s %02d:%02d" % (_WT[tag % 7].capitalize(), minute // 60, minute % 60)
+    return ("-" if abstand < 0 else "") + dauer_text(abs(abstand))
+
+
 def quelle(wert: dict):
     """Die Quelle, die gilt — nur bei Typ liste."""
     wert = wert or {}
@@ -118,6 +169,11 @@ def zusammenfassung(wert: dict) -> str:
     if ist_deadline(wert):
         typ = "typ deadline · vorwarnung %s" % dauer_text((wert or {}).get(
             "vorwarnung", kalender_deadline.VORWARNUNG_STANDARD))
+        soll = (wert or {}).get("soll")
+        if soll is None:
+            soll = soll_text((wert or {}).get("soll_abstand"))
+        if soll:
+            typ += " · soll %s" % soll
     aus = "%s · stil %s" % (typ, _stil_text((wert or {}).get("stil")))
     return aus + (" · uncommitted" if (wert or {}).get("status") == UNCOMMITTED else "")
 
@@ -128,8 +184,13 @@ class Advanced:
 
     titel = "advanced"
 
-    def __init__(self, wert: dict, quellen=None, text="", typen=TYPEN):
+    def __init__(self, wert: dict, quellen=None, text="", typen=TYPEN, muss=None):
         wert = wert or {}
+        # muss: (Wochentag, Minute) der Muss-Zeit aus dem Formular — für
+        # „Di 18:00" (soll_lesen); None = nur der Abstand geht.
+        self.muss = muss
+        soll = wert.get("soll")
+        self.soll = soll if isinstance(soll, str) else soll_text(wert.get("soll_abstand"), muss)
         self.typen = tuple(typen)
         self.typ = wert.get("typ") if wert.get("typ") in self.typen else NORMAL
         v = wert.get("vorwarnung")
@@ -149,6 +210,8 @@ class Advanced:
              "stil": dict(self.stil)}
         v = _dauer_lesen(self.vorwarnung)
         w["vorwarnung"] = v if v is not None else kalender_deadline.VORWARNUNG_STANDARD
+        w["soll"] = self.soll.strip()
+        w["soll_abstand"] = soll_lesen(self.soll, self.muss)[0]
         if self.status:
             w["status"] = self.status
         return w
@@ -156,13 +219,13 @@ class Advanced:
     def reihen(self) -> list:
         """Alle Zeilen, feste Plätze (die Zeilen „Liste" und „Vorwarnung"
         stehen immer da; Vorwarnung nur, wo es Deadlines geben kann)."""
-        return (["typ", "liste"] + (["vorwarnung"] if DEADLINE in self.typen else [])
+        return (["typ", "liste"] + (["vorwarnung", "soll"] if DEADLINE in self.typen else [])
                 + ["stil"] + (["status"] if self.status else []))
 
     def gilt(self) -> list:
         """Je Zeile: gilt sie gerade? („Liste" nur bei Typ liste,
-        „Vorwarnung" nur bei Typ deadline)"""
-        nur = {"liste": LISTE, "vorwarnung": DEADLINE}
+        „Vorwarnung"/„Soll" nur bei Typ deadline)"""
+        nur = {"liste": LISTE, "vorwarnung": DEADLINE, "soll": DEADLINE}
         return [r not in nur or self.typ == nur[r] for r in self.reihen()]
 
     def _auf_aktive(self, schritt):
@@ -184,10 +247,14 @@ class Advanced:
         aus = []
         jetzt = self.reihen().index(self.reihe)
         for k, (r, g) in enumerate(zip(self.reihen(), self.gilt())):
+            hilfe = HILFE[r]
             if not g:
-                b, w = ("Vorwarnung" if r == "vorwarnung" else "Liste"), "—"
+                b, w = {"vorwarnung": "Vorwarnung", "soll": "Soll"}.get(r, "Liste"), "—"
             elif r == "vorwarnung":
                 b, w = "Vorwarnung", self.vorwarnung + ("_" if k == jetzt else "")
+            elif r == "soll":
+                b, w = "Soll", self.soll + ("_" if k == jetzt else "")
+                hilfe = self._soll_hilfe()
             elif r == "typ":
                 b, w = "Typ", "‹ %s ›" % self.typ
             elif r == "liste":
@@ -196,8 +263,17 @@ class Advanced:
                 b, w = "Status", "‹ %s ›" % self.status
             else:
                 b, w = "Stylebox", _stil_text(self.stil)
-            aus.append((b, w, k == jetzt, HILFE[r]))
+            aus.append((b, w, k == jetzt, hilfe))
         return aus
+
+    def _soll_hilfe(self) -> str:
+        """Was das Getippte heißt: „= 2d18h vor muss · Di 18:00"."""
+        v, fehler = soll_lesen(self.soll, self.muss)
+        if v is None:
+            return fehler or HILFE["soll"]
+        anders = soll_text(v, self.muss)
+        return "= %s vor muss%s" % (dauer_text(-v) if v else "0m",
+                                    " · " + anders if anders and anders != self.soll else "")
 
     # ── Tasten (Tabelle: Ansicht = die Zeile, auf der man steht) ────────
     # Liegt ein Kasten darüber (`unter`: QuellenWahl oder die Stylebox), bekommt
@@ -210,6 +286,9 @@ class Advanced:
         "liste": [("enter", "liste", "choose list"), ("space/→", "liste")] + _ZEILE + _ENDE,
         "vorwarnung": [("type", "tippen", "type"), ("⌫", "zeichen_weg", "delete"),
                        ("ctrl+u", "leeren", "clear"), ("enter", "uebernehmen", "apply")]
+        + _ZEILE + _ENDE,
+        "soll": [("type", "tippen", "type"), ("⌫", "zeichen_weg", "delete"),
+                 ("ctrl+u", "leeren", "clear"), ("enter", "uebernehmen", "apply")]
         + _ZEILE + _ENDE,
         "stil": [("enter", "stylebox", "stylebox"), ("space/→", "stylebox"),
                  ("⌫/del", "kein_stil", "no style")] + _ZEILE + _ENDE,
@@ -245,18 +324,27 @@ class Advanced:
         k = self.typen.index(self.typ) + (-1 if taste == "left" else 1)
         self.typ = self.typen[k % len(self.typen)]
 
-    def aktion_tippen(self, zeichen):          # nur in der Zeile „Vorwarnung"
+    def aktion_tippen(self, zeichen):          # Zeilen „Vorwarnung" und „Soll"
         self.fehler = ""
-        if len(zeichen) == 1 and (zeichen.isalnum() or zeichen == " "):
+        if self.reihe == "soll":
+            if len(zeichen) == 1 and (zeichen.isalnum() or zeichen in " :.-+"):
+                self.soll = (self.soll + zeichen)[:16]
+        elif len(zeichen) == 1 and (zeichen.isalnum() or zeichen == " "):
             self.vorwarnung = (self.vorwarnung + zeichen)[:12]
 
     def aktion_zeichen_weg(self, _t):
         self.fehler = ""
-        self.vorwarnung = self.vorwarnung[:-1]
+        if self.reihe == "soll":
+            self.soll = self.soll[:-1]
+        else:
+            self.vorwarnung = self.vorwarnung[:-1]
 
     def aktion_leeren(self, _t):
         self.fehler = ""
-        self.vorwarnung = ""
+        if self.reihe == "soll":
+            self.soll = ""
+        else:
+            self.vorwarnung = ""
 
     def aktion_status(self, _t):
         self.fehler = ""
@@ -278,6 +366,10 @@ class Advanced:
         if self.typ == DEADLINE and _dauer_lesen(self.vorwarnung) is None:
             self.fehler = "vorwarnung wie 3d, 12h, 1d12h (höchstens 366d)"
             self.i = self.reihen().index("vorwarnung")
+            return False
+        if self.typ == DEADLINE and soll_lesen(self.soll, self.muss)[1]:
+            self.fehler = soll_lesen(self.soll, self.muss)[1]
+            self.i = self.reihen().index("soll")
             return False
         if self.typ == LISTE and not self.quelle:
             self.fehler = "erst eine liste wählen — oder typ normal"

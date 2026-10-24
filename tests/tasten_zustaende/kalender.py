@@ -128,6 +128,11 @@ def _advanced_vorwarnung(u):
     _t(u, curses.KEY_LEFT, curses.KEY_DOWN)      # Typ deadline, Zeile „Vorwarnung"
 
 
+def _advanced_soll(u):
+    _advanced(u)
+    _t(u, curses.KEY_LEFT, curses.KEY_DOWN, curses.KEY_DOWN, *"Di")   # deadline, Zeile „Soll", ⌫ hat etwas
+
+
 def _advanced_stil(u):
     _advanced(u, 1)
     _bed(u).W["dialog"].box.stil = {"border-style": "solid"}     # ⌫ hat etwas zu nehmen
@@ -199,6 +204,7 @@ ZUSTAENDE = {
     "advanced:typ": _advanced,
     "advanced:liste": _advanced_liste,
     "advanced:vorwarnung": _advanced_vorwarnung,
+    "advanced:soll": _advanced_soll,
     "advanced:stil": _advanced_stil,
     "advanced:status": lambda u: _advanced(u, 2),
     "quellen:liste": _quellen,

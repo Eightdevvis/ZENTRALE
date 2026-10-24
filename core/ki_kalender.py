@@ -561,6 +561,9 @@ def ebene_text(e: dict) -> str:
         # Termintyp deadline: Zeitpunkt mit Vorwarnung (kalender_deadline)
         teile.append("deadline · Vorwarnung "
                      + kalender_deadline.dauer_text(kalender_deadline.vorwarnung_von(e)))
+        soll = kalender_deadline.soll_von(e)
+        if soll is not None:              # Soll-Zeit vor der Muss-Zeit (24.10.2026)
+            teile.append("Soll " + kalender_deadline.soll_text(soll) + " vor Muss")
     gruppe = kalender_kategorie.anzeige(e)
     if gruppe:
         teile.append(gruppe)

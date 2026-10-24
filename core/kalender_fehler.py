@@ -47,6 +47,9 @@ CODES = {
     "DEADLINE-OHNE-ZEIT": "Eine Deadline braucht eine Uhrzeit (sie ist ein Zeitpunkt).",
     "DEADLINE-MIT-ENDE": "Eine Deadline hat kein Ende (sie ist ein Zeitpunkt) — ende entfernen.",
     "DEADLINE-SPANNE": "Ein mehrtägiger Termin kann keine Deadline sein.",
+    # Soll-Zeit einer Deadline (soll_abstand), seit 24.10.2026
+    "SOLL-UNGUELTIG": "Der Soll-Abstand ist keine Dauer (Minuten ≤ 0 oder z. B. -3d18h; höchstens 28 Tage vor der Muss-Zeit).",
+    "SOLL-NACH-MUSS": "Die Soll-Zeit liegt nach der Muss-Zeit — sie darf nur davor oder gleich liegen.",
 }
 
 
