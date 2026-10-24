@@ -171,6 +171,9 @@ Jede Etappe endet mit etwas, das man im Zuhause **spürt**, nicht nur im Code.
 
 ### Etappe 1 — Heimkommen (die Ursprungsszene)
 
+**Bauplan:** [system/heimkommen.md](system/heimkommen.md) (0 €: Nano + RC522 +
+LED-Streifen an der Tür, Servo am Lampenschalter, kein WLAN, kein 230 V).
+
 1. **Heimkommen erkennen:** Türkontakt (Reed) + PIR am Pi; der Kern macht
    daraus `HOMECOMING` (das Ereignis gibt es seit 14.05.2026 in
    `core/events.py`, nur ohne echten Sensor).
