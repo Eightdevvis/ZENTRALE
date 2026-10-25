@@ -669,6 +669,84 @@ paths:
                 type: array
                 items: {$ref: "#/components/schemas/App"}
 
+  /api/apps/laden:
+    post:
+      tags: [apps]
+      operationId: appLaden
+      summary: App aus dem Schaufenster herunterladen und ihre Ansichten zeigen
+      description: >
+        Das Stück (Kategorie apps) nennt in `downloadUrl` ein git-Repo; der Hub
+        holt es in ein Zwischenlager (oder übernimmt einen Checkout desselben
+        Repos, der schon an seinem Platz liegt) und liest das app.toml.
+        Eingerichtet wird noch nichts — erst `POST /api/apps/installieren`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adresse]
+              properties:
+                adresse: {$ref: "#/components/schemas/Adresse"}
+      responses:
+        "200":
+          description: Die Ansichten zur Wahl
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AppWahl"}
+        "400": {$ref: "#/components/responses/InstallFehler"}
+        "402": {$ref: "#/components/responses/InstallFehler"}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+        "409": {$ref: "#/components/responses/InstallFehler"}
+        "422": {$ref: "#/components/responses/InstallFehler"}
+        "502": {$ref: "#/components/responses/InstallFehler"}
+        "503": {$ref: "#/components/responses/InstallFehler"}
+        "504": {$ref: "#/components/responses/InstallFehler"}
+
+  /api/apps/installieren:
+    post:
+      tags: [apps]
+      operationId: appInstallieren
+      summary: App mit den gewählten Ansichten einrichten
+      description: >
+        Mindestens eine Ansicht aus dem app.toml. Lädt vorher, falls nötig.
+        Nochmal aufrufen ändert nur die Auswahl. Das Stück gilt danach auch
+        als geholt (Besitz).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adresse, ansichten]
+              properties:
+                adresse: {$ref: "#/components/schemas/Adresse"}
+                ansichten: {type: array, minItems: 1, items: {type: string}, examples: [[browser, terminal]]}
+      responses:
+        "200":
+          description: Eingerichtet
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, titel, ansichten, ordner, adresse, neu]
+                additionalProperties: false
+                properties:
+                  name: {type: string}
+                  titel: {type: string}
+                  ansichten: {type: array, items: {type: string}}
+                  ordner: {type: string, description: wo die App auf diesem Rechner liegt}
+                  adresse: {$ref: "#/components/schemas/Adresse"}
+                  neu: {type: boolean, description: vorher nicht installiert}
+        "400": {$ref: "#/components/responses/InstallFehler"}
+        "402": {$ref: "#/components/responses/InstallFehler"}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+        "409": {$ref: "#/components/responses/InstallFehler"}
+        "422": {$ref: "#/components/responses/InstallFehler"}
+        "502": {$ref: "#/components/responses/InstallFehler"}
+        "503": {$ref: "#/components/responses/InstallFehler"}
+        "504": {$ref: "#/components/responses/InstallFehler"}
+
   /api/apps/{name}/start:
     parameters:
       - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
@@ -957,6 +1035,19 @@ components:
             properties:
               fehler: {type: string, enum: [unbekannt, kein_prozess, aus, fremd]}
               text: {type: string}
+    InstallFehler:
+      description: >
+        Installieren ging nicht: keine App oder keine Ansicht gewählt (400),
+        kostet etwas (402), gibt es nicht (404), Name/Ordner schon vergeben
+        (409), app.toml fehlt/passt nicht (422), herunterladen ging nicht
+        (502), git fehlt (503), Netz zu langsam (504)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: {type: string}
     Ok:
       description: Erledigt
       content:
@@ -971,7 +1062,7 @@ components:
     App:
       type: object
       required: [name, titel, version, art, adresse, laeuft, gestartet_vom_hub, autostart,
-                 ansichten, rechte, liefert, routen, daten]
+                 ansichten, rechte, liefert, routen, daten, quelle, ansichten_installiert, icon]
       additionalProperties: false
       properties:
         name: {type: string, description: Name (Prozess-App) bzw. Kurzname (selbst gebaut)}
@@ -982,7 +1073,41 @@ components:
         laeuft: {type: [boolean, "null"], description: antwortet auf /hub/gesund; null bei Vorlage-Apps}
         gestartet_vom_hub: {type: boolean, description: nur dann stoppt der Hub sie}
         autostart: {type: boolean, description: startet mit dem Backend (Einstellung apps_autostart)}
-        ansichten: {type: array, items: {type: string}, examples: [[terminal, fenster]]}
+        ansichten: {type: array, items: {type: string}, description: was die App anbietet (app.toml), examples: [[terminal, fenster]]}
+        quelle:
+          type: [string, "null"]
+          description: Adresse des Stücks im Schaufenster, wenn die App von dort installiert ist; sonst null
+          examples: ["zentrale://shop/apps/budget"]
+        ansichten_installiert:
+          type: array
+          description: >
+            Was auf diesem Rechner eingerichtet ist: bei Apps aus dem Laden die
+            beim Installieren gewählten, sonst alle. browser mit `url`
+            (adresse + `[ansicht.browser] pfad`), die anderen mit `start` (hat
+            das app.toml einen Start-Befehl für diese Ansicht).
+          items:
+            type: object
+            required: [id, titel]
+            additionalProperties: false
+            properties:
+              id: {type: string, examples: [browser]}
+              titel: {type: string, examples: [im browser]}
+              url: {type: string}
+              start: {type: boolean}
+        icon:
+          description: Symbol fürs Rad (wie bei EigeneApp) oder null
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [art, raster]
+              properties:
+                art: {const: bild}
+                raster: {type: array, items: {type: array, items: {type: [string, "null"]}}}
+            - type: object
+              required: [art, motiv]
+              properties:
+                art: {const: motiv}
+                motiv: {type: string}
         rechte: {type: array, items: {type: string}, examples: [["ereignis:anwesenheit"]]}
         liefert: {type: array, items: {type: string}, examples: [["kachel:liste"]]}
         routen:
@@ -1004,6 +1129,29 @@ components:
               properties:
                 muster: {type: array, items: {type: string}, examples: [["data/lists.json"]]}
                 abgleichen: {type: boolean}
+
+    AppWahl:
+      type: object
+      required: [adresse, name, titel, version, ansichten, gewaehlt, installiert, neu]
+      additionalProperties: false
+      properties:
+        adresse: {$ref: "#/components/schemas/Adresse"}
+        name: {type: string}
+        titel: {type: string}
+        version: {type: string}
+        ansichten:
+          type: array
+          description: was das app.toml anbietet, in seiner Reihenfolge
+          items:
+            type: object
+            required: [id, titel]
+            additionalProperties: false
+            properties:
+              id: {type: string}
+              titel: {type: string}
+        gewaehlt: {type: array, items: {type: string}, description: Vorschlag — die bisherige Wahl, sonst alle}
+        installiert: {type: boolean}
+        neu: {type: boolean, description: gerade heruntergeladen (sonst lag sie schon da)}
 
     AppKachelFrage:
       type: object

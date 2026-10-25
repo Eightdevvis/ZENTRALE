@@ -82,13 +82,23 @@ def test_icons_sind_alle_motive_des_rads():
             in it["additionalProperty"]
 
 
-def test_apps_agenten_avatare_sind_noch_leer():
-    """Nichts Erfundenes; Sashas Apps sind „noch zu wonky" für den Laden."""
-    for k in ("apps", "agenten", "avatare"):
+def test_agenten_avatare_sind_noch_leer():
+    """Nichts Erfundenes. Apps: seit 2026-10-25 Budget, installierbar
+    (tests/test_app_installation.py)."""
+    for k in ("agenten", "avatare"):
         assert shop.katalog(k)["itemListElement"] == []
     kats = {k["id"]: k["anzahl"] for k in shop.uebersicht()["kategorien"]}
     assert list(kats) == list(shop.KATEGORIE_IDS)
-    assert kats["apps"] == 0 and kats["icons"] == 10 and kats["bauteile"] >= 1
+    assert kats["apps"] == 1 and kats["icons"] == 10 and kats["bauteile"] >= 1
+
+
+def test_jede_app_sagt_woher_sie_kommt():
+    """Eine App im Laden ist holbar: git-Repo in downloadUrl, Name der App."""
+    budget = shop.stueck("apps", "budget")
+    assert budget["@type"] == "SoftwareApplication"
+    assert budget["downloadUrl"] == "ssh://git@github.com/Eightdevvis/budgeter.git"
+    assert {"@type": "PropertyValue", "name": "app_name", "value": "budget"} \
+        in budget["additionalProperty"]
 
 
 def test_desk_view_vorlage_steht_unter_bauteile():
@@ -355,7 +365,8 @@ def test_ansicht_zeichnet_leer_und_voll(ansicht):
     v.draw_shop(0, 0, 30, 120)
     alles = "\n".join(v.schirm.zeile(y) for y in range(30))
     assert "✓ Post" in alles and "geholt ✓" in alles
-    v.taste(curses.KEY_RIGHT); v.taste(curses.KEY_RIGHT)       # Apps
+    for _ in range(4):                                         # Agenten
+        v.taste(curses.KEY_RIGHT)
     v.schirm.zellen.clear()
     v.draw_shop(0, 0, 30, 120)
     assert "noch leer" in "\n".join(v.schirm.zeile(y) for y in range(30))

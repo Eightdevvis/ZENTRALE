@@ -45,7 +45,7 @@ außerhalb der eigenen Wurzel + `zentrale_sdk`).
 
 | Dienst | Was | Heute im Code |
 |---|---|---|
-| **Apps** | installieren, starten, stoppen, aktualisieren; Liste | — (fest eingebaut) |
+| **Apps** | installieren, starten, stoppen, aktualisieren; Liste | installieren aus dem Schaufenster (`app_installation.py`, 2026-10-25), starten/stoppen/Liste; aktualisieren fehlt |
 | **Manifest + Rechte** | App erklärt, was sie braucht; Nutzer erlaubt einmal/immer; widerrufbar | Erlaubnis-Gate nur für KI-Werkzeuge |
 | **Datenordner je App** | `daten/<app>/` gehört allein der App; fremde Daten nur über Rechte | alles in `data/` gemischt |
 | **Ereignisse** | veröffentlichen/abonnieren: `anwesenheit`, `termin.beginnt`, `mail.neu` … | `events.py`, Event-Loop, `state.py` |
@@ -73,9 +73,16 @@ Rechte sind fein und lesbar: `kalender:lesen`, `kalender:schreiben`,
 
 ## Ansichten: leicht und schick
 
-Eine App liefert Daten und Logik; Ansichten gibt es in zwei Stufen:
+Eine App liefert Daten und Logik; Ansichten gibt es in diesen Arten:
 - **terminal** — curses, läuft auf billiger Hardware und per ssh;
-- **fenster** — grafisch (Pixel-Zimmer, Karte, später schicker).
+- **fenster** — grafisch (Pixel-Zimmer, Karte, später schicker);
+- **browser** (seit 2026-10-25, Budget) — die Web-Oberfläche der App unter
+  ihrer `adresse`; `[ansicht.browser] pfad` (Standard `/`).
+
+Je Ansicht `[ansicht.<art>] start` (terminal, fenster). Bei Apps aus dem
+Schaufenster wählt Sasha vor dem Einrichten, welche er will; das Rad öffnet
+nur die gewählten ([shop.md](shop.md) „Apps installieren"). Titel der Arten:
+`apps.ANSICHT_TITEL`.
 
 Der Hub zeigt, was die Hardware kann. Eine App ohne Fenster-Ansicht läuft
 trotzdem überall.

@@ -467,6 +467,38 @@
           "availability": "https://schema.org/InStock"
         }
       }
+    },
+    {
+      "@type": "ListItem",
+      "position": 18,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/apps/budget",
+        "identifier": "budget",
+        "name": "Budget",
+        "description": "Haushaltsbuch für unregelmäßige Einnahmen: Geldorte, Lauftopf, Monatsbudget mit Unterbudgets, Fixkosten, Spartöpfe und Auswertung. Läuft nur auf deinem Rechner — im Browser oder im Terminal.",
+        "category": "apps",
+        "keywords": [
+          "geld",
+          "haushalt"
+        ],
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Linux",
+        "downloadUrl": "ssh://git@github.com/Eightdevvis/budgeter.git",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "app_name",
+            "value": "budget"
+          }
+        ]
+      }
     }
   ]
 }

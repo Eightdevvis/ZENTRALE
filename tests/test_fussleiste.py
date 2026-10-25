@@ -154,6 +154,13 @@ def antwort(pfad, methode):
     if p == "/api/shop/holen":
         return {"adresse": "zentrale://shop/icons/post", "geholt": True, "neu": True,
                 "am": "2026-10-10T12:00:00+02:00"}
+    if p == "/api/apps/laden":                    # Apps aus dem Laden (2026-10-25)
+        return {"adresse": "zentrale://shop/apps/budget", "name": "budget", "titel": "Budget",
+                "ansichten": [{"id": "browser", "titel": "im browser"},
+                              {"id": "terminal", "titel": "im terminal"}],
+                "gewaehlt": ["browser", "terminal"], "installiert": False, "neu": True}
+    if p == "/api/apps/installieren":
+        return {"name": "budget", "titel": "Budget", "ansichten": ["browser"], "neu": True}
     if p == "/api/shop/besitz":
         return {"@type": "ItemList", "itemListElement": []}
     if p == "/api/shop":
@@ -286,12 +293,13 @@ def welt(monkeypatch, tmp_path):
         u.desk = A.desk.Desk(z); u.DESK = u.desk.DESK
         u.shop = A.shop.Shop(z); u.SHOP = u.shop.SHOP
         u.router = A.sprung.router_fuer(u.DESK, u.kalender, u.fokus, u.graphen)
-        u.eigene = A.eigene_apps.EigeneApps(z, u.router, u.desk)     # Werkstatt (2026-10-10)
+        u.bz = A.befehle.Befehlszeile(z)
+        u.app_wahl = A.app_oeffnen.AppOeffnen(z, u.bz); u.APPWAHL = u.app_wahl.W   # 2026-10-25
+        u.eigene = A.eigene_apps.EigeneApps(z, u.router, u.desk, u.app_wahl)     # Werkstatt (2026-10-10)
         u.werkstatt = A.werkstatt.Werkstatt(z, u.eigene, u.desk, u.router); u.WERK = u.werkstatt.W
         u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik, zt.ERAD)
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
-        u.bz = A.befehle.Befehlszeile(z)
         u.app_start = A.app_start.AppStart(z, u.bz)
         u.aufrufe, u.nebenwirkung = aufrufe, nebenwirkung
         u.zuklappen = lambda: zt.fenster_zuklappen()     # wie run_ui
@@ -310,7 +318,7 @@ def zeichnen(u):
 def fingerabdruck(u):
     teile = []
     for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "DESK",
-                 "SHOP", "WERK"):
+                 "SHOP", "WERK", "APPWAHL"):
         teile.append(repr(getattr(u, name)))
     teile.append(repr((zt.RAD, zt.META, zt.TRAD, zt.ERAD)))
     teile.append(repr(vars(u.bz)))

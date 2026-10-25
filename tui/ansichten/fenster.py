@@ -18,13 +18,13 @@ PROGRAMME = [
     ("G", "graphen"), ("L", "fokus"), ("M", "karte"), ("K", "kalender"),
     ("MAIL", "post"), ("NOTE", "notizen"), ("TECH", "technik"),
     ("PIANO", "klavier"), ("AI", "chat"), ("DESK", "desk"),
-    ("SHOP", "shop"), ("WERK", "werkstatt"),
+    ("SHOP", "shop"), ("WERK", "werkstatt"), ("APPWAHL", "app_wahl"),
 ]
 STARTSEITE = "startseite"            # niemand aktiv: das Rad
 # Wie ein Programm in Überschriften heißt ('/'-Fenster, /help), wo der Name
 # im Bündel nicht passt.
 TITEL = {"fokus": "liste", "graphen": "graph", "chat": "ki-chat", "startseite": "start",
-         "shop": "schaufenster"}
+         "shop": "schaufenster", "app_wahl": "app öffnen"}
 
 
 def titel(name):

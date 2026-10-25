@@ -13,6 +13,10 @@
 # ../language-tutor). Mehr Apps = eine Zeile in BEKANNT; eine echte
 # App-Verwaltung (installieren, Rechte fragen) kommt erst mit Schritt 2.
 #
+# Aus dem Schaufenster installierte Apps (2026-10-25, core/app_installation.py):
+# ihr Ordner und die gewählten Ansichten stehen je Rechner im Register;
+# gefunden werden sie wie die aus BEKANNT, nur ohne feste Zeile hier.
+#
 # Selbst gebaute Apps (2026-10-10, Werkstatt, memory/hub/werkstatt.md):
 # ein Ordner mit derselben app.toml unter `apps_ordner` (Standard data/apps/,
 # abgeglichen), aber ohne `start` — sie sind kein Prozess, sondern eine
@@ -23,6 +27,7 @@ import os
 import tomllib
 
 import ai_config
+import app_installation
 import app_prozess
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -45,6 +50,10 @@ def pfad(name: str) -> str:
     gesetzt = ai_config.setting("app_pfad_" + name)
     if gesetzt:
         return os.path.abspath(os.path.expanduser(str(gesetzt)))
+    if name not in BEKANNT:
+        e = app_installation.eintrag(name)
+        if e is not None:
+            return os.path.abspath(e["ordner"])
     if name not in BEKANNT and os.path.isfile(os.path.join(eigene_ordner(), name, "app.toml")):
         return os.path.join(eigene_ordner(), name)
     return os.path.abspath(os.path.join(_ROOT, "..", BEKANNT.get(name, name)))
@@ -89,10 +98,72 @@ def eigene() -> list:
     return raus
 
 
+def aus_dem_laden() -> list:
+    """Manifeste der aus dem Schaufenster installierten Apps, je mit
+    `_installiert` (der Eintrag im Register: quelle, gewählte ansichten)."""
+    raus = []
+    for e in app_installation.alle():
+        if e["name"] in BEKANNT:
+            continue
+        m = manifest(e["name"])
+        if m and m.get("name") == e["name"]:
+            m["_installiert"] = e
+            raus.append(m)
+    return raus
+
+
 def installiert() -> list:
     """Manifeste aller gefundenen Apps: Prozess-Apps aus BEKANNT, dann die
-    selbst gebauten."""
-    return [m for m in (manifest(n) for n in BEKANNT) if m] + eigene()
+    aus dem Laden, dann die selbst gebauten."""
+    return [m for m in (manifest(n) for n in BEKANNT) if m] + aus_dem_laden() + eigene()
+
+
+# Ansichten einer App (hub_bauplan.md „Ansichten"): terminal und fenster seit
+# 2026-10-09, browser seit 2026-10-25 (die App hat eine Web-Oberfläche unter
+# ihrer `adresse`). Unbekannte Namen zeigt die Oberfläche, wie sie heißen.
+ANSICHT_TITEL = {"browser": "im browser", "terminal": "im terminal", "fenster": "als fenster"}
+
+
+def ansicht_titel(ansicht: str) -> str:
+    return ANSICHT_TITEL.get(ansicht, ansicht)
+
+
+def ansichten_installiert(m: dict) -> list:
+    """Die Ansichten, die auf diesem Rechner eingerichtet sind: bei Apps aus
+    dem Laden die gewählten, sonst alle aus dem Manifest. Je
+    {id, titel, url (browser) | start (bool)}."""
+    angebot = [str(a) for a in (m.get("ansichten") or [])]
+    gewaehlt = (m.get("_installiert") or {}).get("ansichten")
+    namen = [a for a in angebot if gewaehlt is None or a in gewaehlt]
+    raus = []
+    for a in namen:
+        teil = (m.get("ansicht") or {}).get(a) or {}
+        d = {"id": a, "titel": ansicht_titel(a)}
+        if a == "browser":
+            if not m.get("adresse"):
+                continue
+            d["url"] = str(m["adresse"]).rstrip("/") + "/" + str(teil.get("pfad") or "").lstrip("/")
+        else:
+            d["start"] = bool(teil.get("start"))
+        raus.append(d)
+    return raus
+
+
+def icon(ordner: str, m: dict):
+    """Das Symbol einer App fürs Rad: {"art": "bild", "raster"} aus `icon`
+    (PNG neben app.toml, quadratisch, bis 32×32 in voller Größe) oder
+    {"art": "motiv", "motiv"} aus `icon_motiv` — sonst None (das Rad zeigt
+    den Namen)."""
+    if m.get("icon"):
+        datei = os.path.join(ordner, os.path.basename(str(m["icon"])))
+        try:
+            import bild_vorschau                  # Pillow, nur wo das Backend wohnt
+            return {"art": "bild", "raster": bild_vorschau.icon_raster(datei, None)}
+        except Exception:
+            return None
+    if m.get("icon_motiv"):
+        return {"art": "motiv", "motiv": str(m["icon_motiv"])}
+    return None
 
 
 def abonnenten(ereignis: str) -> list:

@@ -32,6 +32,7 @@ import shutil
 import time
 import tomllib
 
+import app_installation
 import apps
 import bild_vorschau
 import datasync
@@ -98,7 +99,7 @@ def namen_pruefen(name, ausser=None) -> tuple:
     slug = slug_aus(name)
     if not slug:
         raise WerkstattFehler("der name braucht mindestens einen buchstaben")
-    if slug in RESERVIERT or slug in apps.BEKANNT:
+    if slug in RESERVIERT or slug in apps.BEKANNT or slug in app_installation.namen():
         raise WerkstattFehler("„%s\" heißt schon eine feste app — anderer name?" % slug, 409)
     for m in apps.eigene():
         if m["_slug"] == ausser:
@@ -191,15 +192,7 @@ def _icon_setzen(slug, m, icon):
 
 
 def _icon_fuer_liste(slug, m):
-    if m.get("icon"):
-        datei = os.path.join(_app_ordner(slug), os.path.basename(str(m["icon"])))
-        try:
-            return {"art": "bild", "raster": bild_vorschau.icon_raster(datei)}
-        except (OSError, bild_vorschau.KeinBild, bild_vorschau.OhnePillow):
-            return None                  # Symbol fehlt/kaputt: das Rad zeigt den Namen
-    if m.get("icon_motiv"):
-        return {"art": "motiv", "motiv": str(m["icon_motiv"])}
-    return None
+    return apps.icon(_app_ordner(slug), m)      # eine Stelle für alle Apps
 
 
 # ── Öffentlich ────────────────────────────────────────────────────────

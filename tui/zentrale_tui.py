@@ -961,6 +961,9 @@ def bild_zeichnen(u):
     elif u.WERK["active"]:
         draw_box(top, mx, body_h, midw, u.werkstatt.titel())
         u.werkstatt.draw(top, mx, body_h, midw)
+    elif getattr(u, "APPWAHL", None) and u.APPWAHL["active"]:   # App aus dem Laden (2026-10-25)
+        draw_box(top, mx, body_h, midw, u.app_wahl.titel())
+        u.app_wahl.draw(top, mx, body_h, midw)
     elif TECH["active"]:
         draw_box(top, mx, body_h, midw, "technik · " + TECH["view"])
         laeuft_jetzt = technik.draw_tech(top, mx, body_h, midw, state, metrics, nets) or laeuft_jetzt
@@ -1134,7 +1137,11 @@ def run_ui(stdscr, store):
     shop = ansichten.shop.Shop(z)          # Schaufenster (2026-10-10): u.shop.oeffnen()
     SHOP = shop.SHOP
     # Werkstatt + selbst gebaute Apps im Rad (2026-10-10, memory/hub/werkstatt.md)
-    eigene = ansichten.eigene_apps.EigeneApps(z, router, desk)
+    # Apps aus dem Schaufenster öffnen: eine Ansicht direkt, sonst Wahl (2026-10-25)
+    app_wahl = ansichten.app_oeffnen.AppOeffnen(z, bz)
+    APPWAHL = app_wahl.W
+    eigene = ansichten.eigene_apps.EigeneApps(z, router, desk, app_wahl)
+    shop.nach_installieren = eigene.laden       # neu installiert → gleich ins Rad
     eigene.laden()
     werkstatt = ansichten.werkstatt.Werkstatt(z, eigene, desk, router)
     technik = ansichten.technik.Technik(z)
@@ -1194,6 +1201,7 @@ def run_ui(stdscr, store):
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
         DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop,
         WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene,
+        APPWAHL=APPWAHL, app_wahl=app_wahl,
         zuklappen=lambda: fenster_zuklappen())
     # Jedes Programm beim Horcher anmelden: er fragt einmal nach den Tasten
     # je Ansicht, die Leiste schlägt danach nur noch nach (2026-10-11).

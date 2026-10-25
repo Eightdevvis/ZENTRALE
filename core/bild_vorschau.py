@@ -309,9 +309,14 @@ def icon_machen(quelle, seite=ICON_SEITE, farben=ICON_FARBEN) -> bytes:
     return puffer.getvalue()
 
 
+ICON_SEITE_APP = 32       # Symbole, die eine App mitbringt (app.toml `icon`)
+
+
 def icon_raster(pfad, seite=ICON_SEITE) -> list:
     """Icon-PNG → seite Zeilen zu je seite Feldern: "#rrggbb" oder None
-    (durchsichtig). Fremde Größen werden hart (NEAREST) angepasst."""
+    (durchsichtig). Fremde Größen werden hart (NEAREST) angepasst.
+    seite=None: in eigener Größe, wenn quadratisch und höchstens
+    ICON_SEITE_APP, sonst auf ICON_SEITE_APP (Symbole aus App-Repos)."""
     Image, _ = _pil()
     try:
         with Image.open(pfad) as roh:
@@ -320,6 +325,9 @@ def icon_raster(pfad, seite=ICON_SEITE) -> list:
         raise
     except Exception:
         raise KeinBild("das ist kein bild, das sich lesen lässt")
+    if seite is None:
+        w, h = img.size
+        seite = w if (w == h and w <= ICON_SEITE_APP) else ICON_SEITE_APP
     if img.size != (seite, seite):
         img = img.resize((seite, seite), Image.NEAREST)
     px = _pixel_liste(img)

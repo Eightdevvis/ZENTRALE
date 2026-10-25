@@ -8,6 +8,11 @@
 #
 #   open_app_window.py <name> [Fenster-Argumente …]     z. B. karte --cx 10 --cy 50 --zoom 3
 #   open_app_window.py <name> --pruefen                 nur prüfen (Satz für Sasha, Code 2)
+#   open_app_window.py <name> --ansicht terminal        eine andere Ansicht (`[ansicht.<x>]
+#                                                       start`), seit 2026-10-25 für Apps aus
+#                                                       dem Schaufenster; terminal läuft im
+#                                                       Terminal des Aufrufers (die TUI tritt
+#                                                       so lange beiseite)
 #
 # Wo die App liegt: Env ZENTRALE_APP_PFAD_<NAME>, sonst die Einstellung von
 # ZENTRALE (core/apps.py, falls core/ da ist), sonst das Nachbar-Repo
@@ -44,7 +49,7 @@ def app_ordner(name):
     return None
 
 
-def fenster_befehl(name):
+def fenster_befehl(name, ansicht="fenster"):
     """→ (ordner, befehl) oder (None, Satz für Sasha)."""
     ordner = app_ordner(name)
     if ordner is None:
@@ -56,9 +61,11 @@ def fenster_befehl(name):
             m = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
         return None, "app.toml von „%s\" nicht lesbar: %s" % (name, e)
-    start = ((m.get("ansicht") or {}).get("fenster") or {}).get("start")
+    start = ((m.get("ansicht") or {}).get(ansicht) or {}).get("start")
     if not start:
-        return None, "„%s\" hat kein fenster (app.toml ohne ansicht.fenster)" % name
+        if ansicht == "fenster":
+            return None, "„%s\" hat kein fenster (app.toml ohne ansicht.fenster)" % name
+        return None, "„%s\" hat keine ansicht %s (app.toml ohne ansicht.%s)" % (name, ansicht, ansicht)
     return ordner, app_prozess.befehl(ordner, start, ROOT)
 
 
@@ -68,7 +75,10 @@ def main(argv=None):
         print("aufruf: open_app_window.py <name> [--pruefen | fenster-argumente …]", file=sys.stderr)
         return 2
     name, rest = argv[0], argv[1:]
-    ordner, befehl = fenster_befehl(name)
+    ansicht = "fenster"
+    if rest[:1] == ["--ansicht"] and len(rest) >= 2:
+        ansicht, rest = rest[1], rest[2:]
+    ordner, befehl = fenster_befehl(name, ansicht)
     if ordner is None:
         print(befehl, file=sys.stderr)        # landet im Log der TUI
         return 2

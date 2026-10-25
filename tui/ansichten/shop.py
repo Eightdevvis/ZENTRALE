@@ -7,12 +7,19 @@
 # Alles kommt per HTTP (/api/shop*, core/shop.py); die Ansicht kennt nur
 # Adressen `zentrale://shop/<kategorie>/<id>`. Doku: memory/hub/shop.md.
 #
+# Apps (2026-10-25, memory/hub/shop.md „Apps installieren"): Enter auf einer
+# App lädt sie (POST /api/apps/laden, im Hintergrund), dann zeigt die Ansicht
+# ihre Ansichten zur Wahl (Leertaste an/aus, mindestens eine); Enter richtet
+# ein (POST /api/apps/installieren) und meldet es dem App-Rad
+# (`nach_installieren`, run_ui hängt eigene_apps.laden ein).
+#
 # Geöffnet wird sie von außen über `oeffnen()` (der Rad-Platz `shop` kommt
 # mit der Werkstatt, 2026-10-10) — hier steht kein Rad-Wissen.
 
 import curses
 import json
 import textwrap
+import threading
 import urllib.error
 import urllib.parse
 
@@ -75,12 +82,18 @@ class Shop:
             "besitz": set(),            # Adressen, die geholt sind
             "geholt": None,             # eben geholt → „geholt ✓"
             "msg": "",
+            "laedt": False,             # eine App wird gerade heruntergeladen
+            "wahl": None,               # Ansichten-Wahl vor dem Installieren
         }
+        # Nach dem Installieren (run_ui: das App-Rad neu holen).
+        self.nach_installieren = None
+        # Wie im Hintergrund geladen wird; Tests setzen „gleich ausführen".
+        self.starten = lambda f: threading.Thread(target=f, daemon=True).start()
 
     # ── Daten ─────────────────────────────────────────────────────────
     def oeffnen(self):
         S = self.SHOP
-        S.update(active=True, msg="", geholt=None)
+        S.update(active=True, msg="", geholt=None, wahl=None)
         try:
             S["kategorien"] = (api_call("/api/shop/kategorien") or {}).get("kategorien") or []
         except Exception as e:
@@ -131,6 +144,52 @@ class Shop:
                 return "fehler %s" % e.code
         return "backend nicht erreichbar"
 
+    def ist_app(self):
+        k = self.kategorie()
+        return bool(k and k["id"] == "apps")
+
+    def app_laden(self):
+        """Enter auf einer App: herunterladen (Hintergrund), dann die Wahl."""
+        S = self.SHOP
+        if not S["stuecke"] or S["laedt"]:
+            return
+        s = S["stuecke"][S["sel"]]
+        S.update(laedt=True, geholt=None, msg="lade „%s\" …" % (s.get("name") or "app"))
+
+        def laden():
+            try:
+                r = api_call("/api/apps/laden", "POST", {"adresse": s.get("@id")}, timeout=320) or {}
+            except Exception as e:
+                S.update(laedt=False, msg="nicht geladen: " + self._fehlertext(e))
+                return
+            angebot = [a for a in r.get("ansichten") or [] if isinstance(a, dict) and a.get("id")]
+            S.update(laedt=False, msg="", wahl={
+                "adresse": s.get("@id"), "titel": r.get("titel") or s.get("name") or "app",
+                "ansichten": angebot, "sel": 0,
+                "an": [a["id"] for a in angebot if a["id"] in (r.get("gewaehlt") or [])],
+                "installiert": bool(r.get("installiert"))})
+        self.starten(laden)
+
+    def installieren(self):
+        S, w = self.SHOP, self.SHOP["wahl"]
+        if not w:
+            return
+        if not w["an"]:
+            S["msg"] = "mindestens eine ansicht wählen"
+            return
+        try:
+            r = api_call("/api/apps/installieren", "POST",
+                         {"adresse": w["adresse"], "ansichten": w["an"]}, timeout=60) or {}
+        except Exception as e:
+            S["msg"] = "nicht installiert: " + self._fehlertext(e)
+            return
+        S["besitz"].add(w["adresse"])
+        S.update(wahl=None, geholt=w["adresse"],
+                 msg="installiert ✓ — steht im app-rad" if r.get("neu", True)
+                 else "ansichten geändert ✓")
+        if self.nach_installieren:
+            self.nach_installieren()
+
     def holen(self):
         S = self.SHOP
         if not S["stuecke"]:
@@ -152,10 +211,17 @@ class Shop:
     _KAT = [("←→", "kategorie", "category")]
     _THEMA = [("tab", "thema", "theme"), ("shift+tab", "thema")]
     _STUECKE = [("↑↓", "waehlen", "select"), ("enter", "holen", "get")]
+    _APP = [("↑↓", "waehlen", "select"), ("enter", "holen", "install")]
     _ZU = [("esc", "zu", "back")]
+    _WAHL = [("↑↓", "wahl_waehlen", "select"), ("space", "wahl_umschalten", "toggle"),
+             ("enter", "installieren", "install"), ("esc", "wahl_zu", "cancel")]
     TASTEN = Tasten({
         "regal": _KAT + _STUECKE[:1] + _THEMA + _STUECKE[1:] + _ZU,
         "regal:ohne_thema": _KAT + _STUECKE + _ZU,
+        "apps": _KAT + _APP[:1] + _THEMA + _APP[1:] + _ZU,
+        "apps:ohne_thema": _KAT + _APP + _ZU,
+        "laedt": _ZU,                               # eine App kommt gerade
+        "wahl": _WAHL,                              # Ansichten vor dem Installieren
         "leer": _KAT + _ZU,
         "leer:thema": _KAT + _THEMA + _ZU,          # nichts zu diesem Thema
         "fehler": _ZU,
@@ -165,8 +231,13 @@ class Shop:
         S = self.SHOP
         if not S["kategorien"]:
             return "fehler"
+        if S["wahl"]:
+            return "wahl"
+        if S["laedt"]:
+            return "laedt"
         if S["stuecke"]:
-            return "regal" if S["themen"] else "regal:ohne_thema"
+            art = "apps" if self.ist_app() else "regal"
+            return art if S["themen"] else art + ":ohne_thema"
         return "leer:thema" if S["themen"] else "leer"
 
     def taste(self, ch):
@@ -201,7 +272,31 @@ class Shop:
             self._laden()
 
     def aktion_holen(self, _taste):
-        self.holen()
+        if self.ist_app():
+            self.app_laden()
+        else:
+            self.holen()
+
+    def aktion_wahl_waehlen(self, taste):
+        w = self.SHOP["wahl"]
+        if w and w["ansichten"]:
+            w["sel"] = (w["sel"] + (-1 if taste == "up" else 1)) % len(w["ansichten"])
+
+    def aktion_wahl_umschalten(self, _taste):
+        w = self.SHOP["wahl"]
+        if w and w["ansichten"]:
+            a = w["ansichten"][w["sel"]]["id"]
+            if a in w["an"]:
+                w["an"].remove(a)
+            else:
+                w["an"] = [x["id"] for x in w["ansichten"] if x["id"] in w["an"] or x["id"] == a]
+            self.SHOP["msg"] = ""
+
+    def aktion_installieren(self, _taste):
+        self.installieren()
+
+    def aktion_wahl_zu(self, _taste):
+        self.SHOP.update(wahl=None, msg="")
 
     # ── Zeichnen ──────────────────────────────────────────────────────
     def titel(self):
@@ -219,6 +314,11 @@ class Shop:
         z.addclip(top + 2, x0 + 7, thema, innen - 7, C["acc"] if S["thema"] else C["dim"])
         z.addclip(top + 3, x0, "─" * innen, innen, C["faint"])
         oben, unten = top + 4, top + h - 2           # unten = Rückmeldung
+        if S["wahl"]:
+            self._draw_wahl(oben, x0, unten - oben, innen)
+            if S["msg"]:
+                z.addclip(unten, x0, S["msg"], innen, C["warn"])
+            return
         if not S["stuecke"]:
             leer = "noch leer" if not S["thema"] else "nichts zu diesem thema"
             if S["msg"]:
@@ -234,6 +334,20 @@ class Shop:
         # passiert ist.
         if S["msg"] and S["stuecke"]:
             z.addclip(unten, x0, S["msg"], innen, C["acc"] if S["msg"].endswith("✓") else C["warn"])
+
+    def _draw_wahl(self, y0, x, hoehe, breite):
+        """Vor dem Installieren: welche Ansichten der App eingerichtet werden."""
+        w, C, z = self.SHOP["wahl"], self.z.C, self.z
+        frage = ("„%s\" — welche ansichten willst du?" if not w["installiert"]
+                 else "„%s\" — welche ansichten sollen eingerichtet sein?") % w["titel"]
+        z.addclip(y0, x, frage, breite, C["bright"] | curses.A_BOLD)
+        for i, a in enumerate(w["ansichten"][:max(0, hoehe - 3)]):
+            zeile = "[%s] %s" % ("x" if a["id"] in w["an"] else " ", a.get("titel") or a["id"])
+            if i == w["sel"]:
+                z.addclip(y0 + 2 + i, x, zeile.ljust(min(breite, 30)), breite,
+                          C["bright"] | curses.A_REVERSE)
+            else:
+                z.addclip(y0 + 2 + i, x, zeile, breite, C["acc"] if a["id"] in w["an"] else C["dim"])
 
     def _draw_leiste(self, y, x, breite):
         """Kategorien nebeneinander; die gewählte hell, leere blass."""

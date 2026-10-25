@@ -106,6 +106,10 @@ os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
 os.environ.setdefault("ZENTRALE_SHOP_ORDNER", os.path.join(_DATEN_TMP, "shop"))
 # Selbst gebaute Apps (core/werkstatt.py, 2026-10-10): im Betrieb data/apps/.
 os.environ.setdefault("ZENTRALE_APPS_ORDNER", os.path.join(_DATEN_TMP, "apps"))
+# Apps aus dem Schaufenster (core/app_installation.py, 2026-10-25): wohin sie
+# geholt werden und was installiert ist — nie Sashas Nachbarordner/data/hub.
+os.environ.setdefault("ZENTRALE_APP_ORDNER", os.path.join(_DATEN_TMP, "app_ordner"))
+os.environ.setdefault("ZENTRALE_INSTALLIERT_ORDNER", os.path.join(_DATEN_TMP, "hub"))
 # Anbindungs-Beschreibungen (core/werkzeug_erzeuger/anbindung.py, 2026-10-11):
 # im Betrieb data/anbindungen/. Dazu unten pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_ANBINDUNGEN_DIR", os.path.join(_DATEN_TMP, "anbindungen"))
@@ -425,6 +429,8 @@ def _nutzung_frisch(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _shop_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_SHOP_ORDNER", str(_frisch(_test_ordner, "shop")))
+    monkeypatch.setenv("ZENTRALE_APP_ORDNER", str(_frisch(_test_ordner, "app_ordner")))
+    monkeypatch.setenv("ZENTRALE_INSTALLIERT_ORDNER", str(_frisch(_test_ordner, "hub")))
     yield
 
 

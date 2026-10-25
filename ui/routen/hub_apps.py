@@ -6,6 +6,9 @@
 #   GET  /api/apps               installierte Apps aus ihren Manifesten
 #   POST /api/apps/<name>/start  Prozess-App starten (läuft sie, nichts)
 #   POST /api/apps/<name>/stop   nur, was der Hub selbst gestartet hat
+#   POST /api/apps/laden         App aus dem Schaufenster holen, Ansichten zeigen
+#   POST /api/apps/installieren  mit den gewählten Ansichten einrichten
+#                                (core/app_installation.py, seit 2026-10-25)
 #
 # Und die Weiterleitung: gehört der Pfad einer Anfrage laut `routen` im
 # app.toml einer App, reicht der Hub sie unverändert an die App
@@ -18,6 +21,7 @@
 
 from flask import Blueprint, Response, jsonify, request
 
+import app_installation   # type: ignore  – in core/, durch sys.path.insert auffindbar
 import app_verwaltung      # type: ignore  – in core/, durch sys.path.insert auffindbar
 import app_weiterleitung   # type: ignore
 
@@ -58,3 +62,23 @@ def api_app_stop(name):
         return jsonify(app_verwaltung.stoppen(name))
     except app_verwaltung.AppFehler as e:
         return jsonify(e.antwort), e.status
+
+
+@bp.route('/api/apps/laden', methods=['POST'])
+def api_app_laden():
+    """Body {"adresse": "zentrale://shop/apps/<id>"} → Ansichten zur Wahl."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(app_installation.laden(body.get("adresse")))
+    except app_installation.InstallFehler as e:
+        return jsonify({"error": str(e)}), e.code
+
+
+@bp.route('/api/apps/installieren', methods=['POST'])
+def api_app_installieren():
+    """Body {"adresse", "ansichten": ["browser", …]} (mindestens eine)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(app_installation.installieren(body.get("adresse"), body.get("ansichten")))
+    except app_installation.InstallFehler as e:
+        return jsonify({"error": str(e)}), e.code

@@ -520,7 +520,9 @@ die Seite der Apps unter `/hub/…`, Tag `app-seite`). Regeln:
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
-| `/api/apps` | GET | `[{name, titel, version, art: prozess\|vorlage, adresse, laeuft, gestartet_vom_hub, autostart, ansichten, rechte, liefert, routen}]` |
+| `/api/apps` | GET | `[{name, titel, version, art: prozess\|vorlage, adresse, laeuft, gestartet_vom_hub, autostart, ansichten, rechte, liefert, routen, daten, quelle, ansichten_installiert, icon}]` |
+| `/api/apps/laden` | POST | `{adresse}` (Stück der Kategorie apps) → App holen, `{name, titel, version, ansichten: [{id, titel}], gewaehlt, installiert, neu}`; nichts eingerichtet (seit 2026-10-25, [shop.md](../hub/shop.md)) |
+| `/api/apps/installieren` | POST | `{adresse, ansichten: [...]}` (mind. eine) → `{name, titel, ansichten, ordner, adresse, neu}`; `400` Wahl falsch, `409` Name/Ordner vergeben, `422` app.toml, `502` holen ging nicht |
 | `/api/apps/<name>/start` | POST | `{name, laeuft, gestartet}`; `404 unbekannt`, `400 kein_prozess`, `503 aus` |
 | `/api/apps/<name>/stop` | POST | `{name, gestoppt}` — nur, was der Hub gestartet hat; sonst `409 fremd` |
 | *Pfade laut `routen` einer App* | alle | unverändert an die App weitergereicht (z. B. `/api/map/*` → App `karte`); App aus → `503 {"fehler": "aus"}` |

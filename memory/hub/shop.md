@@ -31,7 +31,7 @@ Avatare (`shop.KATEGORIEN`, ids `icons`, `hintergruende`, `apps`,
 |---|---|---|
 | Icons | `ImageObject` | **alle** Pixel-Symbole der Apps im Rad (Sasha, Nachtrag 2026-10-10): post, karte, kalender, klavier, notizen, graph, fokus, tutor, desk (`tui/pixel.py` `MOTIVE`) und elektronik. `additionalProperty` `pixel_motiv` = Name des Motivs; die TUI zeichnet daraus die Vorschau. Das Technik-Rad hat keine Pixel-Symbole. |
 | Hintergründe | `CreativeWork` | Denk-Adern (Hintergrund des Chats, wenn die KI denkt), Nacht, Tag (die beiden Farbwelten der TUI) |
-| Apps | `SoftwareApplication` | noch leer — Sashas eigene Apps sind „noch zu wonky" für den Laden |
+| Apps | `SoftwareApplication` | **Budget** (seit 2026-10-25, Repo `Eightdevvis/budgeter`) — installierbar, Abschnitt „Apps installieren" unten. Tutor und Karte stehen (noch) nicht im Laden, sie sind fest im Rad. |
 | Bauteile | `SoftwareApplication` | Desk View als Vorlage (`applicationCategory` „Vorlage", der Canvas-Baustein), die drei Kacheln Kalender-Ausschnitt, Liste, Graph-Verlauf (`isBasedOn` = Adresse der Kachel-Art) |
 | Agenten | `SoftwareApplication` | noch leer (`core/profil/` sind Modell-Schienen, keine Agenten) |
 | Avatare | `ImageObject`/`Product` | noch leer |
@@ -85,6 +85,75 @@ Tasten: Tastentabelle `Shop.TASTEN` (2026-10-11), Ansichten `regal` ·
 zeigt sie, im Kasten stehen keine Tastenhinweise mehr. Nach Hot Reload geht das
 Schaufenster wieder auf (`_offen_apps`).
 
+## Apps installieren (gebaut 2026-10-25)
+
+Sasha: *„Keine Skripts. Ich will die App offiziell über den ZENTRALE-Store
+runterladen. Vor dem Install wähle ich die Versionen, die ich will. Dann wird
+die App in mein Rad geklatscht, ich wähle sie aus und kann die Version wählen,
+die geöffnet werden soll."* Vorher konnte der Laden nur „holen" (Besitz), und
+Prozess-Apps standen fest in `apps.BEKANNT`.
+
+**Im Katalog** trägt ein Stück der Kategorie apps zusätzlich `downloadUrl`
+(ein git-Repo, `https`/`ssh`/`file`) und `additionalProperty` `app_name` (der
+`name` aus seinem app.toml). Fehlt eins, lehnt `shop.pruefen` den ganzen
+Katalog ab (`app_installation.quelle_pruefen`). Mehr steht nicht im Katalog:
+Titel, Ansichten, Symbol kommen aus dem app.toml der App.
+
+**Ablauf** (`core/app_installation.py`, Routen in `ui/routen/hub_apps.py`):
+
+1. `POST /api/apps/laden {adresse}` — `git clone` nach
+   `<app_ordner>/.laden/<repo>` (ohne Rückfrage: `GIT_TERMINAL_PROMPT=0`,
+   ssh `BatchMode`), app.toml lesen und prüfen (Name = `app_name`, kein
+   Name einer festen/selbst gebauten App, mindestens eine Ansicht). Antwort:
+   die Ansichten zur Wahl. Liegt am Platz schon ein Checkout **desselben**
+   Repos (Herkunft `origin`, Schreibweise egal), wird er übernommen — so
+   bleibt Sashas Entwickler-Checkout der eine Ordner. Ein fremder Ordner
+   gleichen Namens → 409, nichts wird überschrieben.
+2. `POST /api/apps/installieren {adresse, ansichten}` — mindestens eine
+   Ansicht aus dem app.toml; der Ordner zieht an `<app_ordner>/<repo>`,
+   die Wahl kommt ins Register, das Stück gilt als geholt. Nochmal aufrufen
+   ändert nur die Wahl.
+
+- **`app_ordner`** (Einstellung, Env `ZENTRALE_APP_ORDNER`): Standard der
+  Ordner, in dem ZENTRALE liegt — neben Tutor und Karte.
+- **Register** je Rechner: `<installiert_ordner>/apps-<rechner>.json`
+  (Standard `data/hub/`, steht NICHT auf der Positivliste: der Code liegt nur
+  hier, ein anderer Rechner wählt selbst). Nur Name, Quelle, Ordner, gewählte
+  Ansichten, Datum.
+- Der Hub findet die App danach wie jede andere (`apps.pfad`,
+  `apps.installiert`, `GET /api/apps` mit `quelle`, `ansichten_installiert`,
+  `icon`); die Werkstatt vergibt ihren Namen nicht mehr.
+
+**Symbol:** `icon = "icon.png"` im app.toml — quadratisches PNG bis 32×32,
+gelesen in voller Größe (`bild_vorschau.icon_raster(pfad, None)`; Werkstatt-
+Symbole bleiben 16×16). Die TUI malt es wie ein Werkstatt-Symbol
+(`pixel.symbol_eintragen`): es klappt auf, die Schriftplatte liegt drüber.
+
+**In der TUI:** Kategorie Apps, Enter = installieren (Leiste „install"): die
+App wird im Hintergrund geladen („lade …", Ansicht `laedt`), dann die Wahl
+`[x] im browser` / `[x] im terminal` (Ansicht `wahl`: ↑↓, space an/aus,
+enter installieren, esc abbrechen; ohne Haken: „mindestens eine ansicht
+wählen"). Danach holt `eigene_apps` die Liste neu — die App steht im App-Rad
+vor den selbst gebauten. Enter im Rad → Router `zentrale://<name>/` →
+`tui/ansichten/app_oeffnen.py`: eine Ansicht geht direkt auf, mehrere zeigen
+den Kasten „wie soll … aufgehen?" (↑↓ enter esc).
+
+- **browser:** `POST /api/apps/<name>/start` (läuft sie, passiert nichts),
+  dann `adresse` + `[ansicht.browser] pfad` mit `xdg-open` (nur mit
+  grafischer Sitzung).
+- **terminal:** `scripts/open_app_window.py <name> --ansicht terminal` im
+  Terminal der TUI (curses tritt beiseite wie beim Editor), danach zurück.
+- **fenster:** derselbe Starter im Hintergrund (wie die Karte).
+
+TUI und Backend müssen dafür auf demselben Rechner laufen (Adresse
+127.0.0.1, Starter liest den Ordner); unterwegs über einen fremden Hub geht
+das Öffnen noch nicht.
+
+**Offen:** Deinstallieren; Aktualisieren (heute: im Ordner selbst `git
+pull`); Rechte-Dialog vor dem Einrichten (die Apps im Laden haben keine
+Rechte); Tutor/Karte über denselben Weg statt `BEKANNT`; die Web-Oberfläche
+zeigt weder Laden noch Rad.
+
 ## Später: bezahlen und Sashas Server
 
 - **Tauschstelle:** `shop._katalog_roh()` liest heute die Datei (Einstellung
@@ -100,4 +169,4 @@ Schaufenster wieder auf (`_offen_apps`).
 
 - `zentrale://shop/…` im Adress-Router der TUI (`sprung.py`) — eine Adresse
   aus einer Notiz öffnet das Stück noch nicht.
-- Echte Apps, Agenten, Avatare, sobald es sie gibt.
+- Weitere Apps, Agenten, Avatare, sobald es sie gibt.

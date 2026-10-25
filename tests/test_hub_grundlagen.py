@@ -235,7 +235,9 @@ def test_api_apps_listet_aus_den_manifesten(client, prozess_app):
     assert p == {"name": "probe", "titel": "Probe", "version": "0.1.0", "art": "prozess",
                  "adresse": p["adresse"], "laeuft": False, "gestartet_vom_hub": False,
                  "autostart": True, "ansichten": ["terminal"], "rechte": [], "liefert": [],
-                 "routen": ["/api/probe"], "daten": None}
+                 "routen": ["/api/probe"], "daten": None, "quelle": None, "icon": None,
+                 "ansichten_installiert": [{"id": "terminal", "titel": "im terminal",
+                                            "start": False}]}
     assert nach_name["tutor"]["laeuft"] is False       # Test-App zeigt ins Leere
 
 

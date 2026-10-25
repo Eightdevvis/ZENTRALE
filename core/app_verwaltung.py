@@ -143,6 +143,11 @@ def _eintrag(m, laeuft):
         "liefert": [str(x) for x in (m.get("liefert") or [])],
         "routen": apps.routen(m),
         "daten": apps.daten(m),
+        # seit 2026-10-25 (Apps aus dem Schaufenster): woher sie kommt, was
+        # auf diesem Rechner eingerichtet ist, ihr Symbol fürs Rad
+        "quelle": (m.get("_installiert") or {}).get("quelle"),
+        "ansichten_installiert": apps.ansichten_installiert(m),
+        "icon": apps.icon(m["_pfad"], m),
     }
 
 
