@@ -15,9 +15,13 @@ Warum nicht vdirsyncer direkt (memory/werkzeuge/kalender_ics_bauplan.md):
   4. (07.10.2026, Sasha: „bitte bitte lösch nix aus google calendar aus
      versehen") Vorher eine Nur-Lese-Kopie von Google holen (Paar
      google_probe) und einmal am Tag als Archiv ablegen. Und: fehlen lokal
-     seit dem letzten Sync mehr Termine als die Löschsperre erlaubt, wird
+     seit dem letzten Abgleich mehr Termine als die Löschsperre erlaubt, wird
      NICHT gesynct — sonst trüge vdirsyncer die Lücke als Löschung zu Google.
      Gewollt? Dann einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.
+     (25.10.2026) Gezählt wird nur die Ebene termine (nur sie geht zu
+     Google), eine UID, die lokal in einem anderen Ordner liegt, fehlt nicht,
+     und verglichen wird mit dem vdirsyncer-Status (Stand nach dem letzten
+     Abgleich), nicht mit einer nur bei Exit 0 erneuerten Liste.
   5. (16.10.2026) Nach JEDEM Lauf den Zustand festhalten (core/
      kalender_sync_zustand.py): letzter Versuch, letzter Erfolg, Fehler im
      Klartext („Google-Zugang abgelaufen — neu anmelden"). ZENTRALE zeigt ihn
@@ -36,6 +40,7 @@ Exit-Code = der von vdirsyncer (1, wenn ZENTRALE nicht auf ics steht;
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -74,25 +79,178 @@ SICHERUNG = os.path.expanduser("~/.local/share/zentrale/google-sicherung")
 KOPIE = os.path.expanduser("~/.local/share/vdirsyncer/google_kopie")
 
 
+# Nur diese Ebene geht zu Google (Paar „zentrale“, collections = termine).
+# uncommitted/ und rhythmus/ bleiben lokal — was dort fehlt, kann bei Google
+# nichts löschen und zählt für die Sperre nicht.
+GESYNCT = "termine"
+
+_UID = re.compile(r"^UID[;:](?:[^:\r\n]*:)?(.+?)\r?$", re.M)
+
+
 def _namen(vdir) -> set:
-    return {str(p.relative_to(vdir)) for p in vdir.rglob("*.ics")} if vdir.exists() else set()
+    """Dateien der gesyncten Ebene, relativ zum vdir („termine/x.ics“)."""
+    o = vdir / GESYNCT
+    return {str(p.relative_to(vdir)) for p in o.glob("*.ics")} if o.exists() else set()
 
 
-def _fehlende(vdir) -> list:
-    """Termine, die seit dem letzten erfolgreichen Sync lokal verschwunden sind."""
+def _uid_aus(pfad) -> str | None:
+    """Die (erste) UID einer .ics-Datei, ohne sie ganz zu parsen."""
+    try:
+        text = pfad.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = _UID.search(re.sub(r"\r?\n[ \t]", "", text))
+    return m.group(1).strip() if m else None
+
+
+def _lokale_uids(vdir) -> set:
+    """UIDs aller lokalen Dateien, über ALLE Ebenen. Eine UID, die nur den
+    Ordner gewechselt hat (uncommitted → termine), ist nicht verschwunden."""
+    if not vdir.exists():
+        return set()
+    return {u for u in (_uid_aus(p) for p in vdir.rglob("*.ics")) if u}
+
+
+# ── Vergleichsbasis: Stand nach dem letzten Abgleich ─────────────────────
+# (25.10.2026) Erste Wahl ist der Status von vdirsyncer selbst: er führt je
+# Termin, was nach dem letzten Abgleich auf BEIDEN Seiten lag — und genau
+# das, was davon lokal fehlt, würde vdirsyncer bei Google löschen. Er wird
+# je Termin fortgeschrieben, auch wenn ein anderer Termin im selben Lauf
+# einen Konflikt hat; eine mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1
+# bestätigte Löschung ist danach aus ihm verschwunden und zählt nie wieder.
+# Vorher war die Basis die eigene Liste STAND, die nur bei Exit 0 neu
+# geschrieben wurde — ein einziger Konflikt hielt so die bestätigten
+# Löschungen fest, die Sperre griff 5,5 h lang alle 3 min (24./25.10.2026).
+# STAND bleibt Rückfall, wenn der Status nicht lesbar ist.
+
+def _config_pfad() -> str:
+    # ZENTRALE_VDIRSYNCER_CONFIG lenkt in Tests um (nie Sashas echte);
+    # VDIRSYNCER_CONFIG setzt der Adapter für den Lauf.
+    for k in ("ZENTRALE_VDIRSYNCER_CONFIG", "VDIRSYNCER_CONFIG"):
+        if os.environ.get(k):
+            return os.path.expanduser(os.environ[k])
+    xdg = os.environ.get("XDG_CONFIG_HOME") or "~/.config"
+    return os.path.expanduser(os.path.join(xdg, "vdirsyncer", "config"))
+
+
+def _wert(roh):
+    try:
+        return json.loads(roh)
+    except ValueError:
+        return roh.strip()
+
+
+def _status_quellen(vdir) -> list:
+    """[(status-Datei, Seite 'a'|'b', lokaler Ordnername)] für die Paare, deren
+    eine Seite dieses vdir ist. Liest aus der Konfiguration NUR Pfade, Paare
+    und Sammlungen — Zugangsdaten werden weder gelesen noch ausgegeben."""
+    import configparser
+    cp = configparser.RawConfigParser(interpolation=None)
+    cp.optionxform = str
+    with open(_config_pfad(), encoding="utf-8") as f:
+        cp.read_file(f)
+    w = lambda kopf, k: _wert(cp.get(kopf, k)) if cp.has_option(kopf, k) else None
+    status = w("general", "status_path") if cp.has_section("general") else None
+    if not isinstance(status, str):
+        return []
+    echt = os.path.realpath(str(vdir))
+    lokal = set()
+    for kopf in cp.sections():
+        t = kopf.split(None, 1)
+        pfad = w(kopf, "path")
+        if len(t) == 2 and t[0] == "storage" and isinstance(pfad, str) \
+                and os.path.realpath(os.path.expanduser(pfad)) == echt:
+            lokal.add(t[1])
+    raus = []
+    for kopf in cp.sections():
+        t = kopf.split(None, 1)
+        if len(t) != 2 or t[0] != "pair":
+            continue
+        for seite, stelle in (("a", 1), ("b", 2)):
+            if w(kopf, seite) not in lokal:
+                continue
+            for c in w(kopf, "collections") or []:
+                if isinstance(c, str) and not c.startswith("from "):
+                    name, ordner = c, c
+                elif isinstance(c, list) and len(c) == 3:
+                    name, ordner = c[0], c[stelle]
+                else:
+                    raise ValueError("Sammlung %r nicht auflösbar" % (c,))
+                raus.append((os.path.join(os.path.expanduser(status), t[1], name + ".items"),
+                             seite, ordner))
+    return raus
+
+
+def _basis_status(vdir) -> dict | None:
+    """{„termine/x.ics“: uid} aus dem vdirsyncer-Status, None = nicht lesbar."""
+    import sqlite3
+    from urllib.parse import quote
+    quellen = _status_quellen(vdir)
+    if not quellen:
+        return None
+    raus = {}
+    for datei, seite, ordner in quellen:
+        if not os.path.isfile(datei):
+            return None
+        c = sqlite3.connect("file:%s?mode=ro" % quote(datei), uri=True)
+        try:
+            for ident, href in c.execute("SELECT ident, href_%s FROM status" % seite):
+                if href:
+                    raus[ordner + "/" + href] = ident
+        finally:
+            c.close()
+    return raus
+
+
+def _basis_stand() -> dict | None:
+    """Rückfall: die eigene Liste vom letzten Lauf mit Exit 0."""
     try:
         with open(STAND, encoding="utf-8") as f:
-            alt = set(json.load(f).get("dateien") or [])
+            d = json.load(f)
     except (OSError, ValueError):
+        return None
+    uids = d.get("uids") or {}
+    return {n: uids.get(n) for n in (d.get("dateien") or [])
+            if n.startswith(GESYNCT + "/")}
+
+
+def _basis(vdir) -> tuple:
+    """(Basis, Quelle) — Basis {Datei: uid oder None} oder None (erster Lauf)."""
+    try:
+        b = _basis_status(vdir)
+        if b is not None:
+            return b, "vdirsyncer-Status"
+    except FileNotFoundError:
+        pass                    # keine Konfiguration: still der Rückfall
+    except Exception as e:      # noqa: BLE001 — dann gilt der Rückfall
+        print("vdirsyncer-Status nicht lesbar (%s) — Vergleich mit der eigenen Liste."
+              % type(e).__name__)
+    return _basis_stand(), "eigene Liste"
+
+
+def _fehlende(vdir, basis=None) -> list:
+    """Termine der gesyncten Ebene, die seit dem letzten Abgleich lokal
+    verschwunden sind — und nicht bloß in einen anderen Ordner gewandert.
+    `basis` = Ergebnis von _basis() (sonst wird sie hier geholt)."""
+    alt = (basis or _basis(vdir))[0]
+    if not alt:
         return []                      # erster Lauf: nichts kann fehlen
-    return sorted(alt - _namen(vdir))
+    weg = {n: u for n, u in alt.items() if n.startswith(GESYNCT + "/")
+           and not (vdir / n).exists()}
+    if not weg:
+        return []
+    da = _lokale_uids(vdir)
+    return sorted(n for n, u in weg.items()
+                  if (u or os.path.splitext(os.path.basename(n))[0]) not in da)
 
 
 def _stand_merken(vdir) -> None:
+    namen = sorted(_namen(vdir))
     os.makedirs(os.path.dirname(STAND), exist_ok=True)
     tmp = STAND + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"dateien": sorted(_namen(vdir))}, f)
+        json.dump({"dateien": namen,
+                   "uids": {n: _uid_aus(vdir / n) for n in namen}}, f)
     os.replace(tmp, STAND)
 
 
@@ -222,12 +380,14 @@ def _lauf(argv, stufe) -> int:
     _spiegeln("vor vdirsyncer")
     vorher = _anzahl(sp.vdir)
 
-    fehlen = _fehlende(sp.vdir)
+    basis = _basis(sp.vdir)
+    fehlen = _fehlende(sp.vdir, basis)
     if len(fehlen) > sp.loeschsperre and os.environ.get("ZENTRALE_KALENDER_SYNC_LOESCHEN_OK") != "1":
         print(f"ABBRUCH: {len(fehlen)} Termine fehlen lokal seit dem letzten Sync "
               f"(Sperre {sp.loeschsperre}). Ohne Prüfung würden sie bei Google "
-              f"gelöscht. Stand davor: heutiger Snapshot / git-Spiegel. Gewollt? "
-              f"Einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.")
+              f"gelöscht. Verglichen mit: {basis[1]} (Stand nach dem "
+              f"letzten Abgleich); der Stand davor liegt auch im heutigen Snapshot "
+              f"und im git-Spiegel. Gewollt? Einmal mit ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1.")
         for n in fehlen[:10]:
             print("   fehlt:", n)
         stufe[0] = "loeschsperre"

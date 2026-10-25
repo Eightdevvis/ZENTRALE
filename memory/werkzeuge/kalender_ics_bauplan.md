@@ -320,9 +320,12 @@ den Termin (seinen Container/Kasten im Kalender) angewendet."
   bitte lösch nix aus google calendar"): vor jedem Lauf Nur-Lese-Kopie von
   Google (Paar `google_probe` → `~/.local/share/vdirsyncer/google_kopie`),
   einmal am Tag als Archiv nach `~/.local/share/zentrale/google-sicherung/`
-  (14 Tage); fehlen lokal seit dem letzten Sync mehr Termine als die
-  Löschsperre, läuft vdirsyncer nicht (`ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1`
-  für Gewolltes).
+  (14 Tage); fehlen lokal seit dem letzten Abgleich mehr Termine als die
+  Löschsperre (5), läuft vdirsyncer nicht (`ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1`
+  für Gewolltes). Seit 25.10.: nur `termine/` zählt, eine anderswo lokal
+  liegende UID fehlt nicht, Basis = vdirsyncer-Status (eigene Liste nur
+  Rückfall); Konflikte an `…@zentrale` löst der Adapter lokal-neuer-gewinnt
+  — Details [kalender_sync_zustand.md](kalender_sync_zustand.md).
 - **Sichtbar** (seit 16.10.): jeder Lauf schreibt seinen Stand (Zugang
   abgelaufen, kein Netz, …), TUI und Alarm-Kanal zeigen Probleme —
   [kalender_sync_zustand.md](kalender_sync_zustand.md).

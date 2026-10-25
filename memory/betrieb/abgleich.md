@@ -242,8 +242,10 @@ schneidet `abgleich_apps.jetzt_erlaubt` es heraus). Google fährt immer nur
 - **Je Gerät bleiben:** `ai_calendar.json` (alter Speicher), Verlauf und
   Grabsteine (`kalender_verlauf/`), Snapshots — Löschen trägt der Abgleich
   selbst (Grabsteine der Mitte), die Kalender-Grabsteine waren für rsync.
-- Die Löschsperre der Brücke bleibt: fehlen seit dem letzten Lauf mehr als 5
-  Termine, fährt sie nicht (ihre Liste reist mit dem Vertrag).
+- Die Löschsperre der Brücke bleibt: fehlen seit dem letzten Abgleich mehr
+  als 5 Termine aus `termine/`, fährt sie nicht. Basis ist der mitreisende
+  vdirsyncer-Status, die eigene Liste (reist ebenfalls mit) nur Rückfall
+  ([../werkzeuge/kalender_ics_bauplan.md](../werkzeuge/kalender_ics_bauplan.md)).
 
 **Zugangsdaten: nur im Abgleich, nie in der Sicherung.** `data/adapter/geheim.enc`
 steht in `GEHEIM` ⊂ `NUR_ABGLEICH`, nie in `SICHERN` (das Sicherungs-Skript

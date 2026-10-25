@@ -71,3 +71,38 @@ nicht" — auf allen Geräten.
   `SYNC_OK_ZEIGEN` (False → gar nichts).
 - TUI Startseite (`tui/ansichten/startseite.py` `sync_warnung`): unter
   „up · net" oben rechts die Warnung aus dem Alarm-Kanal.
+
+## Löschsperre: was zählt (seit 25.10.2026)
+
+**Anlass.** 24.10. 21:03 bis 25.10. 02:36 brach jeder Lauf mit „6 Termine
+fehlen lokal seit dem letzten Sync" ab, obwohl alles gewollt war: 4 Termine
+waren in ZENTRALE gelöscht, 2 von `uncommitted/` nach `termine/` gewandert.
+Die Vergleichsliste `zentrale_stand.json` wurde nur bei Exit 0 erneuert; ein
+Konflikt an einem anderen Termin („One item changed on both sides") ließ
+vdirsyncer mit 1 enden — die Liste blieb alt, auch nach einem Lauf mit
+`ZENTRALE_KALENDER_SYNC_LOESCHEN_OK=1`.
+
+**Was jetzt gilt** (`scripts/kalender_sync.py` `_fehlende`):
+- Nur `termine/` zählt (nur sie geht zu Google). Eine UID, die lokal in
+  einem anderen Ordner (oder unter anderem Namen) noch liegt, fehlt nicht.
+- Basis = **vdirsyncer-Status** (`<status_path>/<paar>/termine.items`,
+  SQLite, nur lesend): genau die Termine, die vdirsyncer bei Google löschen
+  würde. Er wird je Termin fortgeschrieben, auch bei Konflikten anderswo —
+  eine bestätigte Löschung ist danach weg und zählt nie wieder. Aus der
+  Konfiguration (`ZENTRALE_VDIRSYNCER_CONFIG` → `VDIRSYNCER_CONFIG` →
+  `~/.config/vdirsyncer/config`) werden nur `status_path`, Paare, Sammlungen
+  und Speicher-Pfade gelesen, nie ausgegeben.
+- Rückfall, wenn der Status fehlt/unlesbar ist: die eigene Liste (jetzt nur
+  `termine/` + UIDs; alte Listen ohne UIDs nehmen den Dateinamen).
+- Die Sperre selbst (mehr als 5 → Exit 2) und `LOESCHEN_OK=1` bleiben.
+
+**Konflikte** (`scripts/kalender_konflikt.py`): der Adapter trägt für
+Kalender-Paare ohne eigene Regel `conflict_resolution = ["command", …]` in
+seine erzeugte Konfiguration ein. Lokal gewinnt nur bei gleicher UID
+`…@zentrale` und echt neuerer LAST-MODIFIED (sonst DTSTAMP, beide Seiten
+dasselbe Feld, nur `…Z`-Zeiten); sonst Exit 1, der Konflikt bleibt ein Fehler
+wie bisher. Ohne Kalender-Anschluss (heutiger Stand auf dem Laptop) fährt
+die eigene `~/.config/vdirsyncer/config` — die wird NICHT angefasst (enthält
+das Client-Geheimnis); dort wirkt der Löser erst, wenn Sasha die Zeile selbst
+einträgt oder der Anschluss eingerichtet ist. Tests:
+`tests/test_kalender_sync_waechter.py`, `tests/test_kalender_konflikt.py`.

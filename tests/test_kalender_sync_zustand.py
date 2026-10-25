@@ -161,7 +161,7 @@ def test_abgleich_selbst_scheitert(ks):
 
 
 def test_loeschsperre(ks, monkeypatch):
-    monkeypatch.setattr(ks, "_fehlende", lambda vdir: ["t%d" % i for i in range(9)])
+    monkeypatch.setattr(ks, "_fehlende", lambda vdir, basis=None: ["t%d" % i for i in range(9)])
     assert ks.main(["zentrale"]) == 2
     assert zs.lesen()["art"] == "loeschsperre"
 

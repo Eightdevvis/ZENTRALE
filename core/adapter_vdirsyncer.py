@@ -29,6 +29,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 
 import adapter
 import adapter_geheim
@@ -125,6 +126,23 @@ def status_dir(a) -> str:
 
 def kalender_paare(a) -> list:
     """Die Paare, deren eine Seite data/kalender/ ist — ihr Stand reist mit."""
+    return list(_lokale_seiten(a))
+
+
+# Konfliktlöser für die Kalender-Paare (scripts/kalender_konflikt.py): lokal
+# gewinnt nur bei einem ZENTRALE-Termin (UID …@zentrale), dessen lokale
+# Fassung echt neuer ist; sonst bleibt der Konflikt ein Fehler wie bisher.
+# Eingetragen nur, wo Sasha keine eigene Regel gesetzt hat (null/fehlt).
+KONFLIKT_SKRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "scripts", "kalender_konflikt.py")
+
+
+def konflikt_regel(seite: str) -> list:
+    return ["command", sys.executable, KONFLIKT_SKRIPT, "--lokal", seite]
+
+
+def _lokale_seiten(a) -> dict:
+    """{Paar: 'a'|'b'} — welche Seite des Paars data/kalender/ ist."""
     lokal = set()
     for ab in _abschnitte(a):
         t = ab["kopf"].split(None, 1)
@@ -132,13 +150,15 @@ def kalender_paare(a) -> list:
             if any(k == "path" and isinstance(v, dict) and v.get("$ort") == "kalender"
                    for k, v in ab["werte"]):
                 lokal.add(t[1])
-    paare = []
+    paare = {}
     for ab in _abschnitte(a):
         t = ab["kopf"].split(None, 1)
         if len(t) == 2 and t[0] == "pair":
             w = dict((k, v) for k, v in ab["werte"])
-            if w.get("a") in lokal or w.get("b") in lokal:
-                paare.append(t[1])
+            if w.get("a") in lokal:
+                paare[t[1]] = "a"
+            elif w.get("b") in lokal:
+                paare[t[1]] = "b"
     return paare
 
 
@@ -159,9 +179,17 @@ def bauen(a, vdir, wurzel=None) -> str:
     aid = a["id"]
     zeilen = [f"# Erzeugt vom ZENTRALE-Adapter aus dem Anschluss '{aid}'. Nicht von Hand",
               "# ändern — es wird bei jedem Lauf neu geschrieben (memory/hub/adapter.md).", ""]
+    seiten = _lokale_seiten(a)
     for ab in _abschnitte(a):
         zeilen.append(f"[{ab['kopf']}]")
-        for k, v in ab["werte"]:
+        t = ab["kopf"].split(None, 1)
+        paar = t[1] if len(t) == 2 and t[0] == "pair" else None
+        werte = list(ab["werte"])
+        if paar in seiten and not any(k == "conflict_resolution" for k, _v in werte):
+            werte.append(["conflict_resolution", None])
+        for k, v in werte:
+            if paar in seiten and k == "conflict_resolution" and v is None:
+                v = konflikt_regel(seiten[paar])
             if isinstance(v, dict) and "$geheim" in v:
                 w = adapter_geheim.lesen(f"{aid}/{v['$geheim']}", wurzel)
                 if w is None:
