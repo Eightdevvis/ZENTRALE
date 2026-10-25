@@ -38,7 +38,11 @@ fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
   offene Ansicht nimmt Freitext oder '/' selbst (`fenster.in_text_entry`).
 - **'/'-Fenster und /help** lesen ebenfalls den Horcher
   (`fussleiste.programm_tasten`, `fussleiste.hilfe`: je Programm die Tasten
-  seiner ersten Ansicht). Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
+  seiner Hauptansicht: `HAUPTANSICHT` am Programm, sonst die erste der
+  Tabelle — der Kalender nennt `a:termine`, seine erste ist das
+  Ansehen-Fenster, /help zeigte dort bis 25.10.2026 nur „any key close").
+  Die Leiste unten nimmt nur ganze Einträge, die in die Breite passen —
+  vollständig ist erst das '/'-Fenster. Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
   `TUI_KEYS`, `fenster.current_ctx` und alle Hinweiszeilen in den Kästen.
 - **Tasten-Namen:** `enter esc tab shift+tab space ⌫ del home end pgup pgdn`,
   Pfeile `↑↓←→`, `alt+…`, `shift+↑↓←→`, `ctrl+x`, `f1`–`f12`, einzelne

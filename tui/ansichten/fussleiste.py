@@ -103,5 +103,10 @@ def hilfe(u):
     for name in [STARTSEITE] + [n for _d, n in PROGRAMME]:
         ansichten = horcher.ansichten(name)
         if ansichten:
-            raus.append((titel(name), text(horcher.eintraege(name, ansichten[0]))))
+            # Ein Programm kann seine Hauptansicht nennen (HAUPTANSICHT); die
+            # erste der Tabelle ist nicht immer eine (Kalender: „ansehen" —
+            # /help zeigte dort nur „any key close", 25.10.2026).
+            haupt = getattr(getattr(u, name, None), "HAUPTANSICHT", None)
+            ansicht = haupt if haupt in ansichten else ansichten[0]
+            raus.append((titel(name), text(horcher.eintraege(name, ansicht))))
     return raus

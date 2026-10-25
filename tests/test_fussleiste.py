@@ -738,6 +738,28 @@ def test_hilfe_kommt_aus_den_tastentabellen(welt):
     assert ("key", "notizen", h["notizen"]) in rows
 
 
+def test_hilfe_zeigt_die_hauptansicht_des_kalenders(welt):
+    """25.10.2026: /help zeigte beim Kalender nur „any key close" (die erste
+    Ansicht der Tabelle ist das Ansehen-Fenster) — S (Muss|Soll), R, x …
+    fehlten. Jetzt: die Hauptansicht, mit jeder beschrifteten Taste dort."""
+    u = _aufgebaut(welt, lambda u: None)
+    h = dict(fussleiste.hilfe(u))["kalender"]
+    assert "any key" not in h
+    for taste, was in u.z.horcher.eintraege("kalender", u.kalender.HAUPTANSICHT):
+        assert "%s %s" % (taste, was) in h
+    for stueck in ("S must/should", "R rhythm", "x show done", "g go to", "u (un)commit"):
+        assert stueck in h
+
+
+def test_kalender_s_steht_in_jeder_hauptansicht(welt):
+    """Taste S (Muss|Soll, c0b1368) wirkt in A, B und C — und steht dort in
+    der Tabelle, aus der Leiste, '/' und /help lesen."""
+    u = _aufgebaut(welt, lambda u: None)
+    for ansicht in ("a:termine", "a:kalender", "a:todo", "b:monat", "c:woche"):
+        e = u.z.horcher.eintraege("kalender", ansicht)
+        assert ("S", "must/should") in e, ansicht
+
+
 def test_keine_handtabelle_mehr():
     """Die Tasten stehen nur noch in den Tastentabellen der Programme."""
     for alt in ("CTX_KEYS", "CTX_TITLES", "TUI_KEYS"):

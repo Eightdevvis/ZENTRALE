@@ -79,6 +79,9 @@ class Kalender:
         dict({"a": (Bedienung.TASTEN_A, _bedienung), "b": (Bedienung.TASTEN_B, _bedienung),
               "c": (Bedienung.TASTEN_C, _bedienung)},
              **{name: (_tabelle(klasse), _offen(klasse)) for name, klasse in KAESTEN}))
+    # Was /help (fussleiste.hilfe) vom Kalender zeigt: A mit Terminen —
+    # die erste Ansicht der Tabelle ist das Ansehen-Fenster („any key").
+    HAUPTANSICHT = "a:termine"
 
     def __init__(self, z):
         self.z = z
