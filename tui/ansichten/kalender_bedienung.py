@@ -161,7 +161,10 @@ class Bedienung:
             # Ein Fehlschlag bleibt nicht kleben: nach ein paar Sekunden neu
             # versuchen (07.10.2026: nach dem Speichern blieb „kalender:
             # backend?" stehen, bis man blätterte).
-            if not d.get("failed") or time.monotonic() - d.get("_um", 0) < 3:
+            # Soll-Modus: ein Soll wurde seit dem Holen verpasst (oder ein
+            # verpasstes Muss ist vorbei) — die Deadline wandert, neu holen.
+            if (not d.get("failed") or time.monotonic() - d.get("_um", 0) < 3) \
+                    and not kalender_deadline.veraltet(d):
                 return d
         d = self._holen("month", ref)
         if not d.get("failed") and K["stil"] == "A":

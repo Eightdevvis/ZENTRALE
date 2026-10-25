@@ -156,4 +156,19 @@ damit es bei wöchentlichen Serien jede Woche stimmt.
   leer = keine. Die Hilfezeile zeigt die andere Schreibweise („= 2d18h vor
   muss"). Vorbelegt als Wochentag, solange weniger als eine Woche davor.
 
-Tests: `tests/test_kalender_soll.py`.
+- **Soll verpasst** (25.10.2026). Sasha: TP Muss Do 29.10. 12:00, Soll
+  −5d23h45m = Fr 23.10. 12:15 schon vorbei — im Soll-Modus stand in der
+  Woche nur das Soll fürs nächste Blatt (Fr 30.10.), das Blatt in Arbeit
+  fehlte. Jetzt: Soll < jetzt < Muss → die Deadline bleibt im Soll-Modus an
+  ihrer **Muss**-Stelle (Kopie mit `soll_verpasst`, Leuchten relativ zu
+  Muss), markiert mit `VERPASST_TEXT` („soll verpasst", Regler in
+  `kalender_deadline.py`): A „⚑ 12:00 TP · in 4 T · soll verpasst", B/C
+  hinter dem Titel (fällt beim Kürzen zuerst weg), Ansehen „Soll Fr 23.10.
+  12:15 · soll verpasst". Nach Muss wieder am Soll-Tag (Vergangenheit).
+  „jetzt" aus `uhr.jetzt()`; weil sich das mit der Uhrzeit ändert, tragen
+  die Daten `_soll_gilt_bis` (nächster Soll- oder verpasster Muss-Zeitpunkt)
+  und `Bedienung.daten()` holt danach neu (`kalender_deadline.veraltet`) —
+  sonst klebte es bis Mitternacht (Gefahrzone 1).
+
+Tests: `tests/test_kalender_soll.py` (verpasst: `test_soll_verpasst_*`,
+`test_nach_muss_*`, `test_bedienung_holt_neu_*`, mit gestellter Uhr).

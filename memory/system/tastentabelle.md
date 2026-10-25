@@ -41,8 +41,11 @@ fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
   seiner Hauptansicht: `HAUPTANSICHT` am Programm, sonst die erste der
   Tabelle — der Kalender nennt `a:termine`, seine erste ist das
   Ansehen-Fenster, /help zeigte dort bis 25.10.2026 nur „any key close").
-  Die Leiste unten nimmt nur ganze Einträge, die in die Breite passen —
-  vollständig ist erst das '/'-Fenster. Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
+  Die Leiste unten nimmt nur ganze Einträge, die in die Breite passen, in
+  Tabellen-Reihenfolge; ein zu langer wird übersprungen, die kürzeren
+  dahinter kommen noch (bis 25.10.2026 hörte sie beim ersten zu langen auf:
+  Kalender bei 160 Spalten endete vor „t/w/m/y day/week/month/year (caps:
+  back)" mit 42 leeren Spalten) — vollständig ist erst das '/'-Fenster. Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
   `TUI_KEYS`, `fenster.current_ctx` und alle Hinweiszeilen in den Kästen.
 - **Tasten-Namen:** `enter esc tab shift+tab space ⌫ del home end pgup pgdn`,
   Pfeile `↑↓←→`, `alt+…`, `shift+↑↓←→`, `ctrl+x`, `f1`–`f12`, einzelne

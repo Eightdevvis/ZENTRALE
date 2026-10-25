@@ -159,9 +159,12 @@ def _dl(**mehr):
             "typ": "deadline", "vorwarnung": 3 * 1440, "soll_abstand": SOLL, **mehr}
 
 
-def _daten(modus, termine=None, ref="2026-10-28", spaeter=None):
+JETZT = datetime(2026, 10, 26, 8, 0)    # vor jedem Soll: nichts ist verpasst
+
+
+def _daten(modus, termine=None, ref="2026-10-28", spaeter=None, jetzt=JETZT):
     d = kb.api_daten("week", ref=ref, heute=ref, termine=termine or [_dl()], routinen=[])
-    kdl.modus_anwenden(d, modus, spaeter)
+    kdl.modus_anwenden(d, modus, spaeter, jetzt)
     return d
 
 
@@ -232,6 +235,11 @@ def _bedienung(daten_je_ref):
 
 
 def test_taste_s_schaltet_und_werkzeuge_aendern_am_muss_tag():
+    with uhr.gestellt(JETZT):
+        _taste_s_schaltet()
+
+
+def _taste_s_schaltet():
     bed = _bedienung([_dl()])
     assert ("S", "modus") in [(k, a) for k, a, *_r in kbed._rest()]
     bed.setze_tag(date.fromisoformat(DI))
@@ -256,6 +264,74 @@ def test_hot_reload_nimmt_den_modus_mit():
     kal.bedienung.setze_tag = lambda *a: None
     Kalender.stand_nach_neustart(kal, {"modus": "soll"})
     assert kal.K["modus"] == "soll"
+
+
+# ── Soll verpasst, Muss noch nicht (25.10.2026) ────────────────────────
+# Sashas Fall: TP-Blatt Muss Do 29.10. 12:00, Soll −5d23h45m = Fr 23.10.
+# 12:15 (schon vorbei); das nächste Blatt Muss Do 05.11., Soll Fr 30.10.
+TP_SOLL = -(5 * 1440 + 23 * 60 + 45)
+DO = "2026-10-29"
+
+
+def _tp(tag):
+    return _dl(day=tag, label="TP Blatt", soll_abstand=TP_SOLL)
+
+
+def _tp_woche(jetzt):
+    naechste = kb.eintraege(date(2026, 11, 2), date(2026, 11, 8), [_tp("2026-11-05")], [])
+    return _daten(kdl.SOLL, [_tp(DO)], ref="2026-10-26", spaeter=naechste, jetzt=jetzt)
+
+
+def test_soll_verpasst_bleibt_an_der_muss_stelle():
+    jetzt = datetime(2026, 10, 25, 17, 0)
+    d = _tp_woche(jetzt)
+    do, fr = d["days"][DO], d["days"][FR.isoformat()]
+    assert len(do) == 1 and do[0]["soll_verpasst"] and do[0]["time"] == "12:00"
+    assert do[0]["muss_tag"] == DO and do[0]["_echt"]["time"] == "12:00"
+    assert len(fr) == 1 and fr[0]["time"] == "12:15" and not fr[0].get("soll_verpasst")
+    t_do = ka._tag_eintraege(d, DO, False)[0]
+    t_fr = ka._tag_eintraege(d, FR.isoformat(), False)[0]
+    assert kdl.a_text(t_do, jetzt).endswith("· soll verpasst")
+    assert "verpasst" not in kdl.a_text(t_fr, jetzt) and "· muss Do 12:00" in kdl.a_text(t_fr, jetzt)
+    assert kdl.b_text(t_do, 20).endswith("soll verpasst") and "verpasst" not in kdl.b_text(t_fr, 20)
+    # Leuchten relativ zu Muss (3½ Tage davor, Vorwarnung 3 Tage: Stufe 0)
+    assert kdl.stufe(kdl.dl(t_do), t_do["tag"], jetzt) == 0
+    zeilen = [_text(z) for z in ka.ansicht_c(d, 320, 60, jetzt=jetzt)]
+    assert len([z for z in zeilen if "⚑ 12:00 TP Blatt · soll verpasst" in z]) == 1
+    assert len([z for z in zeilen if "TP Blatt" in z]) == 2
+    # Nächster Umschlag: das Muss des laufenden Blatts (Do 29.10. 12:00)
+    assert d["_soll_gilt_bis"] == "2026-10-29T12:00"
+
+
+def test_nach_muss_wieder_am_soll_tag():
+    d = _tp_woche(datetime(2026, 10, 29, 12, 1))
+    assert d["days"][DO] == []                             # Do 29.: am Fr 23.10. (Vergangenheit)
+    assert [e["time"] for e in d["days"][FR.isoformat()]] == ["12:15"]
+    assert kdl.veraltet(d, datetime(2026, 10, 30, 12, 15))
+    assert not kdl.veraltet(d, datetime(2026, 10, 30, 12, 14))
+
+
+def test_muss_modus_kennt_kein_verpasst():
+    d = _daten(kdl.MUSS, [_tp(DO)], ref="2026-10-26", jetzt=datetime(2026, 10, 25, 17, 0))
+    assert not d["days"][DO][0].get("soll_verpasst") and "_soll_gilt_bis" not in d
+
+
+def test_bedienung_holt_neu_wenn_soll_verpasst_wird():
+    """Die TUI läuft durch: Fr 30.10. 12:15 verstreicht das Soll des nächsten
+    Blatts, Do 29.10. 12:00 das Muss des laufenden — ohne Tageswechsel."""
+    bed = _bedienung([_tp(DO), _tp("2026-11-05")])
+    bed.K.update(ref="2026-10-26", modus="soll")
+    with uhr.gestellt(datetime(2026, 10, 29, 11, 0)):
+        bed.setze_tag(date.fromisoformat(DO))
+        assert [t["label"] for t in bed.termine()] == ["TP Blatt"]
+        assert "Soll     Fr 23.10. 12:15 · soll verpasst" in kw.details(bed.gewaehlt(),
+                                                                      bed.roh_tag())
+        uhr.vorstellen(hours=1, minutes=1)                 # Do 12:01: Muss vorbei
+        assert bed.termine() == []
+        bed.setze_tag(FR)
+        assert [t["start"] for t in bed.termine()] == [12 * 60 + 15]
+        uhr.vorstellen(days=1, minutes=15)                 # Fr 12:16: dieses Soll verpasst
+        assert bed.termine() == []                         # steht jetzt am Do 05.11.
 
 
 # ── Formular: Zeile „Soll" ─────────────────────────────────────────────

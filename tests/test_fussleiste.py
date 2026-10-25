@@ -58,6 +58,16 @@ def test_zeile_kappt_an_ganzen_eintraegen():
     assert fussleiste.zeile(e, 5) == " ↑↓ s"
 
 
+def test_zeile_ueberspringt_zu_lange_und_nimmt_die_kuerzeren_dahinter():
+    """25.10.2026: die Kalender-Leiste hörte vor „t/w/m/y day/week/…" auf und
+    ließ 42 von 160 Spalten leer. Reihenfolge bleibt, gezeigt wird mehr."""
+    e = [("↑↓", "select"), ("t/w/m/y", "day/week/month/year (caps: back)"),
+         ("g", "go to"), ("S", "must/should")]
+    assert fussleiste.zeile(e, 45) == " ↑↓ select · g go to · S must/should"
+    assert fussleiste.zeile(e, 70) == (" ↑↓ select · t/w/m/y day/week/month/year (caps: back)"
+                                       " · g go to")
+
+
 # ── Die TUI ohne Bildschirm ───────────────────────────────────────────
 
 class Schirm:

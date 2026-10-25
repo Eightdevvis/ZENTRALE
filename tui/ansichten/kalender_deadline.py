@@ -32,6 +32,14 @@ legt soll_anwenden() jede solche Deadline auf ihren Soll-Tag/ihre Soll-Zeit
 um — VOR dem Normieren, so zeichnen A/B/C, Auswahl und Leuchten sie
 überall gleich und nie doppelt. Die Kopie trägt `muss_tag`/`muss_time` und
 `_echt` (den API-Eintrag: die Werkzeuge ändern immer das Original).
+
+Soll verpasst (25.10.2026). Sasha: Muss Do 12:00, Soll Fr davor schon
+vorbei — im Soll-Modus stand in der Woche nur das Soll fürs NÄCHSTE Blatt,
+das Blatt in Arbeit fehlte. Ist die Soll-Zeit eines Vorkommens vorbei, die
+Muss-Zeit aber noch nicht, bleibt es im Soll-Modus an seiner Muss-Stelle,
+markiert mit VERPASST_TEXT. Nach Muss wieder am Soll-Tag (Vergangenheit).
+Weil das von der Uhrzeit abhängt, tragen die Daten `_soll_gilt_bis` (der
+nächste Umschlag); die Bedienung holt danach neu (Gefahrzone 1).
 """
 from __future__ import annotations
 
@@ -58,6 +66,7 @@ LINIE_MIN = 3                          # so viel Linie bleibt immer (der Titel w
 ROLLEN = {0: "k_dl0", 1: "k_dl1", 2: "k_dl2", 3: "k_dl3", STUFE_VORBEI: "k_dlx"}
 MUSS, SOLL = "muss", "soll"
 SOLL_TAGE = 28                         # wie core SOLL_HOECHSTENS: so weit holt die TUI voraus
+VERPASST_TEXT = "soll verpasst"        # Markierung (A, B, C, Ansehen); Sasha entscheidet
 WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 
@@ -88,33 +97,48 @@ def soll_zeitpunkt(roh, tag) -> datetime | None:
     return None if zp is None or s is None else zp + timedelta(minutes=s)
 
 
-def _soll_kopie(e, iso):
-    """(soll_tag, Kopie zur Soll-Zeit) oder None (keine Soll-Zeit)."""
+def verpasst(soll: datetime | None, muss: datetime | None, jetzt: datetime) -> bool:
+    """Soll vorbei, Muss noch nicht."""
+    return soll is not None and muss is not None and soll < jetzt < muss
+
+
+def _soll_kopie(e, iso, jetzt):
+    """(Tag, Kopie) oder None (keine Soll-Zeit). Die Kopie steht zur
+    Soll-Zeit am Soll-Tag — ist das Soll verpasst, zur Muss-Zeit am Muss-Tag
+    mit `soll_verpasst`. Dazu der nächste Zeitpunkt, an dem sich das ändert
+    (oder None)."""
     if not isinstance(e, dict) or e.get("spanning"):
         return None
-    zp = soll_zeitpunkt(e, iso)
-    if zp is None or _zeitpunkt(e, iso) is None:
+    zp, muss = soll_zeitpunkt(e, iso), _zeitpunkt(e, iso)
+    if zp is None or muss is None:
         return None
-    kopie = dict(e, time=zp.strftime("%H:%M"), muss_tag=iso, muss_time=e.get("time"))
+    kopie = dict(e, muss_tag=iso, muss_time=e.get("time"))
     kopie["_echt"] = e
-    return zp.date().isoformat(), kopie
+    if verpasst(zp, muss, jetzt):
+        kopie["soll_verpasst"] = True
+        return iso, kopie, muss
+    kopie["time"] = zp.strftime("%H:%M")
+    return zp.date().isoformat(), kopie, (zp if jetzt < zp else None)
 
 
-def soll_anwenden(daten: dict, spaeter: dict | None = None) -> None:
+def soll_anwenden(daten: dict, spaeter: dict | None = None, jetzt=None) -> None:
     """Soll-Modus: jede Deadline mit Soll-Zeit wandert (an Ort und Stelle)
-    von ihrem Muss-Tag auf den Soll-Tag zur Soll-Uhrzeit. `spaeter`: die
-    `days` NACH dem Ende der Daten (die TUI holt SOLL_TAGE voraus) — von
-    dort kommen nur Deadlines, deren Soll-Tag in die Daten fällt."""
+    von ihrem Muss-Tag auf den Soll-Tag zur Soll-Uhrzeit — außer ihr Soll
+    ist verpasst (siehe oben). `spaeter`: die `days` NACH dem Ende der
+    Daten (die TUI holt SOLL_TAGE voraus) — von dort kommen nur Deadlines,
+    deren Soll-Tag in die Daten fällt. Setzt `_soll_gilt_bis` (ISO-Zeit des
+    nächsten Umschlags, oder weg)."""
     tage = daten.get("days") if isinstance(daten, dict) else None
     if not isinstance(tage, dict):
         return
-    wandern = []
+    jetzt = jetzt or uhr.jetzt()
+    wandern, umschlag = [], []
     for iso, es in list(tage.items()):
         if not isinstance(es, list):
             continue
         bleibt = []
         for e in es:
-            k = _soll_kopie(e, iso)
+            k = _soll_kopie(e, iso, jetzt)
             (wandern.append(k) if k else bleibt.append(e))
         tage[iso] = bleibt
     ende = str(daten.get("end") or max(tage, default=""))
@@ -122,20 +146,39 @@ def soll_anwenden(daten: dict, spaeter: dict | None = None) -> None:
         if iso in tage or not isinstance(es, list):
             continue
         for e in es:
-            k = _soll_kopie(e, iso)
+            k = _soll_kopie(e, iso, jetzt)
             if k and k[0] <= ende:
                 wandern.append(k)
-    for tag, kopie in wandern:
+            elif k and k[2] is not None:
+                umschlag.append(k[2])     # wird später verpasst: dann neu holen
+    for tag, kopie, wechsel in wandern:
         tage.setdefault(tag, []).append(kopie)
+        if wechsel is not None:
+            umschlag.append(wechsel)
+    if umschlag:
+        daten["_soll_gilt_bis"] = min(umschlag).isoformat(timespec="minutes")
+    else:
+        daten.pop("_soll_gilt_bis", None)
 
 
-def modus_anwenden(daten: dict, modus: str, spaeter: dict | None = None) -> None:
+def veraltet(daten, jetzt=None) -> bool:
+    """Ist ein Soll seit dem Holen verpasst oder ein verpasstes Muss vorbei?"""
+    bis = daten.get("_soll_gilt_bis") if isinstance(daten, dict) else None
+    if not bis:
+        return False
+    try:
+        return (jetzt or uhr.jetzt()) >= datetime.fromisoformat(bis)
+    except ValueError:
+        return False
+
+
+def modus_anwenden(daten: dict, modus: str, spaeter: dict | None = None, jetzt=None) -> None:
     """daten["modus"] setzen (der Kopf zeigt es) und im Soll-Modus umlegen."""
     if not isinstance(daten, dict):
         return
     daten["modus"] = SOLL if modus == SOLL else MUSS
     if daten["modus"] == SOLL:
-        soll_anwenden(daten, spaeter)
+        soll_anwenden(daten, spaeter, jetzt)
 
 
 def modus_text(daten) -> str:
@@ -150,13 +193,14 @@ def wann(zp: datetime) -> str:
     return "%s %s" % (WT[zp.weekday()], zp.strftime("%d.%m. %H:%M"))
 
 
-def soll_muss_zeilen(roh, tag) -> list:
+def soll_muss_zeilen(roh, tag, jetzt=None) -> list:
     """Für das Ansehen-Fenster: [„soll Di 21.10. 18:00", „muss Fr 24.10. 12:00"]
-    — leer ohne Soll-Zeit."""
+    — leer ohne Soll-Zeit; verpasst: „soll Di 21.10. 18:00 · soll verpasst"."""
     soll, muss = soll_zeitpunkt(roh, tag), _zeitpunkt(roh, tag)
     if soll is None or muss is None:
         return []
-    return ["soll %s" % wann(soll), "muss %s" % wann(muss)]
+    marke = " · " + VERPASST_TEXT if verpasst(soll, muss, jetzt or uhr.jetzt()) else ""
+    return ["soll %s%s" % (wann(soll), marke), "muss %s" % wann(muss)]
 
 
 def dl(t) -> dict:
@@ -236,25 +280,37 @@ def _hm(m: int) -> str:
 # ── Texte je Ansicht ───────────────────────────────────────────────────
 def a_text(t: dict, jetzt=None) -> str:
     """A: „⚑ 23:59 Analysis HÜ · in 2 T"; im Soll-Modus dahinter winzig
-    „· muss Fr 12:00" (nie eine zweite Zeile)."""
+    „· muss Fr 12:00" (nie eine zweite Zeile), Soll verpasst: „· soll verpasst"."""
     rest = rest_kurz(dl(t), t["tag"], jetzt)
     aus = "%s %s %s%s" % (ZEICHEN, _hm(t["start"]), t["label"], " · " + rest if rest else "")
+    if ist_verpasst(t):
+        return aus + " · " + VERPASST_TEXT
     muss = _zeitpunkt(t["roh"], t.get("muss_tag") or "") if t.get("muss_tag") else None
     return aus + (" · muss %s %s" % (WT[muss.weekday()], muss.strftime("%H:%M")) if muss else "")
 
 
+def ist_verpasst(t: dict) -> bool:
+    """Eine normierte Deadline, deren Soll verpasst ist (soll_anwenden)."""
+    return bool((t.get("dl") or {}).get("soll_verpasst"))
+
+
+def _marke(t: dict) -> str:
+    return " · " + VERPASST_TEXT if ist_verpasst(t) else ""
+
+
 def b_text(t: dict, cw: int) -> str:
-    """B: „⚑23:59 Titel", schmal „⚑Titel"."""
+    """B: „⚑23:59 Titel", schmal „⚑Titel" (Markierung hinten, fällt beim
+    Kürzen zuerst weg)."""
     zeit = _hm(t["start"]) + " " if cw >= 10 else ""
-    return ZEICHEN + zeit + t["label"]
+    return ZEICHEN + zeit + t["label"] + _marke(t)
 
 
 def c_text(t: dict, breite: int, zeichen: str = ZEICHEN) -> str:
     """C: der Text am Anfang der Linie („⚑ 23:59 Titel "), schmal ohne
     Leerzeichen hinter dem Zeichen."""
     if breite >= 22:
-        return "%s %s %s " % (zeichen, _hm(t["start"]), t["label"])
-    return "%s%s %s " % (zeichen, _hm(t["start"]), t["label"])
+        return "%s %s %s%s " % (zeichen, _hm(t["start"]), t["label"], _marke(t))
+    return "%s%s %s%s " % (zeichen, _hm(t["start"]), t["label"], _marke(t))
 
 
 # ── C: die hingemalte Deadline ─────────────────────────────────────────

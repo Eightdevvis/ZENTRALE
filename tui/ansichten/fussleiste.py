@@ -46,14 +46,21 @@ def text(eintraege):
 
 
 def zeile(eintraege, breite):
-    """Die Leiste auf `breite` Zeichen: ganze Einträge, nie ein halbes Wort.
-    Passt schon der erste nicht, wird er hart gekürzt."""
+    """Die Leiste auf `breite` Zeichen: ganze Einträge, nie ein halbes Wort,
+    in Tabellen-Reihenfolge. Ein Eintrag, der nicht mehr passt, wird
+    übersprungen — die kürzeren dahinter kommen noch dran. Bis 25.10.2026
+    hörte die Leiste beim ersten zu langen auf: im Kalender (160 Spalten)
+    endete sie vor „t/w/m/y day/week/month/year (caps: back)" mit 42 leeren
+    Spalten (Sasha: „unten ist noch genug platz"). Passt schon der erste
+    nicht, wird er hart gekürzt."""
     aus = ""
     for t, w in eintraege:
         stueck = "%s %s" % (t, w)
         kandidat = (aus + TRENNER + stueck) if aus else " " + stueck
         if len(kandidat) > breite:
-            break
+            if not aus:
+                break
+            continue
         aus = kandidat
     if not aus and eintraege:
         aus = (" %s %s" % eintraege[0])[:breite]
