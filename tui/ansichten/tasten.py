@@ -191,6 +191,7 @@ class Tasten:
 
     def __init__(self, tabelle):
         self._ziele = {}
+        self.zuletzt = None
         daten = {a: [_als_objekt(e) for e in liste] for a, liste in tabelle.items()}
         fehler = tt.pruefen(daten)
         if fehler:
@@ -247,6 +248,11 @@ class Tasten:
         aktion = self.nimmt(ansicht, name)
         if aktion is None:
             return None
+        # Für den Sortierer der Leiste (tasten_zaehler.py): was zuletzt
+        # gedrückt wurde. Die Hauptschleife setzt es vor jeder Taste auf
+        # None; ein verschachteltes verteilen überschreibt das äußere nicht.
+        if self.zuletzt is None:
+            self.zuletzt = (ansicht, name, aktion)
         if aktion == self._frei.get(ansicht) and (len(name) == 1 or name == "space") \
                 and self._karte[ansicht].get(name) is None:
             name = " " if name == "space" else name

@@ -799,6 +799,12 @@ def taste_verteilen(u, ch):
         if res is not None:
             if befehl_ausfuehren(res, bz, store, LAUF, DASH, TECH, app_start):
                 return BEENDEN
+    elif fussleiste.erklaert(z):
+        # '?'-Erklärung offen (fussleiste.py, 2026-10-25): nach '?' wird die
+        # nächste Taste erklärt statt ausgeführt, danach schließt jede Taste.
+        fussleiste.erklaer_taste(u, ch)
+    elif ch == ord(fussleiste.FRAGE) and fussleiste.frage_frei(z):
+        fussleiste.frage_oeffnen(z)
     elif ch == ord("/") and not in_text_entry(z):
         # '/' greift JETZT in jedem Fenster (nicht nur Home): blendet die
         # Shortcuts des fokussierten Fensters ein. In Freitext-Feldern bleibt
@@ -808,8 +814,16 @@ def taste_verteilen(u, ch):
         # Das Programm mit dem Fokus (fenster.PROGRAMME, sonst die Startseite)
         # verteilt die Taste aus seiner Tastentabelle (tasten.py, 2026-10-11).
         # Bis dahin stand hier eine Kette je Fenster.
+        # Vorher merken, wo die Taste landet — danach zählt der Sortierer
+        # der Leiste, welcher Eintrag es war (tasten_zaehler.py).
         p = z.programme.get(ansichten.fenster.aktives_programm(z))
-        if p is not None and p.taste(ch) == BEENDEN:
+        mit = ansichten.fenster.programm_mit_tabelle(z)
+        if mit is not None:
+            mit[1].TASTEN.zuletzt = None
+        raus = p.taste(ch) if p is not None else None
+        if ch != -1:
+            fussleiste.zaehlen(z, mit)
+        if raus == BEENDEN:
             return BEENDEN
 
 
@@ -1006,10 +1020,12 @@ def bild_zeichnen(u):
     # überall dasselbe, auch „space ki", wo die Leertaste etwas anderes
     # tut). Eine KI-Antwort, die im Hintergrund fertig wurde, meldet sich
     # auf der Startseite mit ● an der Leertaste.
-    eintr = fussleiste.eintraege(u)
-    if chat.ungelesen() and ansichten.fenster.aktives_programm(z) == "startseite":
-        eintr = [(t, w + " ●" if t == "space" else w) for t, w in eintr]
-    addclip(footer_row, 0, fussleiste.zeile(eintr, W - 1), W - 1, C["faint"])
+    # Seit 25.10.2026 nur die Tasten selbst, meistgenutzte vorn; '?' + Taste
+    # erklärt eine (fussleiste.leistenzeile).
+    punkt = {"space"} if (chat.ungelesen()
+                          and ansichten.fenster.aktives_programm(z) == "startseite") else ()
+    text, farbe = fussleiste.leistenzeile(u, W - 1, punkt)
+    addclip(footer_row, 0, text, W - 1, C.get(farbe, C["faint"]))
 
     # ── Graph-Reminder-Nag (zuletzt → liegt über allem) ───────────────
     erinnerung.zeichnen(H, W)
@@ -1276,6 +1292,9 @@ def run_ui(stdscr, store):
             apply_theme(cur_theme)
 
         bild_zeichnen(u)
+
+    # Ende, /reload oder Hot Reload: die Tasten-Zähler der Leiste sichern.
+    fussleiste.leiste_von(z).zaehler.speichern()
 
 
 # Default-Pfad bleibt fix (start_tui.sh liest genau diesen); per Env überstimmbar,

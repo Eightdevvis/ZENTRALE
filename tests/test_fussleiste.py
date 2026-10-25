@@ -51,21 +51,18 @@ def test_codes_lesen_die_beschriftungen():
         fussleiste.codes("bild↑↓")
 
 
-def test_zeile_kappt_an_ganzen_eintraegen():
-    e = [("↑↓", "select"), ("enter", "open"), ("esc", "close")]
-    assert fussleiste.zeile(e, 80) == " ↑↓ select · enter open · esc close"
-    assert fussleiste.zeile(e, 27) == " ↑↓ select · enter open"
-    assert fussleiste.zeile(e, 5) == " ↑↓ s"
+def test_kompakt_zeigt_nur_tasten():
+    """25.10.2026: nur die Tasten, Bedeutung über '?' + Taste."""
+    assert fussleiste.kompakt(["↑↓", "enter", "S"], ["/", "?"], 80) == " ↑↓ · enter · S · / · ?"
+    assert fussleiste.kompakt([], [], 80) == ""
 
 
-def test_zeile_ueberspringt_zu_lange_und_nimmt_die_kuerzeren_dahinter():
-    """25.10.2026: die Kalender-Leiste hörte vor „t/w/m/y day/week/…" auf und
-    ließ 42 von 160 Spalten leer. Reihenfolge bleibt, gezeigt wird mehr."""
-    e = [("↑↓", "select"), ("t/w/m/y", "day/week/month/year (caps: back)"),
-         ("g", "go to"), ("S", "must/should")]
-    assert fussleiste.zeile(e, 45) == " ↑↓ select · g go to · S must/should"
-    assert fussleiste.zeile(e, 70) == (" ↑↓ select · t/w/m/y day/week/month/year (caps: back)"
-                                       " · g go to")
+def test_kompakt_wirft_nichts_still_weg():
+    """Passt es nicht, steht „…" vor '/' und '?' — die bleiben immer."""
+    t = ["↑↓", "t/w/m/y", "g", "S", "R"]
+    s = fussleiste.kompakt(t, ["/", "?"], 26)
+    assert s.endswith("… · / · ?") and len(s) <= 26 and s.startswith(" ↑↓ · t/w/m/y")
+    assert len(fussleiste.kompakt(t, ["/", "?"], 5)) == 5
 
 
 # ── Die TUI ohne Bildschirm ───────────────────────────────────────────

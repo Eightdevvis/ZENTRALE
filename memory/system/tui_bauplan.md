@@ -75,7 +75,7 @@ hineinbauen kann, ohne den Rest zu lesen.
 | `ansichten/startseite.py` | `Startseite`: Rad, Galaxie + ihre Geometrie; drei Räder (Apps, Technik, Erschaffen) seit 2026-10-10, `rad_apps()` = feste + eigene Apps, `symbol_rad()` | liest `RAD`/`META`/`TRAD`/`ERAD` |
 | `ansichten/dashboard.py` | `Dashboard`: rechte Spalte des alten Dashboards | — |
 | `ansichten/befehle.py` | Befehle (`TUI_COMMANDS`), `overlay_rows` ('/'-Fenster, /help), `Befehlszeile` — keine Tasten-Tabellen mehr | `cmd_mode` … |
-| `ansichten/fussleiste.py` | Die EINE Tastenleiste ganz unten: `eintraege(u)`, `programm_tasten(u)` ('/'-Fenster), `hilfe(u)` (/help) — alles aus dem Horcher; `zeile`, `text`, `codes` | — |
+| `ansichten/fussleiste.py` | Die EINE Tastenleiste ganz unten: `eintraege(u)`, `programm_tasten(u)` ('/'-Fenster), `hilfe(u)` (/help) — alles aus dem Horcher; `leistenzeile`/`kompakt` (nur Tasten, seit 25.10.2026), `?`-Erklärung (`frage_frei`, `erklaerung`), `text`, `codes`; Sortierer `tasten_zaehler.py` (meistgenutzt zuerst, ~/.local/state) — [tastentabelle.md](tastentabelle.md) | — |
 | `ansichten/tasten.py` | `Tasten`: Tastentabelle eines Programms — verteilt (`verteilen`) UND zeigt (`eintraege`); `Tasten.zusammen` für Teile mit eigener Tabelle; Tastencodes ↔ neutrale Namen (Alt-/Shift-Folgen) | — |
 | `ansichten/horcher.py` | `Horcher`: fragt jedes Programm beim Verkabeln einmal nach seiner Tabelle (sonst app.toml, sonst abhören) und merkt sich die Einträge je Ansicht | `z.horcher` |
 | `ansichten/erinnerung.py` | `Erinnerung`: Graph-Reminder-Kästchen | `nag_*` |

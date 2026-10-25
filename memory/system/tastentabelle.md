@@ -41,11 +41,8 @@ fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
   seiner Hauptansicht: `HAUPTANSICHT` am Programm, sonst die erste der
   Tabelle — der Kalender nennt `a:termine`, seine erste ist das
   Ansehen-Fenster, /help zeigte dort bis 25.10.2026 nur „any key close").
-  Die Leiste unten nimmt nur ganze Einträge, die in die Breite passen, in
-  Tabellen-Reihenfolge; ein zu langer wird übersprungen, die kürzeren
-  dahinter kommen noch (bis 25.10.2026 hörte sie beim ersten zu langen auf:
-  Kalender bei 160 Spalten endete vor „t/w/m/y day/week/month/year (caps:
-  back)" mit 42 leeren Spalten) — vollständig ist erst das '/'-Fenster. Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
+  Die Leiste unten zeigt seit 25.10.2026 nur die Tasten (siehe
+  „Kompakte Leiste" unten). Weg sind `befehle.CTX_KEYS`, `CTX_TITLES`,
   `TUI_KEYS`, `fenster.current_ctx` und alle Hinweiszeilen in den Kästen.
 - **Tasten-Namen:** `enter esc tab shift+tab space ⌫ del home end pgup pgdn`,
   Pfeile `↑↓←→`, `alt+…`, `shift+↑↓←→`, `ctrl+x`, `f1`–`f12`, einzelne
@@ -53,6 +50,48 @@ fliegen deswegen so komisch rum. stattdessen will ich es dynamisch." Seitdem:
   Leisten-Text englisch (Sasha, 07.10.2026). Umlaute in Freitext: die
   Tabelle kennt nur ASCII; Programme mit Freitext setzen UTF-8-Bytes vorher
   zusammen (Post-Antwort, Chat, Desk, Kalender-Kästen, Klavier-Name).
+
+## Kompakte Leiste, `?` und Sortierer (seit 2026-10-25)
+
+Sasha: „mach einfach nur die shortcuts hin und wenn man ?+shortcut drückt
+dann wird die bedeutung aufgeklappt, dazu ein kleiner sortierer mit the most
+used shortcuts ganz nach vorne." Anlass: Kalender-Hauptansicht ~255 Zeichen,
+Terminal 160 Spalten — S (must/should), R … fehlten (auch nach 3cd1467, das
+zu lange Einträge übersprang).
+
+- **Nur Tasten** (`fussleiste.leistenzeile` → `kompakt`): „ ↑↓ · enter ·
+  t/w/m/y · g · R · S · / · ?". Kalender A/B/C passen in 100 Spalten.
+  Passt es nicht, fällt hinten etwas aus dem Körper und `…` steht vor
+  `/ · ?` — die beiden bleiben immer (über `/` sieht man alle mit Text).
+- **`?` + Taste** erklärt die Taste in der Leiste („ S  must/should"), die
+  Taste wird dabei NICHT ausgeführt; der nächste Druck schließt (verbraucht).
+  Zweitbelegung: „k  select (like ↑↓)". `?` greift nur, wo die offene
+  Ansicht es nicht nimmt (`fussleiste.frage_frei`: kein Freitext, kein
+  „any key"); sonst gehört es dem Programm. Geprüft 25.10.2026: kein
+  Programm belegt `?` selbst, nur Freitext-Ansichten und die „any key"-
+  Fragen (Graph/Notizen/Fokus/Post-Nachfrage, Kalender ansehen/frage:ny/at/ant)
+  — Wächter `test_kein_programm_belegt_das_fragezeichen_selbst`. Ein
+  Präfix, weil ein Terminal gedrückt GEHALTENES Shift/Alt nicht sieht; `?`
+  fängt weder Terminal noch i3 ab.
+- **Sortierer** (`tasten_zaehler.py`): zählt je Programm/Ansicht unter der
+  gezeigten Beschriftung (über `Tasten.zuletzt`, das `verteilen` setzt; k
+  zählt für ↑↓; `type`/`any key` zählen nicht). Meistgenutzt zuerst,
+  Gleichstand in Tabellen-Reihenfolge, nichts fällt weg. **Dämpfung:**
+  neu sortiert wird nur beim Öffnen einer Ansicht — die Leiste hüpft nie
+  während der Bedienung. Datei `$ZENTRALE_TASTEN_ZAEHLER`, sonst
+  `$XDG_STATE_HOME/zentrale/tasten_zaehler.json` (~/.local/state…), nie im
+  Repo; geschrieben beim Ansichtswechsel und beim Ende. Kaputte Datei →
+  `….kaputt` daneben + Meldung auf stderr, Neubeginn; falsche Teile fallen
+  einzeln weg.
+- **Regler** (Feinschliff entscheidet Sasha): `TRENNER_KOMPAKT`,
+  `AUSLASSUNG`, `FRAGE`, `FARBE`, `FARBE_ERKLAERUNG`, `TEXT_WARTEN` oben in
+  `fussleiste.py`; `SORTIEREN` in `tasten_zaehler.py`.
+- **/help und das `/`-Fenster** bleiben vollständig mit Beschriftungen und
+  in Tabellen-Reihenfolge (`programm_tasten`, `hilfe`).
+
+Tests: `tests/test_leiste_kompakt.py` (S bei 100 Spalten in A/B/C,
+`?`-Erklärung, Freitext, Sortierung + Dämpfung, kaputte/fehlende Datei),
+`test_fussleiste.py::test_kompakt_*`.
 
 **Tests:** `tests/test_tastentabellen.py` verlangt für jedes Programm: eine
 Tabelle, zu jeder Aktion eine Methode, zu jeder Ansicht einen Aufbau in

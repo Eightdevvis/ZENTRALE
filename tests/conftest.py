@@ -424,6 +424,14 @@ def _nutzung_frisch(_test_ordner, monkeypatch):
     yield
 
 
+# 7e1d. Die Tasten-Zähler der Leiste (tui/ansichten/tasten_zaehler.py,
+# 2026-10-25) liegen je Test woanders — nie im echten ~/.local/state.
+@pytest.fixture(autouse=True)
+def _tasten_zaehler_frisch(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_TASTEN_ZAEHLER", str(_test_ordner / "tasten_zaehler.json"))
+    yield
+
+
 # 7e2. Jeder Test hat seinen eigenen Besitz im Schaufenster (core/shop.py,
 # 2026-10-10).
 @pytest.fixture(autouse=True)
