@@ -96,7 +96,7 @@ Prozess-Apps standen fest in `apps.BEKANNT`.
 **Im Katalog** trägt ein Stück der Kategorie apps zusätzlich `downloadUrl`
 (ein git-Repo, `https`/`ssh`/`file`) und `additionalProperty` `app_name` (der
 `name` aus seinem app.toml). Fehlt eins, lehnt `shop.pruefen` den ganzen
-Katalog ab (`app_installation.quelle_pruefen`). Mehr steht nicht im Katalog:
+Katalog ab (`app_register.quelle_fehler`). Mehr steht nicht im Katalog:
 Titel, Ansichten, Symbol kommen aus dem app.toml der App.
 
 **Ablauf** (`core/app_installation.py`, Routen in `ui/routen/hub_apps.py`):
@@ -116,7 +116,7 @@ Titel, Ansichten, Symbol kommen aus dem app.toml der App.
 
 - **`app_ordner`** (Einstellung, Env `ZENTRALE_APP_ORDNER`): Standard der
   Ordner, in dem ZENTRALE liegt — neben Tutor und Karte.
-- **Register** je Rechner: `<installiert_ordner>/apps-<rechner>.json`
+- **Register** (`core/app_register.py`) je Rechner: `<installiert_ordner>/apps-<rechner>.json`
   (Standard `data/hub/`, steht NICHT auf der Positivliste: der Code liegt nur
   hier, ein anderer Rechner wählt selbst). Nur Name, Quelle, Ordner, gewählte
   Ansichten, Datum.

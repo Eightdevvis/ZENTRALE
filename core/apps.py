@@ -13,7 +13,7 @@
 # ../language-tutor). Mehr Apps = eine Zeile in BEKANNT; eine echte
 # App-Verwaltung (installieren, Rechte fragen) kommt erst mit Schritt 2.
 #
-# Aus dem Schaufenster installierte Apps (2026-10-25, core/app_installation.py):
+# Aus dem Schaufenster installierte Apps (2026-10-25, core/app_register.py):
 # ihr Ordner und die gewählten Ansichten stehen je Rechner im Register;
 # gefunden werden sie wie die aus BEKANNT, nur ohne feste Zeile hier.
 #
@@ -27,7 +27,7 @@ import os
 import tomllib
 
 import ai_config
-import app_installation
+import app_register
 import app_prozess
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -51,7 +51,7 @@ def pfad(name: str) -> str:
     if gesetzt:
         return os.path.abspath(os.path.expanduser(str(gesetzt)))
     if name not in BEKANNT:
-        e = app_installation.eintrag(name)
+        e = app_register.eintrag(name)
         if e is not None:
             return os.path.abspath(e["ordner"])
     if name not in BEKANNT and os.path.isfile(os.path.join(eigene_ordner(), name, "app.toml")):
@@ -102,7 +102,7 @@ def aus_dem_laden() -> list:
     """Manifeste der aus dem Schaufenster installierten Apps, je mit
     `_installiert` (der Eintrag im Register: quelle, gewählte ansichten)."""
     raus = []
-    for e in app_installation.alle():
+    for e in app_register.alle():
         if e["name"] in BEKANNT:
             continue
         m = manifest(e["name"])

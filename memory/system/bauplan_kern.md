@@ -108,6 +108,7 @@ zählen als ein Modul.
 | `aussenposten` | 1 | Pakete für Knoten ohne Backend (auch Dateien von Apps, `app:<name>/…`) |
 | `app_prozess` | 1 | Eine Prozess-App starten, „lebt sie?" (`/hub/gesund`), anhalten; Python und Befehl aus dem Manifest — stdlib-only, geteilt vom Hub (`app_verwaltung`) und dem Zimmer-Starter `scripts/open_tutor_room.py` (seit 2026-10-22, steht in `deploy/aussenposten.txt`) |
 | `apps` | 1 | Installierte Apps (Hub-Bauplan): Ordner (`app_pfad_<name>`), Manifest `app.toml`, Abonnenten eines Ereignisses; seit 2026-10-10 auch die selbst gebauten (`apps_ordner`, Standard `data/apps/*/app.toml`) — liest nur, importiert nie App-Code |
+| `app_register` | 1 | Was aus dem Schaufenster installiert ist (seit 2026-10-25): Register je Rechner `<installiert_ordner>/apps-<rechner>.json` (Name, Quelle, Ordner, gewählte Ansichten), wo Apps wohnen (`app_ordner`), wie die Quelle einer App im Katalog aussieht (`downloadUrl`, `app_name`) |
 | `theme` | 1 | Tag/Nacht-Modus, die Datei als einzige Wahrheit |
 | `tone` | 1 | Ton-Erzeuger fürs TUI-Klavier |
 | `pc_status` | 1 | Ist der andere Knoten gerade da? |
@@ -193,6 +194,7 @@ zählen als ein Modul.
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `werkstatt` | 2 | Werkstatt (seit 2026-10-10): selbst gebaute Apps aus Vorlagen — `<apps_ordner>/<slug>/app.toml` (dasselbe Manifest wie Prozess-Apps, ohne `start`, mit `vorlage`/`desk`) + `icon.png` aus einem Bild in Input/ (über `bild_vorschau`); anlegen, umbenennen, Symbol ändern, löschen; Kurzname prüfen (reserviert, vergeben); Desks umbenennen/löschen mit Blick auf Apps, die auf sie zeigen |
 | `app_verwaltung` | 2 | Prozess-Apps des Hubs (seit 2026-10-22): Liste für `GET /api/apps` (läuft?), starten, nur Eigenes stoppen (Marken im Laufzeit-Ordner überleben den Hot Reload), Autostart mit dem Backend (`autostart = true`, Einstellung `apps_autostart`) |
+| `app_installation` | 2 | Apps aus dem Schaufenster installieren (seit 2026-10-25): git-Repo aus `downloadUrl` holen (Zwischenlager, vorhandener Checkout desselben Repos wird übernommen), app.toml prüfen, Ansichten zur Wahl; einrichten mit den gewählten Ansichten (über `app_register`, `apps`, `shop`) |
 | `app_weiterleitung` | 2 | Routen-Weiterleitung (seit 2026-10-22): Pfad → App laut `routen` im `app.toml`, Anfrage unverändert an ihre `adresse`, Antwort unverändert zurück; aus → 503 `aus` |
 | `kachel_http` | 2 | Kachel-Quelle hinter HTTP (seit 2026-10-22): Katalog aus `[kachel.<art>]` im `app.toml`, Fragen an `/hub/kachel*` der App mit 0,5 s Budget — dieselbe Schnittstelle wie eine Quelle im Prozess |
 | `kacheln` | 2 | Hub für Kacheln (seit 2026-10-10): Anfrage prüfen, Recht `<app>:lesen`, Quelle aus `QUELLEN` fragen (im Prozess, Anfrage/Antwort durch JSON wie über HTTP), kürzen, `stand`/`ttl`, zu klein/weg/aus; Aktion „oeffnen“ → `zeige` |

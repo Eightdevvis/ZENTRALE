@@ -32,7 +32,7 @@ import shutil
 import time
 import tomllib
 
-import app_installation
+import app_register
 import apps
 import bild_vorschau
 import datasync
@@ -99,7 +99,7 @@ def namen_pruefen(name, ausser=None) -> tuple:
     slug = slug_aus(name)
     if not slug:
         raise WerkstattFehler("der name braucht mindestens einen buchstaben")
-    if slug in RESERVIERT or slug in apps.BEKANNT or slug in app_installation.namen():
+    if slug in RESERVIERT or slug in apps.BEKANNT or slug in app_register.namen():
         raise WerkstattFehler("„%s\" heißt schon eine feste app — anderer name?" % slug, 409)
     for m in apps.eigene():
         if m["_slug"] == ausser:

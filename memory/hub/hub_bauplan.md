@@ -73,16 +73,10 @@ Rechte sind fein und lesbar: `kalender:lesen`, `kalender:schreiben`,
 
 ## Ansichten: leicht und schick
 
-Eine App liefert Daten und Logik; Ansichten gibt es in diesen Arten:
+Eine App liefert Daten und Logik; Ansichten (`[ansicht.<art>] start`):
 - **terminal** — curses, läuft auf billiger Hardware und per ssh;
 - **fenster** — grafisch (Pixel-Zimmer, Karte, später schicker);
-- **browser** (seit 2026-10-25, Budget) — die Web-Oberfläche der App unter
-  ihrer `adresse`; `[ansicht.browser] pfad` (Standard `/`).
-
-Je Ansicht `[ansicht.<art>] start` (terminal, fenster). Bei Apps aus dem
-Schaufenster wählt Sasha vor dem Einrichten, welche er will; das Rad öffnet
-nur die gewählten ([shop.md](shop.md) „Apps installieren"). Titel der Arten:
-`apps.ANSICHT_TITEL`.
+- **browser** (2026-10-25) — Web-Oberfläche unter `adresse` + `[ansicht.browser] pfad`; Wahl beim Installieren: [shop.md](shop.md).
 
 Der Hub zeigt, was die Hardware kann. Eine App ohne Fenster-Ansicht läuft
 trotzdem überall.

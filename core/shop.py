@@ -44,6 +44,7 @@ from datetime import datetime
 
 import adressen
 import ai_config
+import app_register
 import datasync
 import dateien
 
@@ -134,12 +135,9 @@ def pruefen(daten):
             raise ShopFehler("katalog: typ %r unbekannt" % it.get("@type"), 503)
         if it.get("@id") != adresse(kat, kennung):
             raise ShopFehler("katalog: @id passt nicht zu %s/%s" % (kat, kennung), 503)
-        if kat == "apps":                      # holbar = installierbar (2026-10-25)
-            import app_installation
-            try:
-                app_installation.quelle_pruefen(it)
-            except app_installation.InstallFehler as e:
-                raise ShopFehler("katalog: %s bei %s" % (e, it["@id"]), 503)
+        fehlt = app_register.quelle_fehler(it) if kat == "apps" else None
+        if fehlt:                              # holbar = installierbar (2026-10-25)
+            raise ShopFehler("katalog: %s bei %s" % (fehlt, it["@id"]), 503)
         if it["@id"] in gesehen:
             raise ShopFehler("katalog: %s doppelt" % it["@id"], 503)
         gesehen.add(it["@id"])

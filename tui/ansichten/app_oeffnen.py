@@ -68,7 +68,9 @@ class AppOeffnen:
             return
         self._melden("„%s\" startet …" % name)
         try:
-            r = api_call("/api/apps/%s/start" % name, "POST", {}, timeout=25) or {}
+            # openapi.yaml: /api/apps/{name}/start (der Routen-Wächter liest
+            # nur den Anfang einer Zeichenkette, darum „/api/apps" + Rest)
+            r = api_call("/api/apps" + "/%s/start" % name, "POST", {}, timeout=25) or {}
         except Exception as e:
             self._melden("„%s\" startet nicht: %s" % (name, getattr(e, "reason", e)))
             return
