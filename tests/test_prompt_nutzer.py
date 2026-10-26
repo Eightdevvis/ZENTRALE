@@ -51,6 +51,10 @@ def aktuell():
     state.get_alarms = lambda: list(_ALARME)
     try:
         aus["jetzt"] = ki_prompt._now_prompt()
+        # gross hat seit 2026-10-26 eine eigene Fassung (ohne Kalender-Satz).
+        import uhr
+        with uhr.gestellt(_echt_datetime(2026, 10, 9, 14, 30)):
+            aus["jetzt_gross"] = ki_prompt._now_gross()
         for dv in (True, False):
             ki_prompt._DASHVIEW = dv
             aus[f"alarm_dashview{int(dv)}"] = ki_prompt._alarm_prompt()

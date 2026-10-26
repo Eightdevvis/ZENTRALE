@@ -95,10 +95,11 @@ def kalender_ansicht(tage_vor: int = 1, tage_nach: int = 35) -> str:
 def kontext_der_ki() -> str:
     """Die wechselnden Teile, die die KI zu Beginn des Zugs im Prompt hat und
     die Tatsachen tragen: Datum, „Was ansteht" (heute/morgen), offene
-    Erinnerungen. Nur die — Persona und Werkzeug-Texte belegen nichts."""
+    Erinnerungen, dazu was laut Kalender gerade läuft. Nur die — Persona und Werkzeug-Texte belegen nichts."""
     import ki_prompt
     teile = []
-    for fn in ("_now_prompt", "_imprint_prompt", "_alarm_prompt"):
+    for fn in ("_now_prompt", "_jetzt_naechstes_prompt", "_imprint_prompt",
+               "_alarm_prompt"):
         f = getattr(ki_prompt, fn, None)
         if f is None:
             continue

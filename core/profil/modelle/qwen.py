@@ -39,15 +39,19 @@ _ARBEITSWEISE_VORLAGE = """## Arbeitsweise (gilt vor allem anderen)
 
 1. Will {nutzer} etwas im Kalender (eintragen, verschieben, ändern, löschen, ausfallen lassen) und sind Tag und Uhrzeit klar: ruf SOFORT das Werkzeug. Nicht ankündigen, nicht fragen „soll ich?" — die Ja/Nein-Frage stellt ZENTRALE selbst, bevor etwas geschrieben wird.
 2. Sagt {nutzer} „ok", „ja", „mach", „passt" auf deinen Vorschlag: führ ihn JETZT mit Werkzeugen aus.
-3. Bevor du einen bestehenden Termin änderst oder etwas über den Kalender sagst: read_calendar — für einen bestimmten Termin oder eine Serie mit 'suche' (Stichwort) und OHNE 'zeitraum'. Der Block „Was ansteht" zeigt nur heute und morgen, nie den ganzen Kalender. Findet die Stichwort-Suche nichts, lies den Zeitraum ohne 'suche' (Titel heißen oft anders), bevor du sagst, es gibt ihn nicht. Kennungen (#r…, #t…) schreibst du nur aus einem Werkzeug-Ergebnis ab, nie ausgedacht, und nie in den Text an {nutzer}.
+3. Bevor du einen bestehenden Termin änderst oder eine Frage zum Kalender beantwortest: read_calendar — für einen bestimmten Termin oder eine Serie mit 'suche' (Stichwort) und OHNE 'zeitraum'. Der Block „Was ansteht" zeigt nur heute und morgen, nie den ganzen Kalender. Findet die Stichwort-Suche nichts, lies den Zeitraum ohne 'suche' (Titel heißen oft anders), bevor du sagst, es gibt ihn nicht. Kennungen (#r…, #t…) schreibst du nur aus einem Werkzeug-Ergebnis ab, nie ausgedacht, und nie in den Text an {nutzer}.
 4. „Eingetragen", „gelöscht", „korrigiert", „erledigt" sagst du NUR, wenn in DIESEM Zug ein Werkzeug-Ergebnis mit [ergebnis: ok] dazu da ist. Sonst sag, was noch nicht passiert ist.
 5. Was kein Werkzeug geliefert und {nutzer} nicht gesagt hat (Ferien, Semesterdaten, Öffnungszeiten, das Ende einer Serie), ist „weiß ich nicht" — nie als Tatsache, nie „habe ich geholt", nie als ausgedachtes Datum in einem Werkzeug. Suchtreffer (web_search) sind nicht gelesen: ein Datum daraus nur mit „laut Suchtreffer, nicht nachgelesen" — oder erst die Seite lesen. Braucht eine neue Serie ein Ende (bis), das {nutzer} nicht genannt hat: frag „bis wann?". Titel, Ende, Zeitraum und Ebene übernimmst du nur so, wie {nutzer} sie gesagt hat: kein Wochentag im Titel, und „uncommitted" sagst du nur, wenn ein Aufruf es gesetzt hat.
 6. Uhrzeiten: „halb X" ist eine halbe Stunde VOR X — halb sechs = 17:30, halb neun = 20:30 (abends; morgens 5:30/8:30). „viertel nach fünf" = 17:15, „dreiviertel sechs" = 17:45. Verschiebt {nutzer} nur den Beginn, wandert das Ende mit (gleiche Dauer): 17:00–18:00 „ab jetzt um halb sechs" → time 17:30, ende 18:30.
 7. Du änderst nur, was {nutzer} verlangt. Vorschlagen darfst du; eingetragen oder gelöscht wird nichts darüber hinaus. Sagt {er} „nur nachschauen": schau nach und sag, was du gefunden hast — eintragen nichts.
-8. Antwort danach kurz: was jetzt im Kalender steht (Titel, Tag, Uhrzeit). Die Adressen gelesener Seiten zeigt ZENTRALE selbst als Quellen an. Keine Pläne, was du gleich tun wirst — entweder tun oder lassen."""
+8. Nach einer Kalender-Änderung antwortest du kurz: was jetzt im Kalender steht (Titel, Tag, Uhrzeit). Bei Gruß oder Smalltalk („hey“, „was machst du so“) rufst du kein Werkzeug und zählst keine Termine auf; was gerade ansteht, steht im Block „Jetzt und als Nächstes“. Die Adressen gelesener Seiten zeigt ZENTRALE selbst als Quellen an. Keine Pläne, was du gleich tun wirst — entweder tun oder lassen."""
 
 _ERINNERUNG_VORLAGE = ("(Für dich, nicht von {nutzer}: erst Werkzeug, dann Antwort. Erledigt ist nur, "
               "was in diesem Zug mit [ergebnis: ok] zurückkam.)")
+# Bei Gruß/Smalltalk (26.10.2026) stattdessen — „erst Werkzeug" ließ qwen auf
+# „meow" den Kalender lesen und eine Terminliste aufsagen.
+_ERINNERUNG_SMALLTALK = ("(Für dich, nicht von {nutzer}: Gruß oder Smalltalk — antworte "
+                         "ohne Werkzeug. Was ansteht, hast du oben im Blick.)")
 
 
 # Platzhalter ({nutzer}, {er} …) wie in gross (core/nutzer_angaben.py,
@@ -57,6 +61,8 @@ def system(text: str) -> str:
 
 
 def erinnerung(verlauf: list = ()) -> str:
+    if _zusatz.ist_smalltalk(list(verlauf or [])):
+        return nutzer_angaben.einsetzen(_ERINNERUNG_SMALLTALK)
     text = nutzer_angaben.einsetzen(_ERINNERUNG_VORLAGE)
     uhr = uhrzeiten(_letzte_nachricht(verlauf))
     return f"{text}\n{uhr}" if uhr else text
@@ -225,10 +231,15 @@ def antwort_pflicht() -> bool:
     return str(wert or "").strip().lower() in ("an", "1", "true", "ja")
 
 
+# Gruß/Smalltalk (26.10.2026, Sasha: auf „meow" nichts nachschlagen): kein
+# Zwang, in keiner Runde. Was ansteht, steht im Block „Jetzt und als
+# Nächstes" (cloud._volatile_text); im Zweifel lieber nicht erzwingen.
 def tool_choice(*, nr: int, verlauf: list, tools=(), **_):
     namen = {t["function"]["name"] for t in tools or ()}
     if nr == 0 and _zusatz.will_aendern(verlauf) and "read_calendar" in namen:
         return {"type": "function", "function": {"name": "read_calendar"}}
+    if _zusatz.ist_smalltalk(verlauf):
+        return None
     if "antwort" in namen and antwort_pflicht():
         return "required"
     return None

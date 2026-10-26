@@ -1,7 +1,7 @@
 # KI-Bibel — Prompt: Länge, Aufbau, Ton
 
-**Stand 2026-10-22:** Sechs Einträge (P-01 bis P-06). Umgesetzt ist nur die
-Länge (Budget-Wächter). Ton und Aufbau sind auf gross teilweise umgestellt,
+**Stand 2026-10-26:** Sechs Einträge (P-01 bis P-06). Umgesetzt ist nur die
+Länge (Budget-Wächter); P-06 ist auf gross teilweise umgesetzt. Ton und Aufbau sind auf gross teilweise umgestellt,
 der Rest ist offen. Wie der Prompt heute gebaut ist, steht in
 `memory/ki/prompt_aufbau.md`; hier steht, wonach er gebaut werden soll.
 Legende und Pflegeregeln: [README.md](README.md).
@@ -36,11 +36,12 @@ Legende und Pflegeregeln: [README.md](README.md).
   Werkzeug-Texte ([W-11](werkzeuge.md#w-11-großbuchstaben-raus-aus-den-werkzeug-beschreibungen))
   und Alarm-Block auf gross ([B-03](baustellen.md#b-03-alarm-block-passt-nicht-zu-gross))
   seit 0446ae5. Offen: der Jetzt-Block `ki_prompt._now_prompt` (NICHT, UHRZEIT,
-  „NICHT im Kopf“), geteilt mit klein; für gross bräuchte er eine eigene
-  Fassung wie der Alarm-Block (hängt mit [P-06](#p-06-keine-kalender-schlagseite) zusammen).
+  „NICHT im Kopf“) gilt nur noch für klein; gross hat seit 2026-10-26 eine
+  eigene Fassung `_now_gross` ([P-06](#p-06-keine-kalender-schlagseite), COMMIT).
 - **Heute bei ZENTRALE:** Persona, Meta-Regeln, Imprint, Umschlag, Werkzeug-
   Texte und Alarm-Block auf gross sind normal geschrieben. Großbuchstaben
-  stehen noch im Jetzt-Block.
+  stehen noch im Jetzt-Block von klein; gross hat seit 2026-10-26 einen
+  eigenen (`ki_prompt._now_gross`, normale Schreibung, siehe P-06).
 
 ### P-03 Richtige Flughöhe, klare Abschnitte, knapp anfangen
 
@@ -91,10 +92,15 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Zitat:** —
 - **Quelle:** Sasha, 14.10.2026
 - **Gilt für:** alle
-- **Status:** offen — `core/ki_prompt.py` ~127–133 (Satz „Kalender/Termine: …
-  hast du NICHT im Kopf“ im Jetzt-Block)
-- **Heute bei ZENTRALE:** Der Jetzt-Block mit der Kalender-Regel hängt im
-  Umschlag hinten an jeder Nutzernachricht.
+- **Status:** teilweise — auf gross ist der Satz „Kalender/Termine: … hast du
+  NICHT im Kopf: dafür read_calendar rufen“ raus (`core/ki_prompt.py`
+  `_now_gross`, gerufen aus `cloud._volatile_text`), COMMIT. Die Grenze steht
+  nur noch im Imprint (gecachter Kopf). Offen: klein (byte-gleich gelassen,
+  so ist das lokale qwen gemessen); hinten steht auf gross jetzt „Jetzt und
+  als Nächstes“ ([KT-07](kontext.md#kt-07-kontext-statt-nachschlagen-bei-smalltalk)) —
+  Kalenderdaten, aber mit dem Satz „im Blick, nicht aufsagen“.
+- **Heute bei ZENTRALE:** gross: kein Kalender-Befehl mehr hinter jeder
+  Nachricht. klein: unverändert.
 - **Szene dazu:** „Bei ihr einchecken“ (26.10.2026) in
   [../../leitbild.md](../../leitbild.md#szenen-sasha-2026-10-24) — auf „was
   machst du so“ kam eine Terminliste.
@@ -106,3 +112,5 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — P-02 nachgezogen (Durchgang Werkzeuge, 0446ae5).
 - **2026-10-26** — P-06: Verweis auf die Szene „Bei ihr einchecken“.
+- **2026-10-26** — P-06 teilweise, P-02 nachgezogen: eigener Jetzt-Block auf
+  gross ohne Kalender-Satz (COMMIT).

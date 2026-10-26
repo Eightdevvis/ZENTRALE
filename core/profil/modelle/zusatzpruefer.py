@@ -196,6 +196,32 @@ def will_aendern(verlauf: list) -> bool:
     return False
 
 
+# Gruß und Smalltalk (26.10.2026, Sasha: auf „meow" nichts nachschlagen,
+# Leitbild-Szene „Bei ihr einchecken"): kurz und ohne ein Wort, das nach
+# Daten, Zeit oder einem Auftrag klingt. Bewusst einfach — wer sich irrt,
+# irrt in Richtung „nicht erzwingen": was ansteht, steht ohnehin im Block
+# „Jetzt und als Nächstes", und rufen darf qwen trotzdem.
+_SMALLTALK_WOERTER = 6
+_DATEN = re.compile(
+    r"\b(wann|uhr\w*|spät|spaet|heute|morgen|übermorgen|uebermorgen|woche\w*|"
+    r"montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|wochenende|"
+    r"plan\w*|ansteh\w*|steht\w* an|deadline\w*|frist\w*|abgabe\w*|mail\w*|news|"
+    r"nachricht\w*|wetter|notiz\w*|liste\w*|such\w*|schau\w*|guck\w*|lies|les\w*|"
+    r"zeig\w*|erinner\w*|merk\w*|schreib\w*|notier\w*|mach|öffne\w*|oeffne\w*|"
+    r"recherch\w*|finde?|google\w*|http\S*|www\S*)\b|\d")
+_GRUSS = re.compile(r"\bguten (morgen|tag|abend)\b|^\W*morgen\W*$")
+
+
+def ist_smalltalk(verlauf: list) -> bool:
+    """Ist Sashas neueste Nachricht Gruß oder Smalltalk („meow", „hey", „was
+    machst du so")? Dann erzwingt qwen kein Werkzeug (tool_choice)."""
+    text = letzte_nachricht(verlauf).casefold().strip()
+    if not text or len(text.split()) > _SMALLTALK_WOERTER:
+        return False
+    text = _GRUSS.sub(" ", text)
+    return not (_KALENDER_WILL.search(text) or _DATEN.search(text))
+
+
 def letzte_nachricht(verlauf: list) -> str:
     for m in reversed(verlauf or []):
         if m.get("role") == "user":

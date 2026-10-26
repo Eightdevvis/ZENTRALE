@@ -12,7 +12,7 @@
 
 import hashlib
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import kalender_deadline
 import kalender_kategorie
@@ -683,6 +683,132 @@ def imprint_for_prompt(tage: int | None = None, *, betont: bool = True) -> str:
     return f"## Was ansteht\n{liste}\n\n{grenze}"
 
 
+# ── Jetzt und als Nächstes (26.10.2026) ────────────────────────────────
+# Sasha: schreibt er „meow", soll sie nichts nachschlagen müssen, sondern im
+# Blick haben, was laut Kalender gerade läuft und als Nächstes kommt — und
+# höchstens sanft fragen („fertig mit Analysis?"). Der Imprint („Was
+# ansteht") weiß das nicht: er steht im gecachten Kopf und kennt die Uhr
+# nicht. Dieser Abschnitt steht deshalb im wechselnden Teil (cloud.
+# _volatile_text, nur gross) und liest dieselben Einträge wie der Imprint
+# (entries_in_range, sichtbare Ebenen, anzeige_titel) und dieselben
+# Deadline-Zeilen wie der Alarm-Kanal (_deadline_zeilen) — dasselbe Objekt,
+# nicht kopiert. Keine Minuten, kein „in 20 min": nur Uhrzeiten (der
+# Countdown-Befund vom 18.08., siehe ki_prompt._now_prompt).
+# Leitbild: Szene „Bei ihr einchecken"; KI-Bibel P-06, KT-07.
+
+JETZT_NAECHSTE = 3          # wie viele kommende Termine höchstens
+JETZT_DEADLINE_TAGE = 30    # Horizont für Deadlines, wie open_alarms
+
+_JETZT_UMGANG = (
+    "Das ist aus dem Kalender gelesen, dafür brauchst du kein Werkzeug. Du hast "
+    "es im Blick und sagst es nicht auf. Passt es ins Gespräch, fragst du "
+    "höchstens sanft nach (etwa „fertig mit …?“). Ob {er} etwas erledigt hat, "
+    "weißt du nicht — nimm es nicht an.")
+_JETZT_LAEUFT = "- Laut Kalender läuft gerade: {was}. Ob {er} dabei ist, weißt du nicht."
+
+
+def _deadline_zeilen(day_iso: str, entries: list, jetzt) -> list[str]:
+    """Die Deadlines eines Tages, deren Vorwarn-Fenster offen ist, als
+    fertige Zeile („Deadline Analysis HÜ morgen (Di 27.10. 23:59)").
+    Eine Quelle für den Alarm-Kanal und für „Jetzt und als Nächstes"."""
+    return [kalender_deadline.alarm_text(e, day_iso, jetzt) for e in entries
+            if kalender_deadline.ist_deadline(e)
+            and kalender_deadline.im_fenster(e, day_iso, jetzt)]
+
+
+def _um(tag: date, minuten: int) -> datetime:
+    return datetime.combine(tag, datetime.min.time()) + timedelta(minutes=minuten)
+
+
+def _spanne(e: dict, tag: date):
+    """(beginn, ende) als datetime eines Eintrags mit Uhrzeit und Ende, oder
+    None. Endet er vor dem Beginn (Schlaf 23:00–07:00), endet er am Folgetag."""
+    b, z = _to_minutes(e.get("time") or ""), _to_minutes(e.get("ende") or "")
+    if b is None or z is None:
+        return None
+    beginn = _um(tag, b)
+    ende = _um(tag, z) + timedelta(days=1 if z <= b else 0)
+    return beginn, ende
+
+
+def _wann_kurz(zp, jetzt) -> str:
+    """„22:00" heute, sonst „morgen 22:00" — nie Minuten bis dahin."""
+    tage = (zp.date() - jetzt.date()).days
+    vorn = {0: "", 1: "morgen "}.get(tage, zp.strftime("%d.%m. "))
+    return vorn + zp.strftime("%H:%M")
+
+
+def jetzt_und_naechstes(jetzt=None) -> str:
+    """Der Abschnitt „## Jetzt und als Nächstes" für den wechselnden Teil.
+
+    - was laut Kalender gerade läuft (bis wann), Termin und Tagesrhythmus
+      getrennt — der Rhythmus ist kein Termin;
+    - die nächsten Termine heute/morgen (höchstens JETZT_NAECHSTE);
+    - Deadlines in ihrem Vorwarn-Fenster.
+    Vorbereitung steht nicht da: dafür gibt es keine Daten, und erfunden
+    wird nichts. Nichts davon → "" (kein Abschnitt)."""
+    jetzt = jetzt or uhr.jetzt()
+    heute = jetzt.date()
+    try:
+        data = _load_raw()
+    except Exception:
+        return ""
+    sichtbar = [n for n, lyr in data.get("layers", {}).items()
+                if lyr.get("default_visible", True)]
+    tage = entries_in_range(heute - timedelta(days=1), heute + timedelta(days=1),
+                            layers=sichtbar)
+    laeuft, rhythmus, kommt = [], [], []
+    for iso in sorted(tage):
+        tag = date.fromisoformat(iso)
+        for e in tage[iso]:
+            if e.get("deaktiviert") or e.get("ausfall") or kalender_deadline.ist_deadline(e):
+                continue
+            titel = kalender_quelle.anzeige_titel(e)
+            if e.get("layer") == UNVERBINDLICH:
+                titel += " (vielleicht)"
+            sp = _spanne(e, tag)
+            if sp and sp[0] <= jetzt < sp[1]:
+                bis = f"bis {_wann_kurz(sp[1], jetzt)}"
+                (rhythmus if e.get("layer") == RHYTHMUS else laeuft).append(f"{titel} ({bis})")
+                continue
+            if e.get("layer") == RHYTHMUS or tag < heute:
+                continue
+            b = _to_minutes(e.get("time") or "")
+            if b is None:
+                continue          # ganztags: kein „als Nächstes"
+            beginn = _um(tag, b)
+            if beginn > jetzt:
+                kommt.append((beginn, f"{_wann_kurz(beginn, jetzt)} {titel}"))
+    kommt = [t for _, t in sorted(kommt, key=lambda x: x[0])][:JETZT_NAECHSTE]
+
+    # Deadlines über alle Ebenen, wie open_alarms — dieselben Zeilen wie
+    # dort (auf gross stehen sie deshalb nur noch hier, ki_prompt._alarm_gross).
+    fristen = []
+    try:
+        horizont = entries_in_range(heute, heute + timedelta(days=JETZT_DEADLINE_TAGE))
+    except Exception:
+        horizont = {}
+    for iso, es in horizont.items():
+        fristen += _deadline_zeilen(iso, [e for e in es if _verbindlich(e)], jetzt)
+
+    if not (laeuft or rhythmus or kommt or fristen):
+        return ""
+    z = ["## Jetzt und als Nächstes"]
+    if laeuft:
+        z.append(nutzer_angaben.einsetzen(_JETZT_LAEUFT).replace("{was}", "; ".join(laeuft)))
+    else:
+        z.append("- Laut Kalender läuft gerade kein Termin.")
+    if rhythmus:
+        z.append("- Tagesrhythmus gerade (kein Termin, nicht ansagen): "
+                 + "; ".join(rhythmus) + ".")
+    if kommt:
+        z.append("- Als Nächstes: " + " · ".join(kommt) + ".")
+    for f in fristen:
+        z.append(f"- {f}.")
+    z.append(nutzer_angaben.einsetzen(_JETZT_UMGANG))
+    return "\n".join(z)
+
+
 def conflicts_for_proposed(layer: str, day: str, label: str,
                            time: str | None = None, ende: str | None = None,
                            ausser: str | None = None) -> list[str]:
@@ -821,9 +947,8 @@ def open_alarms(horizon_days: int = 30) -> list[dict]:
         entries = [e for e in entries if _verbindlich(e)]  # deaktiviert/uncommitted/Ausfall: kein Alarm
         # Deadline im Vorwarn-Fenster (20.10.2026): EIN Hinweis, dessen Text
         # sich höchstens einmal am Tag ändert („in 2 Tagen" → „morgen").
-        for e in entries:
-            if kalender_deadline.ist_deadline(e) and kalender_deadline.im_fenster(e, day_iso, jetzt):
-                raw.append(("Deadline", kalender_deadline.alarm_text(e, day_iso, jetzt), day_iso))
+        for text in _deadline_zeilen(day_iso, entries, jetzt):
+            raw.append(("Deadline", text, day_iso))
         for line in _conflict_lines(d, entries, away_blocks):
             raw.append(("KONFLIKT", line, day_iso))
         for line in day_warnings(entries):

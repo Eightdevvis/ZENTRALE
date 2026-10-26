@@ -82,6 +82,16 @@ der Schiene.
    Standard an (`qwen.ANTWORT_PFLICHT_STANDARD`); abschalten mit
    `antwort_pflicht` = aus. Ein Durchgang je Seite ist eine kleine
    Stichprobe: nachmessen, wenn qwen wieder öfter fährt.
+4c. **Kein Zwang bei Gruß/Smalltalk (2026-10-26, Sasha).** Ist Sashas neueste
+   Nachricht kurz (höchstens 6 Wörter) und ohne Wort, das nach Daten, Zeit
+   oder Auftrag klingt („meow", „hey", „was machst du so"), gibt
+   `tool_choice` nichts vor, in keiner Runde (`zusatzpruefer.ist_smalltalk`);
+   die Erinnerung am Ende sagt dann „antworte ohne Werkzeug" statt „erst
+   Werkzeug". Regel 3 gilt für Kalenderfragen, Regel 8 nur nach einer
+   Kalender-Änderung und sagt ausdrücklich: bei Smalltalk kein Werkzeug.
+   Was ansteht, steht im Block „Jetzt und als Nächstes"
+   ([prompt_aufbau.md](prompt_aufbau.md)). Im Zweifel nicht erzwingen.
+   Ungemessen (Prüfstand mit qwen kostet).
 5. **Werkzeug-Auswahl je Gespräch.** Fester Kern (Kalender, Notizen, Suche,
    Netz, Knopf …) plus Gruppen (Browser, Dateien, Dokumente, Post,
    Messreihen, Skills), die erst bei passenden Wörtern in Sashas Nachrichten

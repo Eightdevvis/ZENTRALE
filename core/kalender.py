@@ -1045,7 +1045,8 @@ from kalender_konflikte import (  # noqa: E402,F401
     DEFAULT_PUFFER_MIN, IMPRINT_TAGE, _absage_alarms, _away_blocks,
     _conflict_lines, _fmt_entry, _fmt_min, _interval, _load_config,
     _pause_grund, _to_minutes, conflicts_for_proposed, day_warnings,
-    find_collisions, imprint_for_prompt, open_alarms, render_range_for_tool,
+    find_collisions, imprint_for_prompt, jetzt_und_naechstes, open_alarms,
+    render_range_for_tool,
     travel_minutes, _WEEKDAYS_FULL_DE)
 import kalender_konflikte as _konflikte  # noqa: E402
 _konflikte.anschliessen(_load_raw, entries_in_range)

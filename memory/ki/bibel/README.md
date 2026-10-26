@@ -1,7 +1,7 @@
 # KI-Bibel — der Leitfaden, wie die KI gebaut wird
 
-**Stand 2026-10-22 (spät):** 77 Einträge in zehn Teilen. Status: 24 umgesetzt,
-20 teilweise, 33 offen (nach dem Durchgang Werkzeuge). Jede Regel hat eine Quelle (offiziell
+**Stand 2026-10-26:** 78 Einträge in zehn Teilen. Status: 25 umgesetzt,
+21 teilweise, 32 offen (nach „Jetzt und als Nächstes“, KT-07). Jede Regel hat eine Quelle (offiziell
 von Anthropic, inoffiziell oder von Sasha). Wer an der KI baut, liest vorher
 die betroffenen Einträge und zieht danach den Status nach (Pflegeregeln unten).
 
@@ -56,17 +56,17 @@ haben, keine Regel von außen.
 
 | Teil | Einträge | Status (u/t/o) |
 |---|---|---|
-| [prompt.md](prompt.md) — Länge, Aufbau, Ton, Großbuchstaben | P-01 Länge wie Anthropic · P-02 keine Großbuchstaben-Befehle · P-03 Flughöhe, Abschnitte · P-04 Beispiele statt Sonderfälle · P-05 Anthropic nachahmen · P-06 keine Kalender-Schlagseite | 1/2/3 |
+| [prompt.md](prompt.md) — Länge, Aufbau, Ton, Großbuchstaben | P-01 Länge wie Anthropic · P-02 keine Großbuchstaben-Befehle · P-03 Flughöhe, Abschnitte · P-04 Beispiele statt Sonderfälle · P-05 Anthropic nachahmen · P-06 keine Kalender-Schlagseite | 1/3/2 |
 | [werkzeuge.md](werkzeuge.md) — Beschreibungen, Suche, Ergebnisse | W-01 Beschreibung wichtigster Hebel · W-02 Fehler sagen, was tun · W-03 Freigabe-Text stimmt · W-04 keine Überschneidung · W-05 Beispiele · W-06 knappe Ergebnisse · W-07 Werkzeug-Suche, max. 5 · W-08 Suche im Prompt (Schritt 9) · W-09 Prüfstand A/B (Schritt 10) · W-10 Sashas Wörter · W-11 Großbuchstaben in Beschreibungen · W-12 Programmatic Tool Calling · W-13 Claude Code ~15 geladen · W-14 Kalender-Felder nur aus Sashas Angaben | 3/8/3 |
 | [recherche.md](recherche.md) — suchen, lesen, Runden, Fazit | R-01 Lesen anweisen · R-02 suchen → auswählen → lesen · R-03 breit, dann eng · R-04 Aufrufe nach Schwierigkeit · R-05 Adresse immer lesen · R-06 Schnipsel reichen nicht · R-07 Widersprüche → weitersuchen · R-08 Erfolgskriterien · R-09 Hypothesen, Notizen · R-10 erst nachsehen · R-11 nicht endlos suchen · R-12 Aktuelles nachprüfen · R-13 Recherche-Skill · R-14 Rechenschaft · R-15 mehrere Runden · R-16 schnelle Suche · R-17 Platz für Suchregeln · R-18 Vorbilder | 14/2/2 |
 | [handeln.md](handeln.md) — handeln statt fragen | H-01 standardmäßig handeln · H-02 Ideen/Plan → anhalten · H-03 weiterarbeiten bis fertig · H-04 fertig → berichten · H-05 Rückfragen nur auf Verlangen | 0/1/4 |
 | [skills.md](skills.md) — Kurzfassung, voller Text bei Bedarf | S-01 progressive disclosure · S-02 Sasha sichtet vor dem Entfernen | 0/1/1 |
-| [kontext.md](kontext.md) — Kontext klein | KT-01 wenig, aber gehaltvoll · KT-02 knapp ≠ kurz · KT-03 Verweise statt Daten · KT-04 alte Ergebnisse raus · KT-05 Kompaktierung · KT-06 Notizen außerhalb | 0/4/2 |
+| [kontext.md](kontext.md) — Kontext klein | KT-01 wenig, aber gehaltvoll · KT-02 knapp ≠ kurz · KT-03 Verweise statt Daten · KT-04 alte Ergebnisse raus · KT-05 Kompaktierung · KT-06 Notizen außerhalb · KT-07 Kontext statt Nachschlagen bei Smalltalk | 1/4/2 |
 | [denken.md](denken.md) — Nachdenken, effort, parallel | D-01 nach Ergebnissen nachdenken · D-02 effort statt Budget · D-03 parallele Aufrufe · D-04 Selbstcheck · D-05 niedriger effort | 1/0/4 |
 | [pruefung.md](pruefung.md) — Richter, Evals, Python-Prüfer | PR-01 Prüfschleife mit Kriterien · PR-02 Regeln für Richter · PR-03 Werkzeuge per Evals · PR-04 Prüfer blind für Recherche · PR-05 Suche ≠ Tat · PR-06 „oder“ · PR-07 eine Runde · PR-08 Bestanden sichtbar · PR-09 Befunde überschrieben · PR-10 Argumente abgleichen · PR-11 Statuszeile · PR-12 Kalender-Werte ohne Grundlage · PR-13 Wochentag im Titel | 4/1/8 |
 | [klassifikatoren.md](klassifikatoren.md) — Ideenecke, nicht bauen | KL-01 Werkzeuge vorab einlegen · KL-02 Fokus-Prüfkette · KL-03 Modell als Richter | 0/0/3 |
 | [baustellen.md](baustellen.md) — Offenes im eigenen Bau | B-01 Anstupsen · B-02 „Sasha“ im Gedächtnis-Kopf · B-03 Alarm-Block · B-04 Ausweichweg weg · B-05 Budget-Rückfall qwen | 1/1/3 |
-| **gesamt** | 77 | **24/20/33** |
+| **gesamt** | 78 | **25/21/32** |
 
 ## Nach Modell/Schiene
 
@@ -76,8 +76,8 @@ für jede Schiene.
 | Gilt für | Einträge |
 |---|---|
 | **alle** | P-03, P-04, P-06 · W-01–W-06, W-10 · R-01–R-16 · H-01–H-05 · S-02 · KT-01–KT-04, KT-06 · D-01, D-04 · PR-01–PR-03, PR-11 · KL-01–KL-03 · B-01, B-02 |
-| **claude-gross** | P-01, P-02, P-05 · W-07, W-08, W-09, W-11, W-12, W-13, W-14 · R-17, R-18 · S-01 · KT-05 · D-02, D-03, D-05 · PR-04–PR-10, PR-12, PR-13 · B-03, B-04 |
-| **qwen** | W-07 (Vorauswahl), W-14 · PR-10, PR-12, PR-13 · B-05 |
+| **claude-gross** | P-01, P-02, P-05 · W-07, W-08, W-09, W-11, W-12, W-13, W-14 · R-17, R-18 · S-01 · KT-05, KT-07 · D-02, D-03, D-05 · PR-04–PR-10, PR-12, PR-13 · B-03, B-04 |
+| **qwen** | W-07 (Vorauswahl), W-14 · KT-07 · PR-10, PR-12, PR-13 · B-05 |
 | **klein/ollama** | nur die `alle`-Einträge; bewusst ausgenommen ist P-02 (klein bleibt in Großbuchstaben, so ist das lokale qwen gemessen) |
 
 ## Historie
@@ -95,3 +95,5 @@ für jede Schiene.
   Werkzeug-Suche Schritt 9 hinter dem Schalter, Alarm-Block auf gross (0446ae5).
 - **2026-10-26** — Verweise auf die Szene „Bei ihr einchecken“
   (`memory/leitbild.md`) bei B-01, KL-02, P-06; keine neuen Einträge.
+- **2026-10-26** — KT-07 neu (Kontext statt Nachschlagen bei Smalltalk,
+  Sasha), P-06 teilweise, P-02 nachgezogen (COMMIT).

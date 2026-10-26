@@ -1,6 +1,6 @@
 # KI-Bibel — Kontext klein halten
 
-**Stand 2026-10-22:** Sechs Einträge (KT-01 bis KT-06). Kennung „KT“, damit
+**Stand 2026-10-26:** Sieben Einträge (KT-01 bis KT-07); KT-07 umgesetzt. Kennung „KT“, damit
 sie nicht mit den Fehlercodes `K-…` (`core/fehlercodes.py`) verwechselt wird.
 Teilweise umgesetzt: Budget, Verweise statt Daten, alte Werkzeug-Ergebnisse
 zwischen den Zügen. Offen: Kompaktierung. Achtung: Was vorne aus dem Verlauf
@@ -87,8 +87,31 @@ Pflegeregeln: [README.md](README.md).
 - **Heute bei ZENTRALE:** Für Wissen über Sasha ja, für die Arbeit an einer
   Aufgabe nein.
 
+### KT-07 Kontext statt Nachschlagen bei Smalltalk
+
+- **Regel:** Was gerade ansteht (laufender Termin, die nächsten Termine,
+  offene Fristen), steht automatisch im Kontext. Bei Gruß oder Smalltalk
+  schlägt die KI nichts nach und zählt nichts auf; sie hat es im Blick und
+  fragt höchstens sanft nach („fertig mit Analysis?“). Ob Sasha etwas
+  erledigt hat, weiß sie nicht — fragen statt annehmen.
+- **Zitat:** —
+- **Quelle:** Sasha, 26.10.2026 (Leitbild-Szene „Bei ihr einchecken“,
+  [../../leitbild.md](../../leitbild.md#szenen-sasha-2026-10-24); Gespräch
+  20261026-201032-04ec42)
+- **Gilt für:** claude-gross, qwen
+- **Status:** umgesetzt — `core/kalender_konflikte.py`
+  `jetzt_und_naechstes` (über `ki_prompt._jetzt_naechstes_prompt` in
+  `cloud._volatile_text`, nur gross); qwen: `zusatzpruefer.ist_smalltalk`,
+  `qwen.tool_choice` ohne Zwang, eigene Erinnerung, Regel 3 und 8 angepasst;
+  COMMIT. Tests `tests/test_jetzt_im_prompt.py`. Ungemessen mit echtem Modell.
+- **Heute bei ZENTRALE:** Abschnitt „## Jetzt und als Nächstes“ im
+  wechselnden Teil, Rhythmus als Rhythmus gekennzeichnet, keine Minuten.
+  Bewusst Daten statt Verweis (Ausnahme zu KT-03): ein paar Zeilen sparen
+  die Werkzeug-Runde. Wie das gebaut ist: `memory/ki/prompt_aufbau.md`.
+
 ---
 
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-26** — KT-07 neu und umgesetzt (Sasha, COMMIT).

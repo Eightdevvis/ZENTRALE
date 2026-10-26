@@ -380,7 +380,8 @@ def cloud_tools() -> list:
 
 def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     """
-    Das Wechselnde: Jetzt-Block, Alarme, Mic-Hinweis. Der Graph-Kontext
+    Das Wechselnde: Jetzt-Block (auf gross mit „Jetzt und als Nächstes"),
+    Alarme, Mic-Hinweis. Der Graph-Kontext
     stand bis 18.08.2026 hier und ist aus (ki_prompt.GRAPH_KONTEXT); Imprint und
     Gedaechtnis-Kopf gehoeren NICHT hierher, sondern in _static_system.
 
@@ -406,14 +407,23 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
     schiene = _profil()
     # Werkzeug-Suche an (Schritt 9): read_time heißt „über search_tools“.
     # Aus bleibt der Block byte-gleich (Aufruf ohne Argument wie vorher).
-    parts.append(ki_prompt._now_prompt(suche=True) if _suche_im_prompt(schiene)
-                 else ki_prompt._now_prompt())
+    gross = schiene.NAME == "gross"
+    if gross:
+        # Eigene Fassung ohne Kalender-Satz, dahinter was gerade läuft und
+        # als Nächstes kommt (26.10.2026, KI-Bibel P-06, KT-07).
+        parts.append(ki_prompt._now_gross(suche=_suche_im_prompt(schiene)))
+        jetzt = ki_prompt._jetzt_naechstes_prompt()
+        if jetzt:
+            parts.append(jetzt)
+    else:
+        parts.append(ki_prompt._now_prompt(suche=True) if _suche_im_prompt(schiene)
+                     else ki_prompt._now_prompt())
     if not tutor_mode:
         # Der Imprint steht NICHT hier, sondern im gecachten Kopf
         # (_static_system). Er ändert sich mit dem Tag, nicht mit dem Turn —
         # hier unten würde er bei jedem Turn ungecacht mitbezahlt.
         # gross: eigener Alarm-Text ohne Dashboard (KI-Bibel B-03).
-        alarm = (ki_prompt._alarm_prompt(gross=True) if schiene.NAME == "gross"
+        alarm = (ki_prompt._alarm_prompt(gross=True) if gross
                  else ki_prompt._alarm_prompt())
         if alarm:
             parts.append(alarm)

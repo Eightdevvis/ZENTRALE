@@ -90,6 +90,8 @@ def welt(monkeypatch):
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_now_prompt", lambda: "## Jetzt\nMontag, 10:00")
+    monkeypatch.setattr(ki_prompt, "_now_gross", lambda **_: "## Jetzt\nMontag, 10:00")
+    monkeypatch.setattr(ki_prompt, "_jetzt_naechstes_prompt", lambda: "")
     monkeypatch.setattr(erlaubnis, "braucht_erlaubnis", lambda *a, **k: False)
     ausgefuehrt = []
 

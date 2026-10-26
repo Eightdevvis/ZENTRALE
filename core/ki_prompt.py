@@ -102,6 +102,8 @@ def _now_prompt(suche: bool = False) -> str:
 
     suche (2026-10-22, Werkzeug-Suche Schritt 9): read_time ist dann erst
     nach search_tools da — der Satz sagt es. Aus: byte-gleich wie vorher.
+
+    Die Schiene gross hat seit 2026-10-26 eine eigene Fassung: _now_gross.
     """
     now = datetime.now()
     weekday = _WEEKDAYS_DE[now.weekday()]
@@ -136,6 +138,48 @@ def _now_prompt(suche: bool = False) -> str:
         "ohne Tool zurückfragen."
     )
     return head
+
+
+# Der Jetzt-Block auf gross (2026-10-26, KI-Bibel P-02, P-06): normale
+# Schreibung statt NICHT/UHRZEIT, und ohne den Kalender-Satz („hast du NICHT
+# im Kopf: dafür read_calendar rufen, nie raten …"). Der hing bei jeder
+# Nachricht ganz hinten, und was zuletzt steht, wirkt am stärksten: auf
+# „meow" schlug sie den Kalender nach und las eine Terminliste vor (Szene
+# „Bei ihr einchecken", Gespräch 20261026-201032-04ec42). Die Grenze steht
+# weiter im Imprint („Für jeden anderen Zeitraum read_calendar rufen", im
+# gecachten Kopf); was gerade läuft, steht direkt hierunter in „Jetzt und als
+# Nächstes" (_jetzt_naechstes_prompt). klein bleibt byte-gleich.
+_JETZT_GROSS = (
+    "## Jetzt\n"
+    "Heute ist {wochentag}, der {datum}. Dieser Block ist die einzige verlässliche "
+    "Zeitquelle; Daten in Notizen oder im Tagebuch sind Erinnerungen an frühere "
+    "Tage, nicht der aktuelle Tag.\n\n"
+    "Die Uhrzeit steht hier bewusst nicht. Brauchst du sie, weil {nutzer} danach "
+    "fragt oder weil es für eine Entscheidung zählt, ruf read_time{suche}. Rate "
+    "sie nicht und rechne nichts aus dem Kopf aus.")
+
+
+def _now_gross(suche: bool = False) -> str:
+    """Der Jetzt-Block für gross (Begründung über _JETZT_GROSS)."""
+    import uhr      # die eine Uhr (core/uhr.py, Gefahrzone „heute")
+    now = uhr.jetzt()
+    text = (_JETZT_GROSS
+            .replace("{wochentag}", _WEEKDAYS_DE[now.weekday()])
+            .replace("{datum}", f"{now.day}. {_MONTHS_DE[now.month]} {now.year}")
+            .replace("{suche}", " (über search_tools)" if suche else ""))
+    return nutzer_angaben.einsetzen(text)
+
+
+def _jetzt_naechstes_prompt() -> str:
+    """„## Jetzt und als Nächstes" (nur gross): was laut Kalender gerade
+    läuft, die nächsten Termine, Deadlines im Vorwarn-Fenster. Begründung
+    bei kalender_konflikte.jetzt_und_naechstes. Fällt der Kalender aus,
+    fehlt der Block — der Chat fällt nicht mit."""
+    try:
+        import kalender
+        return kalender.jetzt_und_naechstes()
+    except Exception:
+        return ""
 
 
 def _imprint_prompt(betont: bool = True) -> str:
@@ -218,6 +262,11 @@ _ALARM_GROSS = (
 
 
 def _alarm_gross(alarms) -> str:
+    # Deadlines stehen auf gross in „Jetzt und als Nächstes" (dieselbe Zeile,
+    # kalender_konflikte._deadline_zeilen) — hier nicht noch einmal.
+    alarms = [a for a in alarms if a.get("kind") != "Deadline"]
+    if not alarms:
+        return ""
     lines = ["## Offene Erinnerungen"]
     lines += ["- " + str(a.get("text", "")).strip() for a in alarms]
     lines.append(nutzer_angaben.einsetzen(_ALARM_GROSS))

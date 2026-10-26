@@ -285,6 +285,43 @@ Beschreibung; jetzt nur noch dort).
 - Steckbrief: der Satz „…der Grund, warum eine Antwort manchmal gegen den
   spontanen Wunsch geht" ist raus (Idee dahinter: [zukunftsvisionen.md](zukunftsvisionen.md)).
 
+## Jetzt und als Nächstes (seit 2026-10-26, nur gross)
+
+Anlass: Leitbild-Szene „Bei ihr einchecken" (Gespräch
+`20261026-201032-04ec42`). Auf „meow" schlug qwen den Kalender nach, sagte
+eine Terminliste auf und nannte den Tagesrhythmus als Termin; was gerade lief
+(„Ana HÜ" 20:30–22:00), wusste sie nicht — der Imprint „Was ansteht" sitzt im
+gecachten Kopf und kennt die Uhr nicht.
+
+Im wechselnden Teil (`cloud._volatile_text`) steht auf gross jetzt:
+
+1. `ki_prompt._now_gross()` — Datum und „Uhrzeit über read_time", normal
+   geschrieben, **ohne** den Kalender-Satz („hast du NICHT im Kopf: dafür
+   read_calendar rufen …"). Der hing hinter jeder Nachricht (KI-Bibel P-06);
+   die Grenze steht weiter im Imprint im gecachten Kopf. klein behält
+   `_now_prompt()` byte-gleich.
+2. `ki_prompt._jetzt_naechstes_prompt()` → `kalender.jetzt_und_naechstes()`
+   (`core/kalender_konflikte.py`): was laut Kalender gerade läuft (mit Ende,
+   auch über Mitternacht von gestern), der Tagesrhythmus in eigener Zeile als
+   „kein Termin, nicht ansagen", die nächsten höchstens drei Termine heute/
+   morgen, Deadlines im Vorwarn-Fenster, dazu ein Satz zum Umgang (im Blick,
+   nicht aufsagen, höchstens sanft nachfragen, nicht annehmen, ob erledigt).
+   Uhrzeiten, nie Minuten. Leer → kein Abschnitt. Vorbereitung steht nicht
+   da: dafür gibt es keine Daten.
+
+Dasselbe Objekt, nicht kopiert: gelesen wird mit `entries_in_range` und
+`anzeige_titel` wie der Imprint; die Deadline-Zeilen kommen aus
+`_deadline_zeilen`, derselben Funktion, die `open_alarms` nutzt. Auf gross
+lässt der Alarm-Block (`_alarm_gross`) die Deadlines deshalb weg. Der
+Imprint bleibt im gecachten Kopf (heute/morgen komplett); „Als Nächstes"
+nennt nur die nächsten drei daraus. Der feste Prompt ändert sich nicht.
+
+Gemessen mit Beispielkalender (laufender Termin, Rhythmus, drei kommende,
+eine Deadline): Wechselndes 1.425 → 1.235 Zeichen; mit leerem Kalender
+kürzer um den Kalender-Satz. Bauzeit ~2 ms. Tests:
+`tests/test_jetzt_im_prompt.py`, Schnappschuss `jetzt_gross` in
+`tests/fixtures/prompt_schnappschuss.json`.
+
 ## Der Nutzer im Prompt — `core/nutzer_angaben.py` (seit 2026-10-09)
 
 Leerer Erststart (Produkt-Inventur Punkt 1): Persona, Antwortverhalten,
@@ -322,3 +359,5 @@ nur noch auf `klein` (dort gemessen, unverändert).
 - **2026-10-11** — aus `ki_system.md` ausgelagert.
 - **2026-10-14** — Ballast raus (Doppeltes, Veraltetes, Großbuchstaben auf
   gross), Prompt-Budget 21.000 Zeichen mit Wächter-Test.
+- **2026-10-26** — gross: eigener Jetzt-Block ohne Kalender-Satz und
+  Abschnitt „Jetzt und als Nächstes" im Wechselnden (siehe oben).
