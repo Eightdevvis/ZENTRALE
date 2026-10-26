@@ -172,7 +172,7 @@ def _cc() -> dict:
     Anthropic cacht nicht den markierten Block, sondern ALLES davor
     (tools → system → messages, in dieser Reihenfolge gerendert). Ein
     Breakpoint sagt also: "bis hierher ist der Präfix stabil, merk ihn dir".
-    Treffer kosten 10 % des Input-Preises.
+    Treffer kosten 10 % des Input-Preises (Opus/Sonnet 5.5: 5 %).
     """
     return {"type": "ephemeral", "ttl": _CACHE_TTL}
 
@@ -961,7 +961,8 @@ def _gestoppt_buchen(verbrauch: dict, model: str, rest_zeichen: int = 0):
         rd = int(verbrauch.get("cache_read_input_tokens", 0) or 0)
         wr = int(verbrauch.get("cache_creation_input_tokens", 0) or 0)
         eur = usage.buchen(model, input_tokens=rein, output_tokens=gemeldet + rest,
-                           cache_read=rd, cache_write=wr, output_geschaetzt=rest)
+                           cache_read=rd, cache_write=wr, cache_ttl=_CACHE_TTL,
+                           output_geschaetzt=rest)
         zug_ablauf.verbrauch(eingabe=rein, ausgabe=gemeldet + rest, cache_lesen=rd,
                              cache_schreiben=wr, euro=eur, geschaetzt=bool(rest))
         state.push_log(
@@ -995,7 +996,7 @@ def _log_usage(final, model: str):
         eur = usage.buchen(model,
                            input_tokens=int(u.input_tokens or 0),
                            output_tokens=int(u.output_tokens or 0),
-                           cache_read=rd, cache_write=wr)
+                           cache_read=rd, cache_write=wr, cache_ttl=_CACHE_TTL)
         zug_ablauf.verbrauch(eingabe=int(u.input_tokens or 0),
                              ausgabe=int(u.output_tokens or 0),
                              cache_lesen=rd, cache_schreiben=wr, euro=eur)

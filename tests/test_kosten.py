@@ -270,3 +270,48 @@ def test_effort_nimmt_nur_gueltige_stufen(budget, keine_env):
     assert ai_backends.chat_effort() == "low"
     with pytest.raises(ValueError):
         ai_backends.set_chat_effort("voll_aufdrehen")
+
+
+# ── Stand 26.10.2026, gegen die offizielle Preisseite geprüft ─────────────
+# https://platform.claude.com/docs/en/about-claude/pricing
+# Je Zeile in $ pro Mio. Token: Eingabe, Cache-Schreiben 5 min, 1 h,
+# Cache-Lesen, Ausgabe.
+OFFIZIELL = {
+    "claude-sonnet-5":   (2.00, 2.50,  4.00, 0.20, 10.00),
+    "claude-sonnet-5-5": (2.00, 2.50,  4.00, 0.10, 10.00),
+    "claude-opus-5-5":   (4.00, 5.00,  8.00, 0.20, 20.00),
+    "claude-haiku-5-5":  (0.10, 0.125, 0.20, 0.01,  0.50),
+}
+
+
+def _usd(model, **kw):
+    return prices.euro(model, **kw) / prices.USD_EUR
+
+
+def test_anthropic_preise_wie_auf_der_preisseite():
+    for mdl, (rein, w5, w1, lesen, raus) in OFFIZIELL.items():
+        assert prices.bekannt(mdl), mdl
+        m = 1_000_000
+        assert _usd(mdl, input_tokens=m // 20) * 20 == pytest.approx(rein), mdl
+        assert _usd(mdl, cache_write=m // 20, cache_ttl="5m") * 20 == pytest.approx(w5), mdl
+        assert _usd(mdl, cache_write=m // 20, cache_ttl="1h") * 20 == pytest.approx(w1), mdl
+        assert _usd(mdl, cache_read=m // 20) * 20 == pytest.approx(lesen), mdl
+        assert _usd(mdl, output_tokens=m) == pytest.approx(raus), mdl
+
+
+def test_cache_schreiben_ohne_dauer_rechnet_eine_stunde():
+    """cloud.py schreibt mit 1 h; ohne Angabe die teurere Annahme."""
+    assert prices.euro("claude-sonnet-5", cache_write=10_000) == \
+        prices.euro("claude-sonnet-5", cache_write=10_000, cache_ttl="1h")
+    assert prices.euro("claude-sonnet-5", cache_write=10_000, cache_ttl="5m") < \
+        prices.euro("claude-sonnet-5", cache_write=10_000)
+
+
+def test_haiku_5_5_staffel_ueber_100k_prompt():
+    """Über 100.000 Token Prompt (input + Cache) gilt die teure Zeile —
+    für den ganzen Aufruf, auch die Ausgabe."""
+    bis = _usd("claude-haiku-5-5", input_tokens=100_000, output_tokens=1_000_000)
+    assert bis == pytest.approx(0.10 * 0.1 + 0.50)
+    ueber = _usd("claude-haiku-5-5", input_tokens=60_000, cache_read=40_001,
+                 output_tokens=1_000_000)
+    assert ueber == pytest.approx(0.50 * 0.06 + 0.05 * 0.040001 + 2.50)

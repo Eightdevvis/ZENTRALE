@@ -165,6 +165,7 @@ def tokens_geschaetzt(zeichen: int) -> int:
 
 def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
            cache_read: int = 0, cache_write: int = 0,
+           cache_ttl: str = "1h",
            geschaetzt: bool = False, output_geschaetzt: int = 0,
            faktor: float = 1.0, zweck: str | None = None) -> float:
     """
@@ -185,6 +186,9 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     faktor (2026-10-09): Preis-Faktor des Wegs — 0.5 für die Message Batches
     API von Anthropic (halber Preis; der Prüfstand-Richter mit --richter-batch).
 
+    cache_ttl (2026-10-26): Dauer des Cache, in den cache_write ging ("5m"
+    oder "1h") — der Schreibpreis hängt daran (1,25× bzw. 2,0×).
+
     zweck (2026-10-10): wofür, wenn es kein Gesprächszug ist — z. B.
     „klassifikator" (core/klassifikator.py). Zählt ganz normal im Topf der
     Herkunft mit (Deckel und Rückfall sehen es) und zusätzlich je Monat
@@ -197,7 +201,8 @@ def buchen(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
     try:
         eur = prices.euro(model, input_tokens=input_tokens,
                           output_tokens=output_tokens,
-                          cache_read=cache_read, cache_write=cache_write)
+                          cache_read=cache_read, cache_write=cache_write,
+                          cache_ttl=cache_ttl)
         teil_eur = (prices.euro(model, output_tokens=output_geschaetzt)
                     if output_geschaetzt > 0 and not geschaetzt else 0.0)
         eur, teil_eur = eur * float(faktor), teil_eur * float(faktor)

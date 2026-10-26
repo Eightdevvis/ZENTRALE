@@ -8,7 +8,7 @@ Messungen dazu existiert.
 |---|---|
 | **KI-Bibel — vor jeder Arbeit an der KI lesen.** Wonach die KI gebaut wird: alle Regeln und Tipps (Anthropic, inoffiziell, Sasha) mit Kennung, Quelle und Status; Prompt, Werkzeuge, Recherche, Handeln, Skills, Kontext, Denken, Prüfung, Klassifikatoren, Baustellen | [bibel/README.md](bibel/README.md) |
 | **Einstieg.** Überblick: wie der Chat läuft (lokal und Cloud), Architektur-Bild, wo welches Thema steht | [ki_system.md](ki_system.md) |
-| Anbieter und Modelle: Cloud-Kern, zweiter Dialekt, Backend-Wahl, Lokal-Regel, Isolations-Invariante, Modell-Parameter, **Fallen der API**, gestoppt = geschätzt gebucht, lokales Modell, Warmup | [anbieter_modelle.md](anbieter_modelle.md) |
+| Anbieter und Modelle: Cloud-Kern, zweiter Dialekt, Backend-Wahl, Lokal-Regel, Isolations-Invariante, Modell-Parameter, **Fallen der API**, gestoppt = geschätzt gebucht, Preistabelle (Sonnet-5-Preisfehler 26.10.), lokales Modell, Warmup | [anbieter_modelle.md](anbieter_modelle.md) |
 | System-Prompt-Reihenfolge, zwei Schienen `klein`/`gross`, Prompt-Cache (statisch vorn, Wechselndes hinten), **Prompt-Budget** (21.000 Zeichen, Wächter-Test), Werkzeug-Beschreibungen als wichtigster Hebel, Nutzer im Prompt | [prompt_aufbau.md](prompt_aufbau.md) |
 | Werkzeuge: Liste, Werkzeug-Register (neues Werkzeug anlegen), Status und Belege („Belegt oder gesagt"), Gespräche/Projekte/Ablage/PDF-Werkzeuge | [werkzeuge.md](werkzeuge.md) |
 | **Werkzeug-Suche** (seit 2026-10-14, Schalter `werkzeug_suche`, Standard aus): fester Kern + `search_tools`, Anthropic mit `defer_loading`/`tool_reference`, OpenAI hängt an, Freischaltung über Züge hinweg, Gruppen-Tabelle, Skills mit Kurzfassung; Probelauf-Ergebnis, was offen ist | [werkzeug_suche.md](werkzeug_suche.md) |

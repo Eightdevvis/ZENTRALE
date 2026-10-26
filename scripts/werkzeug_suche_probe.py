@@ -90,7 +90,8 @@ def _rufen(client, msgs, titel):
     rd = u.cache_read_input_tokens or 0
     wr = u.cache_creation_input_tokens or 0
     eur = prices.euro(MODELL, input_tokens=u.input_tokens,
-                      output_tokens=u.output_tokens, cache_read=rd, cache_write=wr)
+                      output_tokens=u.output_tokens, cache_read=rd, cache_write=wr,
+                      cache_ttl="5m")   # Breakpoint oben ohne ttl = 5 min
     for k, v in (("in", u.input_tokens), ("out", u.output_tokens), ("rd", rd), ("wr", wr)):
         _SUMME[k] += v
     _SUMME["eur"] += eur

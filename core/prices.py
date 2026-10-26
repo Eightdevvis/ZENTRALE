@@ -21,22 +21,47 @@
 
 # Stand der Preise. Beim Aktualisieren mitziehen — eine Tabelle ohne Datum
 # ist eine Tabelle, der man nicht ansieht, dass sie falsch ist.
-STAND = "2026-08-15"
+# Anthropic-Zeilen geprüft gegen
+# https://platform.claude.com/docs/en/about-claude/pricing (26.10.2026).
+STAND = "2026-10-26"
 
 # Dollar pro EINE MILLION Token: (input, output).
 #
-# cache_read / cache_write sind MULTIPLIKATOREN auf den Input-Preis:
-#   Anthropic  – Lesen 0,1× / Schreiben 1,25× (5 min) bzw. 2,0× (1 h)
+# cache_read / cache_write_5m / cache_write_1h sind MULTIPLIKATOREN auf den
+# Input-Preis:
+#   Anthropic  – Schreiben 1,25× (5 min) bzw. 2,0× (1 h);
+#                Lesen 0,1×, bei Opus 5.5 und Sonnet 5.5 nur 0,05×.
 #   OpenAI-kompatible – meist impliziter Cache ohne steuerbaren Aufpreis;
 #     wir rechnen dort konservativ mit 1,0× (also: kein Rabatt angenommen).
+#
+# Bis 26.10.2026 gab es nur EIN cache_write = 2,0× für alles. Das stimmte für
+# core/cloud.py (Breakpoints mit ttl "1h"), war aber für 5-min-Breakpoints
+# 60 % zu hoch. Jetzt sagt der Aufrufer die Dauer (euro(..., cache_ttl=)).
+#
+# staffel: Preis hängt an der Länge des Prompts (Haiku 5.5). Prompt =
+# input + cache_read + cache_write EINES Aufrufs; liegt er ÜBER "ab", gilt
+# die ganze Zeile aus der Staffel (auch für die Ausgabe).
+_A   = {"cache_read": 0.10, "cache_write_5m": 1.25, "cache_write_1h": 2.00}
+_A05 = {"cache_read": 0.05, "cache_write_5m": 1.25, "cache_write_1h": 2.00}
+
 PREISE = {
     # ── Anthropic ────────────────────────────────────────────────────
-    "claude-opus-5":     {"in": 5.00, "out": 25.00, "cache_read": 0.10, "cache_write": 2.00},
-    "claude-opus-4-8":   {"in": 5.00, "out": 25.00, "cache_read": 0.10, "cache_write": 2.00},
-    "claude-sonnet-5":   {"in": 3.00, "out": 15.00, "cache_read": 0.10, "cache_write": 2.00},
-    "claude-sonnet-4-6": {"in": 3.00, "out": 15.00, "cache_read": 0.10, "cache_write": 2.00},
-    "claude-haiku-4-5":  {"in": 1.00, "out":  5.00, "cache_read": 0.10, "cache_write": 2.00},
-    "claude-fable-5":    {"in": 10.00, "out": 50.00, "cache_read": 0.10, "cache_write": 2.00},
+    "claude-opus-5-5":   {"in": 4.00, "out": 20.00, **_A05},
+    "claude-opus-5":     {"in": 5.00, "out": 25.00, **_A},
+    "claude-opus-4-8":   {"in": 5.00, "out": 25.00, **_A},
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, **_A05},
+    # Sonnet 5: $2/$10 war als Einführungspreis bis 31.08.2026 angekündigt,
+    # ist laut Preisseite aber DAUERHAFT der Preis — die Erhöhung auf $3/$15
+    # zum 01.09. findet nicht statt. Bis 26.10. stand hier $3/$15 → alle
+    # Sonnet-5-Kosten waren 1,5-fach zu hoch verbucht.
+    "claude-sonnet-5":   {"in": 2.00, "out": 10.00, **_A},
+    "claude-sonnet-4-6": {"in": 3.00, "out": 15.00, **_A},
+    # Haiku 5.5: $0,10/$0,50 für Prompts bis 100.000 Token, darüber
+    # $0,50/$2,50 (Cache entsprechend). Gilt je Aufruf, nicht kumuliert.
+    "claude-haiku-5-5":  {"in": 0.10, "out":  0.50, **_A,
+                          "staffel": {"ab": 100_000, "in": 0.50, "out": 2.50}},
+    "claude-haiku-4-5":  {"in": 1.00, "out":  5.00, **_A},
+    "claude-fable-5":    {"in": 10.00, "out": 50.00, **_A},
 
     # ── Alibaba / DashScope ──────────────────────────────────────────
     "qwen-plus":         {"in": 0.40, "out": 1.20},
@@ -60,7 +85,7 @@ PREISE = {
 # Wenn ein Modell nicht in der Tabelle steht: lieber grob schätzen als gar
 # nichts anzeigen. Eine fehlende Zeile darf den Budget-Deckel nicht blind
 # machen — sonst schützt er ausgerechnet dann nicht, wenn etwas Neues läuft.
-UNBEKANNT = {"in": 3.00, "out": 15.00, "cache_read": 0.10, "cache_write": 2.00}
+UNBEKANNT = {"in": 3.00, "out": 15.00, **_A}
 
 USD_EUR = 0.92   # grobe Umrechnung; für Größenordnungen völlig ausreichend
 
@@ -112,21 +137,29 @@ def bekannt(model: str) -> bool:
 
 
 def euro(model: str, *, input_tokens: int = 0, output_tokens: int = 0,
-         cache_read: int = 0, cache_write: int = 0) -> float:
+         cache_read: int = 0, cache_write: int = 0,
+         cache_ttl: str = "1h") -> float:
     """
     Was dieser eine Call ungefähr gekostet hat, in Euro.
 
     input_tokens  – ungecachter Input (voller Preis)
-    cache_read    – aus dem Cache gelesen (bei Anthropic 10 %)
-    cache_write   – frisch in den Cache geschrieben (bei Anthropic 2,0× bei 1 h)
+    cache_read    – aus dem Cache gelesen (bei Anthropic 10 %, teils 5 %)
+    cache_write   – frisch in den Cache geschrieben
+    cache_ttl     – Dauer des Cache, in den geschrieben wurde: "5m" (1,25×)
+                    oder "1h" (2,0×). Unbekannt → "1h", die teurere Annahme;
+                    core/cloud.py schreibt standardmäßig mit 1 h.
     output_tokens – Ausgabe, inklusive Denken. Der teuerste Posten.
     """
     p = fuer(model)
+    staffel = p.get("staffel")
+    if staffel and input_tokens + cache_read + cache_write > staffel["ab"]:
+        p = {**p, "in": staffel["in"], "out": staffel["out"]}
+    schreib = p.get("cache_write_5m" if cache_ttl == "5m" else "cache_write_1h", 1.0)
     pro_token_in = p["in"] / 1_000_000
     usd = (
         input_tokens  * pro_token_in
         + cache_read  * pro_token_in * p.get("cache_read", 1.0)
-        + cache_write * pro_token_in * p.get("cache_write", 1.0)
+        + cache_write * pro_token_in * schreib
         + output_tokens * p["out"] / 1_000_000
     )
     return usd * USD_EUR

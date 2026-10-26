@@ -89,6 +89,22 @@ Namen bekommen den teuersten Preis ihrer Familie, sonst `UNBEKANNT`
 (Sonnet-Preis). Nie 0 €; einmal je Lauf steht „PREIS ? <modell>: nicht in
 der Preistabelle …" im Log (`usage.buchen`).
 
+**Preisfehler Sonnet 5 (behoben 26.10.2026).** `prices.py` rechnete
+`claude-sonnet-5` seit 15.08. mit $3/$15; laut offizieller Preisseite
+(platform.claude.com/docs/en/about-claude/pricing) ist $2/$10 (Cache-Lesen
+$0,20) dauerhaft der Preis, die angekündigte Erhöhung zum 01.09. kam nie.
+Alle Sonnet-5-Buchungen bis dahin sind **1,5-fach zu hoch**; der Deckel
+(8 €/Monat) schaltete im Oktober deshalb zu früh auf qwen. Verbuchtes in
+`data/ai_usage.json` bleibt bewusst stehen (Sashas Buchhaltung); real =
+verbucht × 2/3. Dabei neu: `claude-sonnet-5-5`, `claude-opus-5-5` (Cache-Lesen
+nur 0,05×), `claude-haiku-5-5` mit Staffel (über 100.000 Token Prompt gilt
+die teure Zeile für den ganzen Aufruf). Cache-Schreiben kennt jetzt die Dauer:
+`prices.euro(…, cache_ttl="5m"|"1h")` → 1,25× bzw. 2,0×; ohne Angabe 1 h
+(die teurere Annahme). `cloud.py` reicht `_CACHE_TTL` über `usage.buchen`
+durch — vorher galt pauschal 2,0×, was für `cloud.py` (1 h) stimmte, für
+5-min-Breakpoints nicht. Wächter: `tests/test_kosten.py`
+(`OFFIZIELL`-Tabelle).
+
 Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
 ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,
 Gate, SSE bis in die TUI sind providerunabhängig. Ein zweiter echter
