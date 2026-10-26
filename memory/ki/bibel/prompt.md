@@ -95,6 +95,9 @@ Legende und Pflegeregeln: [README.md](README.md).
   hast du NICHT im Kopf“ im Jetzt-Block)
 - **Heute bei ZENTRALE:** Der Jetzt-Block mit der Kalender-Regel hängt im
   Umschlag hinten an jeder Nutzernachricht.
+- **Szene dazu:** „Bei ihr einchecken“ (26.10.2026) in
+  [../../leitbild.md](../../leitbild.md#szenen-sasha-2026-10-24) — auf „was
+  machst du so“ kam eine Terminliste.
 
 ---
 
@@ -102,3 +105,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — P-02 nachgezogen (Durchgang Werkzeuge, 0446ae5).
+- **2026-10-26** — P-06: Verweis auf die Szene „Bei ihr einchecken“.

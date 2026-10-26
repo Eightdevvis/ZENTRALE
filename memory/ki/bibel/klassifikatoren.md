@@ -31,6 +31,9 @@ gebaut. Sie kommen nach der Grund-KI dran. Größere Visionen dazu:
 - **Status:** offen
 - **Heute bei ZENTRALE:** Der Satz ist gestrichen (cb8c662), Ersatz gibt es
   nicht.
+- **Szene dazu:** „Bei ihr einchecken“ (26.10.2026) in
+  [../../leitbild.md](../../leitbild.md#szenen-sasha-2026-10-24) — „fertig mit
+  Analysis?“ als Frage aus dem Kalender-Fokus.
 
 ### KL-03 Modell als Richter
 
@@ -49,3 +52,4 @@ gebaut. Sie kommen nach der Grund-KI dran. Größere Visionen dazu:
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
+- **2026-10-26** — KL-02: Verweis auf die Szene „Bei ihr einchecken“.

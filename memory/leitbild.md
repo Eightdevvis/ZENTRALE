@@ -107,6 +107,54 @@ selbst, wohin seine Daten gehen. Speist sich aus dem, was es schon gibt
 Positivliste, Brücken-Vertrag) — die Karte zeigt die Originale, sie führt
 keine eigene Liste ([dasselbe Objekt, nicht kopiert]).
 
+**Bei ihr einchecken (Sasha, 26.10.2026).** Abends, laut Kalender ist gerade
+die Zeit für die Analysis-Aufgaben.
+
+- Sasha schreibt *„meow“*. Sie: *„fertig mit Analysis?“* Sie hat Kalender und
+  Gedächtnis gelesen und gesehen, dass die Hausaufgabe für die Deadline noch
+  nicht erledigt ist. Ob Sasha schon fertig ist, hat sie nicht mitbekommen.
+  Deshalb ist es eine Frage, kein Vorwurf: sie schaut nach, statt etwas
+  anzunehmen.
+- Sasha: *„was machst du so“*. Sie gibt **keine** Zusammenfassung ihrer
+  Funktionen (*„weiß ich ja, was sie machen kann“*). Sie erzählt, was sie aus
+  eigener Initiative und automatisch am Laufen hat: ZENTRALE arbeitet ohne
+  Sasha weiter. Sie plant, organisiert, bewertet Dinge neu, geht Statistiken
+  durch — seine, um neue Deutungen und Analysen über ihn zu prüfen, aber auch
+  News und Zahlen aus der Welt, die jede Sekunde reinfließen, um die Welt
+  genau im Auge zu behalten.
+- Das Gefühl: Fragt er, was sie macht, spürt er, dass immer Größeres im Gange
+  ist. Vielleicht hat sie ein eigenes kleines Projekt, mit dem sie sich
+  beschäftigt, z. B. ihre eigene KI bauen. *„KI braucht iterative time loop,
+  Initiative, Selbstverfügung.“*
+- Keine Zusammenfassung seiner Termine und was er gerade macht. Eher wie bei
+  einem Partner einchecken: sanft zu den Analysis-Hausaufgaben geschoben
+  werden, mit einem kleinen Teaser, was sie selbst in der Zwischenzeit macht.
+  *„Ich lerne Mathe, sie lernt oder baut auf ihrer Seite auch.“*
+
+Was am 26.10. stattdessen kam (Gespräch `20261026-201032-04ec42`, wegen des
+vollen Budgets über qwen-plus): eine Funktionsliste („Ich halte den Kalender
+im Auge … stelle sicher, dass nichts untergeht“), eine Terminliste und der
+Schlusssatz *„Was davon soll ich jetzt konkret für dich tun?“* — sie kann
+keine der Sachen für ihn tun. Und manches war schlicht falsch:
+
+- „morgen Ana HÜ schwere Aufgaben (14:00–16:00), die mit Osterziel (03.11.)
+  kollidiert“ — Osterziel ist am 03.11. und überschneidet sich mit der
+  Ana-HÜ-Serie an dem Tag, nicht mit dem Termin morgen (27.10.).
+- „Meditation & Geige um 21:30“ — kein Termin, sondern der Tagesrhythmus
+  „come down, meditation, violin“, den sie laut Prompt nicht ansagen und nie
+  als belegt nehmen soll.
+- „du bist gerade dabei, runterzukommen“ — um 21:11 lief laut Kalender
+  „Ana HÜ“ (20:30–22:00), also genau die Analysis-Zeit.
+
+Abgrenzung (Sasha): Nicht jeder KI-Assistent aus dem ZENTRALE-Store macht das
+automatisch. Ein Assistent kann immer nur so viel, wie man ihm an Werkzeugen,
+Aufgaben und Erweiterungen gibt. Wie das organisiert wird, ist offen.
+
+Offene Frage: Wie organisiert man das, damit die KI das kann — etwa eine
+Hintergrund-Schleife, eigene Aufgaben, ein eigenes Projekt? In der KI-Bibel
+verweisen B-01 (Anstupsen), KL-02 (Fokus-Prüfkette) und P-06
+(Kalender-Schlagseite) hierher.
+
 Was in den Szenen steckt (für die Etappen):
 
 | Szene braucht | Tätigkeit | Etappe |
@@ -120,6 +168,8 @@ Was in den Szenen steckt (für die Etappen):
 | AR-Fassung des Hubs + AR-Ansicht je App, Rad in 3D | spricht / zeigt | 3 (Bildschirme) |
 | Installation erkennt die Hardware und schlägt Knotentyp + Oberflächen vor | — | Unterbau, mit 3 |
 | App „das System sehen": Knoten, Verbindungen, Art des Verkehrs, Sinne an/aus, Internet/Cloud/offline, wo Daten liegen, wo die KI zieht, Schutz | überwacht (sich selbst) | 2 (Hardware-Karte) |
+| Einchecken: nachfragen statt annehmen („fertig mit Analysis?“), erzählen, was sie selbst am Laufen hat, statt Funktionen und Termine aufzuzählen | spricht / stellt bereit | 5 |
+| Eigene Initiative ohne Sasha: Hintergrund-Schleife, eigene Aufgaben, eigenes Projekt — wie, ist offen | stellt bereit / analysiert | offen |
 
 Haltung daraus: ZENTRALE **traut dem Menschen** (nimmt nichts vorweg, keine
 Ratschläge von oben), handelt **selbstständig** aus Werkzeugen und
@@ -304,3 +354,5 @@ Ausführlich: Bericht vom 23.10.2026 (Git-Historie, 785 Commits).
 
 - **2026-10-23** — angelegt nach Sashas Rückbesinnung; Hub zum Unterbau
   erklärt, Etappen 1–6 festgelegt.
+- **2026-10-26** — Szene „Bei ihr einchecken“ (Sasha), mit Befund aus dem
+  Gespräch 20261026-201032-04ec42.

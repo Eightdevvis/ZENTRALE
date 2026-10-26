@@ -16,6 +16,9 @@ Pflegeregeln: [README.md](README.md).
 - **Gilt für:** alle
 - **Status:** offen — `core/profil/klein.py` ~135 (Persona, gilt auch für gross)
 - **Heute bei ZENTRALE:** Beide Sätze stehen im Prompt.
+- **Szene dazu:** „Bei ihr einchecken“ (26.10.2026) in
+  [../../leitbild.md](../../leitbild.md#szenen-sasha-2026-10-24) — sanft
+  anstupsen als Frage, kein Service-Nachklapp.
 
 ### B-02 „Sasha“ fest im Gedächtnis-Kopf
 
@@ -80,3 +83,4 @@ Pflegeregeln: [README.md](README.md).
 - **2026-10-22** — angelegt (Bibel-Start).
 - **2026-10-22** — B-05 auf teilweise (Kalender-Nachprüfung, c3955c0).
 - **2026-10-22** — B-03 umgesetzt (Durchgang Werkzeuge, 0446ae5).
+- **2026-10-26** — B-01: Verweis auf die Szene „Bei ihr einchecken“.

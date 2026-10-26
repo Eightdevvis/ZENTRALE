@@ -93,3 +93,5 @@ für jede Schiene.
 - **2026-10-22** — Durchgang Werkzeuge (W-01–W-11, dazu P-02, B-03, PR-13):
   Werkzeug-Texte, Abgrenzung, input_examples, read_document in Stücken,
   Werkzeug-Suche Schritt 9 hinter dem Schalter, Alarm-Block auf gross (0446ae5).
+- **2026-10-26** — Verweise auf die Szene „Bei ihr einchecken“
+  (`memory/leitbild.md`) bei B-01, KL-02, P-06; keine neuen Einträge.

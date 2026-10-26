@@ -25,7 +25,7 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 
 | Datei | Warum hier |
 |---|---|
-| **[leitbild.md](leitbild.md)** | **Zuerst lesen.** Wofür es ZENTRALE gibt (das Zuhause, das hört, sieht, spricht, handelt), Grundpfeiler, Messlatte, Etappen 1–6. Steht über allem. |
+| **[leitbild.md](leitbild.md)** | **Zuerst lesen.** Wofür es ZENTRALE gibt (das Zuhause, das hört, sieht, spricht, handelt), Szenen, Grundpfeiler, Messlatte, Etappen 1–6. Steht über allem. |
 | [ueberblick.md](ueberblick.md) | Der Einstieg. Was ZENTRALE ist und wo sie gerade steht — gehört in keinen Bereich, sondern davor. |
 | [claude_hinweise.md](claude_hinweise.md) | Architektur-Entscheidungen speziell für Claude. Bereichsübergreifend. |
 | [doku_regeln.md](doku_regeln.md) | Wie eine `memory/`-Datei aufgebaut ist (Stand zuerst, Warum, Historie unten, ein Fakt eine Datei) — gilt für jede Datei hier. |
