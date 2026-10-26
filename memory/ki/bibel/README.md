@@ -96,4 +96,4 @@ für jede Schiene.
 - **2026-10-26** — Verweise auf die Szene „Bei ihr einchecken“
   (`memory/leitbild.md`) bei B-01, KL-02, P-06; keine neuen Einträge.
 - **2026-10-26** — KT-07 neu (Kontext statt Nachschlagen bei Smalltalk,
-  Sasha), P-06 teilweise, P-02 nachgezogen (COMMIT).
+  Sasha), P-06 teilweise, P-02 nachgezogen (9e74d38).

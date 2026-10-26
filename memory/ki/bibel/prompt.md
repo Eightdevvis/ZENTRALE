@@ -37,7 +37,7 @@ Legende und Pflegeregeln: [README.md](README.md).
   und Alarm-Block auf gross ([B-03](baustellen.md#b-03-alarm-block-passt-nicht-zu-gross))
   seit 0446ae5. Offen: der Jetzt-Block `ki_prompt._now_prompt` (NICHT, UHRZEIT,
   „NICHT im Kopf“) gilt nur noch für klein; gross hat seit 2026-10-26 eine
-  eigene Fassung `_now_gross` ([P-06](#p-06-keine-kalender-schlagseite), COMMIT).
+  eigene Fassung `_now_gross` ([P-06](#p-06-keine-kalender-schlagseite), 9e74d38).
 - **Heute bei ZENTRALE:** Persona, Meta-Regeln, Imprint, Umschlag, Werkzeug-
   Texte und Alarm-Block auf gross sind normal geschrieben. Großbuchstaben
   stehen noch im Jetzt-Block von klein; gross hat seit 2026-10-26 einen
@@ -94,7 +94,7 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **Gilt für:** alle
 - **Status:** teilweise — auf gross ist der Satz „Kalender/Termine: … hast du
   NICHT im Kopf: dafür read_calendar rufen“ raus (`core/ki_prompt.py`
-  `_now_gross`, gerufen aus `cloud._volatile_text`), COMMIT. Die Grenze steht
+  `_now_gross`, gerufen aus `cloud._volatile_text`), 9e74d38. Die Grenze steht
   nur noch im Imprint (gecachter Kopf). Offen: klein (byte-gleich gelassen,
   so ist das lokale qwen gemessen); hinten steht auf gross jetzt „Jetzt und
   als Nächstes“ ([KT-07](kontext.md#kt-07-kontext-statt-nachschlagen-bei-smalltalk)) —
@@ -113,4 +113,4 @@ Legende und Pflegeregeln: [README.md](README.md).
 - **2026-10-22** — P-02 nachgezogen (Durchgang Werkzeuge, 0446ae5).
 - **2026-10-26** — P-06: Verweis auf die Szene „Bei ihr einchecken“.
 - **2026-10-26** — P-06 teilweise, P-02 nachgezogen: eigener Jetzt-Block auf
-  gross ohne Kalender-Satz (COMMIT).
+  gross ohne Kalender-Satz (9e74d38).

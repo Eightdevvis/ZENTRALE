@@ -103,7 +103,7 @@ Pflegeregeln: [README.md](README.md).
   `jetzt_und_naechstes` (über `ki_prompt._jetzt_naechstes_prompt` in
   `cloud._volatile_text`, nur gross); qwen: `zusatzpruefer.ist_smalltalk`,
   `qwen.tool_choice` ohne Zwang, eigene Erinnerung, Regel 3 und 8 angepasst;
-  COMMIT. Tests `tests/test_jetzt_im_prompt.py`. Ungemessen mit echtem Modell.
+  9e74d38. Tests `tests/test_jetzt_im_prompt.py`. Ungemessen mit echtem Modell.
 - **Heute bei ZENTRALE:** Abschnitt „## Jetzt und als Nächstes“ im
   wechselnden Teil, Rhythmus als Rhythmus gekennzeichnet, keine Minuten.
   Bewusst Daten statt Verweis (Ausnahme zu KT-03): ein paar Zeilen sparen
@@ -114,4 +114,4 @@ Pflegeregeln: [README.md](README.md).
 ## Historie
 
 - **2026-10-22** — angelegt (Bibel-Start).
-- **2026-10-26** — KT-07 neu und umgesetzt (Sasha, COMMIT).
+- **2026-10-26** — KT-07 neu und umgesetzt (Sasha, 9e74d38).
