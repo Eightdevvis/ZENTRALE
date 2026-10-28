@@ -360,3 +360,9 @@ schrumpft mit jedem Paket, das daraus entsteht.
 - **2026-10-29**: Plan geschrieben. Anlass: KI-Chat und Kalender sind am
   Handy fest eingebaut, obwohl sie nach [standort_und_app.md](standort_und_app.md)
   Apps sein sollen.
+
+## Decisions (Sasha, 2026-10-29)
+
+- Question 1: the assistant is an **app** whose fixed place is the eye — not part of raw ZENTRALE.
+- Question 2: **probe WASM vs. JS on a real phone first**, then decide (leaning WASM).
+- Questions 3–7 still open.

@@ -12,6 +12,25 @@ noch per rsync, die Mitte ist gebaut und greift erst nach `umstellen mitte`
 (`memory/betrieb/abgleich.md`; Fahrplan: `memory/ueberblick.md`). Ein
 Gedächtnis, ein Assistent — egal von welchem Gerät.
 
+## Language: English for everything new (Sasha, 2026-10-29 — permanent)
+
+ZENTRALE is meant to be English throughout. **Nothing new is built in German.**
+
+- **New code is English:** identifiers, file and module names, comments,
+  docstrings, log messages, test names, commit messages, new `memory/` docs.
+- **No hard-coded UI text.** Every string a human sees (TUI, phone app,
+  notifications, CLI output, KI-facing UI labels) goes through a translation
+  table so more languages can be added later. German stays the first UI
+  language for Sasha. Use the platform standard, no own format: Flutter
+  `gen-l10n` with ARB files (`mobile/`), Python `gettext` (`.po`) for core/TUI/CLI.
+  One table per app/front.
+- **Existing German stays until a dedicated renaming wave** (a planned, large
+  agent run). Until then: when touching old German code, don't extend it in
+  German — new functions/fields next to it are English; don't rename old
+  things piecemeal unless that is the task.
+- Conversation language with Sasha and the KI's answers to him stay German —
+  that is content, not code.
+
 ## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
 
 Dieses Projekt gehört **einem** Menschen (Sasha), das GitHub-`origin` ist
