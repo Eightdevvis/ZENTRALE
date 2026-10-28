@@ -9,6 +9,7 @@ Topologie): [../system/INDEX.md](../system/INDEX.md).
 |---|---|
 | **Einstieg.** Hub-Bauplan — die eine Regel, Hub-Dienste, Manifest `app.toml`, Rechte, Umzug der Module, Kacheln, Adressen `zentrale://…`, Katalog, Farbrollen, KI-Werkzeuge aus dem Schema, Anbindungs-Pipe | [hub_bauplan.md](hub_bauplan.md) |
 | **Wo ein Zustand lebt** — rohes ZENTRALE (Gestell je Knoten) oder App (synct ohne Gnade); Prüffrage vor jedem Entwurf (Sasha, 2026-10-29) | [standort_und_app.md](standort_und_app.md) |
+| **App-Motor (Plan, 2026-10-29)** — App-Paket in Standardformaten, Ansichten als Bausteine (Handy/TUI), Logik als WASM hinter dem HTTP-Vertrag, Play-Regeln, Installieren/Aktualisieren je Knoten, Signatur, Weg für KI-Chat und Kalender am Handy, offene Fragen | [app_motor_plan.md](app_motor_plan.md) |
 | **Listen-App (`fokus`)** — Programm und Kachel teilen EIN Bild (`core/listen_bild.py`), was zum Listenprogramm gehört, wie der spätere Auszug aussieht, Tasten und Ebenen des Fokus-Werkzeugs in TUI/Canvas | [listen_app.md](listen_app.md) |
 | **Werkstatt** — Erschaffen-Rad, der Schmied baut eigene Apps aus Vorlagen, Ablage unter `data/apps/`, Desks verwalten | [werkstatt.md](werkstatt.md) |
 | **Schaufenster (Shop)** — Katalog als schema.org-ItemList, Kategorien, holen, Besitz je Rechner, **Apps installieren** (Ansichten wählen, ins Rad, öffnen), später bezahlen | [shop.md](shop.md) |
