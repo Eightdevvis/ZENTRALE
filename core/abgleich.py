@@ -163,16 +163,18 @@ def mitte_pfade():
         return None
 
 
-def mitte_hat_kalender():
-    """Liegen in der Mitte schon Termine (data/kalender/**)? True/False, None =
-    unbekannt (offline, kein Schlüssel). Für den Schalter kalender-mitte
-    (adapter_ablauf): die Mitte ist die Wahrheit — Ursprung wird nur, wer sie
-    leer vorfindet; sonst schalteten zwei Geräte, die vor dem ersten Abgleich
-    einschalten, beide als Ursprung ein."""
+def mitte_hat_kalender(ordner="data/kalender"):
+    """Liegt im Inhaltsverzeichnis der Mitte mindestens eine Datei unter
+    `ordner`/** (Vorgabe: die Termine)? True / False (Mitte erreichbar, nichts
+    da) / None (offline, kein Schlüssel — unbekannt; der Aufrufer bricht dann
+    ab). Für den Kalender-Schalter (adapter_ablauf): die Mitte ist die
+    Wahrheit, wer sie zuerst füllt, ist der Ursprung — sonst würden zwei
+    Geräte, die vor dem ersten Abgleich einschalten, beide Ursprung."""
     pfade = mitte_pfade()
     if pfade is None:
         return None
-    return any(p.startswith(adapter.KALENDER_MUSTER[:-2]) for p in pfade)
+    vorn = ordner.rstrip("/") + "/"
+    return any(p.startswith(vorn) for p in pfade)
 
 
 def _sha(b):

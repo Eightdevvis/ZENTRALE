@@ -337,3 +337,6 @@ def test_mitte_hat_kalender(welt, monkeypatch):
     laptop.abgleichen()
     laptop._als_ich()
     assert abgleich.mitte_hat_kalender() is True
+    assert abgleich.mitte_hat_kalender("data/gespraeche") is False
+    monkeypatch.setenv("ZENTRALE_ABGLEICH_SCHLUESSEL", str(welt.tmp / "fehlt"))
+    assert abgleich.mitte_hat_kalender() is None           # unbekannt, kein Fehler

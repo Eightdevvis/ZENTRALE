@@ -237,7 +237,7 @@ def test_mitte_mit_terminen_macht_nicht_zum_ursprung(monkeypatch, tmp_path):
     import adapter_ablauf
     import abgleich
     _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
-    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda: True)
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda ordner="data/kalender": True)
     _kalender_da(tmp_path)
     assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "dazu"
     assert not adapter.kalender_dabei(abgleich.ordner())
