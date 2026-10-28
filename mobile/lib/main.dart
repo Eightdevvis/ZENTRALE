@@ -23,6 +23,7 @@ import 'kalender/erinnerungen.dart';
 import 'kalender/kalender_steuerung.dart';
 import 'kalender/zeit.dart';
 import 'ki/anthropic.dart';
+import 'ki/ki.dart';
 import 'konto/geheim.dart';
 import 'konto/konto.dart';
 import 'mitte/abgleich_steuerung.dart';
@@ -45,7 +46,8 @@ Future<void> main() async {
   final steuerung = ChatSteuerung(
     ablage: ablage,
     gespraeche: Gespraeche(ablage, knoten: knotenName),
-    ki: AnthropicAnbieter(kiSchluessel(einstellungen, ablage, konto)),
+    ki: AnthropicAnbieter(kiSchluessel(einstellungen, ablage, konto),
+        ohneSchluessel: () async => SchluesselFehlt(angemeldet: await konto.sitzung() != null)),
     abgleich: abgleich,
     kalender: kalender.ueberblick,
   );

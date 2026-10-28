@@ -17,7 +17,14 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
+            android:enableOnBackInvokedCallback="true"
             android:windowSoftInputMode="adjustResize">
+            <!-- enableOnBackInvokedCallback: Zurück (Taste und Wischgeste) über den
+                 neuen Android-Weg an Flutter geben. Mit targetSdk 36 gilt auf
+                 Android 16 die vorausschauende Zurück-Geste ohnehin; ohne diese
+                 Angabe kam das Zurück im Chat nicht an und man steckte dort fest
+                 (Sasha, 29.10.2026). Flutter meldet selbst, wann es eine Seite
+                 schließen kann; auf der Startseite schließt Zurück die App. -->
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues

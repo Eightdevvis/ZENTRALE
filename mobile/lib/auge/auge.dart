@@ -24,9 +24,10 @@ class AugeSteuerung {
   _AugeState? _auge;
   int _naechste = 0;
 
-  /// 0 = offen, 1 = ganz geschlossen (Knopf-Ring der Startseite). Ein Feld
-  /// statt eines Ereignisses, weil es Bild für Bild mitläuft — das Auge liest
-  /// es in jedem Takt seines Tickers, ohne dass jemand neu baut.
+  /// 0 = offen, 1 = ganz geschlossen (Knopf-Ring der Startseite); kleine
+  /// Ausschläge darüber hinaus sind das Nachfedern der Feder (zeit.offenNachZu).
+  /// Ein Feld statt eines Ereignisses, weil es Bild für Bild dem Finger folgt —
+  /// das Auge liest es in jedem Takt seines Tickers, ohne dass jemand neu baut.
   double zu = 0;
 
   /// Die Pupille wächst, bis sie das Auge füllt; erfüllt, wenn sie es tut.
@@ -145,8 +146,12 @@ class _AugeState extends State<Auge> with SingleTickerProviderStateMixin {
     final offen = dauer == 0 ? 1.0 : math.min(1.0, ms / dauer);
     // Geschlossen (Knopf-Ring): beide Lider treffen sich ruhig in der Mitte,
     // der Blick kehrt dabei zur Mitte zurück.
-    final zu = sanft(widget.steuerung?.zu ?? 0);
-    final o = sanft(offen) * (offen >= 1 ? lidBlinzeln(ms) : 1) * (1 - zu);
+    final zuRoh = widget.steuerung?.zu ?? 0;
+    final zu = zuRoh.clamp(0.0, 1.0);
+    final auf = offenNachZu(zuRoh);
+    // Blinzeln und Schließen zusammen: das kleinere Offen gewinnt, „fest zu"
+    // (auf < 0) bleibt erhalten.
+    final o = auf < 0 ? auf : sanft(offen) * (offen >= 1 ? lidBlinzeln(ms) : 1) * auf;
     var (bx, by) = offen >= 1 ? blick(ms) : (0.0, 0.0);
     bx *= 1 - zu;
     by *= 1 - zu;

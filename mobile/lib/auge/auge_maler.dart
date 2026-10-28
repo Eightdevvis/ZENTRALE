@@ -247,17 +247,27 @@ class AugeMaler extends CustomPainter {
 
     double halb(double dx) => _halb(dx, ry);
 
-    // Offener Anteil der halben Mandelhöhe: in Ruhe 1 − lidTief, beim
-    // Blinzeln 0 (beide Lider treffen sich in der Mitte), beim Antippen
-    // reißt das Auge ganz auf, damit die Pupille alles füllen kann.
+    // Die Lidkanten als Höhe über der Mitte (negativ = oben), je Stelle dx.
+    // Offen: Oberlid bei −(1 − lidTief), Unterlid bei +(1 − unterlidTief)
+    // der halben Mandelhöhe. Zu: beide treffen sich nicht auf einem Strich,
+    // sondern auf einem Bogen, der nach unten hängt wie ein schlafendes Auge
+    // (schlafBogen). lid < 0 heißt „fest zu": der Bogen hängt dann ein wenig
+    // tiefer — das Nachfedern beim Schließen. Beim Antippen reißt das Auge
+    // ganz auf, damit die Pupille alles füllen kann.
     final auf = Curves.easeInOut.transform(z.fuellen.clamp(0.0, 1.0));
-    double anteil(double dx) {
-      final ruhe = (1 - lidTief) * z.lid * (1 - z.lidSchief * (dx + 1) / 2);
-      return ruhe + (1 - ruhe) * auf;
+    final o = math.max(0.0, z.lid);
+    final druck = 1 + math.min(.5, math.max(0.0, -z.lid));
+    double schlaf(double dx) => halb(dx) * schlafBogen * druck;
+    double offenHier(double dx) => o * (1 - z.lidSchief * (dx + 1) / 2);
+    double oben(double dx) {
+      final zu = schlaf(dx), ruhe = zu + (-halb(dx) * (1 - lidTief) - zu) * offenHier(dx);
+      return ruhe + (-halb(dx) - ruhe) * auf;
     }
 
-    double oben(double dx) => -halb(dx) * anteil(dx);
-    double unten(double dx) => halb(dx) * anteil(dx);
+    double unten(double dx) {
+      final zu = schlaf(dx), ruhe = zu + (halb(dx) * (1 - unterlidTief) - zu) * offenHier(dx);
+      return ruhe + (halb(dx) - ruhe) * auf;
+    }
 
     // Alles in eine Ebene, die zum Rand hin ausblendet (Randschwund), als
     // Ganzes auftaucht (da) und bei der Laune „unscharf" verschwimmt.
@@ -374,6 +384,38 @@ class AugeMaler extends CustomPainter {
         strich..color = f.rand.withValues(alpha: .85)..strokeWidth = 1.1 * k);
     canvas.drawPath(_kurve(c, rx, unten),
         strich..color = f.rand.withValues(alpha: .75)..strokeWidth = 1.0 * k);
+
+    // ── Wimpern: nur am (fast) geschlossenen Auge, sonst stünden sie in der
+    // Iris. Feine Striche vom Oberlid nach unten und außen, zu den Winkeln
+    // hin kürzer — sie machen aus dem Bogen ein schlafendes Auge.
+    final wimpern = sanft((wimpernAb - o) / wimpernAb) * (1 - auf);
+    if (wimpern > 0) {
+      final pfad = Path();
+      for (var i = 0; i < wimpernAnzahl; i++) {
+        final dx = (i / (wimpernAnzahl - 1) * 2 - 1) * wimpernBreite;
+        final fuss = c + Offset(dx * rx, oben(dx));
+        final lang = wimpernLaenge * k * (1 - dx * dx * .75) * (.4 + .6 * wimpern);
+        // Richtung: in der Mitte senkrecht nach unten, zu den Seiten nach
+        // außen geneigt; zur Spitze hin biegt sie noch etwas weiter nach außen.
+        final neig = dx * wimpernNeigung;
+        final r = Offset(math.sin(neig), math.cos(neig));
+        final quer = Offset(r.dy, -r.dx); // senkrecht zur Wimper
+        final aussen = Offset(dx == 0 ? 0 : dx.sign, 0);
+        final spitze = fuss + r * lang + aussen * (lang * .28 * dx.abs());
+        final mitte = fuss + r * (lang * .55);
+        // spitz zulaufend: breit am Lid, fein an der Spitze (gefüllt, kein Strich)
+        final b = wimpernDicke * k;
+        final l = fuss + quer * b, rr = fuss - quer * b;
+        pfad
+          ..moveTo(l.dx, l.dy)
+          ..quadraticBezierTo(mitte.dx + quer.dx * b * .45, mitte.dy + quer.dy * b * .45,
+              spitze.dx, spitze.dy)
+          ..quadraticBezierTo(mitte.dx - quer.dx * b * .45, mitte.dy - quer.dy * b * .45,
+              rr.dx, rr.dy)
+          ..close();
+      }
+      canvas.drawPath(pfad, Paint()..color = f.rand.withValues(alpha: .85 * wimpern));
+    }
 
     // ── Randschwund + Auftauchen: Maske von der Mitte nach außen ──
     canvas.drawRect(rect, Paint()

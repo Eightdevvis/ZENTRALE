@@ -75,6 +75,13 @@ Future<GlobalKey> startseiteZeigen(WidgetTester tester, int n, {bool nacht = tru
   return rahmen;
 }
 
+/// Bild für Bild pumpen, bis die Feder sich gesetzt hat.
+Future<void> ruhen(WidgetTester tester) async {
+  for (var i = 0; i < 150; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
 /// Wischen und das erste Bild der Bewegung abwarten (dort steht die Zeit
 /// der Animation noch auf null, erst ab dem nächsten läuft sie).
 Future<void> wischen(WidgetTester tester, double dy) async {
@@ -199,18 +206,39 @@ void main() {
       await startseiteZeigen(tester, 3);
       expect(find.byType(Tooltip), findsNothing); // Standard: keine Knöpfe
       await wischen(tester, 300);
-      await tester.pump(const Duration(milliseconds: ringMs + 100));
+      await ruhen(tester);
       expect(find.byType(Tooltip), findsNWidgets(3));
       // geschlossen öffnet Tippen das Auge, nicht die KI
       await tester.tap(find.byType(Auge));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: ringZurueckMs + 100));
+      await ruhen(tester);
       expect(find.byType(Tooltip), findsNothing);
       await wischen(tester, 300);
-      await tester.pump(const Duration(milliseconds: ringMs + 100));
+      await ruhen(tester);
       await wischen(tester, -300);
-      await tester.pump(const Duration(milliseconds: ringZurueckMs + 100));
+      await ruhen(tester);
       expect(find.byType(Tooltip), findsNothing);
+    });
+
+    testWidgets('der Ring folgt dem Finger; losgelassen federt er', (tester) async {
+      await startseiteZeigen(tester, 3);
+      // langsam ein Drittel ziehen und loslassen → zurück auf, keine Knöpfe
+      var g = await tester.startGesture(tester.getCenter(find.byType(Startseite)));
+      for (var i = 0; i < 10; i++) {
+        await g.moveBy(Offset(0, wischStrecke / 30));
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await g.up();
+      await ruhen(tester);
+      expect(find.byType(Tooltip), findsNothing);
+      // langsam bis über die Mitte → zu, Knöpfe kommen
+      g = await tester.startGesture(tester.getCenter(find.byType(Startseite)));
+      for (var i = 0; i < 20; i++) {
+        await g.moveBy(Offset(0, wischStrecke / 30));
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await g.up();
+      await ruhen(tester);
+      expect(find.byType(Tooltip), findsNWidgets(3));
     });
 
     testWidgets('Ring-Bilder', (tester) async {
@@ -218,14 +246,22 @@ void main() {
         final rahmen = await startseiteZeigen(tester, n, nacht: nacht);
         final art = nacht ? 'nacht' : 'tag';
         if (n == 3 && nacht) await schirmBild(tester, rahmen, 'r0_offen_${n}_$art');
-        await wischen(tester, 300);
         if (n == 6 || n == 3 && nacht) {
-          for (final ms in [250, 550, 800]) {
-            await tester.pump(Duration(milliseconds: ms - (ms == 250 ? 0 : ms == 550 ? 250 : 550)));
-            await schirmBild(tester, rahmen, 'r${n}_${art}_${ms}ms');
+          // Mit dem Finger halten: Zwischenstände genau dort, wo er gerade ist.
+          final g = await tester.startGesture(tester.getCenter(find.byType(Startseite)));
+          await g.moveBy(const Offset(0, 20)); // Ziehen erkennen lassen
+          var weg = 20.0;
+          for (final anteil in [.15, .25, .4, .6, .8]) {
+            await g.moveBy(Offset(0, wischStrecke * anteil - weg));
+            weg = wischStrecke * anteil;
+            await tester.pump(const Duration(milliseconds: 16));
+            await schirmBild(tester, rahmen, 'r${n}_${art}_finger${(anteil * 100).round()}');
           }
+          await g.up();
+        } else {
+          await wischen(tester, 300);
         }
-        await tester.pump(const Duration(milliseconds: ringMs + 100));
+        await ruhen(tester);
         await schirmBild(tester, rahmen, 'r${n}_${art}_fertig');
         await tester.pumpWidget(const SizedBox());
       }
@@ -242,6 +278,10 @@ void main() {
       await malen(tester, '04_spuk_04uhr', AugeZustand(pupille: spuk));
       await malen(tester, '05_blinzeln_halb', const AugeZustand(lid: .5));
       await malen(tester, '06_blinzeln_zu', const AugeZustand(lid: 0));
+      await malen(tester, '06b_zu_tagfarben', const AugeZustand(lid: 0), f: AugeFarben.tag);
+      await malen(tester, '06c_fast_zu', const AugeZustand(lid: .2));
+      await malen(tester, '06d_fest_zu_federt', const AugeZustand(lid: -.3));
+      await malen(tester, '06e_zu_klein_chat', const AugeZustand(lid: 0), groesse: const Size(120, 90));
       await malen(tester, '07_blick_rechts', const AugeZustand(blickX: 5, blickY: 1.5));
       await malen(tester, '08_denkt', const AugeZustand(denkt: true, puls: .6, ring: 1));
       await malen(tester, '09_tippen_50', const AugeZustand(fuellen: .5));

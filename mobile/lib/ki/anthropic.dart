@@ -12,10 +12,14 @@ import 'ki.dart';
 import 'sse.dart';
 
 class AnthropicAnbieter implements KiAnbieter {
-  AnthropicAnbieter(this.schluessel, {http.Client? client})
+  AnthropicAnbieter(this.schluessel, {this.ohneSchluessel, http.Client? client})
       : _client = client ?? http.Client();
 
   final Future<String?> Function() schluessel;
+
+  /// Welcher Fehler gilt, wenn kein Schlüssel da ist — der Anbieter weiß
+  /// nichts vom Konto, darum fragt er nach (main.dart: [SchluesselFehlt]).
+  final Future<KiFehler> Function()? ohneSchluessel;
   final http.Client _client;
 
   static final _url = Uri.parse('https://api.anthropic.com/v1/messages');
@@ -30,7 +34,8 @@ class AnthropicAnbieter implements KiAnbieter {
   }) async* {
     final key = await schluessel();
     if (key == null || key.isEmpty) {
-      throw KiFehler('Kein API-Schlüssel — in den Einstellungen eintragen.');
+      throw await ohneSchluessel?.call() ??
+          KiFehler('Kein API-Schlüssel — in den Einstellungen eintragen.');
     }
     final anfrage = http.Request('POST', _url)
       ..headers.addAll({

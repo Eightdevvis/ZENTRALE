@@ -57,6 +57,25 @@ class _ChatSeiteState extends State<ChatSeite> {
         listenable: s,
         builder: (context, _) => Scaffold(
           appBar: AppBar(
+            // Links zwei Knöpfe: das Auge führt zurück zur Startseite (mit
+            // der Pupillen-Rückfahrt), daneben das Menü. Vorher stand dort nur
+            // das Menü — ohne Zurück-Geste kam man aus dem Chat nicht mehr
+            // heraus. Das Menü geht außerdem per Wisch vom linken Rand auf.
+            leadingWidth: 96,
+            leading: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'Zum Auge',
+                icon: const Icon(Icons.remove_red_eye_outlined),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+              Builder(
+                builder: (context) => IconButton(
+                  tooltip: 'Gespräche',
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+            ]),
             title: Text(s.titel.isEmpty ? 'ZENTRALE' : s.titel,
                 style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
             actions: [
@@ -70,7 +89,15 @@ class _ChatSeiteState extends State<ChatSeite> {
           drawer: _Leiste(steuerung: s, einstellungen: widget.einstellungen),
           body: SafeArea(
             child: Column(children: [
-              if (s.fehler != null) _Fehler(s.fehler!, () => setState(() => s.fehler = null)),
+              if (s.fehler != null)
+                _Fehler(
+                  s.fehler!,
+                  () => setState(() => s.fehler = null),
+                  einstellungen: s.fehlerZuEinstellungen
+                      ? () => Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => widget.einstellungen()))
+                      : null,
+                ),
               Expanded(child: s.nachrichten.isEmpty && !s.denkt ? const _Leer() : _verlauf()),
               _Eingabe(controller: _eingabe, denkt: s.denkt, senden: _senden, stoppen: s.stoppen),
             ]),
@@ -116,18 +143,32 @@ class _Leer extends StatelessWidget {
 }
 
 class _Fehler extends StatelessWidget {
-  const _Fehler(this.text, this.weg);
+  const _Fehler(this.text, this.weg, {this.einstellungen});
   final String text;
   final VoidCallback weg;
+
+  /// Gesetzt, wenn der Fehler sich dort beheben lässt (z. B. Anmelden).
+  final VoidCallback? einstellungen;
+
   @override
-  Widget build(BuildContext context) => Material(
-        color: Theme.of(context).colorScheme.errorContainer,
-        child: ListTile(
-          dense: true,
-          title: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
-          trailing: IconButton(icon: const Icon(Icons.close), onPressed: weg),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final farbe = Theme.of(context).colorScheme.onErrorContainer;
+    return Material(
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: ListTile(
+        dense: true,
+        title: Text(text, style: TextStyle(color: farbe)),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (einstellungen != null)
+            TextButton(
+              onPressed: einstellungen,
+              child: Text('Einstellungen', style: TextStyle(color: farbe)),
+            ),
+          IconButton(icon: const Icon(Icons.close), onPressed: weg),
+        ]),
+      ),
+    );
+  }
 }
 
 class _Eingabe extends StatelessWidget {

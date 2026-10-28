@@ -15,6 +15,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../auge/auge.dart';
 import '../auge/auge_maler.dart';
@@ -54,19 +55,21 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
   final _auge = AugeSteuerung();
   final _augeOrt = GlobalKey();
   bool _oeffnet = false;
-  double _zug = 0;
 
-  /// Der Ring: 0 = Auge offen, keine Knöpfe; 1 = Auge zu, Knöpfe da.
-  late final AnimationController _ring = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: ringMs),
-    reverseDuration: const Duration(milliseconds: ringZurueckMs),
-  )..addListener(() => _auge.zu = (_ring.value / augeZuBis).clamp(0.0, 1.0));
+  /// Der Ring: 0 = Auge offen, keine Knöpfe; 1 = Auge zu, Knöpfe da. Ohne
+  /// Grenzen, damit die Feder beim Loslassen ein wenig über das Ziel schwingen
+  /// darf und sich setzt — das Auge federt dabei nach (zeit.offenNachZu).
+  late final AnimationController _ring = AnimationController.unbounded(vsync: this)
+    ..addListener(_ringGeaendert);
+
+  /// Wohin der Ring zuletzt wollte (0 oder 1) — tippbar sind die Knöpfe nur,
+  /// wenn er zu ist und dort auch bleiben will.
+  double _ziel = 0;
 
   // Bahnen hängen nur von Fläche und Anzahl ab — einmal planen.
   (Size, int, List<Offset>, List<Bahn>)? _plan;
 
-  bool get _ringDa => _ring.value > 0 && _ring.status != AnimationStatus.reverse;
+  bool get _ringDa => _ziel == 1;
 
   @override
   void dispose() {
@@ -74,13 +77,44 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _schliessen() => _ring.forward();
+  void _ringGeaendert() {
+    final r = _ring.value;
+    // Das Auge schließt sich im ersten Teil der Bewegung; darüber hinaus
+    // (Feder schwingt über 1 oder unter 0) reicht der Ausschlag als Nachfedern weiter.
+    _auge.zu = r < 0 ? r : r > 1 ? 1 + (r - 1) : math.min(1.0, r / augeZuBis);
+  }
 
-  void _aufmachen() => _ring.reverse();
+  /// Zum Ziel federn — tempo in Ring-Einheiten je Sekunde (vom Finger).
+  void _federn(double ziel, [double tempo = 0]) {
+    _ziel = ziel;
+    _ring.animateWith(SpringSimulation(
+      SpringDescription.withDampingRatio(mass: 1, stiffness: ringFeder, ratio: ringDaempfung),
+      _ring.value, ziel, tempo,
+      tolerance: const Tolerance(distance: .001, velocity: .01),
+    ));
+  }
+
+  void _aufmachen() => _federn(0);
+
+  // ── Wischen: der Ring folgt dem Finger, Loslassen entscheidet ──
+
+  void _ziehen(DragUpdateDetails d) {
+    if (_ring.isAnimating) _ring.stop();
+    _ring.value = (_ring.value + (d.primaryDelta ?? 0) / wischStrecke).clamp(0.0, 1.0);
+  }
+
+  void _gewischt(DragEndDetails d) {
+    final tempo = (d.primaryVelocity ?? 0) / wischStrecke;
+    // Schnell geschnippt zählt die Richtung, sonst wo der Finger losließ.
+    final ziel = tempo.abs() > wischTempo / wischStrecke
+        ? (tempo > 0 ? 1.0 : 0.0)
+        : (_ring.value >= .5 ? 1.0 : 0.0);
+    _federn(ziel, tempo);
+  }
 
   Future<void> _tippen() async {
     if (_ringDa) return _aufmachen(); // geschlossenes Auge: aufmachen
-    if (_oeffnet || _ring.value > 0) return; // doppeltes Tippen öffnet nicht zweimal
+    if (_oeffnet || _ring.value.abs() > .01) return; // doppeltes Tippen öffnet nicht zweimal
     _oeffnet = true;
     try {
       await _auge.fuellen();
@@ -100,21 +134,11 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
   }
 
   void _vorschau() {
-    if (_ring.value > 0) return; // geschlossen sieht man keine Laune
+    if (_ring.value.abs() > .01) return; // geschlossen sieht man keine Laune
     final name = _auge.naechsteLaune();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('Laune: $name'), duration: const Duration(seconds: 2)));
-  }
-
-  void _gewischt(DragEndDetails d) {
-    final tempo = d.primaryVelocity ?? 0;
-    if (tempo > wischTempo || (tempo.abs() <= wischTempo && _zug > wischWeg)) {
-      _schliessen();
-    } else if (tempo < -wischTempo || _zug < -wischWeg) {
-      _aufmachen();
-    }
-    _zug = 0;
   }
 
   @override
@@ -127,8 +151,8 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
           // Wischen überall auf dem Schirm, damit man das Auge nicht genau
           // treffen muss; Tippen nur aufs Auge.
           behavior: HitTestBehavior.opaque,
-          onVerticalDragStart: (_) => _zug = 0,
-          onVerticalDragUpdate: (d) => _zug += d.primaryDelta ?? 0,
+          onVerticalDragStart: (_) => _ring.stop(),
+          onVerticalDragUpdate: _ziehen,
           onVerticalDragEnd: _gewischt,
           child: LayoutBuilder(builder: (context, platz) {
             final breite = math.min(platz.maxWidth * .72, 340.0);
@@ -195,11 +219,15 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
         builder: (context, kind) {
           // Jeder Chip wächst am Ende seiner Bahn auf, einer nach dem anderen.
           final von = knoepfeVon + i * knopfVersatz;
-          final w = sanft((_ring.value - von) / math.max(.05, 1 - von));
+          final r = _ring.value;
+          final w = sanft((r - von) / math.max(.05, 1 - von));
           if (w <= 0) return const SizedBox.shrink();
           return IgnorePointer(
-            ignoring: !(_ringDa && _ring.value >= 1), // nur fertig gezeigt tippbar
-            child: Opacity(opacity: w, child: Transform.scale(scale: .3 + .7 * w, child: kind)),
+            ignoring: !(_ringDa && r >= .98), // nur fertig gezeigt tippbar
+            // Schwingt die Feder über 1, ploppt der Chip ein Spürchen auf.
+            child: Opacity(
+                opacity: w,
+                child: Transform.scale(scale: (.3 + .7 * w) * (1 + math.max(0.0, r - 1) * .8), child: kind)),
           );
         },
         child: Tooltip(

@@ -30,12 +30,27 @@ double sanft(double t) {
   return (a.$1 + (b.$1 - a.$1) * u, a.$2 + (b.$2 - a.$2) * u);
 }
 
-/// Lidöffnung durch Blinzeln: alle ~5–8 s, 1 → 0 → 1 in 0,36 s.
+/// Lidöffnung durch Blinzeln: alle ~5–8 s, 1 → 0 → 1 in 0,36 s. Wie ein
+/// echtes Lid: schnell zu, langsamer wieder auf, beides weich angefahren —
+/// früher ein Dreieck mit hartem Knick in der Mitte.
 double lidBlinzeln(int ms) {
   final periode = 5200 + (festerZufall(ms ~/ 5200, 3) * 2800).toInt();
   final p = ms % periode;
-  return p < 360 ? (1 - p / 180).abs() : 1;
+  if (p >= 360) return 1;
+  return p < 130 ? 1 - sanft(p / 130) : sanft((p - 130) / 230);
 }
+
+/// Wie weit das Auge offen ist, aus dem Stand des Knopf-Rings „zu" (siehe
+/// AugeSteuerung.zu): < 0 → ein Hauch weiter auf (Nachfedern beim Öffnen),
+/// 0..1 → weich zu, > 1 → fest zu (Rückgabe < 0, der Schlafbogen hängt tiefer).
+double offenNachZu(double zu) {
+  if (zu < 0) return 1 + math.min(.15, -zu * 1.5);
+  if (zu > 1) return -math.min(.5, (zu - 1) * 3);
+  return 1 - _weich(zu);
+}
+
+/// Weicher als smoothstep: ruhiger Anfang, ruhiges Ende (easeInOutCubic).
+double _weich(double t) => t < .5 ? 4 * t * t * t : 1 - math.pow(-2 * t + 2, 3) / 2;
 
 /// 0..1: wie weit „drin" ist die Stunde h im Bereich [von, bis) — über
 /// Mitternacht hinweg, mit weichen Rändern statt Sprüngen.

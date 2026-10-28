@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:zen_mobile/ablage/ablage.dart';
+import 'package:zen_mobile/chat/chat_steuerung.dart';
+import 'package:zen_mobile/gespraeche/gespraeche.dart';
 import 'package:zen_mobile/ki/anthropic.dart';
 import 'package:zen_mobile/ki/ki.dart';
 import 'package:zen_mobile/ki/kontext.dart';
@@ -93,6 +95,33 @@ void main() {
     final ki = AnthropicAnbieter(() async => null);
     expect(ki.antworten(system: '', verlauf: [], modell: 'm', effort: 'low').toList(),
         throwsA(isA<KiFehler>()));
+  });
+
+  test('ohne Schlüssel: nicht angemeldet → erst anmelden, sonst fehlt er im Tresor', () async {
+    for (final angemeldet in [false, true]) {
+      final ki = AnthropicAnbieter(() async => null,
+          ohneSchluessel: () async => SchluesselFehlt(angemeldet: angemeldet));
+      await expectLater(
+        ki.antworten(system: '', verlauf: [], modell: 'm', effort: 'low').toList(),
+        throwsA(isA<SchluesselFehlt>().having((e) => e.meldung, 'meldung',
+            angemeldet ? contains('ZENTRALE-Tresor') : contains('Melde dich zuerst an'))),
+      );
+    }
+  });
+
+  test('Chat: Anmelde-Hinweis bekommt den Knopf zu den Einstellungen', () async {
+    final ablage = SpeicherAblage();
+    for (final angemeldet in [false, true]) {
+      final chat = ChatSteuerung(
+        ablage: ablage,
+        gespraeche: Gespraeche(ablage, knoten: 'handy'),
+        ki: AnthropicAnbieter(() async => null,
+            ohneSchluessel: () async => SchluesselFehlt(angemeldet: angemeldet)),
+      );
+      await chat.senden('hallo');
+      expect(chat.fehler, angemeldet ? contains('Tresor') : contains('Einstellungen → Konto'));
+      expect(chat.fehlerZuEinstellungen, !angemeldet);
+    }
   });
 
   test('Kontext: Paket aus dem Kern, sonst Notbetrieb; Handy-Absatz immer dran', () async {

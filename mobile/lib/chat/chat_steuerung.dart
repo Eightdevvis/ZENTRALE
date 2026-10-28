@@ -41,6 +41,10 @@ class ChatSteuerung extends ChangeNotifier {
   List<Uebersicht> liste = [];
   Entstehend? entstehend;
   String? fehler;
+
+  /// Lässt sich der Fehler in den Einstellungen beheben (Anmelden)? Dann
+  /// zeigt der Chat einen Knopf dorthin.
+  bool fehlerZuEinstellungen = false;
   bool gleichtAb = false;
 
   StreamSubscription<KiStueck>? _strom;
@@ -152,6 +156,7 @@ class ChatSteuerung extends ChangeNotifier {
       notifyListeners();
     }, onError: (Object err) {
       fehler = '$err';
+      fehlerZuEinstellungen = err is SchluesselFehlt && !err.angemeldet;
       if (!fertig.isCompleted) fertig.complete();
     }, onDone: () {
       if (!fertig.isCompleted) fertig.complete();

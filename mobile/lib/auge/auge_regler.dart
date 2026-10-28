@@ -11,6 +11,23 @@
 /// design spiegeln") — darum wirkt das Auge halb geschlossen statt erschrocken.
 const lidTief = .60;
 
+/// So weit deckt das Unterlid die untere Hälfte (0 = weit offen wie im
+/// ersten Entwurf, lidTief = ganz gespiegelt). Sasha, 29.10.2026: „doch etwas
+/// weiter nach unten geöffnet, aber nich so weit wie vorher" → halb dazwischen.
+const unterlidTief = .30;
+
+/// Geschlossen treffen sich die Lider auf einem Bogen, der so tief nach unten
+/// hängt (Anteil der halben Mandelhöhe) — „kein Strich, sondern ne Kurve nach
+/// unten mit Wimpern dran" (Sasha, 29.10.2026).
+const schlafBogen = .30;
+
+/// Wimpern am geschlossenen Auge: Anzahl, wie weit sie zu den Winkeln reichen
+/// (Anteil der halben Breite), Länge und Dicke (Entwurfseinheiten), Neigung
+/// nach außen am Rand (Bogenmaß); Dicke = halbe Breite am Lid. Sie tauchen auf, sobald die Öffnung unter
+/// wimpernAb fällt — offen stünden sie in der Iris.
+const wimpernAnzahl = 9, wimpernBreite = .72, wimpernLaenge = 4.6, wimpernDicke = .36;
+const wimpernNeigung = 1.1, wimpernAb = .45;
+
 /// Höhe der Mandel relativ zur halben Breite (TUI: 17 / 24,5).
 const mandelHoehe = 17.0 / 24.5;
 
@@ -75,8 +92,14 @@ const zurueckMs = 700;
 // wie auf einer Platine zu den Knöpfen (Sasha, 28.10.2026). Hochwischen:
 // alles läuft rückwärts. Die Phasen sind Anteile der Gesamtdauer (0..1).
 
-/// Gesamtdauer hin (zu + Knöpfe raus) und zurück.
-const ringMs = 1150, ringZurueckMs = 900;
+/// So viele Pixel Fingerweg sind die ganze Bewegung — der Ring folgt dem
+/// Finger direkt: langsam gewischt schließt es langsam.
+const wischStrecke = 260.0;
+
+/// Die Feder nach dem Loslassen (und beim Tippen): Steifigkeit und Dämpfung
+/// (1 = kein Überschwingen; etwas darunter schwingt sie ein Spürchen über
+/// und setzt sich — das wirkt lebendig statt mechanisch).
+const ringFeder = 140.0, ringDaempfung = .78;
 
 /// Das Auge schließt sich in [0, augeZuBis] der Bewegung.
 const augeZuBis = .42;
@@ -88,8 +111,9 @@ const bahnenVon = .22, bahnenBis = .78;
 /// knopfVersatz später (Anteil der Gesamtdauer).
 const knoepfeVon = .62, knopfVersatz = .05;
 
-/// Ab so weit Ziehen (Pixel) oder so schnell (Pixel/s) zählt es als Wischen.
-const wischWeg = 36.0, wischTempo = 260.0;
+/// Ab so schnell (Pixel/s) zählt beim Loslassen die Richtung des Schnippens,
+/// darunter entscheidet, ob der Finger schon über die Hälfte war.
+const wischTempo = 320.0;
 
 /// Leiterbahn: Kern, Schein darum, Lötaugen (Pixel). Die Deckkraft des
 /// Scheins ist nachts höher (auf Schwarz glimmt es, auf Weiß nicht).

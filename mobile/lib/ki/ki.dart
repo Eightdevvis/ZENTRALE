@@ -29,6 +29,21 @@ class KiFehler implements Exception {
   String toString() => meldung;
 }
 
+/// Ohne Claude-Schlüssel kann das Handy nicht antworten. Der Grund entscheidet,
+/// was Sasha tun soll: nicht angemeldet → erst anmelden (dann kommt der
+/// Schlüssel von selbst über die Mitte); angemeldet → der Schlüssel fehlt im
+/// Tresor von ZENTRALE, das richtet man am Rechner. Der Chat zeigt dazu einen
+/// Knopf zu den Einstellungen.
+class SchluesselFehlt extends KiFehler {
+  SchluesselFehlt({required this.angemeldet})
+      : super(angemeldet
+            ? 'Der Claude-Schlüssel fehlt im ZENTRALE-Tresor. Am Rechner in '
+                'ZENTRALE eintragen — das Handy holt ihn beim nächsten Abgleich.'
+            : 'Melde dich zuerst an — Einstellungen → Konto.');
+
+  final bool angemeldet;
+}
+
 abstract class KiAnbieter {
   /// Antwort als Strom. [verlauf] ist [{role, content}], älteste zuerst.
   /// [wechselnd] = was sich von Zug zu Zug ändert (heute: der Kalender der

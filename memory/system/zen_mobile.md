@@ -29,13 +29,23 @@ stehen in `lib/auge/auge_regler.dart` — Ästhetik entscheidet Sasha, dort
 wird gedreht. Probebilder aller Zustände: `flutter test test/auge_test.dart`
 schreibt PNGs nach `mobile/build/auge_vorschau/` (nicht im Repo).
 
-- **Form:** Das Unterlid ist das Spiegelbild des schweren Oberlids an der
-  Waagrechten durch die Pupille („einfach ne x-achse durch die pupille nehmen
-  und das design spiegeln") — halb geschlossen, ruhig, nicht erschrocken.
-  Die Lider laufen zur Mandelkante hin durchsichtig aus (Haut, kein Glas).
-  Falten oben und gespiegelt unten sind halbe Sinusbögen, in der Mitte am
-  dicksten, zu den Enden auf null. Blinzeln: beide Lider treffen sich in der
-  Mitte. Maler: `auge_maler.dart`; Bewegung (Blick, Blinzeln): `zeit.dart`.
+- **Form:** Ein schweres Oberlid halb über der Iris; das Unterlid deckt
+  seit 29.10. etwa halb so viel wie ein volles Spiegelbild (`unterlidTief`
+  zwischen dem ersten, unten weit offenen Entwurf und dem ganz gespiegelten
+  vom 28.10.: „doch etwas weiter nach unten geöffnet, aber nich so weit wie
+  vorher"). Die Lider laufen zur Mandelkante hin durchsichtig aus (Haut, kein
+  Glas). Falten oben und gespiegelt unten sind halbe Sinusbögen, in der Mitte
+  am dicksten, zu den Enden auf null. Maler: `auge_maler.dart`; Bewegung
+  (Blick, Blinzeln): `zeit.dart`.
+- **Geschlossen** (Blinzeln am tiefsten Punkt, zugewischt, während des
+  Rings): kein Strich, sondern ein Bogen, der nach unten hängt
+  (`schlafBogen`), mit Wimpern daran — feine, spitz zulaufende Striche nach
+  unten und außen, zu den Winkeln hin kürzer (`wimpern…`). Sie tauchen erst
+  auf, wenn das Auge fast zu ist; offen stünden sie in der Iris.
+- **Weicher:** Blinzeln schnell zu, langsamer auf, beides angefahren (kein
+  Knick mehr). Schließen über easeInOutCubic; beim Loslassen schwingt die
+  Feder ein wenig über und setzt sich — das Auge öffnet dann einen Hauch
+  weiter bzw. drückt den Schlafbogen kurz tiefer (`zeit.offenNachZu`).
 - **Uhrzeit:** 21–7 Uhr ist die Pupille etwas größer, 3–5 Uhr winzig
   („extra spooky"); Übergänge weich über je eine Stunde um die Grenze.
   Lokale Zeit, die Uhr ist ins Widget steckbar (`Auge(uhr: ...)`, Tests).
@@ -57,11 +67,26 @@ schreibt PNGs nach `mobile/build/auge_vorschau/` (nicht im Repo).
   Dunkel blendet der Chat auf (`pupillen_route.dart`). Zurück endet es in der
   vollen Mandel, dann zieht sich die Pupille wieder zusammen.
 - **Knopf-Ring** (`lib/start/leiterbahnen.dart`): Runterwischen (irgendwo auf
-  dem Schirm) → das Auge schließt sich ruhig, dann zeichnen sich Leiterbahnen
-  vom Lid zu jedem Knopf (gerade raus, ein Knick um 45°, Lötaugen am Anfang
-  und am Knick, leiser Schein in den Augenfarben), am Ende wachsen die Knöpfe
-  als kleine Chips auf. Hochwischen oder Tippen aufs geschlossene Auge → alles
-  rückwärts. Knöpfe sind nur fertig gezeigt tippbar.
+  dem Schirm) → das Auge schließt sich, dann zeichnen sich Leiterbahnen vom
+  Lid zu jedem Knopf (gerade raus, ein Knick um 45°, Lötaugen am Anfang und
+  am Knick, leiser Schein in den Augenfarben), am Ende wachsen die Knöpfe als
+  kleine Chips auf. Seit 29.10. **folgt alles dem Finger**: der Fortschritt
+  ist Fingerweg / `wischStrecke` — langsam gewischt schließt es langsam.
+  Beim Loslassen entscheidet das Schnippen (`wischTempo`) oder, wenn langsam,
+  ob schon über die Hälfte; dann federt es fertig oder zurück
+  (`SpringSimulation`, `ringFeder`/`ringDaempfung`). Hochwischen genauso;
+  Tippen aufs geschlossene Auge öffnet. Knöpfe sind nur fertig gezeigt tippbar.
+- **Zurück aus dem Chat** (29.10., man steckte fest): oben links ein
+  Augen-Knopf „Zum Auge" (daneben das Menü, das auch per Wisch vom linken
+  Rand aufgeht), und die System-Zurück-Taste/-Geste schließt den Chat mit der
+  Pupillen-Rückfahrt. Dafür steht `android:enableOnBackInvokedCallback="true"`
+  im Manifest: mit targetSdk 36 gilt auf Android 16 die vorausschauende
+  Zurück-Geste, ohne die Angabe kam das Zurück nicht bei Flutter an. Kalender
+  und Einstellungen haben den normalen Zurück-Pfeil (Test: `test/zurueck_test.dart`).
+- **Ohne Claude-Schlüssel** sagt der Chat, was zu tun ist: nicht angemeldet
+  → „Melde dich zuerst an — Einstellungen → Konto" mit Knopf dorthin;
+  angemeldet, aber der Schlüssel fehlt im ZENTRALE-Tresor → genau das
+  (`SchluesselFehlt` in `lib/ki/ki.dart`).
 - **Kleine Augen im Chat** (Leer-Zustand, Denk-Anzeige) nutzen denselben
   Maler; die Denk-Anzeige bekommt nie Launen.
 
@@ -197,3 +222,5 @@ gespielte Cloud `test/falsche_cloud.dart` — nie Netz, nie echte Konten).
 2. Kalender in die Mitte (Kalender-Session), dann Ändern/Löschen vom Handy.
 3. Argon2id-Dauer auf dem echten Handy messen; ist sie zu lang, eine native
    Umsetzung hinter dieselbe Funktion `hauptschluessel` stecken.
+4. **Später, nicht jetzt:** Tutorial/Einführung und UX-Feinschliff (Sasha,
+   29.10.2026) — z. B. zeigen, dass man runterwischen kann.
