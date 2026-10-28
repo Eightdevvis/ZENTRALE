@@ -1,0 +1,45 @@
+{
+ "beschreibung": "Mitte über die Cloud, erzeugt von scripts/handy_testvektoren.py mit core/abgleich_schluessel.Tresor. Schlüssel = konto_schluessel aus konto_testvektoren.json.",
+ "konto_schluessel": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-f4CBgoM=",
+ "namen": {
+  "data/gespraeche/20261008-101500-a1b2c3/handy.jsonl": "e35b3d682ae63544f0bd20f54b85b70b",
+  "data/gespraeche/_knoten/handy.json": "b89f99d9976105414dd251d5d448fff5",
+  "data/mobil/kontext.json": "5861033295d44c3666351b68cb0c3bfb",
+  "data/kalender/termine/0123456789abcdef0123456789abcdef@zentrale.ics": "828e67820bed1f534dd9c31e80af7a89",
+  "data/adapter/geheim.enc": "8320680b017a704bd6e736ae7c31af45",
+  "data/gedaechtnis/dossiers/ümlaut person.md": "8b31f83f8512b4cac7786b02bfbeff55"
+ },
+ "inhalt_token": "gAAAAABq4nQpzr_VQSi1FXLJ1QSEIA8ojm1p6jCdGrm9sKgqeoT5sLNgmW7KVi6XY6f1RVKtYiKW1FwX2ogzNgVP1Xqum8zH190c6xY0K2I0joXvT8KtNhK4DM1rjnoNgQ42YeT_u3tXfUYG6ksRYsotQ9dnHs_S1Q22uqe40sl-ggVIiQHpBH97HnHjdUBUddpSsbF8R7HMHcXdaRXtk8BX6YI7EFVXOyE3BgBmTEXSuMXHJnWRzZ8WyrlcfB9Jk9EthePm2OHoisIknMYtAsN_eGhPfBVSgSJEhehgIQxVJF98ZNVWZuldjv72S8Om_ch61uTjUs5Bx1yxJfGtr5AQAKctpo1SPZMZBpoiakNSWQXAHorDGEsqMie92e0Kfsp-fRTB5HIHRTe67Hx-i_yVKtAgIOmZt201f_JwCgTgmpYoi5aHXSwacLECDJEUlIpwvyPeoyG92LR8Fdg34Xw0_n1Q_ZidtETVQT1OtNMJIycyfD0Q5h3nX5suhQrzdStLjkEUNZ4otKhE2bSXE9QSJcMCoaQbkR53UJ8d6Y9gSwO6PAdIaLy5ieMnbq26_1BVbuCYNJqH",
+ "inhalt": {
+  "format": 1,
+  "dateien": {
+   "data/mobil/kontext.json": {
+    "name": "5861033295d44c3666351b68cb0c3bfb",
+    "sha": "05b911a4baed9e839d68a4435c7c6233a2f8ab7ee2e52ddb8420f60051307be5"
+   }
+  },
+  "geloescht": {
+   "data/kalender/termine/0123456789abcdef0123456789abcdef@zentrale.ics": {
+    "sha": "0000000000000000000000000000000000000000000000000000000000000000",
+    "von": "laptop",
+    "am": "2026-10-20T10:00:00"
+   }
+  }
+ },
+ "datei_token": "gAAAAABq4nQpRcECCnUYWrAa42yQBergmS7sRVWBswSKlQhp5ApSRL7ysbzPXeTyQ6wbgUEaimDOC8aNCN_ynEMxprTq0r43TrTIJPHzQdx-YQ0aI0-wUA4-aAAFOoHEgyTjMuqm6HpW",
+ "datei_klar_b64": "SGFsbG8gdm9tIExhcHRvcCDigJQgbWl0IFVtbGF1dGVuOiDDpMO2w7wK",
+ "umschlag_token": "gAAAAABq4nQpgrpdW4XE04hY92_jKchOGg1yHnWgvgPgRVvsJvqzR2LnDlGG1mXJ7fyq345of_G9-1m8ReOwKsXKBc9AWJ4P5W0mEMYjKGXuJ2R9rpMsRw3HS6T_LMXEqnH1Gia8lb6YTaB-OTCSjNAsuBshQ3Eb000ePMNy4qToki8346yRD51GHLERrfHhC4ebIAtTQw2RgtvkQ-0EtOy_-q-I0qxBVGVVSkn37mBZ7TC1babUv8o=",
+ "umschlag": {
+  "format": 1,
+  "pfad": "data/gespraeche/20261008-101500-a1b2c3/handy.jsonl",
+  "inhalt": "eyJ0ZXh0IjogInZvbSBIYW5keSJ9Cg=="
+ },
+ "geheim_enc": "{\"format\": \"zentrale-geheim/1\", \"eintraege\": {\"ki/ANTHROPIC_API_KEY\": {\"zu\": \"konto\", \"wert\": \"gAAAAABq4nQp415mIkQvkdlECO2keNIEaT5nAMgk8EdbNQHentHan84KaRQKF01nkOP8rBnJV1RPnHtHZ6HAJWVlCnrGVs_o5G6UoL1RovKSx5SRvhqAhhU=\"}, \"google/token\": {\"zu\": \"geraet\", \"wert\": \"gAAAAA-nicht-fuer-das-handy\"}}}",
+ "geheim_ki": "sk-ant-test-nur-ein-vektor",
+ "fest": {
+  "zeit": 1761091200,
+  "iv_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+  "klar_b64": "SGFsbG8gdm9tIExhcHRvcCDigJQgbWl0IFVtbGF1dGVuOiDDpMO2w7wK",
+  "token": "gAAAAABo-B6AoKGio6SlpqeoqaqrrK2ur5wTSjuWwZm83YBZ-LFEJX7CEc20SCJ-FF8aEEOrKtGzX40eUn6p5a7m0jdDt4iMiDUtRFkcSEyabi2rw9mVy6XnhHrxUvcnP_sj26Fqldbt"
+ }
+}

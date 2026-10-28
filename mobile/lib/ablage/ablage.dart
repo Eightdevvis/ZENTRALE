@@ -1,7 +1,9 @@
 // Ablage: Dateien des Handys, Pfade wie unter ZENTRALE/data/.
 //
 // Das Handy hält einen Spiegel der Teile von data/, die es braucht
-// (gespraeche/**, mobil/kontext.json). Alles darüber — Gespräche, Kontext,
+// (gespraeche/**, mobil/kontext.json, kalender/**, adapter/geheim.enc).
+// Pfade hier sind relativ zu data/ — die Mitte zählt ab dem ZENTRALE-Ordner
+// („data/…“); übersetzt wird an EINER Stelle (lib/mitte/regeln.dart). Alles darüber — Gespräche, Kontext,
 // Abgleich — redet nur über diese Schnittstelle, nie direkt mit dem
 // Dateisystem. So laufen die Tests im Speicher und die App auf der Platte.
 
@@ -13,6 +15,9 @@ abstract class Ablage {
 
   /// Datei ganz ersetzen (legt Ordner an).
   Future<void> schreiben(String pfad, String inhalt);
+
+  /// Datei entfernen (fehlt sie, passiert nichts).
+  Future<void> loeschen(String pfad);
 
   /// Eine Zeile anhängen — so wächst eine Rechner-jsonl, nie anders.
   Future<void> anhaengen(String pfad, String zeile);
@@ -50,6 +55,12 @@ class PlattenAblage implements Ablage {
     final tmp = File('${f.path}.tmp');
     await tmp.writeAsString(inhalt, flush: true);
     await tmp.rename(f.path);
+  }
+
+  @override
+  Future<void> loeschen(String pfad) async {
+    final f = _datei(pfad);
+    if (await f.exists()) await f.delete();
   }
 
   @override
@@ -91,6 +102,9 @@ class SpeicherAblage implements Ablage {
 
   @override
   Future<void> schreiben(String pfad, String inhalt) async => dateien[pfad] = inhalt;
+
+  @override
+  Future<void> loeschen(String pfad) async => dateien.remove(pfad);
 
   @override
   Future<void> anhaengen(String pfad, String zeile) async =>
