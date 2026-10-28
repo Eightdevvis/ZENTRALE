@@ -167,14 +167,31 @@ def mitte_hat_kalender(ordner="data/kalender"):
     """Liegt im Inhaltsverzeichnis der Mitte mindestens eine Datei unter
     `ordner`/** (Vorgabe: die Termine)? True / False (Mitte erreichbar, nichts
     da) / None (offline, kein Schlüssel — unbekannt; der Aufrufer bricht dann
-    ab). Für den Kalender-Schalter (adapter_ablauf): die Mitte ist die
-    Wahrheit, wer sie zuerst füllt, ist der Ursprung — sonst würden zwei
-    Geräte, die vor dem ersten Abgleich einschalten, beide Ursprung."""
+    ab). Für die Quelle der Kalender-App (adapter.vor_abgleich,
+    adapter_ablauf.kalender_quelle_setzen): die Mitte ist die Wahrheit — hat
+    sie schon Termine, legt ein Gerät, das zum ersten Mal dazukommt, seine
+    beiseite; ist sie leer, füllt es sie."""
     pfade = mitte_pfade()
     if pfade is None:
         return None
     vorn = ordner.rstrip("/") + "/"
     return any(p.startswith(vorn) for p in pfade)
+
+
+def basis_kennt(ordner="data/kalender") -> bool:
+    """Kennt die Basis dieses Geräts (basis.json: worauf es sich zuletzt mit
+    der Mitte geeinigt hat) mindestens eine Datei unter `ordner`/**? Nein =
+    dieses Gerät hat sich über den Ordner noch nie mit der Mitte geeinigt
+    („erstes Mal“, adapter.vor_abgleich)."""
+    try:
+        kopf = json.loads(_lesen(os.path.join(_abgleich_dir(), "basis.json")) or b"{}")
+    except ValueError:
+        return False
+    vorn = ordner.rstrip("/") + "/"
+    return any(isinstance(r, str) and r.startswith(vorn) for r in kopf.get("dateien") or [])
+
+
+_abgleich_dir = ordner          # basis_kennt nimmt den Namen `ordner` als Argument
 
 
 def _sha(b):
@@ -701,7 +718,8 @@ def _adapter_vorher(wurzel, muster):
         adapter_geheim.umschluesseln(wurzel=wurzel)
     except Exception as e:      # noqa: BLE001 — Zugangsdaten sind Beiwerk des Abgleichs
         print(f"[abgleich] Zugangsdaten nicht umgeschlüsselt: {e}")
-    adapter.vor_abgleich(wurzel, ordner(), muster)
+    adapter.vor_abgleich(wurzel, ordner(), muster, mitte_hat_kalender=mitte_hat_kalender,
+                         basis_kennt=basis_kennt)
 
 
 def _adapter_nachher(wurzel, muster):

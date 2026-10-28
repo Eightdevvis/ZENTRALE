@@ -87,12 +87,9 @@ def tabelle() -> dict:
 def jetzt_erlaubt(muster_liste) -> list:
     """Muster, die gerade gar nicht abgleichen dürfen, herausschneiden
     (memory/hub/adapter.md):
-      data/kalender/**        nur mit einem Kalender-Anschluss: dem Google-Anschluss
-                              mit Brücke ODER dem Schalter kalender-mitte (ohne
-                              Brücke, ohne Google; memory/hub/adapter.md „Der
-                              Schalter kalender-mitte“). Ohne beides gleicht jedes
-                              Gerät selbst mit Google ab, und ein zweiter Weg
-                              brächte Doppelte und Geister
+      data/kalender/**        nur wenn adapter.kalender_ueber_cloud(): Quelle der
+                              Kalender-App zencloud (core/kalender_einstellung.py);
+                              ohne Einstellung der alte Weg mit Google-Anschluss
       data/adapter/geheim.enc nur angemeldet — verschlüsselt mit dem
                               Kontoschlüssel; ohne Konto bleibt sie hier"""
     raus = list(muster_liste)

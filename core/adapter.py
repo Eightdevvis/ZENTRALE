@@ -178,20 +178,10 @@ def kalender_mit_vertrag(wurzel=None) -> bool:
 # ── Der Kalender kommt zur Cloud (erstes Mal je Gerät) ─────────────────
 #
 # Kein Merkzettel je Gerät: „erstes Mal" heißt, die Basis des Abgleichs
-# (<abgleich>/basis.json, worauf sich das Gerät zuletzt mit der Mitte
-# geeinigt hat) kennt noch keine Datei des Kalender-Ordners. Ob die Cloud
-# schon einen Kalender hat, fragt adapter_ablauf.mitte_hat_kalender.
-
-def kalender_in_basis(abgleich_ordner, ordner="data/kalender") -> bool:
-    """Hat sich dieses Gerät mit der Mitte schon einmal über Dateien des
-    Kalender-Ordners geeinigt?"""
-    try:
-        with open(os.path.join(abgleich_ordner, "basis.json"), encoding="utf-8") as f:
-            kopf = json.load(f)
-    except (OSError, ValueError):
-        return False
-    pre = ordner.rstrip("/") + "/"
-    return any(isinstance(r, str) and r.startswith(pre) for r in kopf.get("dateien") or [])
+# kennt noch keine Datei des Kalender-Ordners (abgleich.basis_kennt). Ob die
+# Cloud schon einen Kalender hat, sagt abgleich.mitte_hat_kalender. Beides
+# gibt der Abgleich herein — der Adapter importiert ihn nicht (Import-Kreis,
+# tests/test_kern_bauplan.py).
 
 
 def _hat_termine(vdir) -> bool:
@@ -238,16 +228,8 @@ def kalender_fuellt(ordner="data/kalender"):
         _FUELLT.discard(ordner)
 
 
-def _rueckfrage():
-    """Übergang: die Frage beim laufenden Abgleich holen (er ruft
-    vor_abgleich auf, ist also geladen) — ohne ihn zu importieren. Fällt
-    weg, sobald core/abgleich._adapter_vorher
-    `mitte_hat_kalender=mitte_hat_kalender` mitgibt."""
-    import sys
-    return getattr(sys.modules.get("abgleich"), "mitte_hat_kalender", None)
-
-
-def vor_abgleich(wurzel, abgleich_ordner, muster, mitte_hat_kalender=None) -> str | None:
+def vor_abgleich(wurzel, abgleich_ordner, muster, mitte_hat_kalender=None,
+                 basis_kennt=None) -> str | None:
     """Vor jedem Abgleich (core/abgleich): gleicht der Kalender diesmal mit,
     hat sich dieses Gerät mit der Mitte noch nie über ihn geeinigt (die Basis
     kennt keine Datei aus data/kalender/) und liegen hier Termine, gilt
@@ -258,20 +240,25 @@ def vor_abgleich(wurzel, abgleich_ordner, muster, mitte_hat_kalender=None) -> st
       Cloud leer → der hiesige füllt sie;
       unbekannt → MitteFehler, kein Abgleich (lieber keiner als Geister).
 
-    `mitte_hat_kalender(ordner) -> bool|None` gibt der Abgleich herein (der
-    Adapter importiert den Abgleich nicht — kein Import-Kreis). Solange
-    core/abgleich._adapter_vorher sie noch nicht mitgibt, holt _rueckfrage()
-    sie beim Aufrufer, der gerade läuft. Im Block kalender_fuellt → füllt.
+    `mitte_hat_kalender(ordner) -> bool|None` und `basis_kennt(ordner) ->
+    bool` gibt der Abgleich herein (core/abgleich._adapter_vorher; der
+    Adapter importiert den Abgleich nicht — kein Import-Kreis). Fehlt eine,
+    ist es unbekannt → MitteFehler. Im Block kalender_fuellt → füllt.
     Für jedes Gerät dieselbe Regel. → Ziel oder None."""
     if KALENDER_MUSTER not in muster or not kalender_ueber_cloud(wurzel):
-        return None
-    if kalender_in_basis(abgleich_ordner):
         return None
     if not _hat_termine(os.path.join(str(wurzel), "data", "kalender")):
         return None
     if ke.HAUPT_ORDNER in _FUELLT:
         return None
-    frage = mitte_hat_kalender or _rueckfrage()
+    if basis_kennt is None:
+        import abgleich_mitte       # Schicht 1, tiefer als der Abgleich
+        raise abgleich_mitte.MitteFehler(
+            "Kalender: ohne die Basis des Abgleichs ist „erstes Mal“ nicht zu klären — "
+            "nicht abgeglichen (nichts überschrieben).")
+    if basis_kennt(ke.HAUPT_ORDNER):
+        return None
+    frage = mitte_hat_kalender
     hat = None
     if frage is not None:
         try:
@@ -289,6 +276,6 @@ def vor_abgleich(wurzel, abgleich_ordner, muster, mitte_hat_kalender=None) -> st
 
 def nach_abgleich(abgleich_ordner, muster) -> None:
     """Früher: Merkzettel kalender_dabei.json. Heute weiß das die Basis des
-    Abgleichs selbst (kalender_in_basis) — nichts zu tun. Bleibt, weil
+    Abgleichs selbst (abgleich.basis_kennt) — nichts zu tun. Bleibt, weil
     core/abgleich es ruft."""
     return None

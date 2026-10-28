@@ -128,7 +128,7 @@ def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
         return dict(raus, ergebnis="unbekannt")
     ke.schreiben(iid, "zencloud", wurzel)
     if hat:
-        if not adapter.kalender_in_basis(abgleich.ordner(), ordner):
+        if not abgleich.basis_kennt(ordner):
             raus["beiseite"] = adapter.beiseite_legen(wurzel, abgleich.ordner(), ordner)
         if iid == ke.HAUPT:
             ke.alt_mitte_weg(wurzel)
@@ -196,11 +196,11 @@ def bruecke_lauf(a, wurzel, vdir, fahren, jetzt=None) -> Lauf:
         return _fahren(a, wurzel, vdir, fahren, ich, jetzt, lokal=True)
     # Der alte Weg mit Mietvertrag: erst fahren, wenn der Kalender aus der
     # Cloud hier ist (die Basis kennt ihn) oder die Cloud keinen hat.
-    if not adapter.kalender_in_basis(abgleich.ordner()):
+    if not abgleich.basis_kennt():
         fehler = _abgleichen(wurzel)            # holt den Kalender zum ersten Mal
         if fehler:
             return Lauf("wartet", text=fehler)
-        if not adapter.kalender_in_basis(abgleich.ordner()) and mitte_hat_kalender() is not False:
+        if not abgleich.basis_kennt() and mitte_hat_kalender() is not False:
             return Lauf("wartet", text="calendar not synced to this device yet")
     miete = bruecke.lesen(aid, wurzel)
     if not bruecke.frei_fuer(miete, ich, jetzt):

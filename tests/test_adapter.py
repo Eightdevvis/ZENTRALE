@@ -335,7 +335,8 @@ def test_der_fuellende_abgleich_legt_nicht_beiseite(monkeypatch, tmp_path):
     ics = _kalender_da(tmp_path)
     gesehen = []
     monkeypatch.setattr(abgleich, "abgleichen", lambda w, **k: gesehen.append(
-        adapter.vor_abgleich(tmp_path, abgleich.ordner(), [adapter.KALENDER_MUSTER])))
+        adapter.vor_abgleich(tmp_path, abgleich.ordner(), [adapter.KALENDER_MUSTER],
+                             abgleich.mitte_hat_kalender, abgleich.basis_kennt)))
     assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "fuellt"
     assert gesehen == [None] and ics.exists()
 
@@ -353,25 +354,27 @@ def test_spaeteres_geraet_legt_beim_ersten_abgleich_beiseite(monkeypatch, tmp_pa
 
     def frage(antwort):
         return lambda ordner="data/kalender": antwort
-    assert adapter.vor_abgleich(tmp_path, o, m, frage(True)) is None      # nichts da
+    kennt = abgleich.basis_kennt
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(True), kennt) is None      # nichts da
     _kalender_da(tmp_path)
     _basis(o, ["data/kalender/termine/a.ics"])
-    assert adapter.vor_abgleich(tmp_path, o, m, frage(True)) is None      # war schon dabei
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(True), kennt) is None      # war schon dabei
     _basis(o, ["data/lists.json"])
-    assert adapter.vor_abgleich(tmp_path, o, m, frage(False)) is None     # füllt die Cloud
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(False), kennt) is None     # füllt die Cloud
     with pytest.raises(abgleich_mitte.MitteFehler):
-        adapter.vor_abgleich(tmp_path, o, m, frage(None))
-    ziel = adapter.vor_abgleich(tmp_path, o, m, frage(True))
+        adapter.vor_abgleich(tmp_path, o, m, frage(None), kennt)
+    with pytest.raises(abgleich_mitte.MitteFehler):                   # ohne Frage: unbekannt
+        adapter.vor_abgleich(tmp_path, o, m, None, kennt)
+    with pytest.raises(abgleich_mitte.MitteFehler):                   # ohne Basis: unbekannt
+        adapter.vor_abgleich(tmp_path, o, m, frage(True))
+    ziel = adapter.vor_abgleich(tmp_path, o, m, frage(True), kennt)
     assert ziel and os.path.exists(os.path.join(ziel, "termine", "a.ics"))
     assert not (tmp_path / "data" / "kalender").exists()
-    # Ohne Frage (der heutige Abgleich gibt sie noch nicht herein): die des
-    # laufenden Abgleichs; im Block kalender_fuellt wird nicht gefragt.
+    # Im Block kalender_fuellt wird nicht gefragt.
     _kalender_da(tmp_path)
-    assert adapter.vor_abgleich(tmp_path, o, m) is None                   # Spiel: Cloud leer
-    monkeypatch.setattr(abgleich, "mitte_hat_kalender", frage(True))
     with adapter.kalender_fuellt():
-        assert adapter.vor_abgleich(tmp_path, o, m) is None
-    assert adapter.vor_abgleich(tmp_path, o, m)
+        assert adapter.vor_abgleich(tmp_path, o, m, frage(True), kennt) is None
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(True), kennt)
 
 
 def test_quelle_lokal_weder_cloud_noch_google(monkeypatch, tmp_path):

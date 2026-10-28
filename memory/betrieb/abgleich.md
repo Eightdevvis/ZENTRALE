@@ -78,8 +78,8 @@ Widerspruch ist gut, aber nicht vorrangig.
   Hinweis und Quittung ([abgleich_fremde_knoten.md](abgleich_fremde_knoten.md)
   „Termine vom Handy“). Das erste Anmelden am Handy ersetzt nichts in der Cloud.
 - **App neu dabei** (seit 29.10.2026, vorher offen): wird eine App auf einem
-  Gerät (wieder) angewählt — oder darf sie erst jetzt abgleichen (Kalender
-  bekommt einen Anschluss) —, laufen ihre Dateien wie im `erstabgleich`: die
+  Gerät (wieder) angewählt — oder darf sie erst jetzt abgleichen (Quelle der
+  Kalender-App wird `zencloud`) —, laufen ihre Dateien wie im `erstabgleich`: die
   Mitte gilt, eine abweichende Fassung von hier liegt unter
   `konflikte/<zeit>/` (Hinweis „App neu dabei“), Gelöschtes kommt nicht
   zurück, was es nur hier gibt, kommt dazu. Vorher lief es über die alte
@@ -247,23 +247,29 @@ ihr Desk liegt ohnehin in `data/desk/`.
 
 **Kalender: über die Cloud, seit 2026-10-24** ([../hub/adapter.md](../hub/adapter.md)).
 Bis dahin glich jeder Rechner selbst mit Google ab, `data/kalender/**` stand
-in `NICHT_ABGLEICHEN` (ein zweiter Weg brächte Doppelte und Geister). Jetzt:
-`data/kalender/**` gehört zur App `kalender` und gleicht ab, **sobald es einen
-Kalender-Anschluss gibt** (`zentrale adapter setup`, bewusst; ohne Anschluss
-schneidet `abgleich_apps.jetzt_erlaubt` es heraus). Seit 28.10.2026 auch über
-den Anschluss `kalender-mitte` — ohne Brücke, ohne Google
-([../hub/adapter.md](../hub/adapter.md) „Der Schalter kalender-mitte“); Ursprung
-wird dort nur, wer die Mitte ohne Termine vorfindet (`abgleich.mitte_hat_kalender`). Google fährt immer nur
-**ein** Gerät — wer den Mietvertrag hält. Gegen Geister und Doppelte:
+in `NICHT_ABGLEICHEN` (ein zweiter Weg brächte Doppelte und Geister). Jetzt
+gehört `data/kalender/**` zur App `kalender`; ob es abgleicht, sagt die
+**Quelle der Kalender-App** — `google` | `zencloud` | `lokal`
+([../hub/adapter.md](../hub/adapter.md) „Die Quelle der Kalender-App“,
+`core/kalender_einstellung.py`): nur bei `zencloud` (bzw. ohne Einstellung der
+alte Weg mit Google-Anschluss und Brücke) läuft der Kalender über die Cloud
+(`adapter.kalender_ueber_cloud`, sonst schneidet `abgleich_apps.jetzt_erlaubt`
+ihn heraus). Gegen Geister und Doppelte:
 
-- **Ein Weg je Termin:** Google ↔ Brücke ↔ Cloud ↔ alle anderen. Dateiname
-  bleibt (vdirsyncer benennt nichts um) → keine Doppelten durch Runden.
-- **Erstes Mal je Gerät:** wer nicht der Ursprung des Anschlusses ist, legt
-  seinen alten `data/kalender/` vorher nach
-  `<abgleich_dir>/kalender-vor-cloud/<zeit>/` (nie gelöscht) und übernimmt
-  die Cloud — sonst gingen dort längst gelöschte Termine als „neu" hoch, und
-  die Brücke trüge sie zu Google. Merkzettel `kalender_dabei.json`; erst
-  danach darf das Gerät die Brücke nehmen.
+- **Ein Weg je Termin:** Google ↔ Brücke ↔ Cloud ↔ alle anderen (alter Weg:
+  Google fährt nur, wer den Mietvertrag hält). Dateiname bleibt (vdirsyncer
+  benennt nichts um) → keine Doppelten durch Runden.
+- **Erstes Mal je Gerät** = die Basis kennt noch keine Datei unter
+  `data/kalender/` (`abgleich.basis_kennt`; kein Merkzettel). Dann vor dem
+  Abgleich (`adapter.vor_abgleich`, beides vom Abgleich hereingegeben):
+  Cloud hat schon Termine (`abgleich.mitte_hat_kalender`) → der hiesige
+  `data/kalender/` wandert nach `<abgleich_dir>/kalender-vor-cloud/<zeit>/`
+  (nie gelöscht, Sasha wählt), das Gerät übernimmt die Cloud; Cloud leer →
+  der hiesige füllt sie; unbekannt (offline) → `MitteFehler`, kein Abgleich.
+- **Wieder dabei** (die Basis kennt den Kalender schon, er war nur eine Weile
+  aus — Quelle umgestellt): „App neu dabei“ (oben) — die Mitte gilt je Datei,
+  Abweichendes von hier liegt unter `konflikte/`, kein Drei-Wege über die
+  alte Basis.
 - **.ics je Termin zusammenführen** (`core/abgleich_ics.py`, Art `ics`): je
   VEVENT (UID + RECURRENCE-ID) über die Basis; beide geändert → späterer
   LAST-MODIFIED, sonst die Mitte, mit Hinweis. Nie die Text-Regel (zwei

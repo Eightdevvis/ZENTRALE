@@ -29,8 +29,8 @@ Abgleich und übernehmen daraus:
 Ein Vorschlag wird nur geprüft, wenn die App auf diesem Rechner abgleicht
 (`abgleich_apps`): solange `data/kalender/**` nicht über die Mitte läuft,
 wartet ein Termin-Vorschlag still im Eingang. Das Handy sieht den Kalender
-erst, wenn ein Rechner ihn in die Mitte gibt (Schalter der Kalender-Session,
-`abgleich_apps.jetzt_erlaubt`) — bis dahin zeigt es „noch nicht in der Mitte“.
+erst, wenn ein Rechner ihn in die Mitte gibt (Quelle der Kalender-App
+`zencloud`, `abgleich_apps.jetzt_erlaubt`) — bis dahin zeigt es „noch nicht in der Mitte“.
 
 **Abweichung vom Vorschlag „Pfad-Spiegel" (Klartext-Pfade):** die Pfade
 bleiben auch für das Handy versteckt (`<name>` = HMAC des Pfads, unten).
