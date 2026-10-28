@@ -2,7 +2,7 @@
 #
 # Was ein fremder Knoten (das Handy) VORSCHLAGEN darf — Dateien, die nicht
 # ihm allein gehören, die ein Rechner aber aus seinem Eingang übernimmt,
-# solange nichts dagegen spricht (memory/betrieb/abgleich.md, „Format für
+# solange nichts dagegen spricht (memory/betrieb/abgleich_fremde_knoten.md, „Format für
 # fremde Knoten“). Die eigenen Dateien eines Knotens (seine .jsonl …) stehen
 # in abgleich.eigene_datei; hier nur die Vorschläge:
 #

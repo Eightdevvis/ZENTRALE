@@ -1,6 +1,6 @@
 // Abgleich zwischen Handy-Ablage und Mitte — konfliktfrei durch Bauart.
 //
-// Das Handy ist ein fremder Knoten (memory/betrieb/abgleich.md):
+// Das Handy ist ein fremder Knoten (memory/betrieb/abgleich_fremde_knoten.md):
 //   HOLEN   alles aus dem Inhaltsverzeichnis, was regeln.holen nennt
 //           (Gespräche, Kontextpaket, Kalender, Zugangsdaten). Was dort
 //           verschwindet (gelöscht), verschwindet auch hier.
@@ -52,6 +52,17 @@ class AbgleichZustand {
       return AbgleichZustand({});
     }
   }
+}
+
+/// Zeilen zweier .jsonl-Fassungen vereinen: erst alle der Cloud, dann die von
+/// hier, die dort fehlen. Die Gespräche ordnen ohnehin nach `ts`.
+String zeilenVereinen(String cloud, String hier) {
+  final zeilen = const LineSplitter().convert(cloud).where((z) => z.trim().isNotEmpty).toList();
+  final da = zeilen.toSet();
+  for (final z in const LineSplitter().convert(hier)) {
+    if (z.trim().isNotEmpty && da.add(z)) zeilen.add(z);
+  }
+  return zeilen.isEmpty ? '' : '${zeilen.join('\n')}\n';
 }
 
 class Abgleich {
@@ -117,13 +128,24 @@ class Abgleich {
     final stand = await mitte.holen();
     if (stand.kennung == null) return Ergebnis(0, 0, mitteLeer: true);
 
-    // ── Nach einer Neuinstallation: das Eigene aus dem Eingang zurück ──
+    // ── Erster Lauf (neu installiert oder erst jetzt angemeldet): das Eigene
+    // aus dem Eingang zurück. Grundsatz (abgleich.md): die Cloud wird nie
+    // überschrieben. Gibt es eine eigene Datei hier UND im Eingang, gewinnt
+    // nicht still die von hier: eine .jsonl bekommt die Zeilen beider
+    // (erst die aus der Cloud), alles andere nimmt die Fassung der Cloud.
     if (geholt.isEmpty && gebracht.isEmpty) {
       for (final MapEntry(key: mp, value: inhalt) in (await mitte.eingangLesen()).entries) {
         final ap = r.ablagePfad(mp);
-        if (ap == null || await ablage.lesen(ap) != null) continue;
-        await ablage.schreiben(ap, utf8.decode(inhalt, allowMalformed: true));
-        gebracht[ap] = Tresor.sha(inhalt);
+        if (ap == null) continue;
+        final fern = utf8.decode(inhalt, allowMalformed: true);
+        final hier = await ablage.lesen(ap);
+        if (hier == null || hier == fern) {
+          if (hier == null) await ablage.schreiben(ap, fern);
+          gebracht[ap] = Tresor.sha(inhalt);
+          continue;
+        }
+        // Beide verschieden: zusammenlegen; gebracht bleibt leer → geht hinaus.
+        await ablage.schreiben(ap, ap.endsWith('.jsonl') ? zeilenVereinen(fern, hier) : fern);
       }
     }
 

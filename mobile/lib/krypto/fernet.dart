@@ -1,5 +1,5 @@
 // Fernet — das Format, mit dem ZENTRALE alles in der Mitte verschlüsselt
-// (memory/betrieb/abgleich.md, „Verschlüsseln (Fernet, Version 0x80)").
+// (memory/betrieb/abgleich_fremde_knoten.md, „Verschlüsseln (Fernet, Version 0x80)").
 //
 //   token = base64url( 0x80 ‖ zeit(8, BE) ‖ iv(16) ‖ AES-128-CBC(PKCS7) ‖ HMAC-SHA256 )
 //   Schlüssel = 32 Bytes (base64url mit '='): 0–15 Signieren, 16–31 Verschlüsseln

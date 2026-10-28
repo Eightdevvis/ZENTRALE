@@ -103,7 +103,9 @@ def kalender_mitte_einschalten(wurzel) -> tuple:
         return "offline", fehler
     if adapter.lesen(adapter.MITTE_ID, wurzel):
         return "vorhanden", _abgleichen(wurzel)
-    schon = adapter.kalender_ueber_cloud(wurzel)
+    # Liegen schon Termine in der Mitte, war ein anderes Gerät zuerst — auch
+    # wenn sein Anschluss hier noch nicht angekommen ist (abgleich.mitte_hat_kalender).
+    schon = adapter.kalender_ueber_cloud(wurzel) or abgleich.mitte_hat_kalender() is True
     adapter.speichern(adapter.neu(adapter.MITTE_ID, "kalender-mitte", "kalender",
                                   "Calendar through your account"), wurzel)
     if not schon:

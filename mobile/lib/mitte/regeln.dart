@@ -1,6 +1,6 @@
 // Was das Handy aus der Mitte holt und was es bringen darf — die EINE Stelle
 // dafür, Spiegel der Rechner-Seite (core/abgleich.eigene_datei,
-// core/abgleich_vorschlaege) und der Doku (memory/betrieb/abgleich.md,
+// core/abgleich_vorschlaege) und der Doku (memory/betrieb/abgleich_fremde_knoten.md,
 // „Format für fremde Knoten“).
 //
 // Hier liegt auch die Übersetzung der Pfade: die Mitte zählt ab dem

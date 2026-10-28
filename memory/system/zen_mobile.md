@@ -73,7 +73,7 @@ gehen. Darum spricht es die KI **selbst** (Claude-API) und gleicht über die
 dieselbe Adresse wie `core/cloud_api.VORGABE`, in Dart `lib/mitte/cloud.dart`).
 Das Handy ist ein **fremder Knoten**: es liest das Inhaltsverzeichnis, schreibt
 aber nur in seinen Eingang `knoten/handy/` (Format:
-`memory/betrieb/abgleich.md` → „Format für fremde Knoten“). Der alte Plan einer
+`memory/betrieb/abgleich_fremde_knoten.md` → „Format für fremde Knoten“). Der alte Plan einer
 `GitHubMitte` ist damit erledigt.
 
 - **Anmelden (einmal):** Benutzername + Passwort des ZENTRALE-Kontos in den

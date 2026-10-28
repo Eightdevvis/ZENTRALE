@@ -4,7 +4,7 @@
 // steht in X-ZENTRALE-ART, oder sie wird geraten wie im Kern (Google, khal).
 //
 // Nur Lesen: das Handy ändert keine vorhandenen Termine (nächster Schritt,
-// memory/betrieb/abgleich.md „Kalender-Vorschläge“). Was ZENTRALE an einem
+// memory/betrieb/abgleich_fremde_knoten.md, Termin-Vorschläge). Was ZENTRALE an einem
 // Termin nicht verwaltet (DESCRIPTION, fremde VALARM), bleibt in der Datei.
 
 import 'dart:convert';

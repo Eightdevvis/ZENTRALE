@@ -98,7 +98,7 @@ kein Hinweis an die KI, keine „offen"-Zeile) · **aus**.
 Gespeichert an der Antwort (`core/gespraeche.py`, alles optional):
 `erledigt {zeile, schritte:[{werkzeug, wen, status}]}`, `pruefung {befunde,
 korrigiert}`, `offen [sätze]`; an jedem gespeicherten Werkzeug-Schritt jetzt
-auch `status`. Das Handy liest nur, was es kennt ([abgleich](../betrieb/abgleich.md)).
+auch `status`. Das Handy liest nur, was es kennt ([abgleich_fremde_knoten](../betrieb/abgleich_fremde_knoten.md)).
 
 ## Prüfen bis bestanden, dann Warnungen (seit 2026-10-09 abends)
 
@@ -450,7 +450,7 @@ Prüfer an: was fehlt, findet keine Satz-Prüfung.
   …"), im Ereignis `ehrlichkeit`, im Ablauf-Protokoll als Eintrag `auftrag`
   (Trace: „Auftrag · 2 erledigt, 1 offen" / TUI „task: 2 done, 1 open"), TUI
   leise unter der Antwort (Rolle `auftrag`, bleibt an DIESER Antwort stehen).
-  Handy-Format: [abgleich](../betrieb/abgleich.md).
+  Handy-Format: [abgleich_fremde_knoten](../betrieb/abgleich_fremde_knoten.md).
 
 **Falschtreffer „Abrechnung Pflicht", gemessen 10.10.2026**
 (`ehrlichkeit_messen.py`, alte Züge kamen alle ohne Feld — jede Pflicht wäre

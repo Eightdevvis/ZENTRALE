@@ -1,7 +1,7 @@
 # core/mobil_kontext.py
 #
 # Das Kontextpaket fürs Handy: data/mobil/kontext.json. Das Handy ist ein
-# eigener Knoten an der Mitte (memory/betrieb/abgleich.md, Abschnitt „Format
+# eigener Knoten an der Mitte (memory/betrieb/abgleich_fremde_knoten.md, Abschnitt „Format
 # für fremde Knoten"); es ruft das Sprachmodell selbst auf und braucht dafür
 # denselben festen System-Prompt wie die Cloud-Schiene hier — Persona,
 # Gedächtnis-Kopf, Hausregeln, Skill-Liste. Statt das in Dart nachzubauen,

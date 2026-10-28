@@ -147,6 +147,34 @@ def cloud_pfade():
         return None
 
 
+def mitte_pfade():
+    """Welche Pfade das Inhaltsverzeichnis der Mitte nennt, auf dem Weg, über
+    den dieses Gerät abgleicht (git oder Cloud) — ohne eine Datei zu laden.
+    None, wenn es nicht geht (kein Schlüssel, offline)."""
+    try:
+        tresor = schluessel.Tresor(schluessel_laden())
+        stand, lesen, _namen = mitte_oeffnen().holen()
+        if stand is None:
+            return set()
+        roh = lesen(INHALT)
+        return set(json.loads(tresor.auf(roh)).get("dateien", {})) if roh else set()
+    except (schluessel.SchluesselFehler, abgleich_mitte.MitteFehler, konto.KontoFehler,
+            OSError, ValueError):
+        return None
+
+
+def mitte_hat_kalender():
+    """Liegen in der Mitte schon Termine (data/kalender/**)? True/False, None =
+    unbekannt (offline, kein Schlüssel). Für den Schalter kalender-mitte
+    (adapter_ablauf): die Mitte ist die Wahrheit — Ursprung wird nur, wer sie
+    leer vorfindet; sonst schalteten zwei Geräte, die vor dem ersten Abgleich
+    einschalten, beide als Ursprung ein."""
+    pfade = mitte_pfade()
+    if pfade is None:
+        return None
+    return any(p.startswith(adapter.KALENDER_MUSTER[:-2]) for p in pfade)
+
+
 def _sha(b):
     return hashlib.sha256(b).hexdigest() if b is not None else None
 
@@ -248,7 +276,7 @@ def _mitte_lesen(tresor, stand, lesen, basis, muster=auswahl.ABGLEICH):
 # Inhaltsverzeichnis — sonst stritten es und die Rechner um eine Datei.
 # Es legt nur eigene Dateien in seinen Eingang knoten/<name>/, jede als
 # verschlüsselter Umschlag {format, pfad, inhalt}. Format für fremde Knoten:
-# memory/betrieb/abgleich.md.
+# memory/betrieb/abgleich_fremde_knoten.md.
 
 _KNOTEN_NAME = re.compile(r"^[A-Za-z0-9@.\-]+$")
 

@@ -157,6 +157,26 @@ void main() {
     expect(neu.dateien['gespraeche/g1/handy.jsonl'], 'alt\n');
   });
 
+  test('erstes Anmelden mit eigenen Daten: die Cloud wird nicht überschrieben', () async {
+    final c = await _cloud();
+    final alt = SpeicherAblage();
+    await Abgleich(alt, _mitte(c)).laufen();
+    await alt.schreiben('gespraeche/g1/handy.jsonl', 'a\nb\n');
+    await alt.schreiben('gespraeche/_knoten/handy.json', '{"aktiv":"g1"}');
+    await Abgleich(alt, _mitte(c)).laufen();
+    // Neu installiert, offline schon etwas geschrieben, dann angemeldet:
+    final neu = SpeicherAblage();
+    await neu.schreiben('gespraeche/g1/handy.jsonl', 'c\n');
+    await neu.schreiben('gespraeche/_knoten/handy.json', '{"aktiv":null}');
+    await Abgleich(neu, _mitte(c)).laufen();
+    expect(neu.dateien['gespraeche/g1/handy.jsonl'], 'a\nb\nc\n');
+    expect(neu.dateien['gespraeche/_knoten/handy.json'], '{"aktiv":"g1"}');
+    final ein = await c.eingang(_tresor);
+    expect(ein['data/gespraeche/g1/handy.jsonl'], 'a\nb\nc\n');
+    expect(ein['data/gespraeche/_knoten/handy.json'], '{"aktiv":"g1"}');
+    expect(zeilenVereinen('x\n', ''), 'x\n');
+  });
+
   test('leere Mitte: das Handy wartet, schreibt nichts', () async {
     final c = FalscheCloud(vektoren: _konto);
     final ablage = SpeicherAblage();

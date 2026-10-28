@@ -1,5 +1,5 @@
 // Die Mitte als ZENTRALE-Cloud, für einen fremden Knoten — genau nach
-// memory/betrieb/abgleich.md („Format für fremde Knoten“, „Die Mitte als
+// memory/betrieb/abgleich_fremde_knoten.md („Format für fremde Knoten“, „Über die
 // Cloud“) und memory/hub/knoten_beitritt.md (Schnittstelle):
 //
 //   holen    GET /v1/mitte → {kennung, namen}; GET /v1/mitte/datei/inhalt.enc

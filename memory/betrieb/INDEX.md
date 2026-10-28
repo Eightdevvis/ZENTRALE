@@ -27,7 +27,8 @@ hier ist „Maschine", nicht „Feature".
 | Bedrohungsmodell, LUKS, Evil-Maid, was verschlüsselt ist | [sicherheit.md](sicherheit.md) |
 | **Zugang zum Backend:** von anderen Geräten nur mit Schlüssel; Stellungen aus/melden/an, Schlüssel anlegen, auf Pi und Handy bringen, Browser-Link | [zugang.md](zugang.md) |
 | Welche Dateien die KI lesen darf (Whitelist) und was nie in git gehört | [datei_zugriffe.md](datei_zugriffe.md) |
-| **Abgleich über die Mitte:** Rechner gleichen verschlüsselt über eine Mitte ab statt direkt; Zusammenführen pro Eintrag, Grabsteine, Schlüssel in KeePass, Umstellung vom rsync-Weg; Mitte als Cloud (`HttpMitte`, Kontoschlüssel), Bereiche je Gerät | [abgleich.md](abgleich.md) |
+| **Abgleich über die Mitte:** Rechner gleichen verschlüsselt über eine Mitte ab statt direkt; Zusammenführen pro Eintrag, Grabsteine, Schlüssel in KeePass, Umstellung vom rsync-Weg; Mitte als Cloud (`HttpMitte`, Kontoschlüssel), Bereiche je Gerät, Grundsatz „die Cloud wird nie überschrieben“ | [abgleich.md](abgleich.md) |
+| **Abgleich für fremde Knoten (Handy):** Format Byte für Byte (Fernet, versteckte Namen, Eingang, Umschlag), Routen über die Cloud mit Login, was die Rechner übernehmen (eigene Dateien, Gesprächskopf, neue Termine als Vorschlag), Kontextpaket | [abgleich_fremde_knoten.md](abgleich_fremde_knoten.md) |
 | **Cloud** (Cloudflare Worker + D1 + R2): Login ohne Klartext, Mitte über HTTP mit Compare-and-Swap, Einladungscodes, Pakete, Ausrollen, Gratis-Grenzen (`zentrale cloud usage`, Bremse) | [cloud.md](cloud.md) |
 | **Datensicherung** ins private Daten-Repo: Positivliste, Schlüssel-Scanner, ein Branch pro Rechner, täglicher Timer (wird vom Abgleich abgelöst) | [datensicherung.md](datensicherung.md) |
 

@@ -1,4 +1,4 @@
-"""Das Handy als fremder Knoten an der Mitte (memory/betrieb/abgleich.md,
+"""Das Handy als fremder Knoten an der Mitte (memory/betrieb/abgleich_fremde_knoten.md,
 „Format für fremde Knoten").
 
 Der Knoten hier ist absichtlich NUR nach der Beschreibung gebaut: Fernet aus
@@ -241,6 +241,8 @@ def kalender_welt(welt, monkeypatch):
     laptop.schreiben("kalender/termine/" + "a" * 32 + "@zentrale.ics",
                      _termin("a" * 32 + "@zentrale", "Schon da").decode())
     laptop.schreiben("kalender/termine/abc.ics", _termin("abc@google.com", "Von Google").decode())
+    laptop._als_ich()
+    adapter.als_ursprung_merken(abgleich.ordner())   # der Laptop füllt die Mitte
     laptop.abgleichen()
     return welt
 
@@ -320,3 +322,18 @@ def test_ohne_kalender_in_der_cloud_wartet_der_vorschlag(welt, monkeypatch):
     b = laptop.abgleichen()
     assert not laptop.da(f"kalender/termine/{uid}.ics")
     assert not b.hinweise
+
+
+def test_mitte_hat_kalender(welt, monkeypatch):
+    monkeypatch.setattr(adapter, "kalender_ueber_cloud", lambda wurzel=None: True)
+    laptop = welt.rechner("laptop")
+    laptop.schreiben("lists.json", LISTE)
+    laptop._als_ich()
+    adapter.als_ursprung_merken(abgleich.ordner())
+    laptop.abgleichen()
+    laptop._als_ich()
+    assert abgleich.mitte_hat_kalender() is False
+    laptop.schreiben("kalender/termine/x.ics", _termin("x@google.com").decode())
+    laptop.abgleichen()
+    laptop._als_ich()
+    assert abgleich.mitte_hat_kalender() is True

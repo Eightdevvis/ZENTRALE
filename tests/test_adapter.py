@@ -230,6 +230,19 @@ def test_mitte_wer_zuerst_einschaltet_legt_nichts_beiseite(monkeypatch, tmp_path
     assert ics.exists()
 
 
+def test_mitte_mit_terminen_macht_nicht_zum_ursprung(monkeypatch, tmp_path):
+    """Zwei Geräte schalten vor dem ersten Abgleich ein: das zweite findet
+    schon Termine in der Mitte (abgleich.mitte_hat_kalender) und wird NICHT
+    Ursprung, auch wenn der Anschluss des ersten noch nicht da ist."""
+    import adapter_ablauf
+    import abgleich
+    _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda: True)
+    _kalender_da(tmp_path)
+    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "dazu"
+    assert not adapter.kalender_dabei(abgleich.ordner())
+
+
 def test_mitte_spaeter_eingeschaltet_legt_beiseite_statt_zu_loeschen(monkeypatch, tmp_path):
     """Ein anderes Gerät war zuerst: dieses ist NICHT der Ursprung, auch wenn
     es selbst einschaltet — sein alter Kalender wandert beiseite."""
