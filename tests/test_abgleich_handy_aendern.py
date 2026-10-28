@@ -129,7 +129,7 @@ def test_widerspruch_wird_abgelehnt_und_nichts_ueberschrieben(kalender_welt):
     assert "SUMMARY:Am Laptop" in laptop.lesen(f"kalender/termine/{UID}.ics")
     assert any("abgelehnt" in x and "Widerspruch" in x for x in b.hinweise)
     q = h.quittung(REL)
-    assert q["ergebnis"] == "abgelehnt" and "Widerspruch" in q["grund"]
+    assert q["ergebnis"] == "abgelehnt" and q["code"] == "conflict" and "Widerspruch" in q["grund"]
     aufgehoben = list((laptop.zustand / "konflikte" / "eingang-handy").rglob("*.ics"))
     assert len(aufgehoben) == 1 and b"SUMMARY:Am Handy" in aufgehoben[0].read_bytes()
     assert not laptop.abgleichen().hinweise              # einmal gemeldet, nicht jedes Mal

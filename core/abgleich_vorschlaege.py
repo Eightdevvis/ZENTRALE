@@ -41,6 +41,7 @@ from zoneinfo import ZoneInfo
 
 import abgleich_ics
 import dateien
+from i18n import _
 
 # Was ZENTRALE an einem VEVENT selbst verwaltet — GLEICH wie
 # kalender_ics_abbildung.VERWALTET(_ABWEICHUNG). Abgeschrieben, weil der
@@ -97,20 +98,55 @@ class Vorschlag:
         self.knoten, self.umschlag = knoten, umschlag
 
 
+# Why a proposal was rejected: a stable English code (the receipt carries it,
+# so the phone translates with its own ARB table) and the msgid of the
+# human-readable text (core/locale, gettext; German first).
+REASONS = {
+    "not_found": "the event does not exist",
+    "delete_needs_base": "deleting needs basis_sha (which version was seen)",
+    "changed_not_deleted": "changed in the cloud meanwhile — not deleted",
+    "unreadable": "not a readable event",
+    "one_uid": "one file holds exactly one event (one UID)",
+    "no_master": "the main part of the event is missing (deleting only with loeschen)",
+    "name_taken": "another event lives under this name",
+    "deleted_in_cloud": "deleted in the cloud, changed on the phone — not restored",
+    "no_layer": "the layer “{layer}” does not exist",
+    "bad_name": "the file name does not match the UID",
+    "uid_twice": "this UID exists more than once in the cloud",
+    "other_name": "this event already exists under another name",
+    "target_taken": "another file already exists at the target",
+    "needs_base": "this event already exists — changing needs basis_sha (which version was seen); nothing overwritten",
+    "base_unknown": "changed in the cloud meanwhile, and the version the phone saw is unknown here — nothing overwritten",
+    "merge_unreadable": "merging gave no readable event — nothing overwritten",
+    "conflict": "conflict — {details}",
+    "same_file": "another proposal touches the same file",
+    "conflict_changed": "{event}: changed differently on the phone and in the cloud",
+    "conflict_deleted": "{event}: deleted on one side, changed on the other",
+}
+
+
 class Entscheid:
     """ergebnis: angenommen | abgelehnt | erledigt (nichts mehr zu tun).
-    schreiben: {rel: bytes | None=löschen} — was in die Sicht der Mitte geht."""
+    schreiben: {rel: bytes | None=löschen} — was in die Sicht der Mitte geht.
+    code: reason code from REASONS (English), grund: its translated text."""
 
-    def __init__(self, ergebnis, grund=None, schreiben=None):
+    def __init__(self, ergebnis, grund=None, schreiben=None, code=None):
         self.ergebnis, self.grund, self.schreiben = ergebnis, grund, schreiben or {}
+        self.code = code
 
     @property
     def ja(self):
         return self.ergebnis == ANGENOMMEN
 
 
-def _nein(grund):
-    return Entscheid(ABGELEHNT, grund)
+def _nein(code, **fields):
+    """Rejected, with reason `code` (REASONS); fields fill the placeholders."""
+    return Entscheid(ABGELEHNT, _(REASONS[code]).format(**fields), code=code)
+
+
+def rejected(code, **fields) -> "Entscheid":
+    """A rejection decided outside this module (abgleich: two proposals, one file)."""
+    return _nein(code, **fields)
 
 
 def _uids(roh: bytes) -> set:
@@ -246,9 +282,8 @@ def dreiweg(basis: bytes, vorschlag: bytes, mitte: bytes):
         elif _gleich(m, b):
             r = None if p is None else _uebernehmen(p, m, k[1])
         else:
-            widerspruch.append(f"{name}: am Handy und in der Mitte verschieden geändert"
-                               if p is not None and m is not None else
-                               f"{name}: auf der einen Seite gelöscht, auf der anderen geändert")
+            widerspruch.append(_(REASONS["conflict_changed"] if p is not None and m is not None
+                                 else REASONS["conflict_deleted"]).format(event=name))
             continue
         if r is not None:
             termine.append(r)
@@ -294,11 +329,11 @@ def kalender_vorschlag_annehmen(v: Vorschlag, mitte: dict, geloescht: dict,
     ebene = rel.split("/")[2]
     if v.loeschen:
         if rel not in mitte:
-            return Entscheid(ERLEDIGT) if rel in geloescht else _nein("den Termin gibt es nicht")
+            return Entscheid(ERLEDIGT) if rel in geloescht else _nein("not_found")
         if not v.basis_sha:
-            return _nein("Löschen braucht basis_sha (welche Fassung gesehen wurde)")
+            return _nein("delete_needs_base")
         if sha(mitte[rel]) != v.basis_sha:
-            return _nein("inzwischen in der Mitte geändert — nicht gelöscht")
+            return _nein("changed_not_deleted")
         return Entscheid(ANGENOMMEN, schreiben={rel: None})
 
     from icalendar import Calendar
@@ -306,47 +341,46 @@ def kalender_vorschlag_annehmen(v: Vorschlag, mitte: dict, geloescht: dict,
         teile = abgleich_ics.zerlegen(v.inhalt or b"")
         Calendar.from_ical(v.inhalt)
     except Exception:       # noqa: BLE001 — alles Unlesbare ist dasselbe: kein Termin
-        return _nein("kein lesbarer Termin")
+        return _nein("unreadable")
     uids = {uid for uid, _rid in teile.termine}
     if len(uids) != 1:
-        return _nein("eine Datei hält genau einen Termin (eine UID)")
+        return _nein("one_uid")
     uid = uids.pop()
     if (uid, "") not in teile.termine:
-        return _nein("der Hauptteil des Termins fehlt (Löschen nur mit loeschen)")
+        return _nein("no_master")
     orte = [r for r, roh in mitte.items() if ist_kalender(r) and uid in _uids(roh)]
 
     if not orte:                                     # ── neu
         if rel in mitte:
-            return _nein("unter diesem Namen liegt ein anderer Termin")
+            return _nein("name_taken")
         if rel in geloescht:
             if v.basis_sha:
-                return _nein("in der Mitte gelöscht, am Handy geändert — nicht wiederhergestellt")
+                return _nein("deleted_in_cloud")
             return Entscheid(ERLEDIGT)              # alter neuer Vorschlag, längst gelöscht
         if not _ebene_da(ebene, mitte):
-            return _nein(f"die Ebene „{ebene}“ gibt es nicht")
+            return _nein("no_layer", layer=ebene)
         if rel.rsplit("/", 1)[1] != dateien.sicherer_name(uid) + ".ics":
-            return _nein("der Dateiname passt nicht zur UID")
+            return _nein("bad_name")
         return Entscheid(ANGENOMMEN, schreiben={rel: v.inhalt})
 
     if len(orte) > 1:
-        return _nein("diese UID liegt in der Mitte mehrfach")
+        return _nein("uid_twice")
     alt = orte[0]
     m = mitte[alt]
     if alt != rel:                                   # ── Ebene gewechselt
         if alt.split("/")[2] == ebene:
-            return _nein("diesen Termin gibt es schon unter einem anderen Namen")
+            return _nein("other_name")
         if rel in mitte:
-            return _nein("am Ziel liegt schon eine andere Datei")
+            return _nein("target_taken")
         if not _ebene_da(ebene, mitte):
-            return _nein(f"die Ebene „{ebene}“ gibt es nicht")
+            return _nein("no_layer", layer=ebene)
         if rel.rsplit("/", 1)[1] != dateien.sicherer_name(uid) + ".ics":
-            return _nein("der Dateiname passt nicht zur UID")
+            return _nein("bad_name")
     elif _schon_drin(v.inhalt, m):
         return Entscheid(ERLEDIGT)
 
     if not v.basis_sha:
-        return _nein("diesen Termin gibt es schon — Ändern braucht basis_sha "
-                     "(welche Fassung gesehen wurde), nichts überschrieben")
+        return _nein("needs_base")
     if sha(m) == v.basis_sha:
         b = m
     elif v.basis is not None:
@@ -354,16 +388,15 @@ def kalender_vorschlag_annehmen(v: Vorschlag, mitte: dict, geloescht: dict,
     elif basis and sha(basis.get(alt)) == v.basis_sha:
         b = basis[alt]
     else:
-        return _nein("inzwischen in der Mitte geändert, und die Fassung, die das Handy "
-                     "sah, kenne ich nicht — nichts überschrieben")
+        return _nein("base_unknown")
     try:
         neu, widerspruch = dreiweg(b, v.inhalt, m)
         if neu is not None:
             Calendar.from_ical(neu)
     except Exception:       # noqa: BLE001
-        return _nein("Zusammenführen ergab keinen lesbaren Termin — nichts überschrieben")
+        return _nein("merge_unreadable")
     if widerspruch:
-        return _nein("Widerspruch — " + "; ".join(widerspruch[:3]))
+        return _nein("conflict", details="; ".join(widerspruch[:3]))
     if alt == rel:
         return Entscheid(ERLEDIGT) if neu == m else Entscheid(ANGENOMMEN, schreiben={rel: neu})
     return Entscheid(ANGENOMMEN, schreiben={rel: neu, alt: None})

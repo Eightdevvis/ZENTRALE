@@ -87,9 +87,13 @@ zurückführen lässt. Der Umschlag bekommt dafür drei Felder dazu:
 ```json
 "eingang": {"handy": {"<pfad>": {"umschlag": "<sha256-hex des entschlüsselten Umschlags>",
                                  "ergebnis": "angenommen" | "abgelehnt" | "erledigt",
-                                 "grund": "…", "am": "<ISO-Zeit>"}}}
+                                 "code": "<reason code>", "grund": "…", "am": "<ISO-Zeit>"}}}
 ```
 
+  `code` (English, stable; `core/abgleich_vorschlaege.REASONS`, e.g.
+  `conflict`, `base_unknown`, `needs_base`, `changed_not_deleted`) is what the
+  phone translates with its own ARB table; `grund` is the text in the
+  computer's UI language (gettext, `core/locale`).
   Das Handy vergleicht `umschlag` mit dem sha256 seines Umschlag-Klartexts
   (die JSON-Bytes vor dem Verschlüsseln): passt er, ist der Vorschlag
   entschieden → aus dem Eingang räumen; bei `abgelehnt` Sasha den `grund`

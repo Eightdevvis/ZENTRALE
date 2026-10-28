@@ -45,6 +45,7 @@ import adapter_geheim
 import ai_config
 import dateien
 import konto
+from i18n import _
 
 VORGABE_DIR = "~/.local/share/zentrale/abgleich"
 VORGABE_MITTE = "git@github.com:Eightdevvis/data.git"
@@ -249,7 +250,7 @@ def _basis_lesen():
 
 def _basis_schreiben(stand, basis):
     wurzel = os.path.join(ordner(), "basis")
-    _, alt = _basis_lesen()
+    _stand, alt = _basis_lesen()
     for rel, inhalt in basis.items():
         if alt.get(rel) != inhalt:
             dateien.atomar_schreiben(os.path.join(wurzel, rel), inhalt)
@@ -346,7 +347,8 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
         elif not auswahl.passt(rel, muster):
             continue          # App auf diesem Gerät abgewählt
         elif loeschen and not vorschlag.ist_kalender(rel):
-            bericht.hinweise.append(f"Eingang {knoten}: {_kurz(rel)} löschen darf er nicht — übergangen")
+            bericht.hinweise.append(_("Inbox {node}: {path} may not be deleted by it — skipped")
+                                    .format(node=knoten, path=_kurz(rel)))
         elif eigene_datei(rel, knoten):
             fremd[rel] = inhalt
         elif vorschlag.ist_kalender(rel):
@@ -386,16 +388,19 @@ def _vorschlaege_pruefen(vorschlaege, m, geloescht, bericht, basis=None, eingang
             continue                        # schon entschieden
         e = vorschlag.kalender_vorschlag_annehmen(v, m, geloescht, basis)
         if e.ja and any(r in raus for r in e.schreiben):
-            e = vorschlag.Entscheid(vorschlag.ABGELEHNT, "ein anderer Vorschlag trifft dieselbe Datei")
+            e = vorschlag.rejected("same_file")
         if e.ja:
             raus.update(e.schreiben)
         elif e.ergebnis == vorschlag.ABGELEHNT:
-            bericht.hinweise.append(f"Eingang {v.knoten}: Termin {_kurz(rel)} abgelehnt — "
-                                    f"{e.grund}; die Mitte bleibt, wie sie ist")
+            bericht.hinweise.append(
+                _("Inbox {node}: event {path} rejected — {reason}; the cloud stays as it is")
+                .format(node=v.knoten, path=_kurz(rel), reason=e.grund))
             if v.inhalt is not None and not trocken:
                 dateien.atomar_schreiben(os.path.join(
                     ordner(), "konflikte", f"eingang-{v.knoten}", v.umschlag[:12], rel), v.inhalt)
         q = {"umschlag": v.umschlag, "ergebnis": e.ergebnis, "am": _jetzt()}
+        if e.code:
+            q["code"] = e.code
         if e.grund:
             q["grund"] = e.grund
         quittungen.setdefault(v.knoten, {})[rel] = q
@@ -474,9 +479,11 @@ def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None, 
                 if l is not None and l != m:
                     aufheben[rel] = l
                     bericht.hinweise.append(
-                        f"{_kurz(rel)}: auf diesem Rechner anders als in der Mitte"
-                        + (" (App neu dabei)" if neu else "") +
-                        " — die Mitte gilt, die Fassung von hier ist aufgehoben")
+                        _("{path}: differs from the cloud (app newly included) — the cloud "
+                          "wins, the version from here is kept aside").format(path=_kurz(rel))
+                        if neu else
+                        f"{_kurz(rel)}: auf diesem Rechner anders als in der Mitte — "
+                        "die Mitte gilt, die Fassung von hier ist aufgehoben")
             elif l is not None and stein is not None:
                 erg[rel] = None
                 bericht.hinweise.append(f"{_kurz(rel)}: wurde anderswo gelöscht — hier beiseitegelegt")
@@ -544,7 +551,7 @@ def _vorhaben_abschliessen(wurzel, bericht=None):
     v = _vorhaben_dir()
     kopf = json.loads(_lesen(os.path.join(v, "vorhaben.json")))
     tag = kopf["zeit"].replace(":", "-").replace("T", "_")
-    _, basis = _basis_lesen()
+    _stand, basis = _basis_lesen()
     basis = dict(basis)
     for rel, e in kopf["eintraege"].items():
         neu = _lesen(os.path.join(v, "neu", rel)) if e["neu"] else None
@@ -683,7 +690,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                     return bericht
                 kennung = stand
                 if bericht.gesendet or LIESMICH not in namen or eingang != eingang_alt:
-                    _, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner, fremd,
+                    _inhalt_neu, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner, fremd,
                                                            eingang)
                     schreiben[LIESMICH] = LIESMICH_TEXT.encode("utf-8")
                     kennung = mitte.vorbereiten(schreiben, loeschen,

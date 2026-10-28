@@ -72,6 +72,7 @@ zählen als ein Modul.
 | `adapter_vdirsyncer` | 1 | vdirsyncer-Konfiguration ↔ Vorlage im Anschluss (Geheimnisse, Token-Datei, Kalender-Ordner als Platzhalter); auf der Brücke bauen, erneuerten Token zurückschreiben |
 | `adapter_ablauf` | 1 | Einrichten (KI-Schlüssel, vorhandene vdirsyncer-Konfiguration als Anschluss) und ein Lauf des Kalender-Timers: Brücke nehmen → abgleichen → nur als Inhaber Google; die Quelle der Kalender-App umstöpseln (`kalender_quelle_setzen`) |
 | `eingebaute_apps` | 1 | Die eingebauten Apps (fokus, notizen, kalender … und `cloud`) mit Titel und `[daten]` wie ein app.toml, dazu der Ersatz für den Tutor, solange sein app.toml kein `[daten]` hat (seit 2026-10-23) |
+| `i18n` | 1 | UI text through Python gettext: English msgids, German first (`core/locale/<lang>/LC_MESSAGES/zentrale.po` + `.mo`), language from `ZENTRALE_LANG` (since 2026-10-29) |
 | `konto_schluessel` | 1 | Schlüssel-Schema des Kontos, nur Rechnen: Argon2id, HKDF-Infos, Fernet-Verpackung, Notfallschlüssel als Base32 — nachbaubar aus der Doku, Prüfstein `tests/daten/konto_testvektoren.json` (seit 2026-10-22) |
 | `cloud_api` | 1 | Der Draht zur ZENTRALE-Cloud: urllib, Bearer, Fehler als `CloudFehler` mit englischem Satz; Adresse an einer Stelle (`VORGABE`, Env `ZENTRALE_CLOUD`) (seit 2026-10-22) |
 | `cloud_nutzung` | 1 | Gratis-Grenzen der Cloud für den Betreiber: `GET /v1/nutzung` holen, 1 h merken in `~/.local/state/zentrale/nutzung.json`, `warnung()` für Start/Status nie blockierend und nie mit Ausnahme (seit 2026-10-23) |

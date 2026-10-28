@@ -1,0 +1,78 @@
+# ZENTRALE core — German UI texts (gettext). msgid = English (CLAUDE.md "Language").
+# After editing: msgfmt -o zentrale.mo zentrale.po (tests/test_i18n.py checks they match).
+msgid ""
+msgstr ""
+"Project-Id-Version: zentrale\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: de\n"
+
+msgid "the event does not exist"
+msgstr "den Termin gibt es nicht"
+
+msgid "deleting needs basis_sha (which version was seen)"
+msgstr "Löschen braucht basis_sha (welche Fassung gesehen wurde)"
+
+msgid "changed in the cloud meanwhile — not deleted"
+msgstr "inzwischen in der Mitte geändert — nicht gelöscht"
+
+msgid "not a readable event"
+msgstr "kein lesbarer Termin"
+
+msgid "one file holds exactly one event (one UID)"
+msgstr "eine Datei hält genau einen Termin (eine UID)"
+
+msgid "the main part of the event is missing (deleting only with loeschen)"
+msgstr "der Hauptteil des Termins fehlt (Löschen nur mit loeschen)"
+
+msgid "another event lives under this name"
+msgstr "unter diesem Namen liegt ein anderer Termin"
+
+msgid "deleted in the cloud, changed on the phone — not restored"
+msgstr "in der Mitte gelöscht, am Handy geändert — nicht wiederhergestellt"
+
+msgid "the layer “{layer}” does not exist"
+msgstr "die Ebene „{layer}“ gibt es nicht"
+
+msgid "the file name does not match the UID"
+msgstr "der Dateiname passt nicht zur UID"
+
+msgid "this UID exists more than once in the cloud"
+msgstr "diese UID liegt in der Mitte mehrfach"
+
+msgid "this event already exists under another name"
+msgstr "diesen Termin gibt es schon unter einem anderen Namen"
+
+msgid "another file already exists at the target"
+msgstr "am Ziel liegt schon eine andere Datei"
+
+msgid "this event already exists — changing needs basis_sha (which version was seen); nothing overwritten"
+msgstr "diesen Termin gibt es schon — Ändern braucht basis_sha (welche Fassung gesehen wurde), nichts überschrieben"
+
+msgid "changed in the cloud meanwhile, and the version the phone saw is unknown here — nothing overwritten"
+msgstr "inzwischen in der Mitte geändert, und die Fassung, die das Handy sah, kenne ich nicht — nichts überschrieben"
+
+msgid "merging gave no readable event — nothing overwritten"
+msgstr "Zusammenführen ergab keinen lesbaren Termin — nichts überschrieben"
+
+msgid "conflict — {details}"
+msgstr "Widerspruch — {details}"
+
+msgid "another proposal touches the same file"
+msgstr "ein anderer Vorschlag trifft dieselbe Datei"
+
+msgid "{event}: changed differently on the phone and in the cloud"
+msgstr "{event}: am Handy und in der Mitte verschieden geändert"
+
+msgid "{event}: deleted on one side, changed on the other"
+msgstr "{event}: auf der einen Seite gelöscht, auf der anderen geändert"
+
+msgid "Inbox {node}: {path} may not be deleted by it — skipped"
+msgstr "Eingang {node}: {path} löschen darf er nicht — übergangen"
+
+msgid "Inbox {node}: event {path} rejected — {reason}; the cloud stays as it is"
+msgstr "Eingang {node}: Termin {path} abgelehnt — {reason}; die Mitte bleibt, wie sie ist"
+
+msgid "{path}: differs from the cloud (app newly included) — the cloud wins, the version from here is kept aside"
+msgstr "{path}: auf diesem Rechner anders als in der Mitte (App neu dabei) — die Mitte gilt, die Fassung von hier ist aufgehoben"
