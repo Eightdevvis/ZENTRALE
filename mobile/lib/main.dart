@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'ablage/ablage.dart';
+import 'auge/pupillen_route.dart';
 import 'chat/chat_seite.dart';
 import 'chat/chat_steuerung.dart';
 import 'einstellungen/einstellungen.dart';
@@ -58,15 +59,14 @@ class ZenMobile extends StatelessWidget {
         darkTheme: zentraleThema(Brightness.dark),
         home: Builder(
           builder: (context) => Startseite(
-            kiOeffnen: () => Navigator.of(context).push(PageRouteBuilder(
-              transitionDuration: const Duration(milliseconds: 350),
-              pageBuilder: (_, _, _) => ChatSeite(
+            kiOeffnen: (mandel) => Navigator.of(context).push(pupillenRoute<void>(
+              mandel: mandel,
+              farbe: AugeFarben.von(context).pupille,
+              seite: (_) => ChatSeite(
                 steuerung: steuerung,
                 einstellungen: () =>
                     EinstellungenSeite(einstellungen: einstellungen, ablage: ablage),
               ),
-              transitionsBuilder: (_, anim, _, kind) =>
-                  FadeTransition(opacity: anim, child: kind),
             )),
           ),
         ),
