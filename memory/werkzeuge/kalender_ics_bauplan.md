@@ -385,6 +385,8 @@ dann auf eine Property abgebildet, wenn es sich **exakt** zurücklesen lässt.
   base64-verpackt, weil Server Kommas und Semikolons in unbekannten
   Properties verschieden behandeln). Extras füllen beim Lesen nur **Lücken** —
   was am Handy geändert wurde, gewinnt.
+- Die ZENTRALE-App am Handy ändert Termine über den Abgleich, nie über Google:
+  [../betrieb/abgleich_fremde_knoten.md](../betrieb/abgleich_fremde_knoten.md) „Termine vom Handy“.
 - Uhrzeiten, wie sie in Sashas echten Daten stehen (`"10"`, `"9:30"`, `"8"`),
   gehen als 10:00 / 09:30 / 08:00 nach DTSTART — Google zeigt die richtige
   Stunde. Der Originaltext steht in `X-ZENTRALE-ZEIT-ROH` und gilt nur, solange

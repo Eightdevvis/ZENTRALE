@@ -49,6 +49,18 @@ def _daten(roh):
     return abb.datei_lesen(roh)[0]["daten"]
 
 
+def test_abgeschriebenes_bleibt_gleich_wie_in_der_abbildung():
+    """abgleich_vorschlaege (Fundament) darf kalender_ics_abbildung (Dienst)
+    nicht importieren — die Liste VERWALTET und X-ZENTRALE-AUS sind dort
+    abgeschrieben und müssen gleich bleiben."""
+    assert vs.VERWALTET == abb.VERWALTET
+    assert vs.VERWALTET_ABWEICHUNG == abb.VERWALTET_ABWEICHUNG
+    assert vs.X_AUS == abb.X_AUS
+    for liste in ([], ["2026-11-10"], ["2026-11-10", "kein Datum"]):
+        assert vs.x_aus_schreiben(liste) == abb._xkodieren(liste)
+        assert vs.x_aus_lesen(abb._xkodieren(liste)) == liste
+
+
 # ── Ändern ohne Widerspruch ────────────────────────────────────────────
 
 def test_aendern_ohne_widerspruch_behaelt_was_das_handy_nicht_kennt(kalender_welt):

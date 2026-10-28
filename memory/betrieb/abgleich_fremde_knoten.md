@@ -1,6 +1,6 @@
 # Abgleich: das Handy und andere fremde Knoten
 
-**Stand 2026-10-28.** Ausgelagert aus [abgleich.md](abgleich.md) (Regel 9,
+**Stand 2026-10-29.** Ausgelagert aus [abgleich.md](abgleich.md) (Regel 9,
 600 Zeilen). Dort steht der Abgleich der Rechner; hier, wie ein Knoten mit
 der Mitte spricht, der nie zusammenführt (das Handy, [../system/zen_mobile.md](../system/zen_mobile.md)).
 
@@ -23,7 +23,7 @@ Abgleich und übernehmen daraus:
 |---|---|
 | **eigene Datei** des Knotens: `data/gespraeche/<id>/<knoten>.jsonl`, `data/gespraeche/_knoten/<knoten>.json`, `data/rueckmeldungen/<knoten>.jsonl` | gilt so, wie sie ist; auf jeden Rechner geschrieben, **nie überschrieben**, nie ins Inhaltsverzeichnis. Eine örtliche Änderung daran wird beim nächsten Abgleich zurückgesetzt. Konfliktfrei durch Bauart: nur dieser Knoten schreibt sie. |
 | `data/gespraeche/<id>/kopf.json` (neues Gespräch) | **Vorschlag**: gilt nur, solange die Mitte für dieses Gespräch noch keinen Kopf hat. Dann übernimmt ihn der erste Rechner ins Inhaltsverzeichnis; ab da gilt der dort (Umbenennen usw. machen die Rechner). |
-| `data/kalender/<ebene>/<uid>.ics` (neuer Termin, seit 28.10.2026) | **Vorschlag**: eine ganze .ics mit genau einer UID, Dateiname = UID (Zeichen außer `A–Z a–z 0–9 @ . -` → `_`) + `.ics`, die Ebene gibt es in der Mitte schon. Gilt nur, solange es **Pfad und UID nirgends** gibt und kein Grabstein auf dem Pfad liegt — dann übernimmt ihn der erste Rechner wie eine Datei aus der Mitte (auf alle Rechner, über die Brücke zu Google). Schon da oder gelöscht → still übergangen; UID woanders, Ebene fehlt, Name passt nicht → übergangen mit Hinweis. Die eine Regel: `core/abgleich_vorschlaege.kalender_vorschlag_annehmen`. |
+| `data/kalender/<ebene>/<uid>.ics` (Termin: neu seit 28.10., ändern/löschen/Ebene seit 29.10.2026) | **Vorschlag**, unten „Termine vom Handy“: neu, geändert (je VEVENT über die Fassung, die das Handy sah), einzelnes Vorkommen aus/an, Ebene gewechselt, gelöscht (nur ausdrücklich). Ein Widerspruch wird **abgelehnt** — nichts in der Mitte überschrieben. Jeder entschiedene Vorschlag bekommt eine **Quittung** in `inhalt.enc`. Die eine Regel: `core/abgleich_vorschlaege.kalender_vorschlag_annehmen`. |
 | alles andere, falscher Name, unlesbar | übergangen, mit Hinweis |
 
 Ein Vorschlag wird nur geprüft, wenn die App auf diesem Rechner abgleicht
@@ -32,19 +32,77 @@ wartet ein Termin-Vorschlag still im Eingang. Das Handy sieht den Kalender
 erst, wenn ein Rechner ihn in die Mitte gibt (Schalter der Kalender-Session,
 `abgleich_apps.jetzt_erlaubt`) — bis dahin zeigt es „noch nicht in der Mitte“.
 
-**Nächster Schritt (geplant, Kalender-Session):** Ändern, Löschen und einzelne
-Vorkommen ab-/anschalten vom Handy. Das Handy schickt dafür weiter die **ganze
-.ics** in den Eingang; geweitet wird nur `kalender_vorschlag_annehmen`: eine
-vorhandene UID wird dann nicht mehr abgelehnt, sondern je VEVENT (UID +
-RECURRENCE-ID) mit der Fassung der Mitte zusammengeführt (`core/abgleich_ics`,
-späterer LAST-MODIFIED gewinnt). Löschen braucht dann eine eigene Form im
-Eingang (z. B. STATUS:CANCELLED je Termin) — noch nicht entschieden.
-
 **Abweichung vom Vorschlag „Pfad-Spiegel" (Klartext-Pfade):** die Pfade
 bleiben auch für das Handy versteckt (`<name>` = HMAC des Pfads, unten).
 Klartext-Pfade verrieten auf GitHub Gesprächszeiten, Rechnernamen und die
 Namen der Dossiers (Personen). Das Handy kann den Namen genauso leicht
 berechnen; zum Aufzählen liest es das Inhaltsverzeichnis.
+
+### Termine vom Handy (seit 2026-10-29)
+
+Grundsatz (Sasha, 28.10.2026): **die Cloud wird nie überschrieben.** Anders
+als zwischen zwei Rechnern (`core/abgleich_ics`, späterer LAST-MODIFIED
+gewinnt) gewinnt hier nie eine Uhr: das Handy sagt, **welche Fassung der
+Mitte es gesehen hat**, und ein Rechner nimmt nur an, was sich darauf
+zurückführen lässt. Der Umschlag bekommt dafür drei Felder dazu:
+
+```json
+{"format": 1, "pfad": "data/kalender/<ebene>/<name>.ics",
+ "inhalt":    "<die ganze neue .ics, Standard-Base64>",
+ "basis_sha": "<sha aus inhalt.enc der Datei, die das Handy geändert hat>",
+ "basis":     "<diese Datei selbst, Standard-Base64 — empfohlen>",
+ "loeschen":  true}
+```
+
+| Fall | Was das Handy schickt | Was der Rechner tut |
+|---|---|---|
+| **neu** | `pfad` = Ebene + UID-Name (Zeichen außer `A–Z a–z 0–9 @ . -` → `_`) + `.ics`, `inhalt` mit genau einer UID; kein `basis_sha` | annehmen, solange es Pfad und UID nirgends gibt, die Ebene da ist und kein Grabstein auf dem Pfad liegt (wie seit 28.10.) |
+| **ändern** | `pfad` = der **vorhandene** Pfad (auch fremde Namen wie `abc.ics` von Google), ganze `inhalt`, `basis_sha`, besser auch `basis` | je VEVENT (UID + RECURRENCE-ID) drei Wege: nur das Handy geändert → das Handy; nur die Mitte → die Mitte; **beide verschieden → abgelehnt**. Aus der Mitte bleibt, was das Handy nicht mitschickt und ZENTRALE nicht verwaltet (`VERWALTET` in `kalender_ics_abbildung`: DESCRIPTION, VALARMs, Google-Felder, `X-ZENTRALE-*`) |
+| **Vorkommen aus** | ändern: am Haupt-VEVENT `EXDATE` (gleiche Zeitform wie DTSTART) **und** das Datum in `X-ZENTRALE-AUS` | wie ändern |
+| **Vorkommen an** | ändern: das `EXDATE` weg und das Datum aus `X-ZENTRALE-AUS` | wie ändern; vergisst das Handy `X-ZENTRALE-AUS`, gleicht der Rechner die Liste an EXDATE an |
+| **Ebene wechseln** | `pfad` = `data/kalender/<neue Ebene>/<UID-Name>.ics`, `inhalt`, `basis_sha` (+ `basis`) der Datei am **alten** Ort; kein Löschen dazu | in EINEM Stand: neue Datei da, alte mit Grabstein weg — keine Doppelten, kein Löschen+Neu |
+| **löschen** | `pfad`, `"loeschen": true`, `basis_sha`; kein `inhalt` | nur, wenn die Mitte noch genau diese Fassung hat (sha gleich) → Grabstein; sonst abgelehnt |
+
+- **Basis:** `sha256(Mitte) == basis_sha` → die Mitte ist unverändert, das
+  Handy gilt. Sonst braucht der Rechner die gesehene Fassung: aus `basis`
+  (sha muss passen) oder aus seiner eigenen Basis. Hat er sie nicht → abgelehnt
+  („kenne ich nicht“). Ohne `basis_sha` wird nichts Vorhandenes geändert.
+  LAST-MODIFIED/SEQUENCE als Ersatz sind bewusst nicht gebaut: die Uhr des
+  Handys verrät nicht, ob die Mitte inzwischen geändert wurde.
+- **Gelöscht wird nie, weil etwas fehlt:** eine fehlende Eingangsdatei
+  bewirkt nichts; eine .ics ohne Haupt-VEVENT (nur RECURRENCE-IDs oder leer)
+  wird abgelehnt. Eine weggelassene Abweichung (RECURRENCE-ID) gilt als
+  zurückgenommen — nur, wenn die Mitte sie nicht geändert hat.
+- **Entfernen durch Weglassen geht nicht** für DESCRIPTION, VALARM und andere
+  nicht verwaltete Felder (sie kämen aus der Mitte zurück) — eine Notiz leert
+  das Handy mit `DESCRIPTION:` (leer). Pausen (`X-ZENTRALE-PAUSE`) ändert nur
+  ZENTRALE.
+- **Abgelehnt** heißt: die Mitte bleibt, die Fassung vom Handy bleibt im
+  Eingang, bis das Handy die Quittung liest, und liegt auf dem Rechner unter
+  `<abgleich_dir>/konflikte/eingang-<knoten>/<umschlag>/<pfad>`; ein Hinweis
+  steht im Zustand (TUI „Technik“, `GET /api/abgleich`) — einmal, nicht bei
+  jedem Abgleich.
+- **Quittung** in `inhalt.enc` (vom Rechner geschrieben):
+
+```json
+"eingang": {"handy": {"<pfad>": {"umschlag": "<sha256-hex des entschlüsselten Umschlags>",
+                                 "ergebnis": "angenommen" | "abgelehnt" | "erledigt",
+                                 "grund": "…", "am": "<ISO-Zeit>"}}}
+```
+
+  Das Handy vergleicht `umschlag` mit dem sha256 seines Umschlag-Klartexts
+  (die JSON-Bytes vor dem Verschlüsseln): passt er, ist der Vorschlag
+  entschieden → aus dem Eingang räumen; bei `abgelehnt` Sasha den `grund`
+  zeigen und die eigene Fassung behalten, bis Sasha wählt (neu auf der
+  aktuellen Mitte vorschlagen oder verwerfen). Ein Umschlag mit Quittung
+  wird nicht noch einmal geprüft; die Quittung fällt, sobald der Umschlag
+  aus dem Eingang ist. `erledigt` = es gab nichts mehr zu tun (schon drin,
+  schon gelöscht). Ein noch nicht entschiedener Umschlag darf ersetzt werden
+  (gleiche `basis_sha`, ganze neue Datei).
+- `X-ZENTRALE-AUS` ist `b64:` + Base64url(JSON-Liste von `"JJJJ-MM-TT"`,
+  `sort_keys`), roh-JSON wird auch gelesen.
+- Prüfstein: `tests/test_abgleich_handy_aendern.py` (ein Handy nur nach
+  dieser Beschreibung, wie `tests/test_abgleich_handy.py`).
 
 ### Format für fremde Knoten
 
@@ -91,8 +149,12 @@ name(pfad)       = die ersten 32 Zeichen von hex( HMAC-SHA256(namen_schluessel, 
 ```json
 {"format": 1,
  "dateien":   {"<pfad>": {"name": "<name(pfad)>", "sha": "<SHA256-hex des Klartexts>"}},
- "geloescht": {"<pfad>": {"sha": "…", "von": "<knoten>", "am": "<ISO-Zeit>"}}}
+ "geloescht": {"<pfad>": {"sha": "…", "von": "<knoten>", "am": "<ISO-Zeit>"}},
+ "eingang":   {"<knoten>": {"<pfad>": {"umschlag": "…", "ergebnis": "…", "grund": "…", "am": "…"}}}}
 ```
+
+`eingang` (seit 2026-10-29, fehlt, solange es keine Quittung gibt): die
+Quittungen für Termin-Vorschläge, unten „Termine vom Handy“.
 
 Den Inhalt einer Datei liest man aus `d/<name>.enc`; der `sha` muss zum
 entschlüsselten Klartext passen. Nur lesen — ein fremder Knoten schreibt
@@ -109,10 +171,11 @@ weder `inhalt.enc` noch `d/`.
 Immer die **ganze** Datei (eine `.jsonl` wächst, die Eingangsdatei wird
 ersetzt). Da nur dieser Knoten in `knoten/<knoten>/` schreibt, kann ein `PUT`
 nur scheitern, wenn er selbst gleichzeitig schreibt; die Rechner fassen den
-Eingang nie an. Gelöscht wird nur eines: ein **Termin-Vorschlag**, sobald das
-Inhaltsverzeichnis den Pfad nennt (übernommen) oder einen Grabstein dafür hat
-— das räumt der Knoten selbst aus seinem Eingang (Gespräche werden nie
-gelöscht, nur archiviert).
+Eingang nie an. Gelöscht wird nur eines: ein **Termin-Vorschlag**, sobald `inhalt.enc` eine
+Quittung mit seinem `umschlag` hat (oben „Termine vom Handy“; für neue
+Termine reicht wie bisher: der Pfad steht im Inhaltsverzeichnis oder hat
+einen Grabstein) — das räumt der Knoten selbst aus seinem Eingang (Gespräche
+werden nie gelöscht, nur archiviert).
 
 **Über die Cloud (seit 2026-10-28, das Handy):** dieselben Namen und
 Umschläge, nur über die Routen der Cloud

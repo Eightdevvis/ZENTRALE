@@ -1,6 +1,6 @@
 # Abgleich über die Mitte
 
-**Stand 2026-10-08.** Sasha: *„der sync zum pc war immer iwie etwas cursed,
+**Stand 2026-10-08, ergänzt 2026-10-29.** Sasha: *„der sync zum pc war immer iwie etwas cursed,
 weil sich die sachen gegenseitig verwirrt haben. besser wenn jetzt gegen eine
 cloud, einen server einfach geprüft wird. die idee war ja schon git als cloud
 zu nutzen und dann später wenn der pc mit netzwerk ready ist, die cloud mit
@@ -71,17 +71,22 @@ Widerspruch ist gut, aber nicht vorrangig.
 - **Erstes Verbinden** (keine Basis, `erstabgleich`): die Mitte gilt Datei für
   Datei; eine abweichende Fassung von hier liegt unter `konflikte/<zeit>/`
   mit Hinweis — nie still weg. Was es nur hier gibt, kommt dazu.
-- **Fremde Knoten** (Handy) schreiben nie ins Inhaltsverzeichnis; ihre
-  Vorschläge gelten nur, wo es noch nichts gibt
-  ([abgleich_fremde_knoten.md](abgleich_fremde_knoten.md)). Das erste
-  Anmelden am Handy ersetzt nichts in der Cloud.
-- **Offen** (geprüft 28.10.2026, nicht geändert): eine wieder angewählte App
-  (`abgleich_apps`, Basis zugeschnitten) gleicht ab wie zwei Fassungen ohne
-  Basis, nicht wie „Mitte gilt“ — JSON je Eintrag (in der Mitte Gelöschtes
-  käme von hier zurück), Text mit beiden Fassungen, .ics nach dem späteren
-  LAST-MODIFIED (die Fassung von hier kann die der Mitte ersetzen). Fix
-  bräuchte eine Marke „App neu dabei“ je Gerät, damit diese Dateien wie im
-  `erstabgleich` laufen.
+- **Fremde Knoten** (Handy) schreiben nie ins Inhaltsverzeichnis. Ein
+  Gesprächskopf gilt nur, wo es noch keinen gibt; ein Termin darf geändert
+  oder gelöscht werden, aber nur auf der Fassung, die das Handy gesehen hat
+  (`basis_sha`) — ein Widerspruch wird abgelehnt, beide Fassungen bleiben, mit
+  Hinweis und Quittung ([abgleich_fremde_knoten.md](abgleich_fremde_knoten.md)
+  „Termine vom Handy“). Das erste Anmelden am Handy ersetzt nichts in der Cloud.
+- **App neu dabei** (seit 29.10.2026, vorher offen): wird eine App auf einem
+  Gerät (wieder) angewählt — oder darf sie erst jetzt abgleichen (Kalender
+  bekommt einen Anschluss) —, laufen ihre Dateien wie im `erstabgleich`: die
+  Mitte gilt, eine abweichende Fassung von hier liegt unter
+  `konflikte/<zeit>/` (Hinweis „App neu dabei“), Gelöschtes kommt nicht
+  zurück, was es nur hier gibt, kommt dazu. Vorher lief es über die alte
+  Basis — eine .ics mit späterem LAST-MODIFIED konnte die der Mitte ersetzen.
+  Merkzettel je Gerät: `<abgleich_dir>/apps_dabei.json` (die Muster des
+  letzten erfolgreichen Abgleichs; fehlt er, gilt nichts als neu). Pflicht-Apps
+  (Adapter, z. B. Zugangsdaten ab der Anmeldung) zählen nie als neu.
 
 ## Die Mitte ist austauschbar
 
@@ -156,8 +161,8 @@ einer App.
   Abgleich dieser App.
 - Abgewählt: hier **weder geholt noch gesendet**; in der Mitte bleibt sie
   unberührt. Auch die Basis wird zugeschnitten — sonst sähe sie aus wie
-  „überall gelöscht". Wieder anwählen: die Mitte kommt dazu wie bei einem
-  neuen Gerät.
+  „überall gelöscht". Wieder anwählen: die Mitte gilt wie bei einem neuen
+  Gerät (oben „App neu dabei“).
 
 ## Verschlüsselt — was auf GitHub liegt
 
@@ -173,7 +178,7 @@ So liegt es in der Mitte:
 
 ```
 LIESMICH.md                 fester Erklärtext, kein Inhalt
-inhalt.enc                  verschlüsselt: welche Datei wie heißt, ihr Prüfwert, Grabsteine
+inhalt.enc                  verschlüsselt: welche Datei wie heißt, ihr Prüfwert, Grabsteine, Quittungen fürs Handy
 d/<name>.enc                jede Datei einzeln verschlüsselt (schreiben nur die Rechner)
 knoten/<knoten>/<name>.enc  Eingang eines fremden Knotens, z. B. des Handys
 ```
@@ -461,7 +466,8 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git und http (`HttpMitte`) |
 | `core/abgleich_apps.py`, `core/eingebaute_apps.py` | Apps mit Daten, die Wahl je App und Gerät, Übernahme der alten Bereiche |
 | `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |
-| `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten, Vorhaben, Hinweise, Zustand |
+| `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten (Quittungen), Apps neu dabei, Vorhaben, Hinweise, Zustand |
+| `core/abgleich_vorschlaege.py` | was ein fremder Knoten vorschlagen darf: Gesprächskopf, Termine (neu/ändern/löschen/Ebene, je VEVENT ohne Überschreiben) |
 | `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |
 | `scripts/abgleich.py` | der Befehl |
 | `ui/routen/abgleich.py` | `GET /api/abgleich` |

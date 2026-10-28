@@ -32,12 +32,27 @@
 # Löschen nur ausdrücklich (`loeschen: true` + `basis_sha`), nie, weil eine
 # Datei fehlt. Reine Funktionen: Pfade und Bytes rein, Entscheidung raus.
 
+import base64
 import hashlib
+import json
 import re
-from datetime import datetime
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import abgleich_ics
 import dateien
+
+# Was ZENTRALE an einem VEVENT selbst verwaltet — GLEICH wie
+# kalender_ics_abbildung.VERWALTET(_ABWEICHUNG). Abgeschrieben, weil der
+# Abgleich Fundament ist und die Abbildung ein Dienst (memory/system/
+# bauplan_kern.md: Importe nur nach unten); tests/test_abgleich_handy_aendern
+# prüft, dass beide gleich bleiben. Ebenso X-ZENTRALE-AUS und sein Format.
+VERWALTET = frozenset({"UID", "DTSTAMP", "LAST-MODIFIED", "SUMMARY", "LOCATION",
+                       "DTSTART", "DTEND", "DURATION", "RRULE", "EXDATE",
+                       "RECURRENCE-ID", "CATEGORIES", "COLOR"})
+VERWALTET_ABWEICHUNG = VERWALTET | {"STATUS"}
+X_AUS = "X-ZENTRALE-AUS"
+_TZ = ZoneInfo("Europe/Berlin")
 
 _EBENE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")   # wie kalender_ics.ordner_fuer
 _SHA = re.compile(r"^[0-9a-f]{64}$")
@@ -149,19 +164,47 @@ def _aus_angleichen(ev):
     Vorkommen wieder an), muss es auch aus X-ZENTRALE-AUS — sonst läse
     ZENTRALE es weiter als aus. Ein neues EXDATE ohne Eintrag liest ZENTRALE
     ohnehin als aus (kalender_ics_abbildung._routine_lesen)."""
-    import kalender_ics_abbildung as abb
-    x = abb._xdekodieren(ev.get(abb.X_AUS))
+    x = x_aus_lesen(ev.get(X_AUS))
     if not isinstance(x, list):
         return
     ex = set()
-    for liste in abb._liste(ev.get("EXDATE")):
+    werte = ev.get("EXDATE")
+    for liste in (werte if isinstance(werte, list) else [werte] if werte is not None else []):
         for v in getattr(liste, "dts", []):
-            w = abb._lokal(v.dt)
-            ex.add(w.date() if isinstance(w, datetime) else w)
-    neu = [a for a in x if not isinstance(a, str) or abb._datum(a) is None or abb._datum(a) in ex]
+            w = v.dt
+            if isinstance(w, datetime):
+                w = (w.astimezone(_TZ) if w.tzinfo else w).date()
+            ex.add(w)
+    neu = [a for a in x if not isinstance(a, str) or _tag(a) is None or _tag(a) in ex]
     if neu != x:
-        ev.pop(abb.X_AUS, None)
-        ev.add(abb.X_AUS, abb._xkodieren(neu))
+        ev.pop(X_AUS, None)
+        ev.add(X_AUS, x_aus_schreiben(neu))
+
+
+def _tag(s):
+    try:
+        return date.fromisoformat(s[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def x_aus_lesen(wert):
+    """X-ZENTRALE-AUS: `b64:` + Base64url(JSON), tolerant auch rohes JSON
+    (wie kalender_ics_abbildung._xdekodieren). None, wenn nichts drinsteht."""
+    if wert is None:
+        return None
+    s = str(wert)
+    try:
+        if s.startswith("b64:"):
+            return json.loads(base64.urlsafe_b64decode(s[4:].encode("ascii")))
+        return json.loads(s)
+    except Exception:       # noqa: BLE001
+        return None
+
+
+def x_aus_schreiben(obj) -> str:
+    roh = json.dumps(obj, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    return "b64:" + base64.urlsafe_b64encode(roh).decode("ascii")
 
 
 def _uebernehmen(p, m, rid):
@@ -170,11 +213,10 @@ def _uebernehmen(p, m, rid):
     kalender_ics_abbildung.zusammenfuehren: DESCRIPTION, fremde VALARMs,
     Google-Felder, X-ZENTRALE-* — ein Knoten, der sie beim Lesen verliert,
     löscht sie so nicht). Dazu X-ZENTRALE-AUS passend zu EXDATE."""
-    import kalender_ics_abbildung as abb
     ev = _event(p)
     if m is not None:
         alt = _event(m)
-        verwaltet = abb.VERWALTET_ABWEICHUNG if rid else abb.VERWALTET
+        verwaltet = VERWALTET_ABWEICHUNG if rid else VERWALTET
         schon = {n for n, _w in ev.property_items(recursive=False)}
         for n, w in alt.property_items(recursive=False):
             if n in ("BEGIN", "END") or n in verwaltet or n in schon:
