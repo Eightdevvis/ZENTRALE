@@ -43,6 +43,9 @@ ein neues Gerät (Mini-PC) sonst ohne Kalender und ohne KI dasteht.
    Gerät hat nach dem Login und einem Abgleich eine KI.
 7. **Ist keine Brücke online**, läuft ZENTRALEs Kalender weiter (Cloud);
    nur die Google-Seite hinkt hinterher und holt beim nächsten Lauf auf.
+8. **Kalender über die Mitte, ohne Google** (seit 28.10.2026): Anschluss
+   `kalender-mitte` (Art `kalender-mitte`, keine Brücke, kein Timer) — siehe
+   „Der Schalter kalender-mitte" unten.
 
 ## Dateien
 
@@ -91,6 +94,44 @@ Gemessen (vdirsyncer 0.21.0): ein kopierter Stand mit anderen Datei-Zeiten,
 Inodes und Pfaden löst keine Übertragung aus — vdirsyncer vergleicht den
 Inhalt. Nur `<paar>.collections` hängt an der Konfiguration des Geräts und
 wird neu entdeckt.
+
+## Der Schalter kalender-mitte (seit 28.10.2026)
+
+Anlass: Google wird abgelöst, der Kalender soll zwischen Geräten und Handy
+über die Mitte laufen — bisher ging das nur mit einem Google-Anschluss.
+
+- **Warum ein Anschluss und keine Einstellung:** eine Einstellung
+  (`ai_config`, wo `abgleich_weg` liegt) gilt je Gerät und reist nicht; der
+  Kalender über die Mitte muss aber auf ALLEN Geräten gelten, und der
+  Ursprung braucht `eingerichtet.auf`. Beides hat ein Anschluss schon (immer
+  abgeglichen, Schema, `zentrale adapter` zeigt ihn). Art `kalender-mitte` in
+  `KALENDER_ARTEN`, nicht in `MIT_BRUECKE`.
+- **Vorgabe aus.** Nichts legt ihn von selbst an. Einschalten nur bewusst:
+  `zentrale adapter calendar` → `adapter_ablauf.kalender_mitte_einschalten`.
+- **Wer zuerst einschaltet, ist der Ursprung** (Sasha: die Mitte ist die
+  Wahrheit). Das Einschalten gleicht ERST ab (bringt einen Anschluss, den ein
+  anderes Gerät schon angelegt hat); gibt es danach noch keinen
+  Kalender-Anschluss → `als_ursprung_merken`, sein Kalender füllt die Mitte.
+  Gibt es schon einen (Mitte oder Google) → kein Merkzettel; beim nächsten
+  Abgleich legt `vor_abgleich` den alten `data/kalender/` nach
+  `kalender-vor-cloud/` (nie gelöscht). Ohne Konto oder offline: nichts
+  eingeschaltet. Ursprung = `eingerichtet.auf` des zuerst eingerichteten
+  Kalender-Anschlusses (`kalender_ursprung`).
+- **Kein Google:** `kalender_anschluss()` liefert weiter nur Anschlüsse mit
+  Brücke. `kalender_ohne_bruecke()` → `zentrale adapter run` (Timer) und
+  `scripts/kalender_sync.py` tun nichts — auch nicht mit einer alten
+  eigenen vdirsyncer-Konfiguration (sonst zwei Wege: Doppelte, Geister).
+  Liegt zusätzlich `google-kalender` an, fährt dessen Brücke wie bisher.
+- **Ausschalten:** `data/adapter/anschluesse/kalender-mitte.json` entfernen
+  (abgleichend) — dann schneidet `jetzt_erlaubt` den Kalender wieder heraus.
+  Kein eigener Befehl (noch nicht nötig).
+- **Lücke (im Abgleich, nicht hier):** ob die Mitte schon Kalender-Dateien
+  hat, prüft das Einschalten nur über den Anschluss. Schalten zwei Geräte
+  gleichzeitig ein, bevor eines abgeglichen hat, halten sich beide für den
+  Ursprung. Genauer ginge es nur in `core/abgleich*` (Mitte nach
+  `data/kalender/**` fragen).
+- Tests: `tests/test_adapter.py` (`test_mitte_*`),
+  `tests/test_kalender_cloud.py::test_mitte_ohne_google_erster_fuellt_spaeterer_legt_beiseite`.
 
 ## Gebaut (2026-10-24)
 
@@ -142,3 +183,5 @@ wird neu entdeckt.
 
 - **2026-10-24** — Plan nach dem Beitritt des Mini-PCs; gebaut, die Brücke
   als Mietvertrag mit nahtlosem Wechsel (Sasha: kein festes Gerät).
+- **2026-10-28** — Schalter `kalender-mitte`: Kalender über die Mitte ohne
+  Google; Ursprung nur, wer zuerst einschaltet.

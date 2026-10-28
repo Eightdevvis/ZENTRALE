@@ -146,11 +146,22 @@ def _wann(d: datetime) -> str:
     return d.strftime("%d.%m. %H:%M")
 
 
+def _google_aus() -> bool:
+    try:
+        import adapter      # Schicht 1 wie dieses Modul; spät, nur wenn gefragt
+        return adapter.kalender_ohne_bruecke()
+    except Exception:       # noqa: BLE001 — ohne lesbaren Adapter gilt der Stand
+        return False
+
+
 def bewerten(z: dict | None = None, jetzt: datetime | None = None) -> dict:
     """Der Stand plus Urteil: {bekannt, problem, alt, hinweis, kurz, …Felder}.
     `hinweis` ist die fertige Warnzeile („⚠ google-sync: Zugang abgelaufen —
     seit 14.10. 16:33"), `kurz` die leise Zeile ohne Problem („google ✓ 16:31")."""
-    z = lesen() if z is None else z
+    if z is None:
+        # Kalender nur über die Mitte (kalender-mitte, ohne Google-Anschluss):
+        # Google fährt bewusst niemand — ein alter Stand ist kein „läuft nicht".
+        z = None if _google_aus() else lesen()
     if not z:
         return {"bekannt": False, "problem": False, "alt": False,
                 "hinweis": None, "kurz": None}

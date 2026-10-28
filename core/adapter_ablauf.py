@@ -1,6 +1,6 @@
 # core/adapter_ablauf.py
 #
-# Die zwei Abläufe des Adapters (memory/hub/adapter.md):
+# Die Abläufe des Adapters (memory/hub/adapter.md):
 #
 #   einrichten()     was auf diesem Gerät schon angekabelt ist, in den
 #                    Adapter holen — KI-Schlüssel aus data/ai_config.json,
@@ -10,6 +10,9 @@
 #                    Brücke nehmen oder verlängern → abgleichen → nur wenn
 #                    der Abgleich den eigenen Namen zurückbrachte, Google
 #                    abgleichen → Token und Stand zurück → abgleichen.
+#   kalender_mitte_einschalten()
+#                    der Schalter „Kalender über die Mitte, ohne Google":
+#                    Anschluss `kalender-mitte` (keine Brücke, kein Timer).
 #
 # Fundament (Schicht 1). Den Lauf von vdirsyncer selbst (mit allen
 # Sicherungen, scripts/kalender_sync.py) gibt der Aufrufer herein.
@@ -69,6 +72,43 @@ def einrichten(vdir=None, wurzel=None, kalender=True) -> dict:
                       _stand_datei(), dateien.knoten(), wurzel)
     raus["kalender"] = "angelegt"
     return raus
+
+
+def kalender_mitte_einschalten(wurzel) -> tuple:
+    """Der Schalter „Kalender über die Mitte, ohne Google" (Sasha 28.10.2026:
+    Google wird abgelöst). Legt den Anschluss `kalender-mitte` an — Art ohne
+    Brücke: data/kalender/** gleicht über die Mitte ab, niemand spricht mit
+    Google. Die Mitte ist die Wahrheit; Ursprung ist nur, wer als ERSTER
+    einschaltet:
+
+      1. erst abgleichen — bringt einen Kalender-Anschluss, den ein anderes
+         Gerät schon angelegt hat (ohne Mitte oder offline: nichts tun);
+      2. gab es schon einen Kalender-Anschluss, ist dieses Gerät NICHT der
+         Ursprung: kein Merkzettel, beim nächsten Abgleich wandert sein alter
+         data/kalender/ beiseite (vor_abgleich, nie gelöscht) und es übernimmt
+         den Stand der Mitte;
+      3. sonst ist es der Ursprung (als_ursprung_merken): sein Kalender füllt
+         die Mitte und wandert nie beiseite;
+      4. abgleichen — der Anschluss (und beim Ursprung der Kalender) geht
+         gleich hinaus.
+
+    Löscht nie eine .ics. Ausschalten = Anschluss-Datei entfernen (dann
+    schneidet abgleich_apps.jetzt_erlaubt den Kalender wieder heraus).
+    → (ergebnis, fehler): ergebnis ∈ ursprung | dazu | vorhanden |
+    ohne_mitte | offline; fehler = Text des letzten Abgleichs oder None."""
+    if nur_lokal():
+        return "ohne_mitte", None
+    fehler = _abgleichen(wurzel)
+    if fehler:
+        return "offline", fehler
+    if adapter.lesen(adapter.MITTE_ID, wurzel):
+        return "vorhanden", _abgleichen(wurzel)
+    schon = adapter.kalender_ueber_cloud(wurzel)
+    adapter.speichern(adapter.neu(adapter.MITTE_ID, "kalender-mitte", "kalender",
+                                  "Calendar through your account"), wurzel)
+    if not schon:
+        adapter.als_ursprung_merken(abgleich.ordner())
+    return ("dazu" if schon else "ursprung"), _abgleichen(wurzel)
 
 
 def _stand_datei():

@@ -424,6 +424,9 @@ def adapter_lauf(term):
     sammelt. Ohne vdirsyncer bleibt das Gerät Verbraucher (adapter_ablauf)."""
     import importlib.util
     import adapter_vdirsyncer
+    if adapter.kalender_ohne_bruecke():
+        term.sag(t("ad_run_mitte"))
+        return 0
     if adapter.kalender_anschluss() is None and not os.path.exists(adapter_vdirsyncer.vorgabe_config()):
         term.sag(t("ad_run_nothing"))
         return 0
@@ -432,6 +435,23 @@ def adapter_lauf(term):
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
     return modul.main(["zentrale"])
+
+
+def adapter_kalender(term):
+    """`zentrale adapter calendar`: der Schalter „Kalender über die Mitte,
+    ohne Google" (adapter_ablauf.kalender_mitte_einschalten). Bewusst ein
+    eigener Schritt — nichts schaltet ihn von selbst ein."""
+    ergebnis, fehler = adapter_ablauf.kalender_mitte_einschalten(WURZEL)
+    if ergebnis == "ohne_mitte":
+        term.sag(t("ad_cal_hub_no_account"), "warn")
+        return 1
+    if ergebnis == "offline":
+        term.sag(t("ad_cal_hub_offline", text=fehler), "fehler")
+        return 1
+    term.sag(t("ad_cal_hub_" + ergebnis), *(() if ergebnis == "vorhanden" else ("gut",)))
+    if fehler:
+        term.sag(t("ad_cal_hub_sync_later", text=fehler), "warn")
+    return 0
 
 
 # ── Timer (zentrale_cli/timer.py) ──────────────────────────────────────

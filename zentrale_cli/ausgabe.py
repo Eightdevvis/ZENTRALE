@@ -157,7 +157,7 @@ GRUPPEN = [
     ("group_account", ["cmd_login", "cmd_logout", "cmd_account_create",
                        "cmd_account_recover", "cmd_account_password"]),
     ("group_sync", ["cmd_sync", "cmd_status", "cmd_devices", "cmd_adapter", "cmd_adapter_setup",
-                    "cmd_adapter_run", "cmd_timers", "cmd_timers_install", "cmd_timers_remove"]),
+                    "cmd_adapter_run", "cmd_adapter_calendar", "cmd_timers", "cmd_timers_install", "cmd_timers_remove"]),
     ("group_program", ["cmd_cloud_usage", "cmd_update", "cmd_version", "cmd_help"]),
 ]
 

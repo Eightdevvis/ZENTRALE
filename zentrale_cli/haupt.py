@@ -21,6 +21,7 @@ BEFEHLE = {
     ("adapter",): befehle.adapter_liste,
     ("adapter", "setup"): befehle.adapter_setup,
     ("adapter", "run"): befehle.adapter_lauf,
+    ("adapter", "calendar"): befehle.adapter_kalender,
     ("timers",): befehle.timers,
     ("cloud", "usage"): befehle.cloud_usage,
     ("update",): aktualisieren.update,

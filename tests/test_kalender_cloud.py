@@ -417,3 +417,28 @@ def test_ohne_konto_ist_jedes_geraet_seine_eigene_bruecke(welt, monkeypatch):
     adapter_ablauf.einrichten(vdir=lap.vdir, wurzel=lap.wurzel)
     assert lap.google_lauf() == 0 and lap.laeufe == 1
     assert bruecke.lesen("google-kalender", lap.wurzel) is None
+
+
+# ── Kalender über die Mitte, ohne Google (kalender-mitte) ──────────────
+
+def test_mitte_ohne_google_erster_fuellt_spaeterer_legt_beiseite(welt):
+    """Der Laptop schaltet zuerst ein: sein Kalender füllt die Mitte. Der
+    Mini-PC schaltet später ein: sein alter Kalender wandert beiseite (nie
+    gelöscht), er übernimmt den Stand der Mitte. Kein Gerät fährt Google —
+    auch nicht der Laptop mit seiner eigenen vdirsyncer-Konfiguration."""
+    lap = welt.laptop.ich()
+    vorher = lap.termine()
+    assert adapter_ablauf.kalender_mitte_einschalten(lap.wurzel)[0] == "ursprung"
+    assert lap.termine() == vorher
+    mini = welt.minipc.ich()
+    (mini.vdir / "termine").mkdir(parents=True)
+    (mini.vdir / "termine" / "alt.ics").write_text(_ics("alt", "Nur auf dem Mini-PC"))
+    assert adapter_ablauf.kalender_mitte_einschalten(mini.wurzel)[0] == "vorhanden"
+    welt.minipc.abgleichen()
+    assert sorted(_uids(mini.termine())) == ["g1", "g2"]
+    beiseite = list((mini.ordner / "abgleich" / "kalender-vor-cloud").rglob("alt.ics"))
+    assert len(beiseite) == 1
+    welt.laptop.abgleichen()
+    assert "alt" not in _uids(welt.laptop.termine())
+    assert welt.laptop.google_lauf() == 0 and welt.minipc.google_lauf() == 0
+    assert welt.laptop.laeufe == 0 and welt.minipc.laeufe == 0

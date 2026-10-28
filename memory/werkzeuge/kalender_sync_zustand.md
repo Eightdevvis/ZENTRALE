@@ -34,6 +34,11 @@ erkennen, bewerten, alarme).
 
 ## Mit dem Adapter (seit 24.10.2026)
 
+Mit dem Schalter `kalender-mitte` ohne Google-Anschluss (seit 28.10.2026,
+[../hub/adapter.md](../hub/adapter.md)) fährt kein Gerät Google:
+`scripts/kalender_sync.py` endet mit 0 und schreibt keinen neuen Stand, und
+`bewerten()` liest den alten Stand nicht (keine Warnung „läuft nicht“).
+
 Google fährt nur das Gerät mit dem Mietvertrag ([../hub/adapter.md](../hub/adapter.md)).
 Es legt seinen Stand nach jedem Lauf mit `bruecke: <gerät>` in den Vertrag;
 jedes andere Gerät übernimmt ihn bei seinem Timer-Lauf in die eigene Datei

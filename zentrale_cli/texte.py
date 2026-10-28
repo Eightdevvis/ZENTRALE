@@ -35,6 +35,7 @@ EN = {
     "cmd_adapter": ("adapter", "connected services (AI keys, calendar) and which device bridges"),
     "cmd_adapter_setup": ("adapter setup", "bring in what this device already has connected"),
     "cmd_adapter_run": ("adapter run", "run the calendar bridge once (what the timer does)"),
+    "cmd_adapter_calendar": ("adapter calendar", "sync the calendar through your account, without Google"),
     "cmd_timers": ("timers", "the background timers: sync and calendar bridge"),
     "cmd_timers_install": ("timers install", "install or repair the timers and start them"),
     "cmd_timers_remove": ("timers remove", "stop the timers and remove them"),
@@ -208,6 +209,17 @@ EN = {
     "ad_setup_cal_none": "No vdirsyncer setup on this device ({pfad}) — no calendar connection.",
     "ad_setup_cal_nopair": "The vdirsyncer setup has no pair writing into ZENTRALE's calendar folder — nothing created.",
     "ad_setup_next": "Next: 'zentrale sync' — then every device of your account has it.",
+    "ad_run_mitte": "The calendar syncs through your account only (no Google connection) — nothing to do.",
+    "ad_cal_hub_ursprung": ("Calendar now syncs through your account, without Google.\n"
+                            "This device was first: its calendar fills your account. Other devices put\n"
+                            "their old calendar aside (never deleted) and take this one."),
+    "ad_cal_hub_dazu": ("Calendar through your account is switched on. Another device brought the\n"
+                        "calendar first: on the next sync this device puts its old calendar aside\n"
+                        "(never deleted) and takes the one from your account."),
+    "ad_cal_hub_vorhanden": "Calendar already syncs through your account.",
+    "ad_cal_hub_no_account": "Not logged in — the calendar can only sync through your account. Run 'zentrale login' first.",
+    "ad_cal_hub_offline": "Could not sync first ({text}) — nothing switched on. Try again when online.",
+    "ad_cal_hub_sync_later": "Switched on, but the sync afterwards failed ({text}) — the next 'zentrale sync' catches up.",
     "ad_run_nothing": "No calendar connection and no vdirsyncer setup on this device — nothing to do.",
 
     # ── Timer (zentrale_cli/timer.py) ───────────────────────────────

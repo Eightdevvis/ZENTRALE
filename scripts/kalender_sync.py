@@ -292,9 +292,14 @@ def _google_sichern(exe) -> bool:
 
 def main(argv=None) -> int:
     """Ein Lauf. Mit Kalender-Anschluss über den Adapter (nur die Brücke
-    fährt), sonst wie bisher mit der eigenen Konfiguration."""
+    fährt); Kalender nur über die Mitte (kalender-mitte) → kein Google; sonst
+    wie bisher mit der eigenen Konfiguration."""
     a = _anschluss()
     if a is None:
+        if _nur_mitte():
+            print("Kalender läuft über die Mitte (kalender-mitte), ohne Google-Anschluss — "
+                  "kein Google-Abgleich.")
+            return 0
         return _ein_lauf(argv)
     return _ueber_adapter(a, argv)
 
@@ -306,6 +311,18 @@ def _anschluss():
     except Exception as e:      # noqa: BLE001 — ohne Adapter gilt der alte Weg
         print("Adapter nicht lesbar:", e)
         return None
+
+
+def _nur_mitte() -> bool:
+    """Kalender über die Mitte ohne Brücke: dann fährt hier auch die alte
+    eigene vdirsyncer-Konfiguration nicht (sonst zwei Wege zu Google).
+    Unlesbarer Adapter → wie in _anschluss der alte Weg."""
+    try:
+        import adapter
+        return adapter.kalender_ohne_bruecke()
+    except Exception as e:      # noqa: BLE001
+        print("Adapter nicht lesbar:", e)
+        return False
 
 
 def _ueber_adapter(a, argv) -> int:

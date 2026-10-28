@@ -14,7 +14,9 @@
 #                                        (core/adapter_bruecke.py)
 #
 # Der Kalender über die Cloud: data/kalender/** gleicht nur ab, wenn es einen
-# Kalender-Anschluss gibt (kalender_ueber_cloud). Ein Gerät, das zum ersten
+# Kalender-Anschluss gibt (kalender_ueber_cloud) — mit Brücke zu Google
+# (kalender-vdirsyncer) oder ohne (kalender-mitte: nur die Mitte, kein fremder
+# Dienst; eingeschaltet über adapter_ablauf.kalender_mitte_einschalten). Ein Gerät, das zum ersten
 # Mal mitmacht und nicht selbst der Ursprung ist, legt seinen alten Kalender
 # vorher beiseite (vor_abgleich) — sonst trüge es längst gelöschte Termine in
 # die Cloud, und die Brücke lüde sie zu Google hoch (Geister).
@@ -43,6 +45,12 @@ KALENDER_MUSTER = "data/kalender/**"
 # Arten, die mit einem fremden Dienst abgleichen und deshalb genau EINE
 # Brücke brauchen (die übrigen nutzt jedes Gerät selbst).
 MIT_BRUECKE = ("kalender-vdirsyncer",)
+
+# Arten, mit denen data/kalender/** über die Mitte abgleicht. kalender-mitte
+# hat keinen fremden Dienst und keine Brücke: der Schalter „Kalender über die
+# Mitte, ohne Google" (memory/hub/adapter.md).
+KALENDER_ARTEN = ("kalender-vdirsyncer", "kalender-mitte")
+MITTE_ID = "kalender-mitte"
 
 
 class AdapterFehler(Exception):
@@ -132,18 +140,42 @@ def braucht_bruecke(a: dict) -> bool:
 
 
 def kalender_anschluss(wurzel=None):
-    """Der Anschluss, der den Kalender speist und eine Brücke braucht, oder None."""
+    """Der Anschluss, der den Kalender speist und eine Brücke braucht, oder
+    None. Nur er treibt vdirsyncer — kalender-mitte zählt hier nicht."""
     for a in alle(wurzel).values():
         if a.get("speist") == "kalender" and braucht_bruecke(a):
             return a
     return None
 
 
+def kalender_anschluesse(wurzel=None) -> list:
+    """Alle Anschlüsse, mit denen der Kalender über die Mitte abgleicht (mit
+    und ohne Brücke), der zuerst eingerichtete vorn."""
+    da = [a for a in alle(wurzel).values()
+          if a.get("speist") == "kalender" and a.get("art") in KALENDER_ARTEN]
+    return sorted(da, key=lambda a: ((a.get("eingerichtet") or {}).get("am") or "", a["id"]))
+
+
 def kalender_ueber_cloud(wurzel=None) -> bool:
     """Gleicht data/kalender/** über die Mitte ab? Genau dann, wenn es einen
-    Kalender-Anschluss gibt — dann fährt immer nur EIN Gerät die Brücke zu
-    Google, alle anderen bekommen die Termine aus der Cloud."""
-    return kalender_anschluss(wurzel) is not None
+    Kalender-Anschluss gibt: mit Brücke fährt immer nur EIN Gerät zu Google,
+    alle anderen bekommen die Termine aus der Cloud; mit kalender-mitte
+    (ohne Brücke) spricht niemand mit Google."""
+    return bool(kalender_anschluesse(wurzel))
+
+
+def kalender_ohne_bruecke(wurzel=None) -> bool:
+    """Kalender über die Mitte, aber kein Anschluss mit Brücke: dann darf
+    kein Gerät Google abgleichen — auch nicht mit einer alten eigenen
+    vdirsyncer-Konfiguration (sonst zwei Wege: Doppelte und Geister)."""
+    return kalender_ueber_cloud(wurzel) and kalender_anschluss(wurzel) is None
+
+
+def kalender_ursprung(wurzel=None):
+    """Das Gerät, das den Kalender in die Mitte brachte (eingerichtet.auf des
+    zuerst eingerichteten Kalender-Anschlusses), oder None."""
+    da = kalender_anschluesse(wurzel)
+    return (da[0].get("eingerichtet") or {}).get("auf") if da else None
 
 
 # ── Der Kalender kommt dazu (einmal je Gerät) ──────────────────────────
@@ -171,10 +203,9 @@ def vor_abgleich(wurzel, abgleich_ordner, muster) -> str | None:
     bringt die Wahrheit mit."""
     if KALENDER_MUSTER not in muster or kalender_dabei(abgleich_ordner):
         return None
-    a = kalender_anschluss(wurzel)
-    if a is None:
+    if not kalender_ueber_cloud(wurzel):
         return None
-    if (a.get("eingerichtet") or {}).get("auf") == dateien.knoten():
+    if kalender_ursprung(wurzel) == dateien.knoten():
         return None
     vdir = os.path.join(str(wurzel), "data", "kalender")
     da = [os.path.join(w, f) for w, _d, fs in os.walk(vdir) for f in fs]
@@ -204,7 +235,8 @@ def nach_abgleich(abgleich_ordner, muster) -> None:
 
 
 def als_ursprung_merken(abgleich_ordner) -> None:
-    """Das Gerät, das den Kalender-Anschluss anlegt, ist von Anfang an dabei."""
+    """Das Gerät, das den ersten Kalender-Anschluss anlegt, ist von Anfang an
+    dabei — sein data/kalender/ wandert nie beiseite."""
     dateien.json_schreiben(_merkzettel(abgleich_ordner),
                            {"seit": datetime.datetime.now().replace(microsecond=0).isoformat(),
                             "ursprung": True})
