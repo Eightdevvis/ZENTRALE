@@ -291,15 +291,15 @@ def _google_sichern(exe) -> bool:
 
 
 def main(argv=None) -> int:
-    """Ein Lauf. Mit Kalender-Anschluss über den Adapter (nur die Brücke
-    fährt); Kalender nur über die Mitte (kalender-mitte) → kein Google; sonst
-    wie bisher mit der eigenen Konfiguration."""
+    """Ein Lauf. Google nur, wenn die Quelle der Kalender-App google ist
+    (core/kalender_einstellung.py; ohne Einstellung die Vorgabe). Dann mit
+    Kalender-Anschluss über den Adapter, sonst wie bisher mit der eigenen
+    Konfiguration (die ist nur Zugang, keine Entscheidung)."""
+    if not _google_an():
+        print("Kalender-Quelle ist nicht google (zentrale adapter calendar) — kein Google-Abgleich.")
+        return 0
     a = _anschluss()
     if a is None:
-        if _nur_mitte():
-            print("Kalender läuft über die Mitte (kalender-mitte), ohne Google-Anschluss — "
-                  "kein Google-Abgleich.")
-            return 0
         return _ein_lauf(argv)
     return _ueber_adapter(a, argv)
 
@@ -313,16 +313,16 @@ def _anschluss():
         return None
 
 
-def _nur_mitte() -> bool:
-    """Kalender über die Mitte ohne Brücke: dann fährt hier auch die alte
-    eigene vdirsyncer-Konfiguration nicht (sonst zwei Wege zu Google).
-    Unlesbarer Adapter → wie in _anschluss der alte Weg."""
+def _google_an() -> bool:
+    """Quelle google? Dann fährt Google — auf jedem Gerät. Sonst auch die
+    alte eigene vdirsyncer-Konfiguration nicht (sonst zwei Wege). Unlesbare
+    Einstellung → wie in _anschluss der alte Weg."""
     try:
         import adapter
-        return adapter.kalender_ohne_bruecke()
+        return adapter.kalender_google_an()
     except Exception as e:      # noqa: BLE001
-        print("Adapter nicht lesbar:", e)
-        return False
+        print("Kalender-Einstellung nicht lesbar:", e)
+        return True
 
 
 def _ueber_adapter(a, argv) -> int:

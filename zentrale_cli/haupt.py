@@ -30,7 +30,7 @@ BEFEHLE = {
 }
 
 # Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
-MIT_ARGUMENTEN = {befehle.sync, befehle.timers}
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender}
 
 
 def _entwickler_checkout() -> bool:

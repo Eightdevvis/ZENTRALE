@@ -149,7 +149,7 @@ def _wann(d: datetime) -> str:
 def _google_aus() -> bool:
     try:
         import adapter      # Schicht 1 wie dieses Modul; spät, nur wenn gefragt
-        return adapter.kalender_ohne_bruecke()
+        return not adapter.kalender_google_an()
     except Exception:       # noqa: BLE001 — ohne lesbaren Adapter gilt der Stand
         return False
 
@@ -159,7 +159,7 @@ def bewerten(z: dict | None = None, jetzt: datetime | None = None) -> dict:
     `hinweis` ist die fertige Warnzeile („⚠ google-sync: Zugang abgelaufen —
     seit 14.10. 16:33"), `kurz` die leise Zeile ohne Problem („google ✓ 16:31")."""
     if z is None:
-        # Kalender nur über die Mitte (kalender-mitte, ohne Google-Anschluss):
+        # Quelle der Kalender-App nicht google (zencloud/lokal):
         # Google fährt bewusst niemand — ein alter Stand ist kein „läuft nicht".
         z = None if _google_aus() else lesen()
     if not z:

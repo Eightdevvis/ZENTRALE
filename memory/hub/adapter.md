@@ -43,15 +43,17 @@ ein neues Gerät (Mini-PC) sonst ohne Kalender und ohne KI dasteht.
    Gerät hat nach dem Login und einem Abgleich eine KI.
 7. **Ist keine Brücke online**, läuft ZENTRALEs Kalender weiter (Cloud);
    nur die Google-Seite hinkt hinterher und holt beim nächsten Lauf auf.
-8. **Kalender über die Mitte, ohne Google** (seit 28.10.2026): Anschluss
-   `kalender-mitte` (Art `kalender-mitte`, keine Brücke, kein Timer) — siehe
-   „Der Schalter kalender-mitte" unten.
+8. **Woher der Kalender kommt, ist ein Wert der Kalender-App** (seit
+   29.10.2026): `quelle` ∈ google | zencloud | lokal — siehe „Die Quelle der
+   Kalender-App" unten. Ein Anschluss trägt nur Zugangsdaten, nie die
+   Entscheidung.
 
 ## Dateien
 
 | Datei | was | gleicht ab | Sicherung (GitHub, Klartext) |
 |---|---|---|---|
 | `data/adapter/anschluesse/<id>.json` | Beschreibung, Schema `core/adapter_anschluss.schema.json` | ja | ja |
+| `data/adapter/anschluesse/kalender-<id>.json` | **Einstellung der Kalender-App** `<id>`, Schema `core/kalender_einstellung.schema.json` | ja | ja |
 | `data/adapter/geheim.enc` | Zugangsdaten, JSON, **je Eintrag** Fernet (`zu: konto` / `geraet`) | nur angemeldet | **nie** (`GEHEIM`, Test) |
 | `data/adapter/bruecke/<id>.json` | Mietvertrag `{inhaber, ablauf, seit, zustand}` | ja | nein |
 | `data/adapter/bruecke/<id>.status.json` | Stand von vdirsyncer (`*.items`) + Liste der Löschsperre | ja | nein |
@@ -81,7 +83,11 @@ Sashas Checkout ihn, ein neues Gerät nahm die Brücke nie.
 
 1. kein vdirsyncer → nichts. Ohne Mitte (kein Konto/Schlüssel, rsync-Weg) →
    eigene Brücke, ohne Vertrag.
-2. Kalender noch nicht hier (erstes Mal) → erst abgleichen.
+2. Quelle nicht google → nichts. Quelle google gesetzt (oder ohne Mitte) →
+   jedes Gerät fährt selbst, ohne Vertrag (die Cloud trägt den Kalender
+   dann nicht). Nur der alte Weg (keine Einstellung + Anschluss) geht weiter:
+   Kalender noch nicht hier (die Basis des Abgleichs kennt ihn nicht) → erst
+   abgleichen.
 3. Vertrag gehört jemand anderem und läuft noch → nichts tun; dessen Stand
    (`zustand`) hierher, damit die TUI „google ✓ 16:31 · laptop" zeigt.
 4. Sonst: Vertrag auf mich (15 min), **abgleichen**. Kam mein Name zurück →
@@ -95,43 +101,102 @@ Inodes und Pfaden löst keine Übertragung aus — vdirsyncer vergleicht den
 Inhalt. Nur `<paar>.collections` hängt an der Konfiguration des Geräts und
 wird neu entdeckt.
 
-## Der Schalter kalender-mitte (seit 28.10.2026)
+## Die Quelle der Kalender-App (seit 29.10.2026)
 
-Anlass: Google wird abgelöst, der Kalender soll zwischen Geräten und Handy
-über die Mitte laufen — bisher ging das nur mit einem Google-Anschluss.
+Ersetzt den Schalter `kalender-mitte` vom 28.10. (1f32e6a), den Sasha
+verworfen hat: *„das soll doch alles dasselbe programm sein, überall eine
+streamline keine divergenz"* und *„die wahl is auch nich für DEIN GANZES
+KONTO sondern nur für deine eine kalender app in zentrale die du
+installierst.. wenn du 2 installierst dann hast du halt 2 verschiedene..
+aber zentrale selbst, dein konto, der hub is ja ne nackte shell an sich, die
+hat nichts außer nen haufen pforten wo man sachen rumstöpselt"*.
 
-- **Warum ein Anschluss und keine Einstellung:** eine Einstellung
-  (`ai_config`, wo `abgleich_weg` liegt) gilt je Gerät und reist nicht; der
-  Kalender über die Mitte muss aber auf ALLEN Geräten gelten, und der
-  Ursprung braucht `eingerichtet.auf`. Beides hat ein Anschluss schon (immer
-  abgeglichen, Schema, `zentrale adapter` zeigt ihn). Art `kalender-mitte` in
-  `KALENDER_ARTEN`, nicht in `MIT_BRUECKE`.
-- **Vorgabe aus.** Nichts legt ihn von selbst an. Einschalten nur bewusst:
-  `zentrale adapter calendar` → `adapter_ablauf.kalender_mitte_einschalten`.
-- **Wer zuerst einschaltet, ist der Ursprung** (Sasha: die Mitte ist die
-  Wahrheit). Das Einschalten gleicht ERST ab (bringt einen Anschluss, den ein
-  anderes Gerät schon angelegt hat); gibt es danach noch keinen
-  Kalender-Anschluss → `als_ursprung_merken`, sein Kalender füllt die Mitte.
-  Gibt es schon einen (Mitte oder Google) → kein Merkzettel; beim nächsten
-  Abgleich legt `vor_abgleich` den alten `data/kalender/` nach
-  `kalender-vor-cloud/` (nie gelöscht). Ohne Konto oder offline: nichts
-  eingeschaltet. Ursprung = `eingerichtet.auf` des zuerst eingerichteten
-  Kalender-Anschlusses (`kalender_ursprung`).
-- **Kein Google:** `kalender_anschluss()` liefert weiter nur Anschlüsse mit
-  Brücke. `kalender_ohne_bruecke()` → `zentrale adapter run` (Timer) und
-  `scripts/kalender_sync.py` tun nichts — auch nicht mit einer alten
-  eigenen vdirsyncer-Konfiguration (sonst zwei Wege: Doppelte, Geister).
-  Liegt zusätzlich `google-kalender` an, fährt dessen Brücke wie bisher.
-- **Ausschalten:** `data/adapter/anschluesse/kalender-mitte.json` entfernen
-  (abgleichend) — dann schneidet `jetzt_erlaubt` den Kalender wieder heraus.
-  Kein eigener Befehl (noch nicht nötig).
-- **Lücke (im Abgleich, nicht hier):** ob die Mitte schon Kalender-Dateien
-  hat, prüft das Einschalten nur über den Anschluss. Schalten zwei Geräte
-  gleichzeitig ein, bevor eines abgeglichen hat, halten sich beide für den
-  Ursprung. Genauer ginge es nur in `core/abgleich*` (Mitte nach
-  `data/kalender/**` fragen).
-- Tests: `tests/test_adapter.py` (`test_mitte_*`),
-  `tests/test_kalender_cloud.py::test_mitte_ohne_google_erster_fuellt_spaeterer_legt_beiseite`.
+- **Ein Wert, kein Code-Weg.** Je installierter Kalender-App (Instanz) EINE
+  Datei, die **Einstellung der Kalender-App `<id>`**:
+  `{format: "zentrale-kalender-app/1", id, quelle, ordner, titel, geaendert}`,
+  Schema `core/kalender_einstellung.schema.json`, Code
+  `core/kalender_einstellung.py`. `quelle`:
+  - `google` — jedes Gerät gleicht seinen Ordner selbst mit Google ab
+    (`zentrale adapter run`, `scripts/kalender_sync.py`), die Cloud trägt
+    die Termine nicht;
+  - `zencloud` — die Termine gleichen über die Cloud ab, niemand fährt Google;
+  - `lokal` — weder noch.
+  Heute nur `kalender-haupt` → `data/kalender`; eine zweite Instanz hat ihre
+  eigene Datei, Quelle und Ordner (Schema und `instanzen()`/`mit_quelle()`
+  tragen das; dass ihr Ordner abgleicht, braucht noch ein Muster in der
+  Positivliste).
+- **Wo die Datei liegt und warum:** `data/adapter/anschluesse/kalender-<id>.json`
+  — der einzige Ort, der heute auf JEDES Gerät abgleicht und nie abgewählt
+  wird (App `adapter`, pflicht). Die Kalender-App steckt sich an eine Pforte
+  des Adapters; der Kern/Hub kennt keine Kalender-Einstellung. Nicht
+  `data/kalender/**` (gleicht genau dann nicht ab, wenn die Quelle nicht
+  zencloud ist), nicht `kalender_neben.json` (schreibt der Speicher dauernd,
+  App abwählbar). `adapter.alle()` übergeht diese Dateien (sie sind keine
+  Anschlüsse). **Übergang:** nach [standort_und_app.md](standort_und_app.md)
+  gehört die Einstellung in den Datenbereich der App, nicht zum Gestell —
+  Ziel ist ein eigenes Muster (z. B. `data/kalender_apps/*.json`) in der
+  Positivliste `core/abgleich_auswahl.py` und in `eingebaute_apps`; dann
+  zieht nur `kalender_einstellung._anschluesse()` um.
+- **Überall gleich abgeleitet** (`core/adapter.py`):
+  `kalender_ueber_cloud(ordner)` ⇔ die Instanz mit diesem Ordner hat
+  `zencloud`; `kalender_google_an()` ⇔ `quelle == google`. Die
+  vdirsyncer-Konfiguration eines Geräts (eigene oder aus dem Anschluss
+  `google-kalender`) ist nur Zugang, keine Entscheidung.
+- **Ohne Datei: wie vor dem 28.10.** (zählt als google): ohne
+  Google-Anschluss fährt jedes Gerät seine eigene Konfiguration; mit
+  Anschluss der alte Weg (Kalender über die Cloud, EINE Brücke per
+  Mietvertrag, `kalender_mit_vertrag`). Nichts legt die Datei von selbst an.
+- **Umstöpseln an einer Stelle:**
+  `adapter_ablauf.kalender_quelle_setzen(id, quelle, wurzel)` bzw.
+  `zentrale adapter calendar [google|zencloud|lokal]` (ohne Wort: zeigen;
+  `zentrale adapter` zeigt die Quelle auch). Ändert nur den Wert, löscht nie
+  eine Termin-Datei.
+  - → `google`/`lokal`: Wert setzen, die Termine hier bleiben liegen.
+  - → `zencloud`: erst die Mitte fragen —
+    `abgleich.mitte_hat_kalender(ordner="data/kalender") -> bool|None`
+    (ZEN-MOBIL, über `adapter_ablauf.mitte_hat_kalender`, wirft nie).
+    None → Abbruch, nichts geändert. False → dieses Gerät füllt die Cloud:
+    Wert setzen und gleich abgleichen im Block `adapter.kalender_fuellt()`
+    (nur im Speicher dieses Prozesses); geht der Abgleich nicht hinaus, wird
+    der Wert zurückgenommen (`offline`) — sonst legte der nächste Abgleich
+    den eigenen Kalender beiseite. True → die Cloud gilt: der Ordner hier
+    wandert nach `<abgleich>/kalender-vor-cloud/<zeit>/` (nie gelöscht, Sasha
+    wählt dort selbst), dann abgleichen.
+- **Die Cloud wird nie überschrieben — für jedes Gerät dieselbe Regel**
+  (`adapter.vor_abgleich`, vor jedem Abgleich): gleicht der Kalender diesmal
+  mit, kennt die Basis des Abgleichs (`<abgleich>/basis.json`) noch keine
+  Datei aus `data/kalender/` und liegen hier Termine → Mitte fragen. True →
+  beiseite; False → füllt; None → `MitteFehler`, kein Abgleich. Gilt auch
+  für den alten Weg mit Google-Anschluss (wer ihn anlegt und die Cloud leer
+  findet, füllt sie). Kein Merkzettel, kein Ursprung je Gerät mehr
+  (`kalender_dabei.json`, `als_ursprung_merken`, `kalender_ursprung`,
+  `eingerichtet.auf` als Ursprung: entfernt; alte Merkzettel liegen harmlos
+  herum).
+- **Die Frage kommt vom Abgleich:** der Adapter darf `abgleich` nicht
+  importieren (Import-Kreis, `tests/test_kern_bauplan.py`).
+  `vor_abgleich(…, mitte_hat_kalender=None)` nimmt sie als Argument; solange
+  `core/abgleich._adapter_vorher` sie nicht mitgibt, holt `_rueckfrage()` sie
+  beim laufenden Abgleich (`sys.modules`) — Übergang, fällt mit der einen
+  Zeile in `_adapter_vorher` weg.
+- **Altlast `kalender-mitte`:** liegt `data/adapter/anschluesse/kalender-mitte.json`
+  noch, gilt sie als `kalender-haupt` mit `quelle=zencloud`; das nächste
+  `kalender_quelle_setzen` schreibt die neue Datei und nimmt die alte weg. Auf
+  dem Laptop gab es sie nie (geprüft 29.10.: nur `ki-anbieter.json`).
+- **Achtung beim Zurück auf google:** Google sieht dann den Stand dieses
+  Ordners; fehlen dort Termine, die Google noch hat, löscht vdirsyncer sie
+  bei Google — die Löschsperre (mehr als 5 → Abbruch) fängt nur größere
+  Mengen.
+- **Offen:** ein Gerät, das früher schon den Kalender über die Cloud abglich
+  (Basis kennt ihn), danach google/lokal fuhr und zurückkommt, gleicht
+  normal dreiseitig ab (seine Löschungen gehen mit) statt beiseitezulegen.
+  `basis.json` liest der Adapter direkt — sauberer wäre eine Funktion im
+  Abgleich (`abgleich.basis_kennt(ordner)`). Stöpseln zwei Geräte im selben
+  Augenblick auf zencloud um und finden beide die Cloud leer, füllen beide
+  (der Abgleich führt je UID zusammen).
+- Tests: `tests/test_adapter.py` (`test_quelle_*`, `test_mitte_hat_kalender_vertrag`, `test_fuellen_*`, `test_der_fuellende_*`,
+  `test_spaeteres_geraet_*`, `test_umstoepseln_*`, `test_alter_schalter_*`,
+  `test_zwei_kalender_apps_*`, `test_cli_kalender_quelle`),
+  `tests/test_kalender_cloud.py::test_zencloud_erster_fuellt_spaeterer_legt_beiseite`.
 
 ## Gebaut (2026-10-24)
 
@@ -143,8 +208,9 @@ Anlass: Google wird abgelöst, der Kalender soll zwischen Geräten und Handy
   bruecke_lauf), `abgleich_ics.py` (Termine je UID zusammenführen).
 - Abgleich: `abgleich_apps.jetzt_erlaubt` schneidet `data/kalender/**` ohne
   Kalender-Anschluss und `geheim.enc` ohne Konto heraus. Vor dem Abgleich
-  umschlüsseln und `adapter.vor_abgleich`; danach Merkzettel
-  `kalender_dabei.json` und KI-Schlüssel in die Umgebung.
+  umschlüsseln und `adapter.vor_abgleich` (erstes Mal mit Kalender:
+  beiseite, wenn die Cloud schon einen hat); danach KI-Schlüssel in die
+  Umgebung. (Bis 29.10. auch ein Merkzettel `kalender_dabei.json`.)
 - KI: Rangfolge echte Umgebung > Adapter > `ai_config.json`
   (`ai_config.injiziert`); `providers` legt beim Import ein;
   `ki_uebernehmen()` beim Start des Backends, bei `zentrale sync` und
@@ -185,3 +251,8 @@ Anlass: Google wird abgelöst, der Kalender soll zwischen Geräten und Handy
   als Mietvertrag mit nahtlosem Wechsel (Sasha: kein festes Gerät).
 - **2026-10-28** — Schalter `kalender-mitte`: Kalender über die Mitte ohne
   Google; Ursprung nur, wer zuerst einschaltet.
+- **2026-10-29** — von Sasha verworfen (Zustand je Gerät, Wahl am Konto statt
+  an der App). Neu: Einstellung der Kalender-App mit `quelle` google |
+  zencloud | lokal, überall dieselbe Datei; Umstöpseln mit
+  `kalender_quelle_setzen`; statt Ursprung die Frage „hat die Cloud schon
+  einen Kalender?" + Beiseitelegen.

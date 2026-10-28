@@ -13,17 +13,19 @@
 #   data/adapter/bruecke/<id>.json       wer die Brücke gerade fährt
 #                                        (core/adapter_bruecke.py)
 #
-# Der Kalender über die Cloud: data/kalender/** gleicht nur ab, wenn es einen
-# Kalender-Anschluss gibt (kalender_ueber_cloud) — mit Brücke zu Google
-# (kalender-vdirsyncer) oder ohne (kalender-mitte: nur die Mitte, kein fremder
-# Dienst; eingeschaltet über adapter_ablauf.kalender_mitte_einschalten). Ein Gerät, das zum ersten
-# Mal mitmacht und nicht selbst der Ursprung ist, legt seinen alten Kalender
-# vorher beiseite (vor_abgleich) — sonst trüge es längst gelöschte Termine in
-# die Cloud, und die Brücke lüde sie zu Google hoch (Geister).
+# Der Kalender: woher er kommt, sagt die Einstellung der Kalender-App
+# (core/kalender_einstellung.py, quelle ∈ google | zencloud | lokal) — überall
+# dieselbe Datei, kein Zustand je Gerät. Hier nur, was der Abgleich daraus
+# wissen muss: gleicht data/kalender/** über die Cloud ab
+# (kalender_ueber_cloud), darf Google laufen (kalender_google_an), und ein
+# Gerät, dessen Kalender zum ersten Mal mit der Cloud abgleicht, legt seinen
+# alten beiseite, wenn die Cloud schon einen hat (vor_abgleich) — die Cloud
+# wird nie überschrieben.
 #
 # Fundament (Schicht 1, memory/system/bauplan_kern.md). Kennt weder den
 # Abgleich noch den Kalender — wer Pfade braucht, gibt sie herein.
 
+import contextlib
 import datetime
 import json
 import os
@@ -31,6 +33,7 @@ import shutil
 
 import ai_config
 import dateien
+import kalender_einstellung as ke
 
 FORMAT = "zentrale-anschluss/1"
 SCHEMA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "adapter_anschluss.schema.json")
@@ -45,13 +48,6 @@ KALENDER_MUSTER = "data/kalender/**"
 # Arten, die mit einem fremden Dienst abgleichen und deshalb genau EINE
 # Brücke brauchen (die übrigen nutzt jedes Gerät selbst).
 MIT_BRUECKE = ("kalender-vdirsyncer",)
-
-# Arten, mit denen data/kalender/** über die Mitte abgleicht. kalender-mitte
-# hat keinen fremden Dienst und keine Brücke: der Schalter „Kalender über die
-# Mitte, ohne Google" (memory/hub/adapter.md).
-KALENDER_ARTEN = ("kalender-vdirsyncer", "kalender-mitte")
-MITTE_ID = "kalender-mitte"
-
 
 class AdapterFehler(Exception):
     """Für Menschen lesbar (englisch, wie zentrale_cli)."""
@@ -108,6 +104,9 @@ def alle(wurzel=None) -> dict:
         except (OSError, ValueError):
             print(f"[adapter] {n} nicht lesbar — übergangen")
             continue
+        if isinstance(a, dict) and (a.get("format") == "zentrale-kalender-app/1"
+                                    or a.get("art") == "kalender-mitte"):
+            continue        # Einstellung der Kalender-App (kalender_einstellung), kein Anschluss
         if not isinstance(a, dict) or a.get("id") != n[:-5] or pruefen(a):
             print(f"[adapter] {n} ungültig — übergangen")
             continue
@@ -140,103 +139,156 @@ def braucht_bruecke(a: dict) -> bool:
 
 
 def kalender_anschluss(wurzel=None):
-    """Der Anschluss, der den Kalender speist und eine Brücke braucht, oder
-    None. Nur er treibt vdirsyncer — kalender-mitte zählt hier nicht."""
+    """Der Anschluss, der den Kalender speist und eine Brücke braucht
+    (google-kalender), oder None. Er trägt nur Zugangsdaten — OB Google
+    läuft, sagt die Quelle (kalender_google_an)."""
     for a in alle(wurzel).values():
         if a.get("speist") == "kalender" and braucht_bruecke(a):
             return a
     return None
 
 
-def kalender_anschluesse(wurzel=None) -> list:
-    """Alle Anschlüsse, mit denen der Kalender über die Mitte abgleicht (mit
-    und ohne Brücke), der zuerst eingerichtete vorn."""
-    da = [a for a in alle(wurzel).values()
-          if a.get("speist") == "kalender" and a.get("art") in KALENDER_ARTEN]
-    return sorted(da, key=lambda a: ((a.get("eingerichtet") or {}).get("am") or "", a["id"]))
+def kalender_ueber_cloud(wurzel=None, ordner="data/kalender") -> bool:
+    """Gleicht der Kalender-Ordner über die Cloud ab? Genau dann, wenn die
+    Kalender-App, die ihn hat, quelle=zencloud trägt. Ohne Einstellung gilt
+    der Stand von vor dem 28.10.: mit Google-Anschluss ja (eine Brücke per
+    Mietvertrag, alle anderen aus der Cloud), sonst nein."""
+    for e in ke.instanzen(wurzel).values():
+        if e["ordner"] == ordner:
+            return e["quelle"] == "zencloud"
+    return ordner == ke.HAUPT_ORDNER and kalender_anschluss(wurzel) is not None
 
 
-def kalender_ueber_cloud(wurzel=None) -> bool:
-    """Gleicht data/kalender/** über die Mitte ab? Genau dann, wenn es einen
-    Kalender-Anschluss gibt: mit Brücke fährt immer nur EIN Gerät zu Google,
-    alle anderen bekommen die Termine aus der Cloud; mit kalender-mitte
-    (ohne Brücke) spricht niemand mit Google."""
-    return bool(kalender_anschluesse(wurzel))
+def kalender_google_an(wurzel=None) -> bool:
+    """Darf auf diesem (und jedem) Gerät ein Google-Abgleich laufen
+    (`zentrale adapter run`, scripts/kalender_sync.py)? Nur bei
+    quelle=google — ohne Einstellung ist das die Vorgabe. Eine eigene
+    vdirsyncer-Konfiguration ist nur Zugang, keine Entscheidung."""
+    return ke.quelle(ke.HAUPT, wurzel) == "google"
 
 
-def kalender_ohne_bruecke(wurzel=None) -> bool:
-    """Kalender über die Mitte, aber kein Anschluss mit Brücke: dann darf
-    kein Gerät Google abgleichen — auch nicht mit einer alten eigenen
-    vdirsyncer-Konfiguration (sonst zwei Wege: Doppelte und Geister)."""
-    return kalender_ueber_cloud(wurzel) and kalender_anschluss(wurzel) is None
+def kalender_mit_vertrag(wurzel=None) -> bool:
+    """Der alte Weg (keine Einstellung, Google-Anschluss): der Kalender kommt
+    über die Cloud, Google fährt EIN Gerät mit Mietvertrag. Mit gesetzter
+    quelle=google fährt jedes Gerät selbst (die Cloud trägt dann keine
+    Termine — zwei Wege gäbe es nicht)."""
+    return kalender_google_an(wurzel) and kalender_ueber_cloud(wurzel)
 
 
-def kalender_ursprung(wurzel=None):
-    """Das Gerät, das den Kalender in die Mitte brachte (eingerichtet.auf des
-    zuerst eingerichteten Kalender-Anschlusses), oder None."""
-    da = kalender_anschluesse(wurzel)
-    return (da[0].get("eingerichtet") or {}).get("auf") if da else None
-
-
-# ── Der Kalender kommt dazu (einmal je Gerät) ──────────────────────────
+# ── Der Kalender kommt zur Cloud (erstes Mal je Gerät) ─────────────────
 #
-# Merkzettel je Gerät im Ordner des Abgleichs (außerhalb von data/, wandert
-# nie): ab wann dieses Gerät den Kalender über die Cloud abgleicht.
+# Kein Merkzettel je Gerät: „erstes Mal" heißt, die Basis des Abgleichs
+# (<abgleich>/basis.json, worauf sich das Gerät zuletzt mit der Mitte
+# geeinigt hat) kennt noch keine Datei des Kalender-Ordners. Ob die Cloud
+# schon einen Kalender hat, fragt adapter_ablauf.mitte_hat_kalender.
 
-def _merkzettel(abgleich_ordner) -> str:
-    return os.path.join(abgleich_ordner, "kalender_dabei.json")
+def kalender_in_basis(abgleich_ordner, ordner="data/kalender") -> bool:
+    """Hat sich dieses Gerät mit der Mitte schon einmal über Dateien des
+    Kalender-Ordners geeinigt?"""
+    try:
+        with open(os.path.join(abgleich_ordner, "basis.json"), encoding="utf-8") as f:
+            kopf = json.load(f)
+    except (OSError, ValueError):
+        return False
+    pre = ordner.rstrip("/") + "/"
+    return any(isinstance(r, str) and r.startswith(pre) for r in kopf.get("dateien") or [])
 
 
-def kalender_dabei(abgleich_ordner) -> bool:
-    return os.path.exists(_merkzettel(abgleich_ordner))
+def _hat_termine(vdir) -> bool:
+    return any(fs for _w, _d, fs in os.walk(vdir))
 
 
-def vor_abgleich(wurzel, abgleich_ordner, muster) -> str | None:
-    """Vor einem Abgleich, in dem der Kalender zum ersten Mal mitläuft: ist
-    dieses Gerät NICHT der Ursprung des Kalender-Anschlusses, wandert sein
-    bisheriger data/kalender/ beiseite (nie gelöscht), und es übernimmt den
-    Stand der Cloud. → Ort des Beiseitegelegten oder None.
-
-    Warum: ohne Basis würde jede Datei, die nur hier liegt, als „neu" in die
-    Cloud gehen — auch Termine, die bei Google längst gelöscht sind. Die
-    Brücke trüge sie dann wieder zu Google (Geister). Der Ursprung dagegen
-    bringt die Wahrheit mit."""
-    if KALENDER_MUSTER not in muster or kalender_dabei(abgleich_ordner):
+def beiseite_legen(wurzel, abgleich_ordner, ordner="data/kalender") -> str | None:
+    """Den Kalender-Ordner nach <abgleich>/kalender-vor-cloud/<zeit>/
+    schieben (nie gelöscht) — Sasha wählt dort selbst. → Ziel oder None
+    (nichts da)."""
+    vdir = os.path.join(str(wurzel), *ordner.split("/"))
+    if not _hat_termine(vdir):
         return None
-    if not kalender_ueber_cloud(wurzel):
-        return None
-    if kalender_ursprung(wurzel) == dateien.knoten():
-        return None
-    vdir = os.path.join(str(wurzel), "data", "kalender")
-    da = [os.path.join(w, f) for w, _d, fs in os.walk(vdir) for f in fs]
-    if not da:
-        return None
+    zeit = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    name = ordner.split("/")[-1]
     ziel = os.path.join(abgleich_ordner, "kalender-vor-cloud",
-                        datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S"))
+                        zeit if name == "kalender" else f"{zeit}-{name}")
     os.makedirs(os.path.dirname(ziel), exist_ok=True)
     shutil.move(vdir, ziel)
     # Die Grabsteine des alten Kalenders (data/kalender_verlauf/grabsteine,
     # für den rsync-Weg) gehören zu ihm: sie hielten sonst Termine aus der
-    # Cloud für Geister und räumten sie weg — eine Löschung, die über die
-    # Brücke bis zu Google liefe.
+    # Cloud für Geister und räumten sie weg.
     steine = os.path.join(str(wurzel), "data", "kalender_verlauf", "grabsteine")
-    if os.path.isdir(steine):
+    if name == "kalender" and os.path.isdir(steine):
         shutil.move(steine, os.path.join(ziel, ".grabsteine"))
     print(f"[adapter] Kalender kommt jetzt aus der Cloud — der bisherige liegt in {ziel}")
     return ziel
 
 
+# Ordner, deren Kalender dieser Prozess gerade bewusst in die Cloud bringt
+# (adapter_ablauf.kalender_quelle_setzen, nachdem die Mitte „leer" sagte).
+# Nur im Speicher, nur für diesen einen Abgleich — kein Zustand je Gerät.
+_FUELLT = set()
+
+
+@contextlib.contextmanager
+def kalender_fuellt(ordner="data/kalender"):
+    """Der Abgleich in diesem Block bringt den hiesigen Kalender in die
+    (leere) Cloud, statt ihn beiseitezulegen."""
+    _FUELLT.add(ordner)
+    try:
+        yield
+    finally:
+        _FUELLT.discard(ordner)
+
+
+def _rueckfrage():
+    """Übergang: die Frage beim laufenden Abgleich holen (er ruft
+    vor_abgleich auf, ist also geladen) — ohne ihn zu importieren. Fällt
+    weg, sobald core/abgleich._adapter_vorher
+    `mitte_hat_kalender=mitte_hat_kalender` mitgibt."""
+    import sys
+    return getattr(sys.modules.get("abgleich"), "mitte_hat_kalender", None)
+
+
+def vor_abgleich(wurzel, abgleich_ordner, muster, mitte_hat_kalender=None) -> str | None:
+    """Vor jedem Abgleich (core/abgleich): gleicht der Kalender diesmal mit,
+    hat sich dieses Gerät mit der Mitte noch nie über ihn geeinigt (die Basis
+    kennt keine Datei aus data/kalender/) und liegen hier Termine, gilt
+    „die Cloud wird nie überschrieben":
+
+      Cloud hat schon einen Kalender → der hiesige wandert beiseite
+          (beiseite_legen, nie gelöscht), das Gerät übernimmt die Cloud;
+      Cloud leer → der hiesige füllt sie;
+      unbekannt → MitteFehler, kein Abgleich (lieber keiner als Geister).
+
+    `mitte_hat_kalender(ordner) -> bool|None` gibt der Abgleich herein (der
+    Adapter importiert den Abgleich nicht — kein Import-Kreis). Solange
+    core/abgleich._adapter_vorher sie noch nicht mitgibt, holt _rueckfrage()
+    sie beim Aufrufer, der gerade läuft. Im Block kalender_fuellt → füllt.
+    Für jedes Gerät dieselbe Regel. → Ziel oder None."""
+    if KALENDER_MUSTER not in muster or not kalender_ueber_cloud(wurzel):
+        return None
+    if kalender_in_basis(abgleich_ordner):
+        return None
+    if not _hat_termine(os.path.join(str(wurzel), "data", "kalender")):
+        return None
+    if ke.HAUPT_ORDNER in _FUELLT:
+        return None
+    frage = mitte_hat_kalender or _rueckfrage()
+    hat = None
+    if frage is not None:
+        try:
+            hat = frage(ordner=ke.HAUPT_ORDNER)
+        except Exception as e:      # noqa: BLE001 — unbekannt
+            print(f"[adapter] Mitte nach dem Kalender gefragt: {e}")
+        hat = hat if hat is True or hat is False else None
+    if hat is None:
+        import abgleich_mitte       # Schicht 1, tiefer als der Abgleich
+        raise abgleich_mitte.MitteFehler(
+            "Kalender: ob die Cloud schon Termine hat, ist gerade nicht zu klären — "
+            "nicht abgeglichen (nichts überschrieben).")
+    return beiseite_legen(wurzel, abgleich_ordner) if hat else None
+
+
 def nach_abgleich(abgleich_ordner, muster) -> None:
-    """Nach einem gelungenen Abgleich mit dem Kalender: merken, dass dieses
-    Gerät dabei ist (dann erst darf es die Brücke übernehmen)."""
-    if KALENDER_MUSTER in muster and not kalender_dabei(abgleich_ordner):
-        dateien.json_schreiben(_merkzettel(abgleich_ordner),
-                               {"seit": datetime.datetime.now().replace(microsecond=0).isoformat()})
-
-
-def als_ursprung_merken(abgleich_ordner) -> None:
-    """Das Gerät, das den ersten Kalender-Anschluss anlegt, ist von Anfang an
-    dabei — sein data/kalender/ wandert nie beiseite."""
-    dateien.json_schreiben(_merkzettel(abgleich_ordner),
-                           {"seit": datetime.datetime.now().replace(microsecond=0).isoformat(),
-                            "ursprung": True})
+    """Früher: Merkzettel kalender_dabei.json. Heute weiß das die Basis des
+    Abgleichs selbst (kalender_in_basis) — nichts zu tun. Bleibt, weil
+    core/abgleich es ruft."""
+    return None

@@ -242,8 +242,8 @@ def kalender_welt(welt, monkeypatch):
                      _termin("a" * 32 + "@zentrale", "Schon da").decode())
     laptop.schreiben("kalender/termine/abc.ics", _termin("abc@google.com", "Von Google").decode())
     laptop._als_ich()
-    adapter.als_ursprung_merken(abgleich.ordner())   # der Laptop füllt die Mitte
-    laptop.abgleichen()
+    with adapter.kalender_fuellt():                  # der Laptop füllt die Mitte
+        laptop.abgleichen()
     return welt
 
 
@@ -329,12 +329,12 @@ def test_mitte_hat_kalender(welt, monkeypatch):
     laptop = welt.rechner("laptop")
     laptop.schreiben("lists.json", LISTE)
     laptop._als_ich()
-    adapter.als_ursprung_merken(abgleich.ordner())
     laptop.abgleichen()
     laptop._als_ich()
     assert abgleich.mitte_hat_kalender() is False
     laptop.schreiben("kalender/termine/x.ics", _termin("x@google.com").decode())
-    laptop.abgleichen()
+    with adapter.kalender_fuellt():                  # der Laptop füllt die Mitte
+        laptop.abgleichen()
     laptop._als_ich()
     assert abgleich.mitte_hat_kalender() is True
     assert abgleich.mitte_hat_kalender("data/gespraeche") is False

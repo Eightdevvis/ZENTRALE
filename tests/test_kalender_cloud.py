@@ -419,22 +419,25 @@ def test_ohne_konto_ist_jedes_geraet_seine_eigene_bruecke(welt, monkeypatch):
     assert bruecke.lesen("google-kalender", lap.wurzel) is None
 
 
-# ── Kalender über die Mitte, ohne Google (kalender-mitte) ──────────────
+# ── Quelle der Kalender-App: zencloud (ohne Google) ────────────────────
 
-def test_mitte_ohne_google_erster_fuellt_spaeterer_legt_beiseite(welt):
-    """Der Laptop schaltet zuerst ein: sein Kalender füllt die Mitte. Der
-    Mini-PC schaltet später ein: sein alter Kalender wandert beiseite (nie
-    gelöscht), er übernimmt den Stand der Mitte. Kein Gerät fährt Google —
-    auch nicht der Laptop mit seiner eigenen vdirsyncer-Konfiguration."""
+def test_zencloud_erster_fuellt_spaeterer_legt_beiseite(welt):
+    """Der Laptop stöpselt um: die Cloud ist leer, sein Kalender füllt sie.
+    Der Mini-PC bekommt die Einstellung mit dem Abgleich und folgt — beim
+    ersten Abgleich mit Kalender wandert sein alter beiseite (nie gelöscht).
+    Kein Gerät fährt Google, auch nicht der Laptop mit eigener Konfiguration."""
+    import kalender_einstellung as ke
     lap = welt.laptop.ich()
     vorher = lap.termine()
-    assert adapter_ablauf.kalender_mitte_einschalten(lap.wurzel)[0] == "ursprung"
+    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", lap.wurzel)
+    assert r["ergebnis"] == "fuellt" and r["fehler"] is None
     assert lap.termine() == vorher
     mini = welt.minipc.ich()
     (mini.vdir / "termine").mkdir(parents=True)
     (mini.vdir / "termine" / "alt.ics").write_text(_ics("alt", "Nur auf dem Mini-PC"))
-    assert adapter_ablauf.kalender_mitte_einschalten(mini.wurzel)[0] == "vorhanden"
-    welt.minipc.abgleichen()
+    welt.minipc.abgleichen()                 # bringt die Einstellung
+    assert ke.quelle(wurzel=mini.wurzel) == "zencloud"
+    welt.minipc.abgleichen()                 # jetzt mit dem Kalender
     assert sorted(_uids(mini.termine())) == ["g1", "g2"]
     beiseite = list((mini.ordner / "abgleich" / "kalender-vor-cloud").rglob("alt.ics"))
     assert len(beiseite) == 1
@@ -442,3 +445,7 @@ def test_mitte_ohne_google_erster_fuellt_spaeterer_legt_beiseite(welt):
     assert "alt" not in _uids(welt.laptop.termine())
     assert welt.laptop.google_lauf() == 0 and welt.minipc.google_lauf() == 0
     assert welt.laptop.laeufe == 0 and welt.minipc.laeufe == 0
+    # Zurück auf google: die Termine bleiben liegen, Google fährt wieder.
+    lap = welt.laptop.ich()
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "google", lap.wurzel)["ergebnis"] == "gesetzt"
+    assert sorted(_uids(lap.termine())) == ["g1", "g2"]

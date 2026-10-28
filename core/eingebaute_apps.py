@@ -21,9 +21,10 @@ EINGEBAUT = {
                 "daten": {"muster": ["data/notes.json"], "abgleichen": True}},
     "kalender": {"titel": "Kalender",
                  # Seit 2026-10-24 auch die Termine (data/kalender/**) — aber nur,
-                 # wenn der Adapter einen Kalender-Anschluss hat (abgleich_apps
-                 # schneidet sie sonst heraus): dann fährt EIN Gerät die Brücke
-                 # zu Google, alle anderen bekommen sie aus der Cloud.
+                 # wenn adapter.kalender_ueber_cloud() (abgleich_apps schneidet
+                 # sie sonst heraus): Quelle der Kalender-App zencloud
+                 # (core/kalender_einstellung.py), ohne Einstellung der alte Weg
+                 # mit Google-Anschluss und EINER Brücke.
                  "daten": {"muster": ["data/kalender_neben.json", "data/kalender/**"],
                            "abgleichen": True}},
     "graph": {"titel": "Graphen",

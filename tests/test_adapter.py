@@ -157,10 +157,15 @@ def test_status_zeigt_den_adapter(monkeypatch):
     assert "Adapter" in term.text and "always synced — 1 connection(s)" in term.text
 
 
-# ── Kalender über die Mitte, ohne Google (kalender-mitte, 28.10.2026) ───
+# ── Die Quelle der Kalender-App (kalender_einstellung, 28.10.2026) ──────
 
-def _mitte_spiel(monkeypatch, tmp_path, knoten="laptop"):
-    """Angemeldet, Abgleich gespielt (zählt nur), eigener Abgleich-Ordner."""
+import abgleich_mitte
+import kalender_einstellung as ke
+
+
+def _mitte_spiel(monkeypatch, tmp_path, knoten="laptop", hat=False):
+    """Angemeldet, Abgleich gespielt (zählt nur), eigener Abgleich-Ordner;
+    die Mitte antwortet auf „hast du schon einen Kalender?" mit `hat`."""
     import abgleich
     import adapter_ablauf
     monkeypatch.setenv("ZENTRALE_ABGLEICH_DIR", str(tmp_path / "abgleich"))
@@ -168,125 +173,272 @@ def _mitte_spiel(monkeypatch, tmp_path, knoten="laptop"):
     monkeypatch.setattr(adapter_ablauf, "nur_lokal", lambda: False)
     laeufe = []
     monkeypatch.setattr(abgleich, "abgleichen", lambda w, **k: laeufe.append(w))
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda ordner="data/kalender": hat,
+                        raising=False)
     monkeypatch.setattr(dateien, "knoten", lambda: knoten)
     return laeufe
 
 
 def _kalender_da(wurzel):
     d = wurzel / "data" / "kalender" / "termine"
-    d.mkdir(parents=True)
+    d.mkdir(parents=True, exist_ok=True)
     (d / "a.ics").write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")
     return d / "a.ics"
 
 
-def test_mitte_vorgabe_aus_kalender_gleicht_nicht_ab(monkeypatch):
+def _skript():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "kalender_sync_quelle", os.path.join(os.path.dirname(__file__), "..", "scripts", "kalender_sync.py"))
+    skript = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(skript)
+    return skript
+
+
+def _basis(abgleich_ordner, dateien_):
+    os.makedirs(abgleich_ordner, exist_ok=True)
+    with open(os.path.join(abgleich_ordner, "basis.json"), "w") as f:
+        json.dump({"stand": "1", "dateien": dateien_}, f)
+
+
+def test_quelle_ohne_einstellung_wie_bisher(monkeypatch):
     monkeypatch.setattr(ai_config, "_overrides", {"abgleich_apps": {"kalender": True}})
-    assert not adapter.kalender_ueber_cloud() and not adapter.kalender_ohne_bruecke()
+    assert ke.quelle() == "google" and not ke.eingestellt()
+    assert not adapter.kalender_ueber_cloud() and adapter.kalender_google_an()
     assert "data/kalender/**" not in abgleich_apps.muster()
+    assert not os.path.exists(ke._pfad(ke.HAUPT))          # nichts legt sie von selbst an
+    _kalender_anschluss()                                    # der alte Weg: Brücke per Vertrag
+    assert adapter.kalender_ueber_cloud() and adapter.kalender_mit_vertrag()
+    assert not os.path.exists(ke._pfad(ke.HAUPT))
 
 
-def test_mitte_eingeschaltet_kalender_gleicht_ab_ohne_bruecke(monkeypatch, tmp_path):
+def test_quelle_google_jedes_geraet_faehrt_selbst(monkeypatch, tmp_path):
     import adapter_ablauf
     monkeypatch.setattr(ai_config, "_overrides", {"abgleich_apps": {"kalender": True}})
-    laeufe = _mitte_spiel(monkeypatch, tmp_path)
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path)) == ("ursprung", None)
-    assert len(laeufe) == 2                         # erst holen, dann hinaus
-    assert adapter.lesen("kalender-mitte")["art"] == "kalender-mitte"
-    assert adapter.kalender_ueber_cloud() and adapter.kalender_ohne_bruecke()
-    assert adapter.kalender_anschluss() is None     # nichts treibt vdirsyncer
+    _mitte_spiel(monkeypatch, tmp_path)
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "google", tmp_path)["ergebnis"] == "gesetzt"
+    assert adapter.kalender_google_an() and not adapter.kalender_ueber_cloud()
+    assert "data/kalender/**" not in abgleich_apps.muster()
+    # Ohne Anschluss: jedes Gerät fährt seine eigene Konfiguration.
+    skript = _skript()
+    gefahren = []
+    monkeypatch.setattr(skript, "_ein_lauf", lambda argv=None: gefahren.append(dateien.knoten()) or 0)
+    for wer in ("laptop", "minipc"):
+        monkeypatch.setattr(dateien, "knoten", lambda wer=wer: wer)
+        assert skript.main(["zentrale"]) == 0
+    assert gefahren == ["laptop", "minipc"]
+    # Mit Anschluss: auch ohne Mietvertrag, auf jedem Gerät.
+    a = _kalender_anschluss()
+    assert not adapter.kalender_mit_vertrag()
+    monkeypatch.setattr(adapter_ablauf.shutil, "which", lambda n: "/bin/" + n)
+    wie = []
+    monkeypatch.setattr(adapter_ablauf, "_fahren", lambda *x, lokal=False: wie.append(lokal) or
+                        adapter_ablauf.Lauf("gefahren"))
+    for wer in ("laptop", "minipc"):
+        monkeypatch.setattr(dateien, "knoten", lambda wer=wer: wer)
+        assert adapter_ablauf.bruecke_lauf(a, tmp_path, tmp_path / "data/kalender", None).art == "gefahren"
+    assert wie == [True, True] and bruecke.lesen("google-kalender") is None
+
+
+def test_quelle_zencloud_kein_google_kalender_gleicht_ab(monkeypatch, tmp_path):
+    import adapter_ablauf
+    import kalender_sync_zustand
+    monkeypatch.setattr(ai_config, "_overrides", {"abgleich_apps": {"kalender": True}})
+    laeufe = _mitte_spiel(monkeypatch, tmp_path, hat=False)
+    ics = _kalender_da(tmp_path)
+    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)
+    assert r["ergebnis"] == "fuellt" and r["beiseite"] is None and r["von"] == "google"
+    assert ics.exists() and len(laeufe) == 1                # gleich hinaus, füllt die Cloud
+    assert adapter.kalender_ueber_cloud() and not adapter.kalender_google_an()
     assert "data/kalender/**" in abgleich_apps.muster()
-    # `zentrale adapter run` (der Timer) und das Skript fahren kein Google,
-    # auch nicht mit einer eigenen vdirsyncer-Konfiguration.
+    # Kein Google: weder der Timer noch das Skript, auch nicht mit eigener Konfiguration.
     cfg = tmp_path / "vdirsyncer-config"
     cfg.write_text("[general]\n")
     monkeypatch.setenv("ZENTRALE_VDIRSYNCER_CONFIG", str(cfg))
     term = Spiel()
-    assert befehle.adapter_lauf(term) == 0 and "through your account only" in term.text
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "kalender_sync_mitte", os.path.join(os.path.dirname(__file__), "..", "scripts", "kalender_sync.py"))
-    skript = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(skript)
+    assert befehle.adapter_lauf(term) == 0 and "not google" in term.text
+    skript = _skript()
     monkeypatch.setattr(skript, "_ein_lauf", lambda argv=None: pytest.fail("Google-Lauf"))
     assert skript.main(["zentrale"]) == 0
-    # Ein alter Google-Stand wird nicht zur Warnung „läuft nicht".
-    import kalender_sync_zustand
+    _kalender_anschluss()                                    # auch mit Anschluss nicht
+    assert skript.main(["zentrale"]) == 0
     monkeypatch.setattr(kalender_sync_zustand, "lesen", lambda: {"letzter_versuch": "2026-01-01T00:00:00"})
     assert kalender_sync_zustand.bewerten()["problem"] is False
-    assert kalender_sync_zustand.alarme() == []
-    # Zweimal einschalten: nichts Neues, kein zweiter Ursprung.
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "vorhanden"
+    # Noch einmal: nichts Neues.
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "gleich"
 
 
-def test_mitte_wer_zuerst_einschaltet_legt_nichts_beiseite(monkeypatch, tmp_path):
+def test_quelle_zencloud_volle_cloud_legt_beiseite_auch_beim_umstoepseln(monkeypatch, tmp_path):
     import adapter_ablauf
     import abgleich
-    _mitte_spiel(monkeypatch, tmp_path)
+    _mitte_spiel(monkeypatch, tmp_path, hat=True)
+    _kalender_da(tmp_path)
+    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)
+    assert r["ergebnis"] == "uebernimmt" and r["beiseite"]
+    assert r["beiseite"].startswith(os.path.join(abgleich.ordner(), "kalender-vor-cloud"))
+    assert os.path.exists(os.path.join(r["beiseite"], "termine", "a.ics"))   # nie gelöscht
+    assert not (tmp_path / "data" / "kalender").exists()
+
+
+def test_quelle_zencloud_unbekannt_bricht_ab_aendert_nichts(monkeypatch, tmp_path):
+    import adapter_ablauf
+    import abgleich
+    laeufe = _mitte_spiel(monkeypatch, tmp_path, hat=None)
     ics = _kalender_da(tmp_path)
-    adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))
-    assert adapter.kalender_ursprung() == "laptop"
-    assert json.loads(open(abgleich.ordner() + "/kalender_dabei.json").read())["ursprung"] is True
-    assert adapter.vor_abgleich(tmp_path, abgleich.ordner(), [adapter.KALENDER_MUSTER]) is None
-    assert ics.exists()
-
-
-def test_mitte_mit_terminen_macht_nicht_zum_ursprung(monkeypatch, tmp_path):
-    """Zwei Geräte schalten vor dem ersten Abgleich ein: das zweite findet
-    schon Termine in der Mitte (abgleich.mitte_hat_kalender) und wird NICHT
-    Ursprung, auch wenn der Anschluss des ersten noch nicht da ist."""
-    import adapter_ablauf
-    import abgleich
-    _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
-    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda ordner="data/kalender": True)
-    _kalender_da(tmp_path)
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "dazu"
-    assert not adapter.kalender_dabei(abgleich.ordner())
-
-
-def test_mitte_spaeter_eingeschaltet_legt_beiseite_statt_zu_loeschen(monkeypatch, tmp_path):
-    """Ein anderes Gerät war zuerst: dieses ist NICHT der Ursprung, auch wenn
-    es selbst einschaltet — sein alter Kalender wandert beiseite."""
-    import adapter_ablauf
-    import abgleich
-    _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
-    # Was der erste Abgleich vom Laptop mitbringt:
-    a = adapter.neu("kalender-mitte", "kalender-mitte", "kalender")
-    a["eingerichtet"]["auf"] = "laptop"
-    adapter.speichern(a)
-    _kalender_da(tmp_path)
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "vorhanden"
-    assert not adapter.kalender_dabei(abgleich.ordner())
-    ziel = adapter.vor_abgleich(tmp_path, abgleich.ordner(), [adapter.KALENDER_MUSTER])
-    assert ziel and not (tmp_path / "data" / "kalender").exists()
-    assert os.path.exists(os.path.join(ziel, "termine", "a.ics"))
-
-
-def test_mitte_neben_google_anschluss_ist_nicht_ursprung(monkeypatch, tmp_path):
-    """Gleicht der Kalender schon über einen Google-Anschluss ab, macht das
-    Einschalten dieses Gerät nicht zum Ursprung."""
-    import adapter_ablauf
-    import abgleich
-    _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
-    g = _kalender_anschluss()
-    g["eingerichtet"]["auf"] = "laptop"
-    adapter.speichern(g)
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "dazu"
-    assert not adapter.kalender_dabei(abgleich.ordner())
-    assert adapter.kalender_ursprung() == "laptop"
-    assert not adapter.kalender_ohne_bruecke()      # Google fährt weiter über die Brücke
-
-
-def test_mitte_ohne_konto_oder_offline_schaltet_nichts_ein(monkeypatch, tmp_path):
-    import adapter_ablauf
-    import abgleich
-    _mitte_spiel(monkeypatch, tmp_path)
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "unbekannt"
+    assert not ke.eingestellt() and ics.exists() and laeufe == []
+    monkeypatch.delattr(abgleich, "mitte_hat_kalender")    # Vertrag noch nicht gebaut → None
+    assert adapter_ablauf.mitte_hat_kalender() is None
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "unbekannt"
     monkeypatch.setattr(adapter_ablauf, "nur_lokal", lambda: True)
-    term = Spiel()
-    assert befehle.adapter_kalender(term) == 1 and "Not logged in" in term.text
-    monkeypatch.setattr(adapter_ablauf, "nur_lokal", lambda: False)
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "ohne_mitte"
+    assert not ke.eingestellt()
+
+
+def test_mitte_hat_kalender_vertrag(monkeypatch):
+    import adapter_ablauf
+    import abgleich
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda ordner="data/kalender": ordner == "data/kalender")
+    assert adapter_ablauf.mitte_hat_kalender() is True
+    assert adapter_ablauf.mitte_hat_kalender("data/kalender_arbeit") is False
+
+    def kaputt(ordner="data/kalender"):
+        raise OSError("weg")
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", kaputt)
+    assert adapter_ablauf.mitte_hat_kalender() is None
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", lambda ordner="data/kalender": "ja")
+    assert adapter_ablauf.mitte_hat_kalender() is None
+
+
+def test_fuellen_geht_nicht_hinaus_nimmt_den_wert_zurueck(monkeypatch, tmp_path):
+    import adapter_ablauf
+    import abgleich
+    _mitte_spiel(monkeypatch, tmp_path, hat=False)
+    ics = _kalender_da(tmp_path)
 
     def offline(w, **k):
         raise OSError("keine Verbindung")
     monkeypatch.setattr(abgleich, "abgleichen", offline)
-    assert adapter_ablauf.kalender_mitte_einschalten(str(tmp_path))[0] == "offline"
-    assert not adapter.kalender_ueber_cloud() and not adapter.kalender_dabei(abgleich.ordner())
+    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)
+    assert r["ergebnis"] == "offline" and not ke.eingestellt() and ics.exists()
+    ke.schreiben(ke.HAUPT, "lokal")
+    adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)
+    assert ke.quelle() == "lokal"
+
+
+def test_der_fuellende_abgleich_legt_nicht_beiseite(monkeypatch, tmp_path):
+    """Im Abgleich, den kalender_quelle_setzen nach „Cloud leer" fährt, bleibt
+    der Kalender liegen — vor_abgleich sieht den Block kalender_fuellt."""
+    import adapter_ablauf
+    import abgleich
+    _mitte_spiel(monkeypatch, tmp_path, hat=False)
+    ics = _kalender_da(tmp_path)
+    gesehen = []
+    monkeypatch.setattr(abgleich, "abgleichen", lambda w, **k: gesehen.append(
+        adapter.vor_abgleich(tmp_path, abgleich.ordner(), [adapter.KALENDER_MUSTER])))
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "fuellt"
+    assert gesehen == [None] and ics.exists()
+
+
+def test_spaeteres_geraet_legt_beim_ersten_abgleich_beiseite(monkeypatch, tmp_path):
+    """Die Einstellung kam mit dem Abgleich: jedes Gerät folgt derselben
+    Regel — Cloud voll → beiseite, Cloud leer → füllt, Basis kennt den
+    Kalender → normaler Abgleich, unbekannt → kein Abgleich."""
+    import abgleich
+    _mitte_spiel(monkeypatch, tmp_path, knoten="minipc")
+    ke.schreiben(ke.HAUPT, "zencloud")
+    m = abgleich_apps.jetzt_erlaubt([adapter.KALENDER_MUSTER])
+    assert m == [adapter.KALENDER_MUSTER]
+    o = abgleich.ordner()
+
+    def frage(antwort):
+        return lambda ordner="data/kalender": antwort
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(True)) is None      # nichts da
+    _kalender_da(tmp_path)
+    _basis(o, ["data/kalender/termine/a.ics"])
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(True)) is None      # war schon dabei
+    _basis(o, ["data/lists.json"])
+    assert adapter.vor_abgleich(tmp_path, o, m, frage(False)) is None     # füllt die Cloud
+    with pytest.raises(abgleich_mitte.MitteFehler):
+        adapter.vor_abgleich(tmp_path, o, m, frage(None))
+    ziel = adapter.vor_abgleich(tmp_path, o, m, frage(True))
+    assert ziel and os.path.exists(os.path.join(ziel, "termine", "a.ics"))
+    assert not (tmp_path / "data" / "kalender").exists()
+    # Ohne Frage (der heutige Abgleich gibt sie noch nicht herein): die des
+    # laufenden Abgleichs; im Block kalender_fuellt wird nicht gefragt.
+    _kalender_da(tmp_path)
+    assert adapter.vor_abgleich(tmp_path, o, m) is None                   # Spiel: Cloud leer
+    monkeypatch.setattr(abgleich, "mitte_hat_kalender", frage(True))
+    with adapter.kalender_fuellt():
+        assert adapter.vor_abgleich(tmp_path, o, m) is None
+    assert adapter.vor_abgleich(tmp_path, o, m)
+
+
+def test_quelle_lokal_weder_cloud_noch_google(monkeypatch, tmp_path):
+    import adapter_ablauf
+    monkeypatch.setattr(ai_config, "_overrides", {"abgleich_apps": {"kalender": True}})
+    _mitte_spiel(monkeypatch, tmp_path)
+    _kalender_anschluss()
+    adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "lokal", tmp_path)
+    assert not adapter.kalender_ueber_cloud() and not adapter.kalender_google_an()
+    assert "data/kalender/**" not in abgleich_apps.muster()
+    skript = _skript()
+    monkeypatch.setattr(skript, "_ein_lauf", lambda argv=None: pytest.fail("Google-Lauf"))
+    assert skript.main(["zentrale"]) == 0
+
+
+def test_umstoepseln_loescht_nichts(monkeypatch, tmp_path):
+    import adapter_ablauf
+    _mitte_spiel(monkeypatch, tmp_path, hat=False)
+    ics = _kalender_da(tmp_path)
+    for q in ("zencloud", "lokal", "google", "zencloud", "google"):
+        adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, q, tmp_path)
+        assert ke.quelle() == q and ics.exists()
+    assert ke.instanz()["geaendert"]["von"] == "zencloud"
+    with pytest.raises(adapter.AdapterFehler):
+        adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "icloud", tmp_path)
+
+
+def test_alter_schalter_kalender_mitte_wird_zencloud(monkeypatch, tmp_path, capsys):
+    import adapter_ablauf
+    _mitte_spiel(monkeypatch, tmp_path, hat=True)
+    d = tmp_path / "data/adapter/anschluesse"
+    d.mkdir(parents=True)
+    (d / "kalender-mitte.json").write_text(json.dumps(
+        {"format": adapter.FORMAT, "id": "kalender-mitte", "art": "kalender-mitte", "speist": "kalender"}))
+    assert adapter.alle() == {} and "ungültig" not in capsys.readouterr().out
+    assert ke.quelle() == "zencloud" and adapter.kalender_ueber_cloud()
+    # Umstöpseln schreibt die neue Datei und nimmt den alten Schalter weg.
+    assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "uebernimmt"
+    assert sorted(os.listdir(d)) == ["kalender-haupt.json"]
+    assert ke.quelle() == "zencloud"
+
+
+def test_zwei_kalender_apps_je_eine_quelle(monkeypatch, tmp_path):
+    _mitte_spiel(monkeypatch, tmp_path)
+    ke.schreiben(ke.HAUPT, "google")
+    ke.schreiben("kalender-arbeit", "zencloud", ordner_rel="data/kalender_arbeit")
+    assert sorted(ke.instanzen()) == ["kalender-arbeit", "kalender-haupt"]
+    assert [e["id"] for e in ke.mit_quelle("zencloud")] == ["kalender-arbeit"]
+    assert not adapter.kalender_ueber_cloud()                        # data/kalender: google
+    assert adapter.kalender_ueber_cloud(ordner="data/kalender_arbeit")
+    assert ke.pruefen(ke.neu("kalender-x", "lokal", "data/kalender_x")) == []
+    assert ke.pruefen(dict(ke.neu("kalender-x", "dropbox"))) != []
+    assert adapter.alle() == {}                                       # keine Anschlüsse
+
+
+def test_cli_kalender_quelle(monkeypatch, tmp_path):
+    from zentrale_cli import haupt
+    _mitte_spiel(monkeypatch, tmp_path)
+    monkeypatch.setattr(befehle, "WURZEL", str(tmp_path))
+    term = Spiel()
+    assert haupt.main(["adapter", "calendar"], term) == 0
+    assert "Calendar source: google (not set" in term.text
+    term = Spiel()
+    assert haupt.main(["adapter", "calendar", "lokal"], term) == 0
+    assert "google → lokal" in term.text and ke.quelle() == "lokal"
+    term = Spiel()
+    assert haupt.main(["adapter", "calendar", "icloud"], term) == 2
+    term = Spiel()
+    befehle.adapter_liste(term)
+    assert "Calendar source: lokal" in term.text

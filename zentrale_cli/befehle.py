@@ -372,8 +372,11 @@ def _anschluss_status(a):
 def adapter_liste(term):
     """`zentrale adapter`: die Anschlüsse, wer die Brücke fährt (nur lesen —
     die Brücke wechselt von selbst)."""
+    import kalender_einstellung as ke
     alle = adapter.alle()
     term.sag(t("ad_title"), "fett")
+    term.sag("  " + t("ad_cal_source", quelle=ke.quelle())
+             + ("" if ke.eingestellt() else t("ad_cal_source_default")))
     if not alle:
         term.sag(t("ad_none"))
         return 0
@@ -424,8 +427,8 @@ def adapter_lauf(term):
     sammelt. Ohne vdirsyncer bleibt das Gerät Verbraucher (adapter_ablauf)."""
     import importlib.util
     import adapter_vdirsyncer
-    if adapter.kalender_ohne_bruecke():
-        term.sag(t("ad_run_mitte"))
+    if not adapter.kalender_google_an():
+        term.sag(t("ad_run_not_google", quelle=_quelle()))
         return 0
     if adapter.kalender_anschluss() is None and not os.path.exists(adapter_vdirsyncer.vorgabe_config()):
         term.sag(t("ad_run_nothing"))
@@ -437,20 +440,46 @@ def adapter_lauf(term):
     return modul.main(["zentrale"])
 
 
-def adapter_kalender(term):
-    """`zentrale adapter calendar`: der Schalter „Kalender über die Mitte,
-    ohne Google" (adapter_ablauf.kalender_mitte_einschalten). Bewusst ein
-    eigener Schritt — nichts schaltet ihn von selbst ein."""
-    ergebnis, fehler = adapter_ablauf.kalender_mitte_einschalten(WURZEL)
-    if ergebnis == "ohne_mitte":
+def _quelle():
+    import kalender_einstellung
+    return kalender_einstellung.quelle()
+
+
+def adapter_kalender(term, rest=()):
+    """`zentrale adapter calendar [google|zencloud|lokal]`: die Quelle der
+    Kalender-App kalender-haupt zeigen bzw. umstöpseln
+    (adapter_ablauf.kalender_quelle_setzen). Ändert nur den Wert, löscht
+    nichts. Ohne Wort: nur zeigen."""
+    import kalender_einstellung as ke
+    if not rest:
+        q = ke.quelle()
+        term.sag(t("ad_cal_source", quelle=q) + ("" if ke.eingestellt() else t("ad_cal_source_default")))
+        term.sag(t("ad_cal_source_how"), "blass")
+        return 0
+    if len(rest) != 1 or rest[0] not in ke.QUELLEN:
+        term.fehler(t("ad_cal_source_bad", wort=" ".join(rest), liste=" | ".join(ke.QUELLEN)))
+        return 2
+    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, rest[0], WURZEL)
+    e = r["ergebnis"]
+    if e == "ohne_mitte":
         term.sag(t("ad_cal_hub_no_account"), "warn")
         return 1
-    if ergebnis == "offline":
-        term.sag(t("ad_cal_hub_offline", text=fehler), "fehler")
+    if e == "unbekannt":
+        term.sag(t("ad_cal_hub_unknown"), "fehler")
         return 1
-    term.sag(t("ad_cal_hub_" + ergebnis), *(() if ergebnis == "vorhanden" else ("gut",)))
-    if fehler:
-        term.sag(t("ad_cal_hub_sync_later", text=fehler), "warn")
+    if e == "offline":
+        term.sag(t("ad_cal_hub_offline", text=r["fehler"]), "fehler")
+        return 1
+    if e == "gleich":
+        term.sag(t("ad_cal_source_same", quelle=rest[0]))
+        return 0
+    term.sag(t("ad_cal_set", von=r["von"], quelle=rest[0]), "gut")
+    if e in ("fuellt", "uebernimmt"):
+        term.sag(t("ad_cal_hub_" + e))
+    if r["beiseite"]:
+        term.sag(t("ad_cal_aside", pfad=r["beiseite"]), "warn")
+    if r["fehler"]:
+        term.sag(t("ad_cal_hub_sync_later", text=r["fehler"]), "warn")
     return 0
 
 

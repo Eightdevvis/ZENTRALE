@@ -10,9 +10,10 @@
 #                    Brücke nehmen oder verlängern → abgleichen → nur wenn
 #                    der Abgleich den eigenen Namen zurückbrachte, Google
 #                    abgleichen → Token und Stand zurück → abgleichen.
-#   kalender_mitte_einschalten()
-#                    der Schalter „Kalender über die Mitte, ohne Google":
-#                    Anschluss `kalender-mitte` (keine Brücke, kein Timer).
+#   kalender_quelle_setzen()
+#                    die eine Stelle zum Umstöpseln: die Quelle einer
+#                    Kalender-App (google | zencloud | lokal) setzen
+#                    (core/kalender_einstellung.py). Löscht nie etwas.
 #
 # Fundament (Schicht 1). Den Lauf von vdirsyncer selbst (mit allen
 # Sicherungen, scripts/kalender_sync.py) gibt der Aufrufer herein.
@@ -26,6 +27,7 @@ import adapter_bruecke as bruecke
 import adapter_geheim
 import adapter_vdirsyncer as vdir_cfg
 import dateien
+import kalender_einstellung
 import kalender_sync_zustand
 
 KALENDER_ID = "google-kalender"
@@ -65,52 +67,81 @@ def einrichten(vdir=None, wurzel=None, kalender=True) -> dict:
         raus["kalender"] = "kein_paar"
         return raus
     adapter.speichern(a, wurzel)
-    # Dieses Gerät brachte den Kalender mit: von Anfang an dabei, und sein
-    # bisheriger Stand von vdirsyncer reist ab jetzt mit.
-    adapter.als_ursprung_merken(abgleich.ordner())
+    # Der bisherige Stand von vdirsyncer reist ab jetzt mit.
     bruecke.einpacken(KALENDER_ID, vdir_cfg.status_dir(a), vdir_cfg.kalender_paare(a),
                       _stand_datei(), dateien.knoten(), wurzel)
     raus["kalender"] = "angelegt"
     return raus
 
 
-def kalender_mitte_einschalten(wurzel) -> tuple:
-    """Der Schalter „Kalender über die Mitte, ohne Google" (Sasha 28.10.2026:
-    Google wird abgelöst). Legt den Anschluss `kalender-mitte` an — Art ohne
-    Brücke: data/kalender/** gleicht über die Mitte ab, niemand spricht mit
-    Google. Die Mitte ist die Wahrheit; Ursprung ist nur, wer als ERSTER
-    einschaltet:
+def mitte_hat_kalender(ordner="data/kalender"):
+    """Hat die Mitte schon Termine in `ordner`? True/False, None =
+    unbekannt — abgleich.mitte_hat_kalender, abgefangen (wirft nie)."""
+    try:
+        r = abgleich.mitte_hat_kalender(ordner=ordner)
+    except Exception as e:      # noqa: BLE001 — unbekannt ist nie ein Fehler
+        print(f"[adapter] Mitte nach dem Kalender gefragt: {e}")
+        return None
+    return r if r is True or r is False else None
 
-      1. erst abgleichen — bringt einen Kalender-Anschluss, den ein anderes
-         Gerät schon angelegt hat (ohne Mitte oder offline: nichts tun);
-      2. gab es schon einen Kalender-Anschluss, ist dieses Gerät NICHT der
-         Ursprung: kein Merkzettel, beim nächsten Abgleich wandert sein alter
-         data/kalender/ beiseite (vor_abgleich, nie gelöscht) und es übernimmt
-         den Stand der Mitte;
-      3. sonst ist es der Ursprung (als_ursprung_merken): sein Kalender füllt
-         die Mitte und wandert nie beiseite;
-      4. abgleichen — der Anschluss (und beim Ursprung der Kalender) geht
-         gleich hinaus.
 
-    Löscht nie eine .ics. Ausschalten = Anschluss-Datei entfernen (dann
-    schneidet abgleich_apps.jetzt_erlaubt den Kalender wieder heraus).
-    → (ergebnis, fehler): ergebnis ∈ ursprung | dazu | vorhanden |
-    ohne_mitte | offline; fehler = Text des letzten Abgleichs oder None."""
+def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
+    """Die Quelle der Kalender-App `iid` umstöpseln (Sasha 28.10.2026: ein
+    Wert, eine Stelle). Setzt nur den Wert in der Einstellung (die überall
+    abgleicht) und löscht nie eine Termin-Datei:
+
+      → google / lokal: Wert setzen. Die Termine hier bleiben liegen.
+      → zencloud: erst die Mitte fragen (abgleich.mitte_hat_kalender).
+          None (offline, unbekannt) → Abbruch, nichts geändert.
+          False → dieses Gerät füllt die Cloud: Wert setzen und gleich
+              abgleichen (adapter.kalender_fuellt); geht der Abgleich nicht
+              hinaus, wird der Wert zurückgenommen (→ "offline") — sonst
+              legte der nächste Abgleich den eigenen Kalender beiseite.
+          True → die Cloud gilt: Wert setzen, der Kalender hier wandert
+              beiseite (<abgleich>/kalender-vor-cloud/<zeit>/, nie gelöscht;
+              nur wenn sich das Gerät noch nie mit der Mitte über ihn
+              geeinigt hat), dann abgleichen. Jedes spätere Gerät tut beim
+              ersten Abgleich dasselbe (adapter.vor_abgleich).
+
+    → {"ergebnis": gleich | gesetzt | fuellt | uebernimmt | ohne_mitte |
+       unbekannt | offline, "von": alte Quelle, "beiseite": Pfad|None,
+       "fehler": Text|None}"""
+    ke = kalender_einstellung
+    if quelle not in ke.QUELLEN:
+        raise adapter.AdapterFehler(
+            f"Unknown calendar source '{quelle}' — use one of: {', '.join(ke.QUELLEN)}")
+    alt = ke.quelle(iid, wurzel)
+    raus = {"ergebnis": "gleich", "von": alt, "beiseite": None, "fehler": None}
+    vorher = ke.roh_lesen(iid, wurzel)
+    if alt == quelle and vorher is not None:
+        return raus
+    ordner = ke.ordner(iid, wurzel)
+    if quelle != "zencloud":
+        ke.schreiben(iid, quelle, wurzel)
+        if iid == ke.HAUPT:
+            ke.alt_mitte_weg(wurzel)
+        return dict(raus, ergebnis="gesetzt")
     if nur_lokal():
-        return "ohne_mitte", None
-    fehler = _abgleichen(wurzel)
+        return dict(raus, ergebnis="ohne_mitte")
+    hat = mitte_hat_kalender(ordner)
+    if hat is None:
+        return dict(raus, ergebnis="unbekannt")
+    ke.schreiben(iid, "zencloud", wurzel)
+    if hat:
+        if not adapter.kalender_in_basis(abgleich.ordner(), ordner):
+            raus["beiseite"] = adapter.beiseite_legen(wurzel, abgleich.ordner(), ordner)
+        if iid == ke.HAUPT:
+            ke.alt_mitte_weg(wurzel)
+        return dict(raus, ergebnis="uebernimmt", fehler=_abgleichen(wurzel))
+    with adapter.kalender_fuellt(ordner):
+        fehler = _abgleichen(wurzel)
     if fehler:
-        return "offline", fehler
-    if adapter.lesen(adapter.MITTE_ID, wurzel):
-        return "vorhanden", _abgleichen(wurzel)
-    # Liegen schon Termine in der Mitte, war ein anderes Gerät zuerst — auch
-    # wenn sein Anschluss hier noch nicht angekommen ist (abgleich.mitte_hat_kalender).
-    schon = adapter.kalender_ueber_cloud(wurzel) or abgleich.mitte_hat_kalender() is True
-    adapter.speichern(adapter.neu(adapter.MITTE_ID, "kalender-mitte", "kalender",
-                                  "Calendar through your account"), wurzel)
-    if not schon:
-        adapter.als_ursprung_merken(abgleich.ordner())
-    return ("dazu" if schon else "ursprung"), _abgleichen(wurzel)
+        ke.roh_zurueck(iid, vorher, wurzel)
+        return dict(raus, ergebnis="offline", fehler=fehler)
+    if iid == ke.HAUPT and ke.alt_mitte_da(wurzel):
+        ke.alt_mitte_weg(wurzel)
+        _abgleichen(wurzel)
+    return dict(raus, ergebnis="fuellt")
 
 
 def _stand_datei():
@@ -157,12 +188,20 @@ def bruecke_lauf(a, wurzel, vdir, fahren, jetzt=None) -> Lauf:
     aid = a["id"]
     if not shutil.which("vdirsyncer"):
         return Lauf("wartet", text="vdirsyncer is not installed on this device")
-    if nur_lokal():
+    if not adapter.kalender_google_an(wurzel):
+        return Lauf("aus", text="calendar source is not google")
+    if nur_lokal() or not adapter.kalender_mit_vertrag(wurzel):
+        # Ohne Mitte, oder quelle=google gesetzt: die Cloud trägt den
+        # Kalender nicht, jedes Gerät gleicht selbst mit Google ab.
         return _fahren(a, wurzel, vdir, fahren, ich, jetzt, lokal=True)
-    if not adapter.kalender_dabei(abgleich.ordner()):
+    # Der alte Weg mit Mietvertrag: erst fahren, wenn der Kalender aus der
+    # Cloud hier ist (die Basis kennt ihn) oder die Cloud keinen hat.
+    if not adapter.kalender_in_basis(abgleich.ordner()):
         fehler = _abgleichen(wurzel)            # holt den Kalender zum ersten Mal
-        if fehler or not adapter.kalender_dabei(abgleich.ordner()):
-            return Lauf("wartet", text=fehler or "calendar not synced to this device yet")
+        if fehler:
+            return Lauf("wartet", text=fehler)
+        if not adapter.kalender_in_basis(abgleich.ordner()) and mitte_hat_kalender() is not False:
+            return Lauf("wartet", text="calendar not synced to this device yet")
     miete = bruecke.lesen(aid, wurzel)
     if not bruecke.frei_fuer(miete, ich, jetzt):
         return Lauf("andere", miete=miete)
