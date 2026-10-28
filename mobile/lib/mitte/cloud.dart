@@ -47,7 +47,7 @@ class CloudClient {
   Map<String, String> _kopf([String? art]) => {
         'Accept': 'application/json',
         'User-Agent': 'zentrale-handy',
-        if (art != null) 'Content-Type': art,
+        'Content-Type': ?art,
         if (token != null) 'Authorization': 'Bearer $token',
       };
 

@@ -388,9 +388,11 @@ Sasha (das löscht Geschichte — Claude tut es nicht).
 ## Das Handy und andere fremde Knoten
 
 Sasha, 08.10.2026: **das Handy wird ein eigener Knoten an der Mitte** (eigene
-App in Dart/Flutter). Es liest und schreibt die Mitte selbst (GitHub-API mit
-einem eng begrenzten Token, nur dieses Repo), ruft das Sprachmodell selbst
-auf und schreibt **nur eigene Dateien**.
+App in Dart/Flutter). Es liest und schreibt die Mitte selbst, ruft das
+Sprachmodell selbst auf und schreibt **nur eigene Dateien** (und Vorschläge).
+Seit 28.10.2026 über die ZENTRALE-Cloud mit dem Konto (einmal anmelden, unten
+„Über die Cloud“); der ursprüngliche GitHub-Weg bleibt hier beschrieben, weil
+das Format dasselbe ist. Die App: [../system/zen_mobile.md](../system/zen_mobile.md).
 
 Ein fremder Knoten ist anders gebaut als ein Rechner: er **führt nie
 zusammen und schreibt nie ins Inhaltsverzeichnis.** Sonst stritten Handy und
@@ -402,7 +404,22 @@ Abgleich und übernehmen daraus:
 |---|---|
 | **eigene Datei** des Knotens: `data/gespraeche/<id>/<knoten>.jsonl`, `data/gespraeche/_knoten/<knoten>.json`, `data/rueckmeldungen/<knoten>.jsonl` | gilt so, wie sie ist; auf jeden Rechner geschrieben, **nie überschrieben**, nie ins Inhaltsverzeichnis. Eine örtliche Änderung daran wird beim nächsten Abgleich zurückgesetzt. Konfliktfrei durch Bauart: nur dieser Knoten schreibt sie. |
 | `data/gespraeche/<id>/kopf.json` (neues Gespräch) | **Vorschlag**: gilt nur, solange die Mitte für dieses Gespräch noch keinen Kopf hat. Dann übernimmt ihn der erste Rechner ins Inhaltsverzeichnis; ab da gilt der dort (Umbenennen usw. machen die Rechner). |
+| `data/kalender/<ebene>/<uid>.ics` (neuer Termin, seit 28.10.2026) | **Vorschlag**: eine ganze .ics mit genau einer UID, Dateiname = UID (Zeichen außer `A–Z a–z 0–9 @ . -` → `_`) + `.ics`, die Ebene gibt es in der Mitte schon. Gilt nur, solange es **Pfad und UID nirgends** gibt und kein Grabstein auf dem Pfad liegt — dann übernimmt ihn der erste Rechner wie eine Datei aus der Mitte (auf alle Rechner, über die Brücke zu Google). Schon da oder gelöscht → still übergangen; UID woanders, Ebene fehlt, Name passt nicht → übergangen mit Hinweis. Die eine Regel: `core/abgleich_vorschlaege.kalender_vorschlag_annehmen`. |
 | alles andere, falscher Name, unlesbar | übergangen, mit Hinweis |
+
+Ein Vorschlag wird nur geprüft, wenn die App auf diesem Rechner abgleicht
+(`abgleich_apps`): solange `data/kalender/**` nicht über die Mitte läuft,
+wartet ein Termin-Vorschlag still im Eingang. Das Handy sieht den Kalender
+erst, wenn ein Rechner ihn in die Mitte gibt (Schalter der Kalender-Session,
+`abgleich_apps.jetzt_erlaubt`) — bis dahin zeigt es „noch nicht in der Mitte“.
+
+**Nächster Schritt (geplant, Kalender-Session):** Ändern, Löschen und einzelne
+Vorkommen ab-/anschalten vom Handy. Das Handy schickt dafür weiter die **ganze
+.ics** in den Eingang; geweitet wird nur `kalender_vorschlag_annehmen`: eine
+vorhandene UID wird dann nicht mehr abgelehnt, sondern je VEVENT (UID +
+RECURRENCE-ID) mit der Fassung der Mitte zusammengeführt (`core/abgleich_ics`,
+späterer LAST-MODIFIED gewinnt). Löschen braucht dann eine eigene Form im
+Eingang (z. B. STATUS:CANCELLED je Termin) — noch nicht entschieden.
 
 **Abweichung vom Vorschlag „Pfad-Spiegel" (Klartext-Pfade):** die Pfade
 bleiben auch für das Handy versteckt (`<name>` = HMAC des Pfads, unten).
@@ -473,7 +490,37 @@ weder `inhalt.enc` noch `d/`.
 Immer die **ganze** Datei (eine `.jsonl` wächst, die Eingangsdatei wird
 ersetzt). Da nur dieser Knoten in `knoten/<knoten>/` schreibt, kann ein `PUT`
 nur scheitern, wenn er selbst gleichzeitig schreibt; die Rechner fassen den
-Eingang nie an. Löschen gibt es nicht (Gespräche werden archiviert).
+Eingang nie an. Gelöscht wird nur eines: ein **Termin-Vorschlag**, sobald das
+Inhaltsverzeichnis den Pfad nennt (übernommen) oder einen Grabstein dafür hat
+— das räumt der Knoten selbst aus seinem Eingang (Gespräche werden nie
+gelöscht, nur archiviert).
+
+**Über die Cloud (seit 2026-10-28, das Handy):** dieselben Namen und
+Umschläge, nur über die Routen der Cloud
+([../hub/knoten_beitritt.md](../hub/knoten_beitritt.md) „Schnittstelle“):
+
+- **Anmelden:** `POST /v1/vorab {name}` → `{salz, kdf}`; Argon2id → HKDF →
+  `POST /v1/sitzung {name, anmelde_schluessel, knoten}` → `{token, laeuft_ab,
+  verpackt_passwort}`; `konto_schluessel` = Fernet(verpack_schluessel) auf
+  `verpackt_passwort`. Prüfstein `tests/daten/konto_testvektoren.json`. Der
+  **Schlüssel** der Mitte ist dann der `konto_schluessel` (44 Zeichen wie
+  oben), nicht `abgleich.schluessel`.
+- **Lesen:** `GET /v1/mitte` → `{kennung, namen}`; `kennung` null = noch kein
+  Rechner war da → warten, nichts schreiben. `GET /v1/mitte/datei/inhalt.enc`,
+  dann je Datei `GET /v1/mitte/datei/d/<name>.enc` (sha prüfen; 404 oder
+  falscher sha = die Mitte lief weiter → beim nächsten Mal).
+- **Schreiben:** ein `POST /v1/mitte/stand {basis: kennung, schreiben: {name:
+  base64(token)}, verweise: {name: sha256}, loeschen: [name]}` nur mit Namen
+  unter `knoten/<knoten>/`. Inline zusammen ≤ 256 KiB, Größeres vorher als Blob
+  (`POST /v1/mitte/fehlende`, `PUT /v1/mitte/blob/<sha256>` — sha256 der
+  verschlüsselten Bytes) und als Verweis. **409 `jemand_schneller`** → `GET
+  /v1/mitte` für die neue Kennung, dasselbe nochmal (der Eingang gehört nur
+  dem Knoten, es gibt nichts zusammenzuführen); **400 `blob_fehlt`** → die
+  `fehlen` hochladen, nochmal. Die Rechner übernehmen beim nächsten Stand alle
+  Namen der Basis, der Eingang bleibt also erhalten.
+- Prüfsteine: Dart-Tests in `mobile/test/` gegen eine gespielte Cloud und gegen
+  `mobile/test/daten/mitte_testvektoren.json` (erzeugt mit dem echten Kern von
+  `scripts/handy_testvektoren.py`); Rechner-Seite `tests/test_abgleich_handy.py`.
 
 **Der Knotenname:** Rechner heißen wie ihr Hostname (`0RAMMachine`,
 `pop-os`). Das Handy heißt fest **`handy`**. Ein weiterer Knoten wählt

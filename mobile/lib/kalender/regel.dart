@@ -36,8 +36,8 @@ DateTime? isoTagLesen(String? s) {
 
 const _wt = {'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4, 'FR': 5, 'SA': 6, 'SU': 7};
 
-class _Wochentag {
-  _Wochentag(this.tag, this.n);
+class Wochentag {
+  Wochentag(this.tag, this.n);
   final int tag; // 1 = Montag … 7 = Sonntag (DateTime.weekday)
   final int? n; // 2TU → 2, -1SU → -1, ohne Zahl null
 }
@@ -54,7 +54,7 @@ class Regel {
   final DateTime? bis;
   final List<int> monate;
   final List<int> monatstage;
-  final List<_Wochentag> wochentage;
+  final List<Wochentag> wochentage;
   final List<int> setpos;
   final int wkst;
 
@@ -65,7 +65,7 @@ class Regel {
     int? anzahl;
     DateTime? bis;
     var monate = <int>[], monatstage = <int>[], setpos = <int>[];
-    var wochentage = <_Wochentag>[];
+    var wochentage = <Wochentag>[];
     var wkst = 1;
     List<int> zahlen(String v) => [for (final x in v.split(',')) int.parse(x.trim())];
     for (final teil in text.split(';')) {
@@ -99,7 +99,7 @@ class Regel {
                   final m = RegExp(r'^([+-]?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$')
                       .firstMatch(x.trim().toUpperCase());
                   if (m == null) throw RegelFehler('BYDAY $x');
-                  return _Wochentag(_wt[m.group(2)]!, m.group(1) == null ? null : int.parse(m.group(1)!));
+                  return Wochentag(_wt[m.group(2)]!, m.group(1) == null ? null : int.parse(m.group(1)!));
                 }()
             ];
           default:
@@ -132,7 +132,7 @@ class Regel {
     var mt = monatstage, wt = wochentage, mo = monate;
     if (wt.isEmpty && mt.isEmpty) {
       if (freq == 'WEEKLY') {
-        wt = [_Wochentag(anfang.weekday, null)];
+        wt = [Wochentag(anfang.weekday, null)];
       } else if (freq == 'MONTHLY') {
         mt = [anfang.day];
       } else if (freq == 'YEARLY') {
@@ -199,7 +199,7 @@ class Regel {
     }
   }
 
-  bool _passt(DateTime d, List<int> mo, List<int> mt, List<_Wochentag> wt) {
+  bool _passt(DateTime d, List<int> mo, List<int> mt, List<Wochentag> wt) {
     if (mo.isNotEmpty && !mo.contains(d.month)) return false;
     if (mt.isNotEmpty) {
       final n = DateTime.utc(d.year, d.month + 1, 0).day;
@@ -211,7 +211,7 @@ class Regel {
 
   /// BYDAY mit Zahl: n-ter Wochentag im Monat (MONTHLY, oder YEARLY mit
   /// BYMONTH) bzw. im Jahr (YEARLY ohne BYMONTH) — wie dateutil.
-  bool _wochentagPasst(DateTime d, _Wochentag w, List<int> mo) {
+  bool _wochentagPasst(DateTime d, Wochentag w, List<int> mo) {
     if (d.weekday != w.tag) return false;
     final n = w.n;
     if (n == null || freq == 'DAILY' || freq == 'WEEKLY') return true;

@@ -31,9 +31,13 @@ class KiFehler implements Exception {
 
 abstract class KiAnbieter {
   /// Antwort als Strom. [verlauf] ist [{role, content}], älteste zuerst.
+  /// [wechselnd] = was sich von Zug zu Zug ändert (heute: der Kalender der
+  /// nächsten Tage) — steht HINTER dem festen Prompt und außerhalb des
+  /// Caches, damit der große feste Teil gecacht bleibt.
   /// Abbrechen = die Subscription kündigen.
   Stream<KiStueck> antworten({
     required String system,
+    String? wechselnd,
     required List<Map<String, String>> verlauf,
     required String modell,
     required String effort,

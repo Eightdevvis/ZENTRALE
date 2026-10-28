@@ -62,6 +62,21 @@ void main() {
     expect(body['output_config'], {'effort': 'low'});
     expect(body['stream'], true);
     expect((body['system'] as List).first['cache_control'], {'type': 'ephemeral'});
+    expect((body['system'] as List).length, 1);
+  });
+
+  test('Anthropic: der Kalender steht als zweiter Block hinter dem Cache', () async {
+    late Map<String, dynamic> body;
+    final client = MockClient.streaming((anfrage, bytes) async {
+      body = jsonDecode(await utf8.decodeStream(bytes)) as Map<String, dynamic>;
+      return http.StreamedResponse(Stream.value(utf8.encode(strom)), 200);
+    });
+    await AnthropicAnbieter(() async => 'k', client: client)
+        .antworten(system: 'S', wechselnd: '## Kalender', verlauf: [], modell: 'm', effort: 'low')
+        .toList();
+    final sys = body['system'] as List;
+    expect(sys.length, 2);
+    expect(sys[1], {'type': 'text', 'text': '## Kalender'});
   });
 
   test('Anthropic: Fehlermeldung der API kommt lesbar an', () async {
@@ -86,6 +101,8 @@ void main() {
     expect(not.ausDemKern, isFalse);
     expect(not.modell, standardModell);
     expect(not.system, contains('KEINE Werkzeuge'));
+    expect(not.system, contains('Kalender der nächsten Tage'));
+    expect(not.system, contains('nur lesen'));
 
     await ablage.schreiben(kontextPfad, jsonEncode({
       'version': 1, 'stand': '2026-10-08T12:00:00+00:00', 'anbieter': 'claude',

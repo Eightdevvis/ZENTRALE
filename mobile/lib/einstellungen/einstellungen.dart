@@ -1,5 +1,6 @@
 // Geheimnisse des Handys: liegen im Android-Keystore (flutter_secure_storage),
-// nie in der Ablage — die wandert in die Mitte.
+// nie im Klartext in der Ablage. Hier: der von Hand eingetragene
+// Claude-Schlüssel (Notbehelf; sonst kommt er nach dem Login über die Mitte).
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,6 +18,6 @@ class Einstellungen {
       ? _s.delete(key: _anthropic)
       : _s.write(key: _anthropic, value: wert.trim());
 
-  // Mitte (GitHub-Token, Abgleich-Schlüssel) kommt hierher, sobald das
-  // Format der Mitte steht (memory/betrieb/abgleich.md).
+  // Sitzung und Kontoschlüssel des ZENTRALE-Kontos liegen ebenfalls im
+  // Keystore, eigener Eintrag: lib/konto/konto.dart (KeystoreSitzung).
 }

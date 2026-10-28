@@ -12,8 +12,11 @@ import 'package:zen_mobile/kalender/regel.dart';
 import 'package:zen_mobile/kalender/termin_schreiben.dart';
 import 'package:zen_mobile/konto/geheim.dart';
 import 'package:zen_mobile/konto/konto.dart';
+import 'package:zen_mobile/krypto/fernet.dart';
 import 'package:zen_mobile/krypto/tresor.dart';
+import 'package:zen_mobile/einstellungen/einstellungen.dart';
 import 'package:zen_mobile/mitte/abgleich.dart';
+import 'package:zen_mobile/mitte/abgleich_steuerung.dart';
 import 'package:zen_mobile/mitte/cloud.dart';
 import 'package:zen_mobile/mitte/http_mitte.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
@@ -48,11 +51,22 @@ HttpMitte _mitte(FalscheCloud c) =>
     HttpMitte(CloudClient(basis: 'https://cloud.test', token: c.token, client: c.client), _tresor);
 
 void main() {
-  test('Anmelden: Argon2id → Sitzung → konto_schluessel, Passwort nie gespeichert', () async {
+  test('Anmelden: Hauptschlüssel → Sitzung → konto_schluessel, Passwort nie gespeichert', () async {
     final c = FalscheCloud(vektoren: _konto);
     final speicher = SpeicherSitzung();
+    // Argon2id selbst prüft test/krypto_test.dart; hier zählt der Ablauf. Zwei
+    // 64-MiB-Rechnungen parallel in zwei Test-Prozessen sprengen den Laptop.
+    final haupt = [
+      for (var i = 0; i < (_konto['hauptschluessel_hex'] as String).length; i += 2)
+        int.parse((_konto['hauptschluessel_hex'] as String).substring(i, i + 2), radix: 16)
+    ];
     final konto = Konto(speicher,
-        client: (t) => CloudClient(basis: 'https://cloud.test', token: t, client: c.client));
+        client: (t) => CloudClient(basis: 'https://cloud.test', token: t, client: c.client),
+        ableiten: (pw, salz, kdf) async {
+          expect(salz, b64uLesen(_konto['salz_b64u'] as String));
+          expect(kdf.m, 65536);
+          return pw == _konto['passwort'] ? haupt : List<int>.filled(32, 7);
+        });
     final s = await konto.anmelden('  Sasha ', _konto['passwort'] as String);
     expect(s.kontoSchluessel, _konto['konto_schluessel']);
     expect(s.token, c.token);
@@ -62,7 +76,7 @@ void main() {
     await konto.abmelden();
     expect(speicher.s, isNull);
     expect(c.anfragen, contains('DELETE /v1/sitzung'));
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  });
 
   test('holen: nur was aufs Handy gehört, ohne data/ in der Ablage', () async {
     final c = await _cloud();
@@ -170,4 +184,45 @@ void main() {
     expect(m.eingang.keys, ['data/gespraeche/_knoten/handy.json']);
     expect(Uint8List.fromList(m.eingang.values.first), _b('{}'));
   });
+
+  test('Steuerung: abgemeldet kein Abgleich; angemeldet einer, danach die Nachläufer', () async {
+    final ablage = SpeicherAblage();
+    final speicher = SpeicherSitzung();
+    final m = SpeicherMitte()..rechnerSchreibt('data/mobil/kontext.json', _b('{}'));
+    final st = AbgleichSteuerung(ablage: ablage, konto: Konto(speicher), mitteFuer: (_) => m);
+    var nachher = 0;
+    st.nachher.add(() async => nachher++);
+    await st.jetzt();
+    expect(ablage.dateien.containsKey('mobil/kontext.json'), isFalse);
+    speicher.s = Sitzung(server: 's', name: 'sasha', token: 't',
+        kontoSchluessel: _konto['konto_schluessel'] as String);
+    await Future.wait([st.jetzt(), st.jetzt()]); // zweiter Anstoß wartet, läuft danach
+    expect(ablage.dateien['mobil/kontext.json'], '{}');
+    expect(nachher, greaterThanOrEqualTo(2));
+    expect(st.zustand.letzterErfolg, isNotNull);
+  });
+
+  test('Claude-Schlüssel: von Hand vor Adapter, Adapter nur angemeldet', () async {
+    final ablage = SpeicherAblage();
+    await ablage.schreiben(geheimPfad, _mitteV['geheim_enc'] as String);
+    final speicher = SpeicherSitzung();
+    final hand = _HandSchluessel();
+    final quelle = kiSchluessel(hand, ablage, Konto(speicher));
+    expect(await quelle(), isNull);
+    speicher.s = Sitzung(server: 's', name: 'sasha', token: 't',
+        kontoSchluessel: _konto['konto_schluessel'] as String);
+    expect(await quelle(), _mitteV['geheim_ki']);
+    hand.wert = 'sk-ant-von-hand';
+    expect(await quelle(), 'sk-ant-von-hand');
+    expect(await geheimLesen(ablage, _konto['konto_schluessel'] as String, 'google/token'), isNull,
+        reason: 'Einträge eines anderen Geräts kann das Handy nicht lesen');
+  });
+}
+
+class _HandSchluessel implements Einstellungen {
+  String? wert;
+  @override
+  Future<String?> anthropicSchluessel() async => wert;
+  @override
+  Future<void> anthropicSetzen(String? w) async => wert = w;
 }

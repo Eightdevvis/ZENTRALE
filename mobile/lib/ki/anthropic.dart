@@ -23,6 +23,7 @@ class AnthropicAnbieter implements KiAnbieter {
   @override
   Stream<KiStueck> antworten({
     required String system,
+    String? wechselnd,
     required List<Map<String, String>> verlauf,
     required String modell,
     required String effort,
@@ -44,7 +45,8 @@ class AnthropicAnbieter implements KiAnbieter {
         'thinking': {'type': 'adaptive', 'display': 'summarized'},
         'output_config': {'effort': effort},
         'system': [
-          {'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}
+          {'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}},
+          if (wechselnd != null && wechselnd.isNotEmpty) {'type': 'text', 'text': wechselnd},
         ],
         'messages': verlauf,
       });

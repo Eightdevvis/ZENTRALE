@@ -18,10 +18,13 @@ const standardEffort = 'low';
 const _handyAbsatz = '''
 
 ## Wo du gerade läufst
-Du läufst auf Sashas Handy (ZEN-MOBILE), unterwegs. Hier hast du KEINE Werkzeuge:
-keinen Kalender, keine Ablage, kein Web, keine Listen. Fragt Sasha nach etwas, das
-du nur mit einem Werkzeug wissen könntest (z. B. „was steht heute an"), sag ehrlich,
-dass du es von hier aus nicht sehen kannst — rate nie.''';
+Du läufst auf Sashas Handy (ZEN-MOBILE), unterwegs. Hier siehst du Sashas Kalender
+der nächsten zwei Wochen (unten, „Kalender der nächsten Tage“) — nur lesen: du kannst
+von hier keine Termine anlegen, ändern oder löschen (Sasha kann neue Termine selbst in
+der Kalender-Seite der App eintragen). Sonst hast du hier KEINE Werkzeuge: keine Ablage,
+kein Web, keine Listen, kein Gedächtnis-Schreiben. Fragt Sasha nach etwas, das du nur
+mit einem Werkzeug wissen könntest, sag ehrlich, dass du es von hier aus nicht sehen
+kannst — rate nie. Fehlt der Kalender-Abschnitt, hast du den Kalender gerade nicht.''';
 
 const _minimalPrompt =
     'Du bist ZENTRALE, Sashas persönlicher Assistent. Antworte auf Deutsch, kurz und klar.';

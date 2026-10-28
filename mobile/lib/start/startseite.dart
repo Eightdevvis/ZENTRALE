@@ -20,6 +20,7 @@ import '../auge/auge.dart';
 import '../auge/auge_maler.dart';
 import '../auge/auge_regler.dart';
 import '../auge/zeit.dart';
+import '../kalender/kalender_seite.dart';
 import '../thema/farben.dart';
 import 'leiterbahnen.dart';
 
@@ -30,9 +31,10 @@ class Bereich {
   final WidgetBuilder seite;
 }
 
-/// Die Knöpfe um das Auge. Noch leer: „aber weil wir noch nix außer der ki
-/// drin haben, bilden sich doch keine knöpfe drum rum yet" (Sasha, 08.10.2026).
-const List<Bereich> bereiche = [];
+/// Die Knöpfe um das Auge — der Kalender ist der erste (Sasha, 28.10.2026).
+const List<Bereich> bereiche = [
+  Bereich('Kalender', Icons.calendar_month_outlined, kalenderSeite),
+];
 
 class Startseite extends StatefulWidget {
   const Startseite({super.key, required this.kiOeffnen, this.knoepfe = bereiche});

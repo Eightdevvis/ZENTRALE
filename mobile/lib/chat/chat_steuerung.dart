@@ -10,7 +10,7 @@ import '../ablage/ablage.dart';
 import '../gespraeche/gespraeche.dart';
 import '../ki/ki.dart';
 import '../ki/kontext.dart';
-import '../mitte/abgleich.dart';
+import '../mitte/abgleich_steuerung.dart';
 
 /// Die Antwort, die gerade entsteht (noch nicht gespeichert).
 class Entstehend {
@@ -24,12 +24,16 @@ class ChatSteuerung extends ChangeNotifier {
     required this.gespraeche,
     required this.ki,
     this.abgleich,
+    this.kalender,
   });
 
   final Ablage ablage;
   final Gespraeche gespraeche;
   final KiAnbieter ki;
-  final Abgleich? abgleich;
+  final AbgleichSteuerung? abgleich;
+
+  /// Der Kalender der nächsten Tage für die KI (lib/kalender/ueberblick.dart).
+  final Future<String?> Function()? kalender;
 
   String? gespraech;
   String titel = '';
@@ -62,14 +66,16 @@ class ChatSteuerung extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Abgleichen (beim Start, nach jeder Antwort, beim Herunterziehen).
+  /// Fehler stehen im Zustand des Abgleichs (Einstellungen), nicht im Chat —
+  /// offline geht der Chat einfach weiter.
   Future<void> abgleichen() async {
-    if (abgleich == null || gleichtAb) return;
+    final a = abgleich;
+    if (a == null || gleichtAb) return;
     gleichtAb = true;
     notifyListeners();
     try {
-      await abgleich!.laufen();
-    } catch (e) {
-      fehler = 'Abgleich ging nicht: $e';
+      await a.jetzt();
     } finally {
       gleichtAb = false;
     }
@@ -116,6 +122,12 @@ class ChatSteuerung extends ChangeNotifier {
 
   Future<void> _antworten(String id) async {
     final kontext = await Kontext.laden(ablage);
+    String? kalenderText;
+    try {
+      kalenderText = await kalender?.call();
+    } catch (_) {
+      kalenderText = null; // ohne Kalender antworten, nicht gar nicht
+    }
     final verlauf = await gespraeche.verlaufFuerKi(id);
     nachrichten = await gespraeche.nachrichten(id);
     final e = entstehend = Entstehend();
@@ -125,7 +137,7 @@ class ChatSteuerung extends ChangeNotifier {
     var abgebrochen = true;
     String? grund;
     _strom = ki
-        .antworten(system: kontext.system, verlauf: verlauf,
+        .antworten(system: kontext.system, wechselnd: kalenderText, verlauf: verlauf,
             modell: kontext.modell, effort: kontext.effort)
         .listen((s) {
       switch (s) {

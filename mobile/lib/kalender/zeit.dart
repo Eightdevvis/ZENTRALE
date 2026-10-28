@@ -82,3 +82,10 @@ Duration? dauerLesen(String roh) {
 }
 
 String hhmm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+/// Jetzt als Berliner Ortszeit (UTC-Träger) — die Zeit, in der der Kalender
+/// rechnet, egal in welcher Zone das Handy gerade steht.
+DateTime jetztBerlin([DateTime? echt]) {
+  final b = tz.TZDateTime.from((echt ?? DateTime.now()).toUtc(), berlin);
+  return DateTime.utc(b.year, b.month, b.day, b.hour, b.minute, b.second);
+}

@@ -90,12 +90,18 @@ String nameLesen(String name) {
   return n;
 }
 
+/// Passwort + Salz → Hauptschlüssel (Argon2id). Steckbar, damit Tests die
+/// teure Rechnung nicht doppelt laufen lassen (geprüft in test/krypto_test.dart).
+typedef Ableitung = Future<List<int>> Function(String passwort, List<int> salz, ks.Kdf kdf);
+
 class Konto {
-  Konto(this.speicher, {CloudClient Function(String? token)? client})
-      : _client = client ?? ((t) => CloudClient(token: t));
+  Konto(this.speicher, {CloudClient Function(String? token)? client, Ableitung? ableiten})
+      : _client = client ?? ((t) => CloudClient(token: t)),
+        _ableiten = ableiten ?? ks.hauptschluessel;
 
   final SitzungSpeicher speicher;
   final CloudClient Function(String? token) _client;
+  final Ableitung _ableiten;
 
   Future<Sitzung?> sitzung() => speicher.lesen();
 
@@ -107,7 +113,7 @@ class Konto {
     try {
       final v = await c.post('/v1/vorab', {'name': name});
       final salz = b64uLesen('${v['salz']}');
-      final haupt = await ks.hauptschluessel(passwort, salz, ks.Kdf.lesen(v['kdf']));
+      final haupt = await _ableiten(passwort, salz, ks.Kdf.lesen(v['kdf']));
       Map<String, dynamic> d;
       try {
         d = await c.post('/v1/sitzung',

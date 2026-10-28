@@ -12,7 +12,9 @@
 import 'dart:convert';
 
 import '../ablage/ablage.dart';
+import '../einstellungen/einstellungen.dart';
 import '../krypto/tresor.dart';
+import 'konto.dart';
 
 const geheimPfad = 'adapter/geheim.enc';
 const kiAnthropic = 'ki/ANTHROPIC_API_KEY';
@@ -30,3 +32,13 @@ Future<String?> geheimLesen(Ablage ablage, String kontoSchluessel, String name) 
     return null;
   }
 }
+
+/// Der Claude-Schlüssel: von Hand eingetragen (Vorrang, als Notbehelf) —
+/// sonst aus den Zugangsdaten des Adapters, sobald angemeldet und
+/// abgeglichen. So steht nach dem Login ohne Abtippen eine KI da.
+Future<String?> Function() kiSchluessel(Einstellungen e, Ablage ablage, Konto konto) => () async {
+      final hand = await e.anthropicSchluessel();
+      if (hand != null && hand.isNotEmpty) return hand;
+      final s = await konto.sitzung();
+      return s == null ? null : geheimLesen(ablage, s.kontoSchluessel, kiAnthropic);
+    };
