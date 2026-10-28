@@ -69,6 +69,36 @@ rein**:
   Tagesphasen, Schemen ([../leitbild.md](../leitbild.md), Etappe 5).
   Gesehen wird lokal; was sie bemerkt, bleibt bei Sasha.
 
+### Nachtrag 28.10.2026: Kollisionen selbst lösen, ins Bett schieben
+
+**Kollisionen:** Die KI löst Überschneidungen selbst und sagt, was sie getan
+hat („Ana HÜ auf 14–15 gekürzt, wegen Osterziel 15 Uhr“). Regel: **feste
+Termine bleiben, flexible Hausaufgaben-Blöcke verschiebt oder kürzt sie
+leicht.** Dazu eine Empfehlung, wann der Block künftig besser passt.
+
+**Tagesstruktur mitschreiben:** Was Sasha tatsächlich gemacht hat (Pause,
+Geige, Journal, Coding statt HÜ), nimmt sie selbst ins Plan-vs-Ist-Tracking auf,
+mit dem der Tag gejournalt und reflektiert wird
+(heute von Hand: `~/Zentrale/Ablage/zeitplan-tracking.md`).
+
+**Ins Bett schieben:**
+
+> *„sie sollte außerdem sich melden um mich sachte ins bett zu schieben. dazu
+> sollte irgendwo am bildschirmrand augen auftauchen und irgendwo anders nen
+> mund. wenn ich alleine bin und zuhause dann sagt sie freisprech anlage
+> direkt einfach trocken oder sarkastisch oder so ‚bissl spät langsam oder?‘
+> und ich muss ihr sagen wie lang ich noch machen will, dann stellt sie nen
+> harten timer.. die code sachen hier die ich mache könnte sie mir auch
+> einfach abnehmen dann vllt.. dann geh ich instant ins bett sowieso“*
+
+- Augen am Bildschirmrand, Mund woanders: sichtbar, dass sie gerade „da“ ist.
+- Allein zu Hause: laut über Lautsprecher, trocken/sarkastisch, kurz.
+- Sasha nennt, wie lange noch, dann **harter Timer**.
+- Angefangene Code-Arbeit nimmt sie ihm ab (übergibt an einen Agenten), damit
+  nichts offen bleibt, was ihn wach hält.
+- Spannung zum Journal vom 28.10. (keine Dauer-„observant mother“): Stichprobe
+  zur Schlafenszeit, nicht Dauerblick.
+
 ## Chefkoch in der Küche (24.10.2026)
 
 > *„ich komme in die küche, frage chefkoch, was wir machen sollen. ein display
