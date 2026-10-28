@@ -38,6 +38,7 @@ import abgleich_apps
 import abgleich_auswahl as auswahl
 import abgleich_mitte
 import abgleich_schluessel as schluessel
+import abgleich_vorschlaege as vorschlag
 import abgleich_zusammenfuehren as regeln
 import adapter
 import adapter_geheim
@@ -263,14 +264,6 @@ def eigene_datei(rel: str, knoten: str) -> bool:
     return rel == f"data/rueckmeldungen/{knoten}.jsonl"
 
 
-def _vorschlag(rel: str) -> bool:
-    """Der Kopf eines neuen Gesprächs darf aus dem Eingang kommen — gilt aber
-    nur, solange die Mitte noch keinen hat."""
-    teile = rel.split("/")
-    return (len(teile) == 4 and rel.startswith("data/gespraeche/")
-            and teile[2][:1] not in ("_", ".") and teile[3] == "kopf.json")
-
-
 def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEICH):
     """→ (fremd {rel: bytes}, vorschlaege {rel: bytes}). Was nicht passt
     (falscher Pfad, kaputt, fremde Datei), wird übergangen — mit Hinweis."""
@@ -296,11 +289,29 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
             continue          # App auf diesem Gerät abgewählt
         elif eigene_datei(rel, knoten):
             fremd[rel] = inhalt
-        elif _vorschlag(rel):
+        elif vorschlag.ist_vorschlag(rel):
             vorschlaege[rel] = inhalt
         else:
             bericht.hinweise.append(f"Eingang {knoten}: {_kurz(rel)} darf er nicht schreiben — übergangen")
     return fremd, vorschlaege
+
+
+def _vorschlaege_pruefen(vorschlaege, m, geloescht, bericht) -> dict:
+    """Welche Vorschläge gelten (abgleich_vorschlaege)? Ein Gesprächskopf,
+    solange die Mitte keinen hat; ein Termin nur, solange es ihn nirgends
+    gibt (kalender_vorschlag_annehmen). → {rel: bytes}"""
+    raus = {}
+    for rel, inhalt in vorschlaege.items():
+        if rel in m:
+            continue
+        if vorschlag.ist_kalender(rel):
+            ja, grund = vorschlag.kalender_vorschlag_annehmen(rel, inhalt, m, geloescht)
+            if not ja:
+                if grund:
+                    bericht.hinweise.append(f"Eingang: Termin {_kurz(rel)} übergangen — {grund}")
+                continue
+        raus[rel] = inhalt
+    return raus
 
 
 # ── Planen ─────────────────────────────────────────────────────────────
@@ -507,8 +518,8 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                     continue                  # mitten im Lesen weitergelaufen: neu holen
                 sicht = dict(m)                 # was die Mitte insgesamt sagt
                 sicht.update(fremd)
-                for rel, c in vorschlaege.items():
-                    sicht.setdefault(rel, c)
+                sicht.update(_vorschlaege_pruefen(vorschlaege, m, inhalt.get("geloescht", {}),
+                                                  bericht))
                 lokal = {rel: _lesen(auswahl.pfad(wurzel, rel))
                          for rel in auswahl.auswahl(wurzel, muster)}
                 bericht.art = ("erstbefuellung" if stand is None else

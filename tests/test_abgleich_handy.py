@@ -218,3 +218,105 @@ def test_kontextpaket_zwei_rechner_kein_widerspruch(welt):
     b = pc.abgleichen()
     assert not b.hinweise
     assert pc.json("mobil/kontext.json")["system"] == "C"     # die frische von hier
+
+
+# ── Termine vom Handy: nur neue (seit 2026-10-28) ──────────────────────
+# Das Handy legt einen neuen Termin als ganze .ics in seinen Eingang; ein
+# Rechner übernimmt ihn nur, solange es Pfad und UID nirgends gibt
+# (abgleich_vorschlaege.kalender_vorschlag_annehmen).
+
+import adapter  # noqa: E402
+import kalender_ics_abbildung as abb  # noqa: E402
+
+
+def _termin(uid, titel="Vom Handy", tag="2026-11-03"):
+    kal = abb.termin_kalender(tag, {"label": titel, "time": "10:00", "ende": "11:00"}, uid)
+    return abb.zusammenfuehren(None, kal, uid)
+
+
+@pytest.fixture
+def kalender_welt(welt, monkeypatch):
+    monkeypatch.setattr(adapter, "kalender_ueber_cloud", lambda wurzel=None: True)
+    laptop = welt.rechner("laptop")
+    laptop.schreiben("kalender/termine/" + "a" * 32 + "@zentrale.ics",
+                     _termin("a" * 32 + "@zentrale", "Schon da").decode())
+    laptop.schreiben("kalender/termine/abc.ics", _termin("abc@google.com", "Von Google").decode())
+    laptop.abgleichen()
+    return welt
+
+
+def test_neuer_termin_vom_handy_kommt_auf_alle_rechner(kalender_welt):
+    welt = kalender_welt
+    laptop, pc = welt.rechner("laptop"), welt.rechner("pc")
+    pc.abgleichen()
+    uid = "b" * 32 + "@zentrale"
+    rel = f"data/kalender/termine/{uid}.ics"
+    Handy(welt).schreiben(rel, _termin(uid))
+    b = laptop.abgleichen()
+    assert not b.hinweise
+    assert "SUMMARY:Vom Handy" in laptop.lesen(f"kalender/termine/{uid}.ics")
+    assert rel in welt.inhalt()["dateien"]                 # jetzt ein Termin wie jeder andere
+    pc.abgleichen()
+    assert pc.da(f"kalender/termine/{uid}.ics")
+
+
+def test_termin_vorschlag_zu_vorhandener_uid_wird_abgelehnt(kalender_welt):
+    welt = kalender_welt
+    laptop = welt.rechner("laptop")
+    vorher = laptop.lesen("kalender/termine/abc.ics")
+    Handy(welt).schreiben("data/kalender/termine/abc@google.com.ics",
+                          _termin("abc@google.com", "Umbenannt am Handy"))
+    b = laptop.abgleichen()
+    assert not laptop.da("kalender/termine/abc@google.com.ics")
+    assert laptop.lesen("kalender/termine/abc.ics") == vorher
+    assert any("gibt es schon" in h for h in b.hinweise)
+
+
+def test_vorhandenen_termin_kann_das_handy_nicht_ueberschreiben(kalender_welt):
+    welt = kalender_welt
+    laptop = welt.rechner("laptop")
+    uid = "a" * 32 + "@zentrale"
+    vorher = laptop.lesen(f"kalender/termine/{uid}.ics")
+    Handy(welt).schreiben(f"data/kalender/termine/{uid}.ics", _termin(uid, "Geändert"))
+    b = laptop.abgleichen()
+    assert laptop.lesen(f"kalender/termine/{uid}.ics") == vorher
+    assert not b.hinweise                       # schon da: still erledigt
+
+
+def test_geloeschter_vorschlag_kommt_nicht_wieder(kalender_welt):
+    welt = kalender_welt
+    laptop = welt.rechner("laptop")
+    uid = "c" * 32 + "@zentrale"
+    Handy(welt).schreiben(f"data/kalender/termine/{uid}.ics", _termin(uid))
+    laptop.abgleichen()
+    laptop.pfad(f"kalender/termine/{uid}.ics").unlink()
+    laptop.abgleichen()                         # Grabstein in der Mitte
+    b = laptop.abgleichen()                     # der Vorschlag liegt noch im Eingang
+    assert not laptop.da(f"kalender/termine/{uid}.ics")
+    assert not b.hinweise
+
+
+def test_termin_vorschlag_falsche_ebene_oder_falscher_name(kalender_welt):
+    welt = kalender_welt
+    laptop = welt.rechner("laptop")
+    h = Handy(welt)
+    uid = "d" * 32 + "@zentrale"
+    h.schreiben(f"data/kalender/erfunden/{uid}.ics", _termin(uid))
+    h.schreiben("data/kalender/termine/falsch.ics", _termin("e" * 32 + "@zentrale"))
+    b = laptop.abgleichen()
+    assert not laptop.da(f"kalender/erfunden/{uid}.ics")
+    assert not laptop.da("kalender/termine/falsch.ics")
+    assert any("Ebene" in x for x in b.hinweise)
+    assert any("Dateiname" in x for x in b.hinweise)
+
+
+def test_ohne_kalender_in_der_cloud_wartet_der_vorschlag(welt, monkeypatch):
+    monkeypatch.setattr(adapter, "kalender_ueber_cloud", lambda wurzel=None: False)
+    laptop = welt.rechner("laptop")
+    laptop.schreiben("lists.json", LISTE)
+    laptop.abgleichen()
+    uid = "f" * 32 + "@zentrale"
+    Handy(welt).schreiben(f"data/kalender/termine/{uid}.ics", _termin(uid))
+    b = laptop.abgleichen()
+    assert not laptop.da(f"kalender/termine/{uid}.ics")
+    assert not b.hinweise
