@@ -108,7 +108,7 @@ Pflegeregeln: [README.md](README.md).
   wechselnden Teil, Rhythmus als Rhythmus gekennzeichnet, keine Minuten.
   Bewusst Daten statt Verweis (Ausnahme zu KT-03): ein paar Zeilen sparen
   die Werkzeug-Runde. Wie das gebaut ist: `memory/ki/prompt_aufbau.md`.
-  Handy (seit 28.10.2026, 616e434): der Kalender der nächsten 14 Tage steht als
+  Handy (seit 28.10.2026, 4b30950): der Kalender der nächsten 14 Tage steht als
   zweiter, ungecachter System-Block hinter dem Kontextpaket, mit demselben
   „im Blick, nicht ungefragt aufzählen“, ohne Rhythmus
   (`mobile/lib/kalender/ueberblick.dart`). Ungemessen mit echtem Modell.
