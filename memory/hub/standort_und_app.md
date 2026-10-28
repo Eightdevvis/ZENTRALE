@@ -1,23 +1,26 @@
-# Wo ein Zustand lebt: Hub, Standort, App (Sasha, 2026-10-29)
+# Wo ein Zustand lebt: rohes ZENTRALE oder App (Sasha, 2026-10-29)
 
-Sashas Bild: ein Geschäftsmann mit Standorten (Küste, Inland) und
-Arbeitern (Apps). Daraus drei Orte für jeden Zustand — vor jedem Entwurf
-fragen, an welchen er gehört:
+**Die Prüffrage vor jedem Entwurf: Gehört das zur App oder zum rohen
+ZENTRALE-Paket?** Sasha: „die apps syncen wir ohne gnade, das rohe zentrale
+ist halt einfach nur das gestell was man pro node hat … was halt verschieden
+sein kann, weils halt nur so basic stuff speichert und viel näher auf
+maschinen ebene is als die apps." (ZENTRALE wird so im Kern ein
+Betriebssystem, die Apps laufen obendrauf.)
 
-| Ort | Was dort lebt | Was dort NIE lebt |
+| Schicht | Was dazugehört | Synct? |
 |---|---|---|
-| **Hub / Konto** — „die Pforte der Pforten", eine nackte Hülle | Anmeldung, Mitte, Rechte, Steckplätze | keine Einstellung irgendeiner App |
-| **Standort (Knoten/Gerät)** | welche Apps hier stationiert sind (`abgleich_apps`, beim Einrichten gefragt: „was planst du hier?"); wie viel man von nicht stationierten Apps sieht (z. B. ihre Nachrichten im Postfach); echte Geräte-Eigenschaften (Bildschirm, Hardware) | wie eine App arbeitet |
-| **App-Instanz** | ALLES über die App: Einstellungen (z. B. die Quelle eines Kalenders), Daten, Gedächtnis — synct mit den Daten der App, ist auf jedem Standort, an dem sie stationiert ist, **1:1 dieselbe** | — |
+| **Rohes ZENTRALE** — das Gestell je Knoten: Hub („die Pforte der Pforten"), Store, die zwingenden Start-Adapter; sonst nichts ab Werk | Anmeldung und Zugang zur Mitte, Rechte, Steckplätze; welche Apps auf diesem Knoten stationiert sind (`abgleich_apps`, beim Einrichten gefragt: „was planst du hier?") und wie viel man von anderen sieht (z. B. ihre Nachrichten im Postfach); Maschinennahes (Bildschirm, Hardware, Pfade) | nein — darf je Knoten verschieden sein |
+| **App-Instanz** — alles andere, auch die Vernetzungskarte | ALLES über die App: Einstellungen (z. B. die Quelle eines Kalenders), Daten, Gedächtnis | **ja, ohne Gnade** — auf jedem Knoten, an dem sie läuft, 1:1 dieselbe |
 
-- Dieselbe App an zwei Standorten ist derselbe Arbeiter: was man im
-  Inland mit ihr gemacht hat, weiß sie an der Küste.
-- Soll sie irgendwo anders arbeiten (z. B. Daten aus Google statt aus der
-  ZENTRALE-Cloud), ist das eine **zweite App-Instanz** — beide dürfen
-  gleichzeitig laufen. Nie eine Instanz, die je Standort anders ist.
-- Prüffrage bei jedem Entwurf: *Kann sich das zwischen Geräten
-  unterscheiden?* Wenn ja: ist es „welche Apps hier" oder eine
-  Geräte-Eigenschaft? Sonst gehört es in die App-Instanz. Neue
-  Geräte-Sonderfälle nur mit Sashas Zustimmung.
+Sashas Bild dazu: ein Geschäftsmann mit Standorten (Küste, Inland) und
+Arbeitern (Apps). Er entscheidet je Standort, wer dort stationiert ist —
+aber dieselbe Sekretärin an zwei Standorten ist dieselbe Sekretärin: was er
+im Inland mit ihr gemacht hat, weiß sie an der Küste.
+
+- Soll eine App irgendwo anders arbeiten (z. B. Daten aus Google statt aus
+  der ZENTRALE-Cloud), ist das eine **zweite App-Instanz** — beide dürfen
+  gleichzeitig laufen. Nie eine Instanz, die je Knoten anders ist.
+- Das rohe Paket kennt keine Einstellung irgendeiner App. Was dort neu
+  dazukommt, bleibt maschinennah und klein; im Zweifel ist es App.
 - Anlass: ein Kalender-Schalter „Google oder Cloud je Gerät" (1f32e6a),
   umgebaut zur Einstellung der Kalender-App.

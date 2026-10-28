@@ -32,11 +32,10 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 - **Vor jedem Feature: anschauen, planen, dann bauen.** Wo sitzt es in den
   Schichten? Wird dadurch eine Datei größer oder ein Knoten fester? Dann erst
   die Struktur richten.
-- **Jeder Zustand hat seinen Ort: Hub, Standort oder App-Instanz.** Der
-  Hub kennt keine App-Einstellung; ein Standort wählt nur, welche Apps er
-  beherbergt; eine App ist überall, wo sie läuft, dieselbe. Anders als die
-  App selbst arbeiten = zweite Instanz. Regel und Prüffrage:
-  [hub/standort_und_app.md](hub/standort_und_app.md).
+- **Gehört es zur App oder zum rohen ZENTRALE?** Das rohe Paket (Hub,
+  Store, Start-Adapter) ist das Gestell je Knoten und darf dort verschieden
+  sein; Apps syncen ohne Gnade und sind überall dieselben — anders arbeiten
+  heißt zweite Instanz. Regel: [hub/standort_und_app.md](hub/standort_und_app.md).
 - **Leitplanken sind Tests, keine Hoffnung.** Schichten, Türen und Altlasten
   stehen in [system/bauplan_kern.md](system/bauplan_kern.md); der Test
   `tests/test_kern_bauplan.py` macht Verstöße rot. Altlasten dürfen nur
