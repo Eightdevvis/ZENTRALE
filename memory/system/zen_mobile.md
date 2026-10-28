@@ -178,10 +178,12 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   seinen Eingang; sie steht sofort in der Liste mit „wartet auf Abgleich“.
   Ein Rechner übernimmt sie nur als neuen Termin
   (`core/abgleich_vorschlaege.kalender_vorschlag_annehmen`).
-- **Ändern, Löschen, einzelne Vorkommen aus:** noch nicht — die Seite sagt
-  es beim Antippen. Nächster Schritt (Kalender-Session): ein Vorschlag bleibt
-  eine ganze .ics im Eingang; der Kern weitet nur die eine Annahme-Regel auf
-  „je VEVENT zusammenführen“.
+- **Ändern, Löschen, einzelne Vorkommen aus/an, Ebene wechseln:** die
+  Rechner-Seite steht seit 29.10.2026 (Umschlag mit `basis_sha`/`basis`/
+  `loeschen`, Widerspruch → abgelehnt, Quittung in `inhalt.enc`:
+  [../betrieb/abgleich_fremde_knoten.md](../betrieb/abgleich_fremde_knoten.md)
+  „Termine vom Handy“). In der App noch nicht gebaut — die Seite sagt es beim
+  Antippen.
 - **Erinnerungen** (`erinnerungen.dart`): jeder VALARM wird eine Android-
   Benachrichtigung (relativ zum Beginn/Ende oder fester Zeitpunkt; Google
   -PT7H ebenso wie unsere Deadline-Vorwarnung -P3D). Nach jedem Abgleich alle
