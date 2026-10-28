@@ -83,16 +83,35 @@ class Handy:
         return klar
 
     # Schreiben: nur in den eigenen Eingang
-    def schreiben(self, rel, inhalt: bytes):
+    def schreiben(self, rel, inhalt: bytes | None, **mehr):
+        """mehr: basis_sha, basis (bytes), loeschen — „Termine vom Handy“."""
         self.holen()
-        umschlag = json.dumps({"format": 1, "pfad": rel,
-                               "inhalt": base64.b64encode(inhalt).decode("ascii")}).encode()
+        u = {"format": 1, "pfad": rel}
+        if inhalt is not None:
+            u["inhalt"] = base64.b64encode(inhalt).decode("ascii")
+        if "basis" in mehr:
+            mehr["basis"] = base64.b64encode(mehr["basis"]).decode("ascii")
+        u.update(mehr)
+        umschlag = json.dumps(u).encode()
+        self.letzter_umschlag = hashlib.sha256(umschlag).hexdigest()
         ziel = self.klon / "knoten" / self.NAME / (self.name(rel) + ".enc")
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_bytes(self.zu(umschlag))
         self._git("add", "-A")
         self._git("commit", "-q", "-m", "handy")
         self._git("push", "-q", "origin", "HEAD:abgleich")
+
+    def wegraeumen(self, rel):
+        """Den Umschlag aus dem eigenen Eingang nehmen (nach der Quittung)."""
+        self.holen()
+        (self.klon / "knoten" / self.NAME / (self.name(rel) + ".enc")).unlink()
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "handy räumt")
+        self._git("push", "-q", "origin", "HEAD:abgleich")
+
+    def quittung(self, rel):
+        self.holen()
+        return self.inhalt().get("eingang", {}).get(self.NAME, {}).get(rel)
 
 
 @pytest.fixture
@@ -220,7 +239,8 @@ def test_kontextpaket_zwei_rechner_kein_widerspruch(welt):
     assert pc.json("mobil/kontext.json")["system"] == "C"     # die frische von hier
 
 
-# ── Termine vom Handy: nur neue (seit 2026-10-28) ──────────────────────
+# ── Termine vom Handy: neue (seit 2026-10-28) ──────────────────────────
+# Ändern, Vorkommen, Ebene, Löschen: tests/test_abgleich_handy_aendern.py
 # Das Handy legt einen neuen Termin als ganze .ics in seinen Eingang; ein
 # Rechner übernimmt ihn nur, solange es Pfad und UID nirgends gibt
 # (abgleich_vorschlaege.kalender_vorschlag_annehmen).
@@ -282,7 +302,9 @@ def test_vorhandenen_termin_kann_das_handy_nicht_ueberschreiben(kalender_welt):
     Handy(welt).schreiben(f"data/kalender/termine/{uid}.ics", _termin(uid, "Geändert"))
     b = laptop.abgleichen()
     assert laptop.lesen(f"kalender/termine/{uid}.ics") == vorher
-    assert not b.hinweise                       # schon da: still erledigt
+    # Ohne basis_sha (welche Fassung das Handy sah) wird nichts überschrieben —
+    # sichtbar abgelehnt, seit Ändern geht (2026-10-29).
+    assert any("basis_sha" in h for h in b.hinweise)
 
 
 def test_geloeschter_vorschlag_kommt_nicht_wieder(kalender_welt):

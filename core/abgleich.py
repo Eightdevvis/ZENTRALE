@@ -294,9 +294,12 @@ def eigene_datei(rel: str, knoten: str) -> bool:
     return rel == f"data/rueckmeldungen/{knoten}.jsonl"
 
 
-def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEICH):
-    """→ (fremd {rel: bytes}, vorschlaege {rel: bytes}). Was nicht passt
-    (falscher Pfad, kaputt, fremde Datei), wird übergangen — mit Hinweis."""
+def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEICH, gesehen=None):
+    """→ (fremd {rel: bytes}, vorschlaege {rel: bytes | Vorschlag}). Was nicht
+    passt (falscher Pfad, kaputt, fremde Datei), wird übergangen — mit Hinweis.
+    Ein Termin-Vorschlag kommt als abgleich_vorschlaege.Vorschlag (mit Basis,
+    Löschen, Prüfwert des Umschlags für die Quittung). `gesehen` (Menge)
+    bekommt jedes lesbare (knoten, pfad) — damit verfallen alte Quittungen."""
     fremd, vorschlaege = {}, {}
     for name in namen:
         teile = name.split("/")
@@ -306,8 +309,16 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
         if not _KNOTEN_NAME.match(knoten) or knoten == rechner:
             continue
         try:
-            u = json.loads(tresor.auf(lesen(name) or b""))
-            rel, inhalt = u["pfad"], base64.b64decode(u["inhalt"], validate=True)
+            klar = tresor.auf(lesen(name) or b"")
+            u = json.loads(klar)
+            rel = u["pfad"]
+            loeschen = u.get("loeschen") is True
+            inhalt = (None if loeschen and u.get("inhalt") is None
+                      else base64.b64decode(u["inhalt"], validate=True))
+            basis_roh = u.get("basis")
+            basis_roh = base64.b64decode(basis_roh, validate=True) if basis_roh else None
+            if not isinstance(rel, str):
+                raise TypeError(rel)
         except schluessel.SchluesselFehler:
             raise
         except (ValueError, KeyError, TypeError):
@@ -317,8 +328,16 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
             bericht.hinweise.append(f"Eingang {knoten}: {rel!r} gehört nicht dorthin — übergangen")
         elif not auswahl.passt(rel, muster):
             continue          # App auf diesem Gerät abgewählt
+        elif loeschen and not vorschlag.ist_kalender(rel):
+            bericht.hinweise.append(f"Eingang {knoten}: {_kurz(rel)} löschen darf er nicht — übergangen")
         elif eigene_datei(rel, knoten):
             fremd[rel] = inhalt
+        elif vorschlag.ist_kalender(rel):
+            if gesehen is not None:
+                gesehen.add((knoten, rel))
+            vorschlaege[rel] = vorschlag.Vorschlag(
+                rel, inhalt, loeschen, u.get("basis_sha"), basis_roh, knoten,
+                hashlib.sha256(klar).hexdigest())
         elif vorschlag.ist_vorschlag(rel):
             vorschlaege[rel] = inhalt
         else:
@@ -326,30 +345,99 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
     return fremd, vorschlaege
 
 
-def _vorschlaege_pruefen(vorschlaege, m, geloescht, bericht) -> dict:
+def _vorschlaege_pruefen(vorschlaege, m, geloescht, bericht, basis=None, eingang=None,
+                         trocken=False):
     """Welche Vorschläge gelten (abgleich_vorschlaege)? Ein Gesprächskopf,
-    solange die Mitte keinen hat; ein Termin nur, solange es ihn nirgends
-    gibt (kalender_vorschlag_annehmen). → {rel: bytes}"""
+    solange die Mitte keinen hat; ein Termin nach kalender_vorschlag_annehmen
+    (neu, geändert, Ebene gewechselt, gelöscht — nie gegen einen Widerspruch).
+    → ({rel: bytes | None=löschen}, quittungen).
+
+    Quittungen (`eingang` in inhalt.enc, {knoten: {pfad: {umschlag, ergebnis,
+    grund, am}}}): jeder entschiedene Termin-Vorschlag bekommt eine; daran
+    sieht das Handy, dass er erledigt ist, und räumt seinen Eingang. Ein
+    Umschlag mit Quittung wird nicht noch einmal geprüft. Abgelehnt → die
+    Fassung vom Handy liegt zusätzlich unter konflikte/eingang-<knoten>/."""
     raus = {}
-    for rel, inhalt in vorschlaege.items():
-        if rel in m:
+    quittungen = {k: dict(v) for k, v in (eingang or {}).items() if isinstance(v, dict)}
+    for rel, v in vorschlaege.items():
+        if not isinstance(v, vorschlag.Vorschlag):
+            if rel not in m:
+                raus[rel] = v               # Kopf eines neuen Gesprächs
             continue
-        if vorschlag.ist_kalender(rel):
-            ja, grund = vorschlag.kalender_vorschlag_annehmen(rel, inhalt, m, geloescht)
-            if not ja:
-                if grund:
-                    bericht.hinweise.append(f"Eingang: Termin {_kurz(rel)} übergangen — {grund}")
-                continue
-        raus[rel] = inhalt
+        alt = quittungen.get(v.knoten, {}).get(rel)
+        if isinstance(alt, dict) and alt.get("umschlag") == v.umschlag:
+            continue                        # schon entschieden
+        e = vorschlag.kalender_vorschlag_annehmen(v, m, geloescht, basis)
+        if e.ja and any(r in raus for r in e.schreiben):
+            e = vorschlag.Entscheid(vorschlag.ABGELEHNT, "ein anderer Vorschlag trifft dieselbe Datei")
+        if e.ja:
+            raus.update(e.schreiben)
+        elif e.ergebnis == vorschlag.ABGELEHNT:
+            bericht.hinweise.append(f"Eingang {v.knoten}: Termin {_kurz(rel)} abgelehnt — "
+                                    f"{e.grund}; die Mitte bleibt, wie sie ist")
+            if v.inhalt is not None and not trocken:
+                dateien.atomar_schreiben(os.path.join(
+                    ordner(), "konflikte", f"eingang-{v.knoten}", v.umschlag[:12], rel), v.inhalt)
+        q = {"umschlag": v.umschlag, "ergebnis": e.ergebnis, "am": _jetzt()}
+        if e.grund:
+            q["grund"] = e.grund
+        quittungen.setdefault(v.knoten, {})[rel] = q
+    return raus, quittungen
+
+
+def _quittungen_aufraeumen(quittungen, gesehen, muster):
+    """Eine Quittung gilt, solange der Umschlag im Eingang liegt. Räumt der
+    Knoten ihn weg, fällt sie. Pfade, die dieses Gerät nicht abgleicht,
+    bleiben unberührt (ein anderes Gerät hat sie entschieden)."""
+    raus = {}
+    for k, eintraege in quittungen.items():
+        behalten = {rel: q for rel, q in eintraege.items()
+                    if (k, rel) in gesehen or not auswahl.passt(rel, muster)}
+        if behalten:
+            raus[k] = behalten
     return raus
+
+
+# ── Apps neu dabei (2026-10-29) ────────────────────────────────────────
+# Grundsatz „die Cloud wird nie überschrieben“: wird eine App auf diesem
+# Gerät (wieder) angewählt, gilt für ihre Dateien die Mitte — wie beim
+# Erstabgleich. Eine abweichende Fassung von hier wird aufgehoben
+# (konflikte/<zeit>/), Sasha wählt. Sonst liefe sie über eine alte Basis
+# zusammen, und eine .ics mit späterem LAST-MODIFIED ersetzte die der Mitte.
+
+def _dabei_pfad():
+    return os.path.join(ordner(), "apps_dabei.json")
+
+
+def _dabei_lesen():
+    """Die Muster des letzten erfolgreichen Abgleichs; None = noch nie gemerkt."""
+    roh = _lesen(_dabei_pfad())
+    try:
+        w = json.loads(roh) if roh else None
+    except ValueError:
+        return None
+    return set(w["muster"]) if isinstance(w, dict) and isinstance(w.get("muster"), list) else None
+
+
+def _neu_dabei(muster) -> list:
+    """Muster, die dieses Gerät jetzt abgleicht, beim letzten Mal aber nicht.
+    Ohne Merkzettel: keine (ein Gerät von vor dieser Regel). Pflicht-Apps
+    (der Adapter, z. B. Zugangsdaten erst ab der Anmeldung) zählen nie."""
+    vorher = _dabei_lesen()
+    if vorher is None:
+        return []
+    pflicht = {x for a in abgleich_apps.tabelle().values() if a["pflicht"] for x in a["muster"]}
+    return [x for x in muster if x not in vorher and x not in pflicht]
 
 
 # ── Planen ─────────────────────────────────────────────────────────────
 
-def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None):
+def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None, neu_dabei=()):
     """→ (ergebnis {rel: bytes|None}, aufheben {rel: bytes}).
     aufheben = eigene Fassungen, die weichen mussten. fremd = Dateien aus dem
-    Eingang eines anderen Knotens: die gelten, wie sie sind — nie überschrieben."""
+    Eingang eines anderen Knotens: die gelten, wie sie sind — nie überschrieben.
+    neu_dabei = Muster einer (wieder) angewählten App: für sie gilt die Mitte
+    wie beim Erstabgleich."""
     erg, aufheben = {}, {}
     fremd = fremd or {}
     for rel in sorted(set(basis) | set(lokal) | set(mitte)):
@@ -359,16 +447,19 @@ def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None):
             continue
         stein = grabsteine.get(rel)
         tot = l is not None and stein is not None and stein.get("sha") == _sha(l)
-        if art == "erstabgleich":
+        neu = art != "erstabgleich" and bool(neu_dabei) and auswahl.passt(rel, neu_dabei)
+        if art == "erstabgleich" or neu:
             # Noch keine Basis: die Mitte gilt. Zusammenführen hieße, einen
-            # alten rsync-Stand mit allem Gelöschten zurückzubringen.
+            # alten rsync-Stand mit allem Gelöschten zurückzubringen. Ebenso
+            # für eine wieder angewählte App (ihre Basis ist alt).
             if m is not None:
                 erg[rel] = m
                 if l is not None and l != m:
                     aufheben[rel] = l
                     bericht.hinweise.append(
-                        f"{_kurz(rel)}: auf diesem Rechner anders als in der Mitte — "
-                        "die Mitte gilt, die Fassung von hier ist aufgehoben")
+                        f"{_kurz(rel)}: auf diesem Rechner anders als in der Mitte"
+                        + (" (App neu dabei)" if neu else "") +
+                        " — die Mitte gilt, die Fassung von hier ist aufgehoben")
             elif l is not None and stein is not None:
                 erg[rel] = None
                 bericht.hinweise.append(f"{_kurz(rel)}: wurde anderswo gelöscht — hier beiseitegelegt")
@@ -493,12 +584,16 @@ def _vorhaben_nachholen(wurzel, mitte):
 
 # ── Der Abgleich ───────────────────────────────────────────────────────
 
-def _neues_inhalt(tresor, inhalt, erg, mitte, rechner, fremd=()):
+def _neues_inhalt(tresor, inhalt, erg, mitte, rechner, fremd=(), eingang=None):
     """→ (neues inhalt, schreiben {name: bytes}, loeschen [name]).
     `mitte` = was im Inhaltsverzeichnis steht; Dateien fremder Knoten
-    (`fremd`) bleiben in deren Eingang und kommen nie hinein."""
+    (`fremd`) bleiben in deren Eingang und kommen nie hinein. `eingang` = die
+    Quittungen für fremde Knoten (None = unverändert übernehmen)."""
     neu = {"format": 1, "dateien": dict(inhalt.get("dateien", {})),
            "geloescht": dict(inhalt.get("geloescht", {}))}
+    eingang = inhalt.get("eingang") if eingang is None else eingang
+    if eingang:
+        neu["eingang"] = eingang
     schreiben, loeschen = {}, []
     for rel, r in erg.items():
         if r == mitte.get(rel) or rel in fremd:
@@ -539,17 +634,22 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 # über die Basis (sonst sähe eine abgewählte App aus wie
                 # „überall gelöscht").
                 basis = {rel: b for rel, b in basis.items() if auswahl.passt(rel, muster)}
+                gesehen = set()
                 try:
                     inhalt, m = _mitte_lesen(tresor, stand, lesen, basis, muster)
                     bericht.hinweise, bericht.geholt, bericht.beiseite = [], [], []
                     fremd, vorschlaege = _eingang_lesen(tresor, namen, lesen, rechner,
-                                                        bericht, muster)
+                                                        bericht, muster, gesehen)
                 except abgleich_mitte.MitteBewegt:
                     continue                  # mitten im Lesen weitergelaufen: neu holen
                 sicht = dict(m)                 # was die Mitte insgesamt sagt
                 sicht.update(fremd)
-                sicht.update(_vorschlaege_pruefen(vorschlaege, m, inhalt.get("geloescht", {}),
-                                                  bericht))
+                eingang_alt = inhalt.get("eingang") or {}
+                angenommen, eingang = _vorschlaege_pruefen(
+                    vorschlaege, m, inhalt.get("geloescht", {}), bericht, basis,
+                    eingang_alt, trocken)
+                sicht.update(angenommen)
+                eingang = _quittungen_aufraeumen(eingang, gesehen, muster)
                 lokal = {rel: _lesen(auswahl.pfad(wurzel, rel))
                          for rel in auswahl.auswahl(wurzel, muster)}
                 bericht.art = ("erstbefuellung" if stand is None else
@@ -557,15 +657,17 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 if bericht.art == "erstbefuellung":
                     basis = {}
                 erg, aufheben = _planen(basis, lokal, sicht, inhalt.get("geloescht", {}),
-                                        bericht.art, rechner, bericht, fremd)
+                                        bericht.art, rechner, bericht, fremd,
+                                        _neu_dabei(muster) if bericht.art == "" else ())
                 bericht.gesendet = sorted(r for r in erg
                                           if erg[r] != m.get(r) and r not in fremd)
                 if trocken:
                     bericht.geholt = sorted(r for r in erg if erg[r] != lokal.get(r))
                     return bericht
                 kennung = stand
-                if bericht.gesendet or LIESMICH not in namen:
-                    _, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner, fremd)
+                if bericht.gesendet or LIESMICH not in namen or eingang != eingang_alt:
+                    _, schreiben, loeschen = _neues_inhalt(tresor, inhalt, erg, m, rechner, fremd,
+                                                           eingang)
                     schreiben[LIESMICH] = LIESMICH_TEXT.encode("utf-8")
                     kennung = mitte.vorbereiten(schreiben, loeschen,
                                                 f"Abgleich {_jetzt()} von {rechner}")
@@ -576,6 +678,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                 _vorhaben_kennung(mitte)
                 kennung = getattr(mitte, "echte_kennung", lambda k: k)(kennung)
                 _vorhaben_abschliessen(wurzel, bericht)
+                dateien.json_schreiben(_dabei_pfad(), {"muster": sorted(muster)})
                 _zustand_erfolg(bericht, kennung)
                 _adapter_nachher(wurzel, muster)
                 return bericht
