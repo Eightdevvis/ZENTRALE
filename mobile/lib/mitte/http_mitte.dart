@@ -25,7 +25,7 @@ import '../krypto/tresor.dart';
 import 'cloud.dart';
 import 'mitte.dart';
 
-/// Inline-Dateien je Stand (cloud/src/mitte.ts MAX_INLINE).
+/// Inline-Dateien je Stand (server/src/mitte.ts MAX_INLINE).
 const maxInline = 256 * 1024;
 const maxBlob = 24 * 1024 * 1024;
 

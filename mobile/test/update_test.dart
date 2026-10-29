@@ -1,6 +1,6 @@
 // Self-update (lib/update/): manifest parsing, version compare, download with
 // SHA-256 check, the controller's steps, and the UI — against a fake cloud
-// (MockClient, same contract as cloud/src/phone.ts) and a fake Android. Never the network.
+// (MockClient, same contract as server/src/phone.ts) and a fake Android. Never the network.
 
 import 'dart:convert';
 import 'dart:io';
@@ -32,7 +32,7 @@ Map<String, dynamic> manifest({int code = 5, String? sha, int? size}) => {
       'published_at': '2026-10-29T10:00:00.000Z',
     };
 
-/// The cloud of cloud/src/phone.ts: Bearer required, manifest + APK by code.
+/// The cloud of server/src/phone.ts: Bearer required, manifest + APK by code.
 class FakeCloud {
   Map<String, dynamic>? release = manifest();
   Uint8List body = apk;

@@ -60,7 +60,7 @@ components:
         server trims, NFC-normalizes and lower-cases before checking. A value
         with '@' is refused with the hint that no email is needed. When
         creating, reserved names (admin, root, support, zentrale…, see
-        cloud/src/name.ts) are refused too.
+        server/src/name.ts) are refused too.
     Kdf:
       type: object
       required: [name, t, m, p]

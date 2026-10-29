@@ -22,7 +22,7 @@ import cloud_api
 ZWEIG = "abgleich"
 
 
-# The cloud refuses blobs above 24 MiB (cloud/src/mitte.ts MAX_BLOB). A blob is
+# The cloud refuses blobs above 24 MiB (server/src/mitte.ts MAX_BLOB). A blob is
 # the Fernet token of a file, which is larger than the file itself.
 MAX_BLOB = 24 * 1024 * 1024
 

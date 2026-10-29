@@ -397,7 +397,7 @@ The app updates itself from **our** cloud, not from a store (Sasha:
 - **Flow:** a computer publishes (`scripts/publish_phone_app.py`, steps in
   `memory/betrieb/phone_app_release.md`) → the cloud stores APK + manifest
   `{version, version_code, sha256, size, notes, published_at}`
-  (`cloud/src/phone.ts`) → the app checks on start (quietly) and with
+  (`server/src/phone.ts`) → the app checks on start (quietly) and with
   "Nach Update suchen" in settings → a newer `version_code` shows a small
   glowing dot top right on the start screen (tap → update page) and the
   settings section offers "Laden und installieren" → the APK is streamed to
@@ -425,7 +425,7 @@ The app updates itself from **our** cloud, not from a store (Sasha:
 - **Text:** all from gen-l10n (`lib/l10n/app_de.arb` / `app_en.arb`, keys
   `update*`).
 - **Tests:** `test/update_test.dart` (fake cloud via MockClient, fake Android),
-  cloud `cloud/test/phone.test.ts`, script `tests/test_publish_phone_app.py`.
+  cloud `server/test/phone.test.ts`, script `tests/test_publish_phone_app.py`.
 
 ## Offen
 

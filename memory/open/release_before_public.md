@@ -13,5 +13,5 @@ prepared but switched off (`deploy/verteilung.toml`, `oeffentlich = false`;
   still name Sasha (see `memory/hub/produkt_inventur.md`).
 - **Legal:** copyright of AI-written code, privacy (voice, conversations,
   health), provider terms.
-- Then: `oeffentlich = true`; `cloud/src/paket.ts` needs a code-less route if
+- Then: `oeffentlich = true`; `server/src/paket.ts` needs a code-less route if
   the cloud should serve public packages.

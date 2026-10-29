@@ -2,7 +2,7 @@
 #
 # Wie nah ist die Cloud an den Gratis-Grenzen von Cloudflare? Fragt
 # GET /v1/nutzung (nur Betreiber-Konten, sonst 403 nur_betreiber; Server:
-# cloud/src/nutzung.ts) und merkt sich die Antwort 1 h in einer Datei pro
+# server/src/nutzung.ts) und merkt sich die Antwort 1 h in einer Datei pro
 # Rechner (~/.local/state/zentrale/nutzung.json, umlenkbar per Einstellung
 # `nutzung_dir` / ZENTRALE_NUTZUNG_DIR). Nicht data/: das synct, und jeder
 # Rechner kann die Zahl selbst holen.

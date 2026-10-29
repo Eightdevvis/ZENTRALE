@@ -1,5 +1,5 @@
 """Kontonamen auf dem Gerät (core/konto.py) gegen dieselben Fälle wie der
-Server (tests/daten/konto_namen.json, cloud/test/name.test.ts): nur
+Server (tests/daten/konto_namen.json, server/test/name.test.ts): nur
 Benutzernamen, keine Mail, keine erzeugten Nummern."""
 import json
 import os

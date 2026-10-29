@@ -7,7 +7,7 @@
 #
 # Anonym (23.10.2026): ein Konto ist ein Benutzername, nie eine Mail. Für alle
 # dieselbe Art Name — keine „anonyme Option" (erzeugte Nummern), denn schon die
-# Wahl wäre Metadaten. Regeln wie cloud/src/name.ts, gemeinsame Fälle in
+# Wahl wäre Metadaten. Regeln wie server/src/name.ts, gemeinsame Fälle in
 # tests/daten/konto_namen.json.
 #
 # Kein Terminal, keine Fragen, kein print: jede Oberfläche (CLI, TUI, Handy,

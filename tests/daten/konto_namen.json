@@ -1,5 +1,5 @@
 {
-  "_": "Regeln für Kontonamen (Bauplan v1, anonym seit 23.10.2026: nur Benutzernamen, keine Mail, keine erzeugten Nummern). Dieselben Fälle prüfen cloud/test/name.test.ts (Server, cloud/src/name.ts) und tests/test_konto_namen.py (Gerät, core/konto.py). 'reserviert' und 'reserviert_anfang' müssen genau den Listen im Code entsprechen.",
+  "_": "Regeln für Kontonamen (Bauplan v1, anonym seit 23.10.2026: nur Benutzernamen, keine Mail, keine erzeugten Nummern). Dieselben Fälle prüfen server/test/name.test.ts (Server, server/src/name.ts) und tests/test_konto_namen.py (Gerät, core/konto.py). 'reserviert' und 'reserviert_anfang' müssen genau den Listen im Code entsprechen.",
   "reserviert": [
     "abuse",
     "admin",

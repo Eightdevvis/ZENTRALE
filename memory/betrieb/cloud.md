@@ -10,12 +10,12 @@ Probe von außen: Paket ohne Code 401, falscher Code 403. Eingetragen in
 Seit 23.10. ist die Cloud nur Konten + Abgleich, nicht die Programmquelle —
 Pakete heute noch hier, später öffentlich: [verteilung.md](verteilung.md).
 Der Vertrag steht in [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
-(„Bauplan v1"), die Routen in `cloud/openapi.yaml`, Befehle und Ablauf auf
-Englisch in `cloud/README.md`.
+(„Bauplan v1"), die Routen in `server/openapi.yaml`, Befehle und Ablauf auf
+Englisch in `server/README.md`.
 
 ## Was es ist
 
-Ein Cloudflare Worker (`cloud/`, TypeScript) mit
+Ein Cloudflare Worker (`server/`, TypeScript) mit
 
 - **D1** (SQLite): Konten, Sitzungen, Einladungscodes, Fehlversuch-Zähler,
   Kopf + Geschichte der Mitte, Knoten-Beschreibungen, Besitz.
@@ -49,7 +49,7 @@ bleiben, die Kennungen aller Stände für immer.
 ## Anonym (seit 23.10.)
 
 Keine Mail, nirgends. Ein Konto ist ein **Benutzername** (Regeln in
-`cloud/src/name.ts` = `core/konto.py`, gemeinsame Fälle
+`server/src/name.ts` = `core/konto.py`, gemeinsame Fälle
 `tests/daten/konto_namen.json`). Keine erzeugten Kontonummern: eine Wahl
 „anonyme Option ja/nein" wäre selbst Metadaten und verkleinert die
 Anonymitätsmenge (Tor-Prinzip) — ein Weg für alle. Name vergeben → 409
@@ -87,7 +87,7 @@ Sashas Wunsch: ein Prüfer, wo wir an der Grenze stehen, Warnung bei 50, 80
 und 95 %. Nur **R2** kostet über dem Gratis-Kontingent Geld; Workers und D1
 hören einfach auf (bis 00:00 UTC).
 
-Die Grenzen stehen an **einer** Stelle, `cloud/src/grenzen.ts` (geprüft
+Die Grenzen stehen an **einer** Stelle, `server/src/grenzen.ts` (geprüft
 23.10.2026 in der Cloudflare-Doku, GB = 10⁹ Byte, weil die Doku es nicht sagt
 und das die kleinere Zahl ist):
 
@@ -101,7 +101,7 @@ und das die kleinere Zahl ist):
 | R2 Klasse A (put, list, multipart) | 1 Mio. | Monat | ebd. |
 | R2 Klasse B (get, head) | 10 Mio. | Monat | ebd. |
 
-**Selbst gezählt** (`cloud/src/nutzung.ts`, Tabellen aus Migration `0002`):
+**Selbst gezählt** (`server/src/nutzung.ts`, Tabellen aus Migration `0002`):
 jede Anfrage läuft gegen ein zählendes D1/R2; D1-Zeilen aus `meta`, R2 je
 Aufruf, gespeicherte Bytes genau bei put/delete. Danach **ein** Upsert in die
 Tageszeile (`ctx.waitUntil`, Fehler nur ins Log). Der Zähler kostet selbst
@@ -143,9 +143,9 @@ mit `--ohne-bremse`). Aus: Var `BREMSE_SPEICHER` auf `aus`.
 - Alte Dateien in R2 räumt noch niemand weg (kein Aufräumen nach Prüfsumme) —
   der Speicher wächst also nur; die Bremse hält ihn unter 10 GB.
 - Der allererste Ausrollen-Schritt braucht das Geheimnis gleich mit, weil
-  es den Worker vorher nicht gibt (Weg in `cloud/README.md`).
+  es den Worker vorher nicht gibt (Weg in `server/README.md`).
 
 ## Tests
 
 Laufen ganz lokal im Workers-Laufzeitsystem (Miniflare), ohne
-Cloudflare-Konto: im Ordner `cloud/` die npm-Tests starten.
+Cloudflare-Konto: im Ordner `server/` die npm-Tests starten.

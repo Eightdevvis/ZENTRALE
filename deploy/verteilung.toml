@@ -43,7 +43,7 @@ paket = "https://github.com/{repo}/releases/download/v{version}/zentrale-{versio
 
 [quellen.cloud]
 # Heute verlangt der Worker hier einen Einladungscode; öffentlich bräuchte
-# cloud/src/paket.ts eine Freigabe ohne Code.
+# server/src/paket.ts eine Freigabe ohne Code.
 neueste = "{cloud}/v1/paket"
 paket = "{cloud}/v1/paket/{version}.tar.gz"
 

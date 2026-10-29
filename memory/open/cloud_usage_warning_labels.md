@@ -13,5 +13,5 @@ until the next UTC day.
 - The brake (`BREMSE_SPEICHER`, today only R2 storage → 507 `speicher_voll`)
   also covers R2 Class A and Class B ops before 100 %.
 
-Where: `cloud/src/nutzung.ts`, `cloud/src/grenzen.ts`, `zentrale_cli/texte.py`,
+Where: `server/src/nutzung.ts`, `server/src/grenzen.ts`, `zentrale_cli/texte.py`,
 `memory/betrieb/cloud.md`.

@@ -1,5 +1,5 @@
 // Where releases come from: the ZENTRALE cloud the phone is logged in to,
-// with its own session (contract: cloud/src/phone.ts). The APK address is
+// with its own session (contract: server/src/phone.ts). The APK address is
 // built from the version code on the same server — a URL inside the manifest
 // would never be followed. The download is streamed to a file and hashed on
 // the way; a wrong size or SHA-256 deletes the file.

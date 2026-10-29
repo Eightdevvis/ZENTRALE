@@ -1,5 +1,5 @@
 // ZENTRALE cloud — Cloudflare Worker.
-// Contract: memory/hub/knoten_beitritt.md ("Bauplan v1"), cloud/openapi.yaml.
+// Contract: memory/hub/knoten_beitritt.md ("Bauplan v1"), server/openapi.yaml.
 // Answers are JSON; errors are {"fehler": "<code>", "text": "<English sentence>"}.
 // No CORS: the clients are the CLI and the installer, not browsers.
 
@@ -15,7 +15,7 @@ type Handler = (env: Env, anfrage: Request, p: Record<string, string>, t: number
 
 interface Route {
   methode: string;
-  /** OpenAPI-style path; cloud/openapi.yaml must list exactly these. */
+  /** OpenAPI-style path; server/openapi.yaml must list exactly these. */
   pfad: string;
   handler: Handler;
 }

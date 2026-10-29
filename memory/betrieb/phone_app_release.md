@@ -2,7 +2,7 @@
 
 How a new version of the phone app gets from a computer onto the phones.
 What the app does with it: `memory/system/zen_mobile.md` "Self-update".
-Cloud routes: `cloud/src/phone.ts`, `cloud/README.md`.
+Cloud routes: `server/src/phone.ts`, `server/README.md`.
 
 ## The release key (since 2026-10-29)
 
@@ -88,7 +88,7 @@ in settings).
 ## Cloud deploy
 
 The routes need a normal Worker deploy once (no D1 migration, R2 only):
-in `cloud/`, `wrangler deploy`. Before that, publishing fails with 404.
+in `server/`, `wrangler deploy`. Before that, publishing fails with 404.
 `BETREIBER_NAMEN` must contain Sasha's account name (it says `sasha`).
 
 ## Limits

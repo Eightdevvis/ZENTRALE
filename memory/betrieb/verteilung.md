@@ -42,7 +42,7 @@ deploy/install.sh.in ─► scripts/verteilung.py ─► deploy/install.sh (eing
   ändern: Vorlage `deploy/install.sh.in`, Konstanten aus der toml, Cloud-Adresse
   aus `core/cloud_api.py` (`VORGABE`). `tests/test_verteilung.py` merkt, wenn
   die eingecheckte Datei nicht mehr zur toml passt.
-- `quelle = cloud` öffentlich bräuchte im Worker (`cloud/src/paket.ts`) eine
+- `quelle = cloud` öffentlich bräuchte im Worker (`server/src/paket.ts`) eine
   Freigabe ohne Code — heute 401 ohne Code.
 
 ## Kanäle
@@ -103,7 +103,7 @@ deploy/install.sh.in ─► scripts/verteilung.py ─► deploy/install.sh (eing
    (`releases/latest/download/neueste.json` muss auf die neueste zeigen).
 3. Die gerenderte `install.sh` dorthin legen, wo der Einzeiler sie holt (heute
    R2 `install.sh` hinter `<cloud>/install.sh`; das Hochlade-Skript
-   `cloud/scripts/paket_hochladen.mjs` nimmt `deploy/install.sh` + `dist/`).
+   `server/scripts/paket_hochladen.mjs` nimmt `deploy/install.sh` + `dist/`).
 4. apt: ein eigenes, signiertes apt-Repo (Ort offen: GitHub Pages oder R2) mit
    dem .deb, oder das .deb nur als Release-Download.
 5. pacman: PKGBUILD + .SRCINFO ins AUR-Repo `zentrale`; optional eigenes

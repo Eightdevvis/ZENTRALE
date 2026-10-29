@@ -12,7 +12,7 @@ GET /v1/nutzung nur für `betreiber` (sonst 403 nur_betreiber).
 Konten heißen nach Benutzernamen (anonym, keine Mail): '@' → 400, vergeben →
 409 name_vergeben (der Code bleibt dann frei).
 Stand: Absprache mit dem Server-Teil 2026-10-22, anonym seit 2026-10-23
-(cloud/openapi.yaml)."""
+(server/openapi.yaml)."""
 
 import base64
 import hashlib

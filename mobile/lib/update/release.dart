@@ -1,5 +1,5 @@
 // The release manifest of the phone app, as GET /v1/phone/release sends it
-// (cloud/src/phone.ts, cloud/openapi.yaml "PhoneRelease"). Parsing is strict:
+// (server/src/phone.ts, server/openapi.yaml "PhoneRelease"). Parsing is strict:
 // anything odd is a FormatException, never a half-trusted release.
 
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');

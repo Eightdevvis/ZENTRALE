@@ -210,7 +210,7 @@ notfall_beweis    = base64url(HKDF(notfall, info="zentrale/notfall-beweis/v1", 3
 - Auf dem Gerät liegt nach dem Login: Sitzung + `konto_schluessel` in
   `~/.config/zentrale/konto.json` (Rechte 600). Abmelden löscht beides.
 
-## Schnittstelle (`cloud/openapi.yaml`, OpenAPI 3.1, Präfix `/v1`)
+## Schnittstelle (`server/openapi.yaml`, OpenAPI 3.1, Präfix `/v1`)
 
 Antworten JSON; Fehler `{"fehler": "<code>", "text": "<english sentence>"}`.
 Sitzung als `Authorization: Bearer <token>`.

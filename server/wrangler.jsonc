@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // ZENTRALE cloud: accounts, sessions, the sync "Mitte", device list, packages.
-  // Contract: memory/hub/knoten_beitritt.md ("Bauplan v1"), cloud/openapi.yaml.
+  // Contract: memory/hub/knoten_beitritt.md ("Bauplan v1"), server/openapi.yaml.
   "name": "zentrale-cloud",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-20",
