@@ -1,19 +1,41 @@
 """scripts/publish_phone_app.py — version bump, APK checks and the upload
 order, against a fake cloud client. Never the network."""
 import argparse
+import ast
+import gettext
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 
 import pytest
 
 import cloud_api
+import i18n
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, "scripts"))
 import publish_phone_app as pub  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _english(monkeypatch):
+    """Messages are matched in English below; German is checked separately."""
+    monkeypatch.setenv("ZENTRALE_LANG", "en")
+
+
+def test_every_message_has_a_german_text():
+    tree = ast.parse(open(pub.__file__, encoding="utf-8").read())
+    msgids = [n.args[0].value for n in ast.walk(tree)
+              if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_"]
+    assert len(msgids) > 20
+    with open(os.path.join(i18n.LOCALE_DIR, "de", "LC_MESSAGES", "zentrale.mo"), "rb") as f:
+        de = gettext.GNUTranslations(f)
+    for m in msgids:
+        assert de.gettext(m) != m, f"no German text for {m!r}"
+        assert sorted(re.findall(r"\{(\w+)\}", de.gettext(m))) == sorted(re.findall(r"\{(\w+)\}", m))
 
 
 class FakeClient:

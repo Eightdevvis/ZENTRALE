@@ -116,3 +116,91 @@ msgid ""
 msgstr ""
 "Kalender-Quelle ist zencloud, aber der erste Abgleich des Kalenders ist noch nicht fertig\n"
 "({text}) — der nächste Abgleich versucht es wieder. Nichts wurde gelöscht."
+
+# scripts/publish_phone_app.py
+msgid "mobile/pubspec.yaml has no 'version:' line."
+msgstr "mobile/pubspec.yaml hat keine Zeile 'version:'."
+
+msgid "Cannot read the build's version code; checking the file date instead."
+msgstr "Die Versionsnummer des Baus ist nicht lesbar; geprüft wird stattdessen das Dateidatum."
+
+msgid "The APK is signed with the debug key. Phones could never update from it to a release-signed APK. Check ~/.config/zentrale/android/key.properties and build again."
+msgstr "Die APK ist mit dem Debug-Schlüssel signiert. Von ihr könnten Handys nie auf eine richtig signierte APK aktualisieren. ~/.config/zentrale/android/key.properties prüfen und neu bauen."
+
+msgid "Could not check the APK signature (keytool missing?)."
+msgstr "Die Signatur der APK ließ sich nicht prüfen (keytool fehlt?)."
+
+msgid "Not logged in on this computer. Run 'zentrale login' first."
+msgstr "Auf diesem Rechner nicht angemeldet. Erst 'zentrale login'."
+
+msgid "published: nothing yet"
+msgstr "veröffentlicht: noch nichts"
+
+msgid "Publish the phone app to the ZENTRALE cloud."
+msgstr "Die Handy-App in der ZENTRALE-Cloud veröffentlichen."
+
+msgid "pubspec version vs. the published release"
+msgstr "Version in pubspec.yaml gegen die veröffentlichte"
+
+msgid "raise the version code in mobile/pubspec.yaml"
+msgstr "die Versionsnummer in mobile/pubspec.yaml erhöhen"
+
+msgid "new version name, e.g. 0.2.0 (default: keep)"
+msgstr "neuer Versionsname, z. B. 0.2.0 (sonst bleibt er)"
+
+msgid "do not ask the cloud for its version code"
+msgstr "die Cloud nicht nach ihrer Versionsnummer fragen"
+
+msgid "upload the built release APK and its manifest"
+msgstr "die gebaute Release-APK und ihre Beschreibung hochladen"
+
+msgid "what is new (shown in the app)"
+msgstr "was neu ist (zeigt die App)"
+
+msgid "path of the APK (default: the Flutter release output)"
+msgstr "Pfad der APK (sonst die Ausgabe des Flutter-Release-Baus)"
+
+msgid "run 'flutter build apk --release' first (needs RAM)"
+msgstr "vorher 'flutter build apk --release' ausführen (braucht RAM)"
+
+msgid "check everything, upload nothing"
+msgstr "alles prüfen, nichts hochladen"
+
+msgid "The APK is older than mobile/pubspec.yaml — build it again."
+msgstr "Die APK ist älter als mobile/pubspec.yaml — neu bauen."
+
+msgid "pubspec.yaml: {name} (version code {code})"
+msgstr "pubspec.yaml: {name} (Versionsnummer {code})"
+
+msgid "mobile/pubspec.yaml is now {name}+{code}. Next: build the release APK, then publish."
+msgstr "mobile/pubspec.yaml steht jetzt auf {name}+{code}. Als Nächstes: Release-APK bauen, dann veröffentlichen."
+
+msgid "flutter build failed."
+msgstr "flutter build ist fehlgeschlagen."
+
+msgid "Published {name} (version code {code}). Phones see it on their next start."
+msgstr "{name} (Versionsnummer {code}) ist veröffentlicht. Die Handys sehen es beim nächsten Start."
+
+msgid "The version code must be between 1 and {max}."
+msgstr "Die Versionsnummer muss zwischen 1 und {max} liegen."
+
+msgid "'{name}' is not a valid version name."
+msgstr "'{name}' ist kein gültiger Versionsname."
+
+msgid "No APK at {path} — build it first (flutter build apk --release in mobile/)."
+msgstr "Keine APK unter {path} — erst bauen (flutter build apk --release in mobile/)."
+
+msgid "published: {name} (version code {code}), {at}"
+msgstr "veröffentlicht: {name} (Versionsnummer {code}), {at}"
+
+msgid "Warning: {text}"
+msgstr "Warnung: {text}"
+
+msgid "Version code {code} is not higher than the published {remote} — run 'bump' and build again."
+msgstr "Versionsnummer {code} ist nicht höher als die veröffentlichte {remote} — 'bump' ausführen und neu bauen."
+
+msgid "Dry run: would publish {name} (version code {code}), {size} bytes, sha256 {sha}."
+msgstr "Probelauf: würde {name} (Versionsnummer {code}) veröffentlichen, {size} Bytes, sha256 {sha}."
+
+msgid "The APK was built with version code {built}, pubspec.yaml says {code} — build it again."
+msgstr "Die APK wurde mit Versionsnummer {built} gebaut, pubspec.yaml sagt {code} — neu bauen."

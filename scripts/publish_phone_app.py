@@ -18,7 +18,6 @@ Docs: memory/system/zen_mobile.md "Self-update", memory/betrieb/phone_app_releas
 """
 
 import argparse
-import gettext
 import hashlib
 import json
 import os
@@ -28,6 +27,13 @@ import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if os.path.join(ROOT, "core") not in sys.path:
+    sys.path.insert(0, os.path.join(ROOT, "core"))
+
+import cloud_api  # noqa: E402
+import konto  # noqa: E402
+from i18n import _  # noqa: E402 — UI text: core/locale/<lang>/LC_MESSAGES/zentrale.po
+
 MOBILE = os.path.join(ROOT, "mobile")
 PUBSPEC = os.path.join(MOBILE, "pubspec.yaml")
 # Flutter copies the APK here; AGP writes output-metadata.json next to its own copy.
@@ -35,8 +41,6 @@ APK = os.path.join(MOBILE, "build", "app", "outputs", "flutter-apk", "app-releas
 METADATA = os.path.join(MOBILE, "build", "app", "outputs", "apk", "release", "output-metadata.json")
 UPLOAD_TIMEOUT = 900
 MAX_CODE = 2_100_000_000
-
-_ = gettext.translation("zentrale", os.path.join(ROOT, "locale"), fallback=True).gettext
 
 _VERSION = re.compile(r"^version:\s*([0-9A-Za-z][0-9A-Za-z._-]*)(?:\+(\d+))?\s*$", re.M)
 
@@ -57,9 +61,9 @@ def read_version(text: str) -> tuple:
 
 def write_version(text: str, name: str, code: int) -> str:
     if not 1 <= code <= MAX_CODE:
-        raise PublishError(_("The version code must be between 1 and %d.") % MAX_CODE)
+        raise PublishError(_("The version code must be between 1 and {max}.").format(max=MAX_CODE))
     if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._-]{0,63}", name):
-        raise PublishError(_("'%s' is not a valid version name.") % name)
+        raise PublishError(_("'{name}' is not a valid version name.").format(name=name))
     return _VERSION.sub(f"version: {name}+{code}", text, count=1)
 
 
@@ -105,19 +109,19 @@ def check_apk(apk: str, code: int, pubspec_path: str = PUBSPEC, metadata_path: s
     """Raise PublishError if this APK must not be published; return warnings."""
     warnings = []
     if not os.path.isfile(apk):
-        raise PublishError(_("No APK at %s — build it first (flutter build apk --release in mobile/).") % apk)
+        raise PublishError(_("No APK at {path} — build it first (flutter build apk --release in mobile/).").format(path=apk))
     built = built_code(metadata_path)
     if built is None:
         warnings.append(_("Cannot read the build's version code; checking the file date instead."))
         if os.path.getmtime(apk) < os.path.getmtime(pubspec_path):
             raise PublishError(_("The APK is older than mobile/pubspec.yaml — build it again."))
     elif built != code:
-        raise PublishError(_("The APK was built with version code %(built)d, pubspec.yaml says %(code)d — "
-                             "build it again.") % {"built": built, "code": code})
+        raise PublishError(_("The APK was built with version code {built}, pubspec.yaml says {code} — build it again.")
+                           .format(built=built, code=code))
     signed = debug_signed(apk, run)
     if signed:
-        raise PublishError(_("The APK is signed with the debug key. Phones could never update from it to a "
-                             "release-signed APK. Check ~/.config/zentrale/android/key.properties and build again."))
+        raise PublishError(_("The APK is signed with the debug key. Phones could never update from it to a release-signed APK. "
+                             "Check ~/.config/zentrale/android/key.properties and build again."))
     if signed is None:
         warnings.append(_("Could not check the APK signature (keytool missing?)."))
     return warnings
@@ -126,8 +130,6 @@ def check_apk(apk: str, code: int, pubspec_path: str = PUBSPEC, metadata_path: s
 # ── the cloud ──────────────────────────────────────────────────────────
 
 def _client():
-    sys.path.insert(0, os.path.join(ROOT, "core"))
-    import konto  # noqa: E402 — core/ is only on the path for this script
     c = konto.client()
     if not c.token:
         raise PublishError(_("Not logged in on this computer. Run 'zentrale login' first."))
@@ -136,7 +138,6 @@ def _client():
 
 def published(client) -> dict:
     """The current manifest, or {} if nothing is published yet."""
-    import cloud_api
     try:
         return client.get("/v1/phone/release")
     except cloud_api.CloudFehler as e:
@@ -146,7 +147,6 @@ def published(client) -> dict:
 
 
 def upload(client, apk: str, name: str, code: int, notes: str) -> dict:
-    import cloud_api
     sha = sha256_file(apk)
     with open(apk, "rb") as f:
         data = f.read()
@@ -168,12 +168,12 @@ def cmd_status(args, client_factory=_client):
     with open(PUBSPEC, encoding="utf-8") as f:
         name, code = read_version(f.read())
     m = published(client_factory())
-    print(_("pubspec.yaml: %(name)s (version code %(code)d)") % {"name": name, "code": code})
+    print(_("pubspec.yaml: {name} (version code {code})").format(name=name, code=code))
     if m:
-        print(_("published:    %(name)s (version code %(code)d), %(at)s")
-              % {"name": m.get("version"), "code": m.get("version_code"), "at": m.get("published_at")})
+        print(_("published: {name} (version code {code}), {at}")
+              .format(name=m.get("version"), code=m.get("version_code"), at=m.get("published_at")))
     else:
-        print(_("published:    nothing yet"))
+        print(_("published: nothing yet"))
 
 
 def cmd_bump(args, client_factory=_client, pubspec_path=PUBSPEC):
@@ -185,8 +185,8 @@ def cmd_bump(args, client_factory=_client, pubspec_path=PUBSPEC):
     new_name = args.name or name
     with open(pubspec_path, "w", encoding="utf-8") as f:
         f.write(write_version(text, new_name, new_code))
-    print(_("mobile/pubspec.yaml is now %(name)s+%(code)d. Next: build the release APK, then publish.")
-          % {"name": new_name, "code": new_code})
+    print(_("mobile/pubspec.yaml is now {name}+{code}. Next: build the release APK, then publish.")
+          .format(name=new_name, code=new_code))
     return new_name, new_code
 
 
@@ -199,19 +199,19 @@ def cmd_publish(args, client_factory=_client, pubspec_path=PUBSPEC, metadata_pat
         if run(["flutter", "build", "apk", "--release"], cwd=MOBILE).returncode != 0:
             raise PublishError(_("flutter build failed."))
     for w in check_apk(apk, code, pubspec_path, metadata_path, run):
-        print(_("Warning: %s") % w, file=sys.stderr)
+        print(_("Warning: {text}").format(text=w), file=sys.stderr)
     client = client_factory()
     remote = int(published(client).get("version_code") or 0)
     if code <= remote:
-        raise PublishError(_("Version code %(code)d is not higher than the published %(remote)d — run 'bump' "
-                             "and build again.") % {"code": code, "remote": remote})
+        raise PublishError(_("Version code {code} is not higher than the published {remote} — run 'bump' and build again.")
+                           .format(code=code, remote=remote))
     if args.dry_run:
-        print(_("Dry run: would publish %(name)s (version code %(code)d), %(size)d bytes, sha256 %(sha)s.")
-              % {"name": name, "code": code, "size": os.path.getsize(apk), "sha": sha256_file(apk)})
+        print(_("Dry run: would publish {name} (version code {code}), {size} bytes, sha256 {sha}.")
+              .format(name=name, code=code, size=os.path.getsize(apk), sha=sha256_file(apk)))
         return None
     m = upload(client, apk, name, code, args.notes or "")
-    print(_("Published %(name)s (version code %(code)d). Phones see it on their next start.")
-          % {"name": m.get("version"), "code": m.get("version_code")})
+    print(_("Published {name} (version code {code}). Phones see it on their next start.")
+          .format(name=m.get("version"), code=m.get("version_code")))
     return m
 
 
