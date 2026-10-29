@@ -42,3 +42,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tutor_behaviour_bench.md](tutor_behaviour_bench.md) | Tutor: blueprint checks structure, not behaviour — no bench, no up-to-date/outdated status per language pack | no |
 | [tutor_stt_quality.md](tutor_stt_quality.md) | Tutor: Whisper pinned to the target language invents sentences from noise; model `base`, no vocabulary hint, no confidence threshold | no |
 | [docs_pruefen_markers.md](docs_pruefen_markers.md) | Eleven `⚠ prüfen:` markers in `memory/` from the 18.09. docs rework, unanswered | partly |
+| [task_prioritization.md](task_prioritization.md) | KI asks what to do with dumped ideas/duties instead of deciding their status herself; prompt rule forbids ordering | yes (one decision) |
