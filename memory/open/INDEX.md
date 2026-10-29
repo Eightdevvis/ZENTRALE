@@ -38,3 +38,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [measured_canon_texts.md](measured_canon_texts.md) | klein „muss Sasha bestätigen“ (W-03), qwen rule 5 „laut Suchtreffer“: change only after re-measuring | no |
 | [leitbild_checkin_stage.md](leitbild_checkin_stage.md) | Check-in scene mapped to stage 5 by an agent | yes (check) |
 | [ai_small_leftovers.md](ai_small_leftovers.md) | Skill backup returns via rsync, qwen `input_examples`, long read results (W-05, W-06) | no |
+| [tutor_tool_channel.md](tutor_tool_channel.md) | Tutor (repo `language-tutor`): prompts name tools in prose, no tool-call example, soft contract — the model narrates calls; front only strips them | no |
+| [tutor_behaviour_bench.md](tutor_behaviour_bench.md) | Tutor: blueprint checks structure, not behaviour — no bench, no up-to-date/outdated status per language pack | no |
+| [tutor_stt_quality.md](tutor_stt_quality.md) | Tutor: Whisper pinned to the target language invents sentences from noise; model `base`, no vocabulary hint, no confidence threshold | no |
+| [docs_pruefen_markers.md](docs_pruefen_markers.md) | Eleven `⚠ prüfen:` markers in `memory/` from the 18.09. docs rework, unanswered | partly |
