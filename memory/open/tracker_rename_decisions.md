@@ -13,3 +13,9 @@ From the session on 11.10.2026.
   [141], [159], [204], [212], [302], [313], [371], [376], [396], [459],
   [537], [540], [543], [549], [560].
 - Could be ticked off: list rebuild onto boxes; [564] focus box place.
+- Probably obsolete since chat runs on the cloud and the browser is parked
+  (cleanup session 04.10.2026, Sasha not asked yet): [87] „local AI" (logic
+  loop for the local 9b model), [116] „AI news show" (fetcher only runs with
+  local AI on, cinema view only existed in the browser), [62] „ai cognitive"
+  (two keywords, no content).
+- Content question: [576] desk view (electronics) — what goes in it.
