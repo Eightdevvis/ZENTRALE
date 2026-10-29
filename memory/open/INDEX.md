@@ -11,3 +11,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [small_fixes.md](small_fixes.md) | Stale docstrings, comments, a fallback text, an index section, the word „Takt" | partly |
 | [calendar_frames.md](calendar_frames.md) | Pixel-art frames, selection and "running now" markers for calendar blocks: drafted, not built | yes (pick styles) |
 | [browser_ui_rebuild.md](browser_ui_rebuild.md) | Old dashboard back to the archive, browser UI rebuilt in today's TUI style: asked 13.10., not started | yes (pick approach) |
+| [store_app_lifecycle.md](store_app_lifecycle.md) | Store apps: no uninstall, update or rights dialog yet | no |
+| [store_tutor_map_migration.md](store_tutor_map_migration.md) | Tutor and map still hard-coded, not installed through the store | no |
+| [budgeter_followups.md](budgeter_followups.md) | Budget app: German code, no import, small gaps, look | partly (look) |
+| [test_pruefstand_isolation_red.md](test_pruefstand_isolation_red.md) | `test_pruefstand_isolation` red on main (`SYSTEMD_USER`) | no |
