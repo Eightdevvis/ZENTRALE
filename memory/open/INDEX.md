@@ -10,4 +10,3 @@ How this folder works: [README.md](README.md). One line per open item.
 | [test_suite_memory.md](test_suite_memory.md) | Measure how much RAM the test suite needs | yes (Sasha measures himself) |
 | [small_fixes.md](small_fixes.md) | Stale docstrings, comments, a fallback text, an index section, the word „Takt" | partly |
 | [calendar_frames.md](calendar_frames.md) | Pixel-art frames, selection and "running now" markers for calendar blocks: drafted, not built | yes (pick styles) |
-| [browser_ui_rebuild.md](browser_ui_rebuild.md) | Old dashboard back to the archive, browser UI rebuilt in today's TUI style: asked 13.10., not started | yes (pick approach) |

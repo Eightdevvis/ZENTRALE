@@ -11,7 +11,7 @@ Sasha.
   limit in the giant-files table of [../doku_regeln.md](../doku_regeln.md).
 - **29.10.2026** — `tests/test_memory_groesse.py` is red on `main`:
   `werkzeuge/kalender_ansichten_vorschau.md` shrank to 602 lines (last touched
-  in `fff210d`), the table still says 604. Quick fix: lower the number to 602.
+  in `fff210d`), the table still said 604; lowered to 602 on 29.10.
 
 ## Idea
 
