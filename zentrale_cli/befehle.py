@@ -377,6 +377,7 @@ def adapter_liste(term):
     term.sag(t("ad_title"), "fett")
     term.sag("  " + t("ad_cal_source", quelle=ke.quelle())
              + ("" if ke.eingestellt() else t("ad_cal_source_default")))
+    _show_fill_pending(term)
     if not alle:
         term.sag(t("ad_none"))
         return 0
@@ -445,6 +446,52 @@ def _quelle():
     return kalender_einstellung.quelle()
 
 
+class SignOfLife:
+    """While kalender_quelle_setzen syncs for a long time (first fill: 590
+    files, minutes): one line with the file count first, then every
+    `interval` seconds "… still syncing (n s)". Real progress (file n of N)
+    needs a hook in core/abgleich (memory/hub/adapter.md)."""
+
+    def __init__(self, term, interval=15.0):
+        import threading
+        self.term, self.interval = term, interval
+        self._stop = threading.Event()
+        self._thread = None
+        self._start = None
+
+    def report(self, event, n=0, upload=False, **_kw):
+        import threading
+        import time
+        if event == "syncing" and self._thread is None:
+            self.term.sag(t("ad_cal_uploading" if upload else "ad_cal_syncing", n=n))
+            self._start = time.monotonic()
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+        elif event == "done":
+            self.stop(done=True)
+
+    def _run(self):
+        import time
+        while not self._stop.wait(self.interval):
+            self.term.sag(t("ad_cal_still", s=int(time.monotonic() - self._start)), "blass")
+
+    def stop(self, done=False):
+        import time
+        if self._thread is None:
+            return
+        self._stop.set()
+        self._thread.join(timeout=1)
+        self._thread = None
+        if done:
+            self.term.sag(t("ad_cal_done", s=int(time.monotonic() - self._start)), "blass")
+
+
+def _show_fill_pending(term):
+    if adapter_ablauf.calendar_fill_pending(wurzel=WURZEL):
+        term.sag(t("ad_cal_open"), "warn")
+
+
 def adapter_kalender(term, rest=()):
     """`zentrale adapter calendar [google|zencloud|lokal]`: die Quelle der
     Kalender-App kalender-haupt zeigen bzw. umstöpseln
@@ -454,13 +501,31 @@ def adapter_kalender(term, rest=()):
     if not rest:
         q = ke.quelle()
         term.sag(t("ad_cal_source", quelle=q) + ("" if ke.eingestellt() else t("ad_cal_source_default")))
+        _show_fill_pending(term)
         term.sag(t("ad_cal_source_how"), "blass")
         return 0
     if len(rest) != 1 or rest[0] not in ke.QUELLEN:
         term.fehler(t("ad_cal_source_bad", wort=" ".join(rest), liste=" | ".join(ke.QUELLEN)))
         return 2
-    r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, rest[0], WURZEL)
+    alive = SignOfLife(term)
+    try:
+        r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, rest[0], WURZEL, report=alive.report)
+    finally:
+        alive.stop()
     e = r["ergebnis"]
+    if e == "interrupted":
+        term.sag(t("ad_cal_interrupted"), "warn")
+        if r["beiseite"]:
+            term.sag(t("ad_cal_aside", pfad=r["beiseite"]), "warn")
+        return 130
+    if e in ("continued", "incomplete"):
+        if e == "continued":
+            term.sag(t("ad_cal_continued"), "gut")
+        else:
+            term.sag(t("ad_cal_continue_failed", text=r["fehler"]), "warn")
+        if r["beiseite"]:
+            term.sag(t("ad_cal_aside", pfad=r["beiseite"]), "warn")
+        return 0 if e == "continued" else 1
     if e == "ohne_mitte":
         term.sag(t("ad_cal_hub_no_account"), "warn")
         return 1

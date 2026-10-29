@@ -154,6 +154,24 @@ def _google_aus() -> bool:
         return False
 
 
+def change_stamp() -> tuple:
+    """Changes whenever something bewerten() depends on changes: this
+    device's state file and the calendar app's setting (source). Only stat
+    calls — cheap enough for every tick of the main loop; core/main then
+    recomputes the alarm channel at once (2026-10-29: after switching to
+    zencloud, "Google-Sync Zugang abgelaufen" stayed in the running backend
+    until the next 5-min heartbeat)."""
+    import kalender_einstellung as ke
+    out = []
+    for p in (pfad(), ke._anschluesse(), ke._pfad(ke.HAUPT), ke._pfad(ke.ALT_MITTE)):
+        try:
+            s = os.stat(p)
+            out.append((s.st_mtime_ns, s.st_size, s.st_ino))
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
 def bewerten(z: dict | None = None, jetzt: datetime | None = None) -> dict:
     """Der Stand plus Urteil: {bekannt, problem, alt, hinweis, kurz, …Felder}.
     `hinweis` ist die fertige Warnzeile („⚠ google-sync: Zugang abgelaufen —

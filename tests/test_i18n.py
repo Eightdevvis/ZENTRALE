@@ -13,11 +13,25 @@ MO = os.path.join(i18n.LOCALE_DIR, "de", "LC_MESSAGES", "zentrale.mo")
 
 
 def _po_entries():
-    """msgid → msgstr from the .po (single-line entries, as this table is written)."""
-    text = open(PO, encoding="utf-8").read()
-    pairs = re.findall(r'^msgid "(.*)"\nmsgstr "(.*)"$', text, re.M)
-    unq = lambda s: s.replace('\\"', '"').replace("\\\\", "\\")   # noqa: E731
-    return {unq(a): unq(b) for a, b in pairs if a}
+    """msgid → msgstr from the .po (also multi-line entries and \\n escapes)."""
+    import ast
+    out, key, cur, field = {}, None, None, None
+    for line in open(PO, encoding="utf-8").read().splitlines() + [""]:
+        line = line.strip()
+        if line.startswith("msgid "):
+            if key:
+                out[key] = cur
+            key, cur, field = ast.literal_eval(line[6:]), None, "id"
+        elif line.startswith("msgstr "):
+            cur, field = ast.literal_eval(line[7:]), "str"
+        elif line.startswith('"'):
+            if field == "id":
+                key += ast.literal_eval(line)
+            else:
+                cur += ast.literal_eval(line)
+    if key:
+        out[key] = cur
+    return out
 
 
 def test_compiled_table_matches_po():

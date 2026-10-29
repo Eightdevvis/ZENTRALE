@@ -3,6 +3,9 @@
 Englisch (Bauplan v1: Zielgruppe international). Deutsch kommt später als
 zweite Sprache dazu: ein zweites Wörterbuch DE mit denselben Schlüsseln und
 `SPRACHE` nach Einstellung — der Code fasst keinen Text selbst an.
+
+Since 2026-10-29: translations come from gettext (core/i18n.py, see
+"Translations" below), not from a second dict. German is the first UI language.
 """
 
 EN = {
@@ -226,6 +229,18 @@ EN = {
                            "nothing changed. Try again when online."),
     "ad_cal_hub_offline": "Could not sync ({text}) — nothing switched. Try again when online.",
     "ad_cal_hub_sync_later": "Switched, but the sync afterwards failed ({text}) — the next 'zentrale sync' catches up.",
+    "ad_cal_uploading": "Uploading the calendar to the cloud ({n} files) — this can take a few minutes …",
+    "ad_cal_syncing": "Syncing the calendar with the cloud ({n} files on this device) — this can take a few minutes …",
+    "ad_cal_still": "  … still syncing ({s} s)",
+    "ad_cal_done": "  done after {s} s.",
+    "ad_cal_open": ("This device's calendar is not fully in the cloud yet. The next sync finishes it —\n"
+                    "or run 'zentrale adapter calendar zencloud' again now."),
+    "ad_cal_interrupted": ("Interrupted — the calendar source stays zencloud, nothing was deleted.\n"
+                           "The upload is not finished: run 'zentrale adapter calendar zencloud' again,\n"
+                           "or let the next automatic sync finish it."),
+    "ad_cal_continued": "Calendar source is zencloud — the unfinished first sync of the calendar is now done.",
+    "ad_cal_continue_failed": ("Calendar source is zencloud, but the first sync of the calendar is still not done\n"
+                               "({text}) — the next sync tries again. Nothing was deleted."),
     "ad_run_nothing": "No calendar connection and no vdirsyncer setup on this device — nothing to do.",
 
     # ── Timer (zentrale_cli/timer.py) ───────────────────────────────
@@ -295,6 +310,17 @@ EN = {
 SPRACHE = EN
 
 
+# ── Translations (Sasha 2026-10-29: UI text through gettext) ───────────
+#
+# The English text in EN is the msgid; the core's one table translates it
+# (core/i18n.py, core/locale/<lang>/LC_MESSAGES/zentrale.po + .mo). German
+# is the first UI language, ZENTRALE_LANG picks another; a text without a
+# translation stays English.
+
+
 def t(schluessel, **werte):
     text = SPRACHE[schluessel]
+    if isinstance(text, str):
+        import i18n             # core/ (on the path via zentrale_cli/__init__)
+        text = i18n._(text)
     return text.format(**werte) if werte and isinstance(text, str) else text

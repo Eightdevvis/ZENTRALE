@@ -76,3 +76,43 @@ msgstr "Eingang {node}: Termin {path} abgelehnt — {reason}; die Mitte bleibt, 
 
 msgid "{path}: differs from the cloud (app newly included) — the cloud wins, the version from here is kept aside"
 msgstr "{path}: auf diesem Rechner anders als in der Mitte (App neu dabei) — die Mitte gilt, die Fassung von hier ist aufgehoben"
+
+# ── zentrale_cli: switching the calendar source (befehle.adapter_kalender) ──
+
+msgid "Uploading the calendar to the cloud ({n} files) — this can take a few minutes …"
+msgstr "Lade den Kalender in die Cloud ({n} Dateien) — das kann ein paar Minuten dauern …"
+
+msgid "Syncing the calendar with the cloud ({n} files on this device) — this can take a few minutes …"
+msgstr "Gleiche den Kalender mit der Cloud ab ({n} Dateien auf diesem Gerät) — das kann ein paar Minuten dauern …"
+
+msgid "  … still syncing ({s} s)"
+msgstr "  … läuft noch ({s} s)"
+
+msgid "  done after {s} s."
+msgstr "  fertig nach {s} s."
+
+msgid ""
+"This device's calendar is not fully in the cloud yet. The next sync finishes it —\n"
+"or run 'zentrale adapter calendar zencloud' again now."
+msgstr ""
+"Der Kalender dieses Geräts ist noch nicht ganz in der Cloud. Der nächste Abgleich macht ihn fertig —\n"
+"oder jetzt noch einmal 'zentrale adapter calendar zencloud'."
+
+msgid ""
+"Interrupted — the calendar source stays zencloud, nothing was deleted.\n"
+"The upload is not finished: run 'zentrale adapter calendar zencloud' again,\n"
+"or let the next automatic sync finish it."
+msgstr ""
+"Abgebrochen — die Kalender-Quelle bleibt zencloud, nichts wurde gelöscht.\n"
+"Das Hochladen ist nicht fertig: 'zentrale adapter calendar zencloud' noch einmal,\n"
+"oder der nächste automatische Abgleich macht es fertig."
+
+msgid "Calendar source is zencloud — the unfinished first sync of the calendar is now done."
+msgstr "Kalender-Quelle ist zencloud — der unterbrochene erste Abgleich des Kalenders ist jetzt fertig."
+
+msgid ""
+"Calendar source is zencloud, but the first sync of the calendar is still not done\n"
+"({text}) — the next sync tries again. Nothing was deleted."
+msgstr ""
+"Kalender-Quelle ist zencloud, aber der erste Abgleich des Kalenders ist noch nicht fertig\n"
+"({text}) — der nächste Abgleich versucht es wieder. Nichts wurde gelöscht."
