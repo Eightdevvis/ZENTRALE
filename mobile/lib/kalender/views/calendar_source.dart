@@ -42,7 +42,7 @@ class KalenderItemSource implements CalendarItemSource {
     final byDay = <DateTime, List<CalendarItem>>{};
     for (final l in occ.values) {
       for (final v in l) {
-        if (v.versteckt) continue;
+        if (v.versteckt && !v.switchedOff) continue; // switched-off: shown faint, can go back on
         final item = itemFromOccurrence(v, _color(v.ebene));
         final first = dayOf(item.start);
         final lastDay = item.allDay || item.end == null
@@ -94,6 +94,7 @@ CalendarItem itemFromOccurrence(Vorkommen v, Color? color) {
     place: v.ort,
     softDeadline: v.sollBeginn,
     waiting: v.wartet,
+    switchedOff: v.switchedOff,
     payload: v,
   );
 }

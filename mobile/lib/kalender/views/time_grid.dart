@@ -486,22 +486,23 @@ class _Block extends StatelessWidget {
     final p = palette;
     final c = p.colorOf(item);
     final tentative = item.kind == ItemKind.tentative;
-    final fill = tentative ? p.tentativeFill(c) : p.eventFill(c);
-    final fg = p.readableOn(fill, tentative ? p.text : null);
+    final off = item.switchedOff;
+    final fill = off ? p.background : (tentative ? p.tentativeFill(c) : p.eventFill(c));
+    final fg = off ? p.mutedText : p.readableOn(fill, tentative ? p.text : null);
     final small = TextStyle(fontSize: compact ? minText : 11, color: fg, height: 1.2);
     final end = item.end;
     final time = end == null ? hhmm(item.start) : '${hhmm(item.start)}–${hhmm(end)}';
     return GestureDetector(
       onTap: onTap == null ? null : () => onTap!(item),
       child: CustomPaint(
-        painter: tentative ? _StripePainter(Color.lerp(fill, c, .35)!) : null,
+        painter: tentative && !off ? _StripePainter(Color.lerp(fill, c, .35)!) : null,
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: compact ? 2 : 4, vertical: 1),
           decoration: BoxDecoration(
-            color: tentative ? null : fill,
+            color: tentative && !off ? null : fill,
             borderRadius: BorderRadius.circular(4),
-            border: tentative
-                ? Border.all(color: c, width: 1)
+            border: tentative || off
+                ? Border.all(color: off ? p.mutedText : c, width: 1)
                 : Border(left: BorderSide(color: Color.lerp(c, p.text, .25)!, width: 2)),
           ),
           child: LayoutBuilder(builder: (context, box) {
@@ -527,6 +528,7 @@ class _Block extends StatelessWidget {
                             height: 1.2,
                             fontWeight: FontWeight.w600,
                             color: fg,
+                            decoration: off ? TextDecoration.lineThrough : null,
                             fontStyle: tentative ? FontStyle.italic : FontStyle.normal)),
                   ),
                 ]),

@@ -254,12 +254,33 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   seinen Eingang; sie steht sofort in der Liste mit „wartet auf Abgleich“.
   Ein Rechner übernimmt sie nur als neuen Termin
   (`core/abgleich_vorschlaege.kalender_vorschlag_annehmen`).
-- **Ändern, Löschen, einzelne Vorkommen aus/an, Ebene wechseln:** die
-  Rechner-Seite steht seit 29.10.2026 (Umschlag mit `basis_sha`/`basis`/
-  `loeschen`, Widerspruch → abgelehnt, Quittung in `inhalt.enc`:
+- **Edit, delete, one occurrence off/on, change layer (phone side
+  2026-10-29):** tap an event → detail sheet (`event_sheet.dart`) with Edit
+  (form `eintrag_seite.dart` in edit mode: title, place, day/time, duration,
+  layer; a series keeps its first day), Delete (confirm; a series = the
+  whole series) and, for a series, "only this occurrence off" / "back on"
+  (switched-off occurrences stay visible as struck-through outlines in
+  day/week so they can go back on). Protocol:
   [../betrieb/abgleich_fremde_knoten.md](../betrieb/abgleich_fremde_knoten.md)
-  „Termine vom Handy“). In der App noch nicht gebaut — die Seite sagt es beim
-  Antippen.
+  "Termine vom Handy". `event_edit.dart` changes only the main VEVENT,
+  line by line (DESCRIPTION, foreign VALARMs etc. stay); occurrence off =
+  EXDATE in DTSTART's form + `X-ZENTRALE-AUS` (`encodeSwitchedOff`,
+  byte-identical to the core). The register `abgleich/proposals.json`
+  (`lib/mitte/proposals.dart`) keeps each change with `basis_sha` + `basis`
+  until the receipt (`eingang.handy.<pfad>` in `inhalt.enc`) matches the
+  sha256 of the envelope plaintext (built in ONE place, `envelope()` in
+  `mitte.dart`); then the inbox entry is cleared. Optimistic: the changed
+  file is in the Ablage at once ("wartet auf Abgleich"), the sync does not
+  overwrite protected paths. Rejected: a banner above the calendar, the
+  reason code translated via ARB (`reason…` keys, one per
+  `core/abgleich_vorschlaege.REASONS` code — a test checks all), both
+  versions, "propose mine again" (new basis = the cloud's current version)
+  or "take the cloud's". An undecided envelope is replaced in place (same
+  basis_sha). Vectors from the real core:
+  `scripts/handy_aendern_testvektoren.py` →
+  `test/daten/kalender_aendern_testvektoren.json` (X-ZENTRALE-AUS encoding,
+  all reason codes, edit/off/on cases incl. Google TZID and UTC series);
+  tests `test/calendar_edit_test.dart`.
 - **Erinnerungen** (`erinnerungen.dart`): jeder VALARM wird eine Android-
   Benachrichtigung (relativ zum Beginn/Ende oder fester Zeitpunkt; Google
   -PT7H ebenso wie unsere Deadline-Vorwarnung -P3D). Nach jedem Abgleich alle
@@ -342,7 +363,7 @@ gespielte Cloud `test/falsche_cloud.dart` — nie Netz, nie echte Konten).
 
 1. **Auf dem Handy ausprobieren** — bisher nur Tests und Analyse. Sasha:
    APK neu bauen (nicht auf dem 3,8-GB-Laptop), einmal anmelden.
-2. Kalender in die Mitte (Kalender-Session), dann Ändern/Löschen vom Handy.
+2. Kalender in die Mitte (Kalender-Session). Ändern/Löschen vom Handy ist gebaut (29.10.), am echten Handy noch nicht ausprobiert.
 3. Argon2id-Dauer auf dem echten Handy messen; ist sie zu lang, eine native
    Umsetzung hinter dieselbe Funktion `hauptschluessel` stecken.
 4. **Später, nicht jetzt:** Tutorial/Einführung und UX-Feinschliff (Sasha,

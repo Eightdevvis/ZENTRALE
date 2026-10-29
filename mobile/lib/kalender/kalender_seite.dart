@@ -19,6 +19,7 @@ import '../dienste.dart';
 import '../l10n/app_localizations.dart';
 import '../thema/farben.dart';
 import 'eintrag_seite.dart';
+import 'event_sheet.dart';
 import 'kalender.dart';
 import 'kalender_steuerung.dart';
 import 'regel.dart';
@@ -169,7 +170,18 @@ class _KalenderSeiteState extends State<KalenderSeite> {
         listenable: widget.steuerung,
         builder: (context, _) {
           final s = widget.steuerung;
-          if (_mode == CalendarViewMode.agenda) return _agenda(context);
+          final rejected = s.rejected;
+          return Column(children: [
+            if (rejected.isNotEmpty) _RejectedBanner(steuerung: s, count: rejected.length),
+            Expanded(child: _mode == CalendarViewMode.agenda ? _agenda(context) : _grid(context)),
+          ]);
+        },
+      ),
+    );
+  }
+
+  Widget _grid(BuildContext context) {
+          final s = widget.steuerung;
           if (!identical(_source?.kalender, s.kalender)) _source = KalenderItemSource(s.kalender);
           return RefreshIndicator(
             onRefresh: () async {
@@ -187,7 +199,7 @@ class _KalenderSeiteState extends State<KalenderSeite> {
               onDayOpen: (d) => _openDay(d),
               onItemTap: (i) {
                 final v = i.payload;
-                if (v is Vorkommen) showOccurrenceDetails(context, v, s.kalender);
+                if (v is Vorkommen) showEventSheet(context, v, s);
               },
               onSlotTap: (at, {required allDay}) => _neu(
                   day: tagVon(at),
@@ -195,9 +207,6 @@ class _KalenderSeiteState extends State<KalenderSeite> {
                   allDay: allDay),
             ),
           );
-        },
-      ),
-    );
   }
 
   void _openDay(DateTime d) => setState(() {
@@ -225,7 +234,7 @@ class _KalenderSeiteState extends State<KalenderSeite> {
         ));
       }
       for (final v in rest) {
-        kinder.add(_Zeile(v: v, kalender: s.kalender, jetzt: jetzt));
+        kinder.add(_Zeile(v: v, steuerung: s, jetzt: jetzt));
       }
       if (rhythmus.isNotEmpty) kinder.add(_Rhythmus(l: rhythmus, kalender: s.kalender));
     }
@@ -245,6 +254,45 @@ class _KalenderSeiteState extends State<KalenderSeite> {
         await s.laden();
       },
       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: kinder),
+    );
+  }
+}
+
+/// Above the calendar while a computer has rejected a change from here.
+class _RejectedBanner extends StatelessWidget {
+  const _RejectedBanner({required this.steuerung, required this.count});
+  final KalenderSteuerung steuerung;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.errorContainer,
+      child: InkWell(
+        key: const ValueKey('calendar-rejected'),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (c) => SafeArea(
+            child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(16), children: [
+              for (final p in steuerung.rejected)
+                RejectedBox(proposal: p, steuerung: steuerung, onDone: () => Navigator.of(c).pop()),
+            ]),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(children: [
+            Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(AppLocalizations.of(context).calendarRejectedCount(count),
+                  style: TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
@@ -275,9 +323,10 @@ class _TagKopf extends StatelessWidget {
 }
 
 class _Zeile extends StatelessWidget {
-  const _Zeile({required this.v, required this.kalender, required this.jetzt});
+  const _Zeile({required this.v, required this.steuerung, required this.jetzt});
   final Vorkommen v;
-  final Kalender kalender;
+  final KalenderSteuerung steuerung;
+  Kalender get kalender => steuerung.kalender;
   final DateTime jetzt;
 
   @override
@@ -344,32 +393,7 @@ class _Zeile extends StatelessWidget {
     );
   }
 
-  void _ansehen(BuildContext context) => showOccurrenceDetails(context, v, kalender);
-}
-
-/// The detail sheet of one occurrence (agenda and the grid views).
-void showOccurrenceDetails(BuildContext context, Vorkommen v, Kalender kalender) {
-  final ebene = kalender.ebene(v.ebene)?.titel ?? v.ebene;
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (_) => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(v.label, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 6),
-        Text('${v.tag.day}.${v.tag.month}.${v.tag.year} · ${v.zeit ?? 'ganztags'}'
-            '${v.ende != null ? '–${v.ende}' : ''} · $ebene${v.serie ? ' · wiederkehrend' : ''}'),
-        if (v.ort != null) Text(v.ort!),
-        const SizedBox(height: 14),
-        Text(
-            v.wartet
-                ? 'Am Handy eingetragen — kommt mit dem nächsten Abgleich auf die Rechner.'
-                : 'Ändern und Löschen geht am Handy noch nicht — das kommt als nächster Schritt. '
-                    'Bis dahin am Rechner.',
-            style: _leise(context)),
-      ]),
-    ),
-  );
+  void _ansehen(BuildContext context) => showEventSheet(context, v, steuerung);
 }
 
 class _Rhythmus extends StatelessWidget {

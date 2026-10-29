@@ -60,6 +60,7 @@ class HttpMitte implements Mitte {
         _namen = {for (final n in (d['namen'] as List? ?? const [])) '$n'};
         _dateien = {};
         var geloescht = <String>{};
+        var receipts = <String, Receipt>{};
         if (_kennung != null && _namen.contains('inhalt.enc')) {
           final roh = await client.bytesHolen('/v1/mitte/datei/inhalt.enc');
           final inhalt = jsonDecode(utf8.decode(await tresor.auf(roh))) as Map<String, dynamic>;
@@ -68,6 +69,13 @@ class HttpMitte implements Mitte {
               '${e.key}': (e.value as Map).cast<String, dynamic>()
           };
           geloescht = {for (final k in ((inhalt['geloescht'] as Map?) ?? const {}).keys) '$k'};
+          final mine = ((inhalt['eingang'] as Map?) ?? const {})[knoten];
+          if (mine is Map) {
+            receipts = {
+              for (final e in mine.entries)
+                if (Receipt.parse(e.value) != null) '${e.key}': Receipt.parse(e.value)!
+            };
+          }
         }
         final namen = _namen;
         return MitteStand(
@@ -75,6 +83,7 @@ class HttpMitte implements Mitte {
           dateien: {for (final e in _dateien.entries) e.key: '${e.value['sha']}'},
           geloescht: geloescht,
           imEingang: (pfad) => namen.contains(_eingangName(pfad)),
+          receipts: receipts,
         );
       });
 
@@ -108,7 +117,9 @@ class HttpMitte implements Mitte {
             final pfad = '${u['pfad']}';
             // Nur, was wirklich unter diesem Namen liegen darf.
             if ('$_eingang${tresor.name(pfad)}.enc' != n) continue;
-            raus[pfad] = base64.decode('${u['inhalt']}');
+            final inhalt = u['inhalt'];
+            if (inhalt is! String) continue; // a deletion carries no file
+            raus[pfad] = base64.decode(inhalt);
           } on FernetFehler {
             continue;
           } on FormatException {
@@ -119,7 +130,9 @@ class HttpMitte implements Mitte {
       });
 
   @override
-  Future<void> eingangSenden(Map<String, Uint8List> schreiben, Set<String> entfernen) => _rufen(() async {
+  Future<void> eingangSenden(Map<String, Uint8List> schreiben, Set<String> entfernen,
+          {Map<String, Uint8List> envelopes = const {}}) =>
+      _rufen(() async {
         if (_kennung == null) {
           // Noch kein Rechner in der Mitte: warten (ein fremder Knoten legt
           // nie den ersten Stand an).
@@ -127,8 +140,12 @@ class HttpMitte implements Mitte {
         }
         final dateien = <String, Uint8List>{};
         for (final MapEntry(key: pfad, value: inhalt) in schreiben.entries) {
-          final umschlag = jsonEncode({'format': 1, 'pfad': pfad, 'inhalt': base64.encode(inhalt)});
-          final token = await tresor.zu(utf8.encode(umschlag));
+          final token = await tresor.zu(envelope(pfad, inhalt));
+          if (token.length > maxBlob) throw MitteFehler('$pfad ist zu groß für die Cloud.');
+          dateien[_eingangName(pfad)] = token;
+        }
+        for (final MapEntry(key: pfad, value: klar) in envelopes.entries) {
+          final token = await tresor.zu(klar);
           if (token.length > maxBlob) throw MitteFehler('$pfad ist zu groß für die Cloud.');
           dateien[_eingangName(pfad)] = token;
         }

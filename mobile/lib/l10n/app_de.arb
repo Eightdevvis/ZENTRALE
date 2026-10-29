@@ -1,51 +1,334 @@
 {
   "@@locale": "de",
   "calendarViewDay": "Tag",
-  "@calendarViewDay": {"description": "Calendar mode: one day as a time grid"},
+  "@calendarViewDay": {
+    "description": "Calendar mode: one day as a time grid"
+  },
   "calendarViewWeek": "Woche",
-  "@calendarViewWeek": {"description": "Calendar mode: seven days as a time grid"},
+  "@calendarViewWeek": {
+    "description": "Calendar mode: seven days as a time grid"
+  },
   "calendarViewMonth": "Monat",
-  "@calendarViewMonth": {"description": "Calendar mode: month grid"},
+  "@calendarViewMonth": {
+    "description": "Calendar mode: month grid"
+  },
   "calendarViewAgenda": "Liste",
-  "@calendarViewAgenda": {"description": "Calendar mode: the agenda list of the next days"},
+  "@calendarViewAgenda": {
+    "description": "Calendar mode: the agenda list of the next days"
+  },
   "calendarViewSwitch": "Ansicht wechseln",
-  "@calendarViewSwitch": {"description": "Tooltip of the view mode menu in the app bar"},
+  "@calendarViewSwitch": {
+    "description": "Tooltip of the view mode menu in the app bar"
+  },
   "calendarToday": "Heute",
-  "@calendarToday": {"description": "Tooltip: jump to today"},
+  "@calendarToday": {
+    "description": "Tooltip: jump to today"
+  },
   "calendarWeekNumber": "KW {week}",
-  "@calendarWeekNumber": {"description": "Calendar week label", "placeholders": {"week": {"type": "int"}}},
+  "@calendarWeekNumber": {
+    "description": "Calendar week label",
+    "placeholders": {
+      "week": {
+        "type": "int"
+      }
+    }
+  },
   "calendarMore": "+{count}",
-  "@calendarMore": {"description": "More entries than fit in a month cell or all-day strip", "placeholders": {"count": {"type": "int"}}},
+  "@calendarMore": {
+    "description": "More entries than fit in a month cell or all-day strip",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendarDeadlineMust": "Muss {time}",
-  "@calendarDeadlineMust": {"description": "Deadline marker: the hard 'must' time", "placeholders": {"time": {"type": "String"}}},
+  "@calendarDeadlineMust": {
+    "description": "Deadline marker: the hard 'must' time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "calendarDeadlineShould": "Soll: {label}",
-  "@calendarDeadlineShould": {"description": "Marker of a deadline's soft 'should' time", "placeholders": {"label": {"type": "String"}}},
+  "@calendarDeadlineShould": {
+    "description": "Marker of a deadline's soft 'should' time",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
   "calendarDeadlineShouldMissed": "Soll verpasst",
-  "@calendarDeadlineShouldMissed": {"description": "The should time has passed, the must time not yet"},
+  "@calendarDeadlineShouldMissed": {
+    "description": "The should time has passed, the must time not yet"
+  },
   "calendarWaitingForSync": "wartet auf Abgleich",
-  "@calendarWaitingForSync": {"description": "Entered on the phone, not yet confirmed by the sync"},
+  "@calendarWaitingForSync": {
+    "description": "Entered on the phone, not yet confirmed by the sync"
+  },
   "peepholeRecenter": "Zurück zur Mitte",
-  "@peepholeRecenter": {"description": "Tooltip: glide the peephole window back to its home point"},
+  "@peepholeRecenter": {
+    "description": "Tooltip: glide the peephole window back to its home point"
+  },
   "peepholeMotionOn": "Bewegung steuert",
-  "@peepholeMotionOn": {"description": "Tooltip/state: phone motion moves the window; tap switches it off"},
+  "@peepholeMotionOn": {
+    "description": "Tooltip/state: phone motion moves the window; tap switches it off"
+  },
   "peepholeMotionOff": "Bewegung aus – Finger schiebt",
-  "@peepholeMotionOff": {"description": "Tooltip/state: motion switched off by hand; tap switches it on"},
+  "@peepholeMotionOff": {
+    "description": "Tooltip/state: motion switched off by hand; tap switches it on"
+  },
   "peepholeMotionStarting": "Sensoren starten …",
-  "@peepholeMotionStarting": {"description": "Waiting for the first motion sensor reading"},
+  "@peepholeMotionStarting": {
+    "description": "Waiting for the first motion sensor reading"
+  },
   "peepholeMotionUnavailable": "Keine Bewegungssensoren – mit dem Finger schieben",
-  "@peepholeMotionUnavailable": {"description": "Device has no usable gyroscope; finger panning only"},
+  "@peepholeMotionUnavailable": {
+    "description": "Device has no usable gyroscope; finger panning only"
+  },
   "peepholeHint": "Schwenk das Handy über den Tisch · lang drücken: zurück zur Mitte",
-  "@peepholeHint": {"description": "Short hint shown when the peephole opens"},
+  "@peepholeHint": {
+    "description": "Short hint shown when the peephole opens"
+  },
   "calendarTableTitle": "Guckloch",
-  "@calendarTableTitle": {"description": "Title of the calendar spread seen through the peephole"},
+  "@calendarTableTitle": {
+    "description": "Title of the calendar spread seen through the peephole"
+  },
   "calendarTableOpen": "Guckloch – Kalender als Tisch",
-  "@calendarTableOpen": {"description": "Tooltip of the calendar app bar action that opens the peephole"},
+  "@calendarTableOpen": {
+    "description": "Tooltip of the calendar app bar action that opens the peephole"
+  },
   "calendarTableAllDay": "ganztags",
-  "@calendarTableAllDay": {"description": "Event without a time"},
+  "@calendarTableAllDay": {
+    "description": "Event without a time"
+  },
   "calendarTableMore": "+{count} weitere",
-  "@calendarTableMore": {"description": "More events in a day cell than fit", "placeholders": {"count": {"type": "int"}}},
+  "@calendarTableMore": {
+    "description": "More events in a day cell than fit",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendarTableToday": "Heute",
-  "@calendarTableToday": {"description": "Marks today's cell"},
+  "@calendarTableToday": {
+    "description": "Marks today's cell"
+  },
   "calendarTableEmpty": "Noch kein Kalender auf dem Handy.",
-  "@calendarTableEmpty": {"description": "No calendar data synced yet"}
+  "@calendarTableEmpty": {
+    "description": "No calendar data synced yet"
+  },
+  "calendarEditTitle": "Termin ändern",
+  "@calendarEditTitle": {
+    "description": "Title of the edit form"
+  },
+  "calendarSave": "Speichern",
+  "@calendarSave": {
+    "description": "Save button of the edit form"
+  },
+  "calendarPlace": "Ort",
+  "@calendarPlace": {
+    "description": "Place field"
+  },
+  "calendarSeriesHint": "Gilt für die ganze Serie; der erste Tag bleibt.",
+  "@calendarSeriesHint": {
+    "description": "Edit form of a recurring event"
+  },
+  "calendarProposalHint": "Steht sofort hier und geht beim nächsten Abgleich als Vorschlag an die Rechner.",
+  "@calendarProposalHint": {
+    "description": "Below the entry form"
+  },
+  "calendarEdit": "Ändern",
+  "@calendarEdit": {
+    "description": "Detail sheet action"
+  },
+  "calendarDelete": "Löschen",
+  "@calendarDelete": {
+    "description": "Detail sheet action"
+  },
+  "calendarDeleteSeries": "Ganze Serie löschen",
+  "@calendarDeleteSeries": {
+    "description": "Detail sheet action for a recurring event"
+  },
+  "calendarDeleteConfirm": "„{title}“ löschen?",
+  "@calendarDeleteConfirm": {
+    "description": "Confirm dialog",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarCancel": "Abbrechen",
+  "@calendarCancel": {
+    "description": "Dialog button"
+  },
+  "calendarOccurrenceOff": "Nur dieses Vorkommen aus",
+  "@calendarOccurrenceOff": {
+    "description": "Switch one occurrence of a series off"
+  },
+  "calendarOccurrenceOn": "Dieses Vorkommen wieder an",
+  "@calendarOccurrenceOn": {
+    "description": "Switch one occurrence back on"
+  },
+  "calendarSwitchedOff": "ausgeschaltet",
+  "@calendarSwitchedOff": {
+    "description": "State of a switched-off occurrence"
+  },
+  "calendarRecurring": "wiederkehrend",
+  "@calendarRecurring": {
+    "description": "A recurring event"
+  },
+  "calendarAllDayShort": "ganztägig",
+  "@calendarAllDayShort": {
+    "description": "Time of an all-day event"
+  },
+  "calendarPendingHint": "Am Handy geändert — kommt mit dem nächsten Abgleich auf die Rechner.",
+  "@calendarPendingHint": {
+    "description": "Detail sheet: change waits for sync"
+  },
+  "calendarRejected": "Abgelehnt: {reason}",
+  "@calendarRejected": {
+    "description": "A computer rejected the change",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarRejectedCount": "{count, plural, =1{Eine Änderung wurde abgelehnt} other{{count} Änderungen wurden abgelehnt}}",
+  "@calendarRejectedCount": {
+    "description": "Banner above the calendar",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarMine": "Am Handy: {summary}",
+  "@calendarMine": {
+    "description": "Phone's version of a rejected change",
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarCloud": "In der Cloud: {summary}",
+  "@calendarCloud": {
+    "description": "Cloud's version of a rejected change",
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarCloudGone": "In der Cloud gelöscht",
+  "@calendarCloudGone": {
+    "description": "The event no longer exists in the cloud"
+  },
+  "calendarDeletedHere": "am Handy gelöscht",
+  "@calendarDeletedHere": {
+    "description": "The phone's version is a deletion"
+  },
+  "calendarKeepMine": "Meine Fassung neu vorschlagen",
+  "@calendarKeepMine": {
+    "description": "Re-propose the phone's version on top of the cloud's"
+  },
+  "calendarTakeCloud": "Fassung der Cloud nehmen",
+  "@calendarTakeCloud": {
+    "description": "Drop the phone's version"
+  },
+  "reasonNotFound": "den Termin gibt es nicht",
+  "@reasonNotFound": {
+    "description": "Reason code reasonNotFound from core REASONS"
+  },
+  "reasonDeleteNeedsBase": "zum Löschen fehlt, welche Fassung das Handy sah",
+  "@reasonDeleteNeedsBase": {
+    "description": "Reason code reasonDeleteNeedsBase from core REASONS"
+  },
+  "reasonChangedNotDeleted": "inzwischen in der Cloud geändert — nicht gelöscht",
+  "@reasonChangedNotDeleted": {
+    "description": "Reason code reasonChangedNotDeleted from core REASONS"
+  },
+  "reasonUnreadable": "kein lesbarer Termin",
+  "@reasonUnreadable": {
+    "description": "Reason code reasonUnreadable from core REASONS"
+  },
+  "reasonOneUid": "eine Datei enthält genau einen Termin",
+  "@reasonOneUid": {
+    "description": "Reason code reasonOneUid from core REASONS"
+  },
+  "reasonNoMaster": "der Hauptteil des Termins fehlt",
+  "@reasonNoMaster": {
+    "description": "Reason code reasonNoMaster from core REASONS"
+  },
+  "reasonNameTaken": "unter diesem Namen liegt schon ein anderer Termin",
+  "@reasonNameTaken": {
+    "description": "Reason code reasonNameTaken from core REASONS"
+  },
+  "reasonDeletedInCloud": "in der Cloud gelöscht, am Handy geändert — nicht wiederhergestellt",
+  "@reasonDeletedInCloud": {
+    "description": "Reason code reasonDeletedInCloud from core REASONS"
+  },
+  "reasonNoLayer": "diese Ebene gibt es nicht",
+  "@reasonNoLayer": {
+    "description": "Reason code reasonNoLayer from core REASONS"
+  },
+  "reasonBadName": "der Dateiname passt nicht zur UID",
+  "@reasonBadName": {
+    "description": "Reason code reasonBadName from core REASONS"
+  },
+  "reasonUidTwice": "diese UID gibt es in der Cloud mehrmals",
+  "@reasonUidTwice": {
+    "description": "Reason code reasonUidTwice from core REASONS"
+  },
+  "reasonOtherName": "den Termin gibt es schon unter anderem Namen",
+  "@reasonOtherName": {
+    "description": "Reason code reasonOtherName from core REASONS"
+  },
+  "reasonTargetTaken": "am Ziel liegt schon eine andere Datei",
+  "@reasonTargetTaken": {
+    "description": "Reason code reasonTargetTaken from core REASONS"
+  },
+  "reasonNeedsBase": "den Termin gibt es schon — zum Ändern fehlt, welche Fassung das Handy sah",
+  "@reasonNeedsBase": {
+    "description": "Reason code reasonNeedsBase from core REASONS"
+  },
+  "reasonBaseUnknown": "inzwischen in der Cloud geändert, und die Fassung vom Handy ist dort unbekannt",
+  "@reasonBaseUnknown": {
+    "description": "Reason code reasonBaseUnknown from core REASONS"
+  },
+  "reasonMergeUnreadable": "Zusammenführen ergab keinen lesbaren Termin",
+  "@reasonMergeUnreadable": {
+    "description": "Reason code reasonMergeUnreadable from core REASONS"
+  },
+  "reasonConflict": "Widerspruch — am Handy und in der Cloud verschieden geändert",
+  "@reasonConflict": {
+    "description": "Reason code reasonConflict from core REASONS"
+  },
+  "reasonSameFile": "ein anderer Vorschlag betrifft dieselbe Datei",
+  "@reasonSameFile": {
+    "description": "Reason code reasonSameFile from core REASONS"
+  },
+  "reasonConflictChanged": "am Handy und in der Cloud verschieden geändert",
+  "@reasonConflictChanged": {
+    "description": "Reason code reasonConflictChanged from core REASONS"
+  },
+  "reasonConflictDeleted": "auf einer Seite gelöscht, auf der anderen geändert",
+  "@reasonConflictDeleted": {
+    "description": "Reason code reasonConflictDeleted from core REASONS"
+  },
+  "reasonUnknown": "abgelehnt ({code})",
+  "@reasonUnknown": {
+    "description": "Reason code reasonUnknown from core REASONS",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  }
 }

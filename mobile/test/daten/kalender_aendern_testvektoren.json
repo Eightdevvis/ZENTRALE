@@ -1,0 +1,204 @@
+{
+ "x_aus": [
+  {
+   "list": [],
+   "encoded": "b64:W10="
+  },
+  {
+   "list": [
+    "2026-11-10"
+   ],
+   "encoded": "b64:WyIyMDI2LTExLTEwIl0="
+  },
+  {
+   "list": [
+    "2026-11-17",
+    "2026-11-10"
+   ],
+   "encoded": "b64:WyIyMDI2LTExLTE3IiwgIjIwMjYtMTEtMTAiXQ=="
+  },
+  {
+   "list": [
+    "2026-11-10",
+    "kein Datum"
+   ],
+   "encoded": "b64:WyIyMDI2LTExLTEwIiwgImtlaW4gRGF0dW0iXQ=="
+  },
+  {
+   "list": [
+    "2026-12-24"
+   ],
+   "encoded": "b64:WyIyMDI2LTEyLTI0Il0="
+  }
+ ],
+ "reasons": [
+  "bad_name",
+  "base_unknown",
+  "changed_not_deleted",
+  "conflict",
+  "conflict_changed",
+  "conflict_deleted",
+  "delete_needs_base",
+  "deleted_in_cloud",
+  "merge_unreadable",
+  "name_taken",
+  "needs_base",
+  "no_layer",
+  "no_master",
+  "not_found",
+  "one_uid",
+  "other_name",
+  "same_file",
+  "target_taken",
+  "uid_twice",
+  "unreadable"
+ ],
+ "cases": [
+  {
+   "name": "routine off",
+   "uid": "11111111111111111111111111111111@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Geige\r\nDTSTART;TZID=Europe/Berlin:20261103T170000\r\nDTEND;TZID=Europe/Berlin:20261103T174500\r\nDTSTAMP:20261001T080000Z\r\nUID:11111111111111111111111111111111@zentrale\r\nRRULE:FREQ=WEEKLY;BYDAY=TU\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Musikschule\r\nX-ZENTRALE-ART:ROUTINE\r\nX-ZENTRALE-AUS:b64:W10=\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "off": "2026-11-17",
+    "time": "17:00"
+   },
+   "expect": {
+    "label": "Geige",
+    "time": "17:00",
+    "ende": "17:45",
+    "ort": "Musikschule",
+    "aus": [
+     "2026-11-17"
+    ],
+    "seit": "2026-11-03"
+   }
+  },
+  {
+   "name": "routine second off",
+   "uid": "11111111111111111111111111111111@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Geige\r\nDTSTART;TZID=Europe/Berlin:20261103T170000\r\nDTEND;TZID=Europe/Berlin:20261103T174500\r\nDTSTAMP:20261001T080000Z\r\nUID:11111111111111111111111111111111@zentrale\r\nRRULE:FREQ=WEEKLY;BYDAY=TU\r\nEXDATE;TZID=Europe/Berlin:20261117T170000\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Musikschule\r\nX-ZENTRALE-ART:ROUTINE\r\nX-ZENTRALE-AUS:b64:WyIyMDI2LTExLTE3Il0=\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "off": "2026-11-24",
+    "time": "17:00"
+   },
+   "expect": {
+    "label": "Geige",
+    "time": "17:00",
+    "ende": "17:45",
+    "ort": "Musikschule",
+    "aus": [
+     "2026-11-17",
+     "2026-11-24"
+    ],
+    "seit": "2026-11-03"
+   }
+  },
+  {
+   "name": "routine back on",
+   "uid": "11111111111111111111111111111111@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Geige\r\nDTSTART;TZID=Europe/Berlin:20261103T170000\r\nDTEND;TZID=Europe/Berlin:20261103T174500\r\nDTSTAMP:20261001T080000Z\r\nUID:11111111111111111111111111111111@zentrale\r\nRRULE:FREQ=WEEKLY;BYDAY=TU\r\nEXDATE;TZID=Europe/Berlin:20261117T170000\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Musikschule\r\nX-ZENTRALE-ART:ROUTINE\r\nX-ZENTRALE-AUS:b64:WyIyMDI2LTExLTE3Il0=\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "on": "2026-11-17",
+    "time": "17:00"
+   },
+   "expect": {
+    "label": "Geige",
+    "time": "17:00",
+    "ende": "17:45",
+    "ort": "Musikschule",
+    "seit": "2026-11-03"
+   }
+  },
+  {
+   "name": "google tz off",
+   "uid": "google-abc@google.com",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Google Inc//Google Calendar 70.9054//EN\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Berlin:20261104T180000\r\nDTEND;TZID=Europe/Berlin:20261104T200000\r\nRRULE:FREQ=WEEKLY;BYDAY=WE\r\nDTSTAMP:20261001T080000Z\r\nUID:google-abc@google.com\r\nSUMMARY:Chorprobe\r\nDESCRIPTION:Noten mitbringen\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Chor\r\nTRIGGER:-PT30M\r\nEND:VALARM\r\nEND:VEVENT\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "off": "2026-11-18",
+    "time": "18:00"
+   },
+   "expect": {
+    "label": "Chorprobe",
+    "time": "18:00",
+    "ende": "20:00",
+    "aus": [
+     "2026-11-18"
+    ],
+    "seit": "2026-11-04"
+   }
+  },
+  {
+   "name": "google utc off",
+   "uid": "google-utc@google.com",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Google Inc//Google Calendar 70.9054//EN\r\nBEGIN:VEVENT\r\nDTSTART:20261023T070000Z\r\nDTEND:20261023T073000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=FR\r\nDTSTAMP:20261001T080000Z\r\nUID:google-utc@google.com\r\nSUMMARY:Laufen\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "off": "2026-11-06",
+    "time": "08:00"
+   },
+   "expect": {
+    "label": "Laufen",
+    "time": "09:00",
+    "ende": "09:30",
+    "aus": [
+     "2026-11-06"
+    ],
+    "seit": "2026-10-23"
+   }
+  },
+  {
+   "name": "termin edit",
+   "uid": "22222222222222222222222222222222@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Zahnarzt\r\nDTSTART;TZID=Europe/Berlin:20261119T100000\r\nDTEND;TZID=Europe/Berlin:20261119T110000\r\nDTSTAMP:20261001T080000Z\r\nUID:22222222222222222222222222222222@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Dr. Lenz\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "edit": {
+     "title": "Zahnarzt Kontrolle",
+     "place": "Praxis Lenz",
+     "day": "2026-11-20",
+     "start": "09:30",
+     "end": "10:15"
+    }
+   },
+   "expect": {
+    "label": "Zahnarzt Kontrolle",
+    "time": "09:30",
+    "ende": "10:15",
+    "ort": "Praxis Lenz"
+   }
+  },
+  {
+   "name": "termin clear place",
+   "uid": "22222222222222222222222222222222@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Zahnarzt\r\nDTSTART;TZID=Europe/Berlin:20261119T100000\r\nDTEND;TZID=Europe/Berlin:20261119T110000\r\nDTSTAMP:20261001T080000Z\r\nUID:22222222222222222222222222222222@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Dr. Lenz\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "edit": {
+     "place": ""
+    }
+   },
+   "expect": {
+    "label": "Zahnarzt",
+    "time": "10:00",
+    "ende": "11:00"
+   }
+  },
+  {
+   "name": "routine edit time",
+   "uid": "11111111111111111111111111111111@zentrale",
+   "input": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Geige\r\nDTSTART;TZID=Europe/Berlin:20261103T170000\r\nDTEND;TZID=Europe/Berlin:20261103T174500\r\nDTSTAMP:20261001T080000Z\r\nUID:11111111111111111111111111111111@zentrale\r\nRRULE:FREQ=WEEKLY;BYDAY=TU\r\nLAST-MODIFIED:20261001T080000Z\r\nLOCATION:Musikschule\r\nX-ZENTRALE-ART:ROUTINE\r\nX-ZENTRALE-AUS:b64:W10=\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "action": {
+    "edit": {
+     "title": "Geige (neu)",
+     "start": "16:30",
+     "end": "17:30"
+    }
+   },
+   "expect": {
+    "label": "Geige (neu)",
+    "time": "16:30",
+    "ende": "17:30",
+    "ort": "Musikschule",
+    "aus": [],
+    "seit": "2026-11-03"
+   }
+  }
+ ]
+}

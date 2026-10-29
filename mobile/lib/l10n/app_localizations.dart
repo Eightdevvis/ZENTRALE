@@ -241,6 +241,276 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Noch kein Kalender auf dem Handy.'**
   String get calendarTableEmpty;
+
+  /// Title of the edit form
+  ///
+  /// In de, this message translates to:
+  /// **'Termin ändern'**
+  String get calendarEditTitle;
+
+  /// Save button of the edit form
+  ///
+  /// In de, this message translates to:
+  /// **'Speichern'**
+  String get calendarSave;
+
+  /// Place field
+  ///
+  /// In de, this message translates to:
+  /// **'Ort'**
+  String get calendarPlace;
+
+  /// Edit form of a recurring event
+  ///
+  /// In de, this message translates to:
+  /// **'Gilt für die ganze Serie; der erste Tag bleibt.'**
+  String get calendarSeriesHint;
+
+  /// Below the entry form
+  ///
+  /// In de, this message translates to:
+  /// **'Steht sofort hier und geht beim nächsten Abgleich als Vorschlag an die Rechner.'**
+  String get calendarProposalHint;
+
+  /// Detail sheet action
+  ///
+  /// In de, this message translates to:
+  /// **'Ändern'**
+  String get calendarEdit;
+
+  /// Detail sheet action
+  ///
+  /// In de, this message translates to:
+  /// **'Löschen'**
+  String get calendarDelete;
+
+  /// Detail sheet action for a recurring event
+  ///
+  /// In de, this message translates to:
+  /// **'Ganze Serie löschen'**
+  String get calendarDeleteSeries;
+
+  /// Confirm dialog
+  ///
+  /// In de, this message translates to:
+  /// **'„{title}“ löschen?'**
+  String calendarDeleteConfirm(String title);
+
+  /// Dialog button
+  ///
+  /// In de, this message translates to:
+  /// **'Abbrechen'**
+  String get calendarCancel;
+
+  /// Switch one occurrence of a series off
+  ///
+  /// In de, this message translates to:
+  /// **'Nur dieses Vorkommen aus'**
+  String get calendarOccurrenceOff;
+
+  /// Switch one occurrence back on
+  ///
+  /// In de, this message translates to:
+  /// **'Dieses Vorkommen wieder an'**
+  String get calendarOccurrenceOn;
+
+  /// State of a switched-off occurrence
+  ///
+  /// In de, this message translates to:
+  /// **'ausgeschaltet'**
+  String get calendarSwitchedOff;
+
+  /// A recurring event
+  ///
+  /// In de, this message translates to:
+  /// **'wiederkehrend'**
+  String get calendarRecurring;
+
+  /// Time of an all-day event
+  ///
+  /// In de, this message translates to:
+  /// **'ganztägig'**
+  String get calendarAllDayShort;
+
+  /// Detail sheet: change waits for sync
+  ///
+  /// In de, this message translates to:
+  /// **'Am Handy geändert — kommt mit dem nächsten Abgleich auf die Rechner.'**
+  String get calendarPendingHint;
+
+  /// A computer rejected the change
+  ///
+  /// In de, this message translates to:
+  /// **'Abgelehnt: {reason}'**
+  String calendarRejected(String reason);
+
+  /// Banner above the calendar
+  ///
+  /// In de, this message translates to:
+  /// **'{count, plural, =1{Eine Änderung wurde abgelehnt} other{{count} Änderungen wurden abgelehnt}}'**
+  String calendarRejectedCount(int count);
+
+  /// Phone's version of a rejected change
+  ///
+  /// In de, this message translates to:
+  /// **'Am Handy: {summary}'**
+  String calendarMine(String summary);
+
+  /// Cloud's version of a rejected change
+  ///
+  /// In de, this message translates to:
+  /// **'In der Cloud: {summary}'**
+  String calendarCloud(String summary);
+
+  /// The event no longer exists in the cloud
+  ///
+  /// In de, this message translates to:
+  /// **'In der Cloud gelöscht'**
+  String get calendarCloudGone;
+
+  /// The phone's version is a deletion
+  ///
+  /// In de, this message translates to:
+  /// **'am Handy gelöscht'**
+  String get calendarDeletedHere;
+
+  /// Re-propose the phone's version on top of the cloud's
+  ///
+  /// In de, this message translates to:
+  /// **'Meine Fassung neu vorschlagen'**
+  String get calendarKeepMine;
+
+  /// Drop the phone's version
+  ///
+  /// In de, this message translates to:
+  /// **'Fassung der Cloud nehmen'**
+  String get calendarTakeCloud;
+
+  /// Reason code reasonNotFound from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'den Termin gibt es nicht'**
+  String get reasonNotFound;
+
+  /// Reason code reasonDeleteNeedsBase from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'zum Löschen fehlt, welche Fassung das Handy sah'**
+  String get reasonDeleteNeedsBase;
+
+  /// Reason code reasonChangedNotDeleted from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'inzwischen in der Cloud geändert — nicht gelöscht'**
+  String get reasonChangedNotDeleted;
+
+  /// Reason code reasonUnreadable from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'kein lesbarer Termin'**
+  String get reasonUnreadable;
+
+  /// Reason code reasonOneUid from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'eine Datei enthält genau einen Termin'**
+  String get reasonOneUid;
+
+  /// Reason code reasonNoMaster from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'der Hauptteil des Termins fehlt'**
+  String get reasonNoMaster;
+
+  /// Reason code reasonNameTaken from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'unter diesem Namen liegt schon ein anderer Termin'**
+  String get reasonNameTaken;
+
+  /// Reason code reasonDeletedInCloud from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'in der Cloud gelöscht, am Handy geändert — nicht wiederhergestellt'**
+  String get reasonDeletedInCloud;
+
+  /// Reason code reasonNoLayer from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'diese Ebene gibt es nicht'**
+  String get reasonNoLayer;
+
+  /// Reason code reasonBadName from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'der Dateiname passt nicht zur UID'**
+  String get reasonBadName;
+
+  /// Reason code reasonUidTwice from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'diese UID gibt es in der Cloud mehrmals'**
+  String get reasonUidTwice;
+
+  /// Reason code reasonOtherName from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'den Termin gibt es schon unter anderem Namen'**
+  String get reasonOtherName;
+
+  /// Reason code reasonTargetTaken from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'am Ziel liegt schon eine andere Datei'**
+  String get reasonTargetTaken;
+
+  /// Reason code reasonNeedsBase from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'den Termin gibt es schon — zum Ändern fehlt, welche Fassung das Handy sah'**
+  String get reasonNeedsBase;
+
+  /// Reason code reasonBaseUnknown from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'inzwischen in der Cloud geändert, und die Fassung vom Handy ist dort unbekannt'**
+  String get reasonBaseUnknown;
+
+  /// Reason code reasonMergeUnreadable from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'Zusammenführen ergab keinen lesbaren Termin'**
+  String get reasonMergeUnreadable;
+
+  /// Reason code reasonConflict from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'Widerspruch — am Handy und in der Cloud verschieden geändert'**
+  String get reasonConflict;
+
+  /// Reason code reasonSameFile from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'ein anderer Vorschlag betrifft dieselbe Datei'**
+  String get reasonSameFile;
+
+  /// Reason code reasonConflictChanged from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'am Handy und in der Cloud verschieden geändert'**
+  String get reasonConflictChanged;
+
+  /// Reason code reasonConflictDeleted from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'auf einer Seite gelöscht, auf der anderen geändert'**
+  String get reasonConflictDeleted;
+
+  /// Reason code reasonUnknown from core REASONS
+  ///
+  /// In de, this message translates to:
+  /// **'abgelehnt ({code})'**
+  String reasonUnknown(String code);
 }
 
 class _AppLocalizationsDelegate

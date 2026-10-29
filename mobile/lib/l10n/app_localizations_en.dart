@@ -91,4 +91,168 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calendarTableEmpty => 'No calendar on the phone yet.';
+
+  @override
+  String get calendarEditTitle => 'Edit event';
+
+  @override
+  String get calendarSave => 'Save';
+
+  @override
+  String get calendarPlace => 'Place';
+
+  @override
+  String get calendarSeriesHint =>
+      'Applies to the whole series; the first day stays.';
+
+  @override
+  String get calendarProposalHint =>
+      'Shows here at once and goes to the computers as a proposal at the next sync.';
+
+  @override
+  String get calendarEdit => 'Edit';
+
+  @override
+  String get calendarDelete => 'Delete';
+
+  @override
+  String get calendarDeleteSeries => 'Delete whole series';
+
+  @override
+  String calendarDeleteConfirm(String title) {
+    return 'Delete “$title”?';
+  }
+
+  @override
+  String get calendarCancel => 'Cancel';
+
+  @override
+  String get calendarOccurrenceOff => 'Switch off only this occurrence';
+
+  @override
+  String get calendarOccurrenceOn => 'Switch this occurrence back on';
+
+  @override
+  String get calendarSwitchedOff => 'switched off';
+
+  @override
+  String get calendarRecurring => 'recurring';
+
+  @override
+  String get calendarAllDayShort => 'all day';
+
+  @override
+  String get calendarPendingHint =>
+      'Changed on the phone — goes to the computers at the next sync.';
+
+  @override
+  String calendarRejected(String reason) {
+    return 'Rejected: $reason';
+  }
+
+  @override
+  String calendarRejectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changes were rejected',
+      one: 'One change was rejected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarMine(String summary) {
+    return 'On the phone: $summary';
+  }
+
+  @override
+  String calendarCloud(String summary) {
+    return 'In the cloud: $summary';
+  }
+
+  @override
+  String get calendarCloudGone => 'Deleted in the cloud';
+
+  @override
+  String get calendarDeletedHere => 'deleted on the phone';
+
+  @override
+  String get calendarKeepMine => 'Propose mine again';
+
+  @override
+  String get calendarTakeCloud => 'Take the cloud\'s version';
+
+  @override
+  String get reasonNotFound => 'the event does not exist';
+
+  @override
+  String get reasonDeleteNeedsBase =>
+      'deleting needs to know which version was seen';
+
+  @override
+  String get reasonChangedNotDeleted =>
+      'changed in the cloud meanwhile — not deleted';
+
+  @override
+  String get reasonUnreadable => 'not a readable event';
+
+  @override
+  String get reasonOneUid => 'one file holds exactly one event';
+
+  @override
+  String get reasonNoMaster => 'the main part of the event is missing';
+
+  @override
+  String get reasonNameTaken => 'another event lives under this name';
+
+  @override
+  String get reasonDeletedInCloud =>
+      'deleted in the cloud, changed on the phone — not restored';
+
+  @override
+  String get reasonNoLayer => 'this layer does not exist';
+
+  @override
+  String get reasonBadName => 'the file name does not match the UID';
+
+  @override
+  String get reasonUidTwice => 'this UID exists more than once in the cloud';
+
+  @override
+  String get reasonOtherName => 'this event already exists under another name';
+
+  @override
+  String get reasonTargetTaken => 'another file already exists at the target';
+
+  @override
+  String get reasonNeedsBase =>
+      'this event already exists — changing needs to know which version was seen';
+
+  @override
+  String get reasonBaseUnknown =>
+      'changed in the cloud meanwhile, and the phone\'s version is unknown there';
+
+  @override
+  String get reasonMergeUnreadable => 'merging gave no readable event';
+
+  @override
+  String get reasonConflict =>
+      'conflict — changed differently on the phone and in the cloud';
+
+  @override
+  String get reasonSameFile => 'another proposal touches the same file';
+
+  @override
+  String get reasonConflictChanged =>
+      'changed differently on the phone and in the cloud';
+
+  @override
+  String get reasonConflictDeleted =>
+      'deleted on one side, changed on the other';
+
+  @override
+  String reasonUnknown(String code) {
+    return 'rejected ($code)';
+  }
 }

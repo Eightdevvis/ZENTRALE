@@ -19,7 +19,7 @@ List<DateTime> monthGridDays(DateTime month) {
 /// Order inside a cell: all-day, then by start.
 List<CalendarItem> monthCellItems(List<CalendarItem> l) => [
       for (final i in l)
-        if (i.kind != ItemKind.rhythm) i
+        if (i.kind != ItemKind.rhythm && !i.switchedOff) i
     ]..sort((a, b) {
         if (a.allDay != b.allDay) return a.allDay ? -1 : 1;
         return a.start.compareTo(b.start);

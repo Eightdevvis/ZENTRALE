@@ -40,6 +40,7 @@ class CalendarItem {
     this.place,
     this.softDeadline,
     this.waiting = false,
+    this.switchedOff = false,
     this.payload,
   });
 
@@ -64,6 +65,9 @@ class CalendarItem {
 
   /// Entered on the phone, not yet confirmed by the sync.
   final bool waiting;
+
+  /// One occurrence of a series switched off: drawn as an outline only.
+  final bool switchedOff;
 
   /// Whatever the producer wants back on tap (the views never look inside).
   final Object? payload;
