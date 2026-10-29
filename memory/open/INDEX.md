@@ -43,3 +43,9 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tutor_stt_quality.md](tutor_stt_quality.md) | Tutor: Whisper pinned to the target language invents sentences from noise; model `base`, no vocabulary hint, no confidence threshold | no |
 | [docs_pruefen_markers.md](docs_pruefen_markers.md) | Eleven `⚠ prüfen:` markers in `memory/` from the 18.09. docs rework, unanswered | partly |
 | [task_prioritization.md](task_prioritization.md) | KI asks what to do with dumped ideas/duties instead of deciding their status herself; prompt rule forbids ordering | yes (one decision) |
+| [mini_pc_tty_login.md](mini_pc_tty_login.md) | Mini-PC: greeter has no window without a monitor → switch to text-console login (prepared) | yes (2 commands + reboot) |
+| [mini_pc_network.md](mini_pc_network.md) | Mini-PC still on the laptop's hotspot: eduroam (mini + tablet), home Wi-Fi, optional own hotspot | yes (credentials) |
+| [mini_pc_zentrale_setup.md](mini_pc_zentrale_setup.md) | ZENTRALE not installed on the mini; cloud folder to activate; `uds` only copied; repo paths for Claude sessions | yes (login) |
+| [second_screen.md](second_screen.md) | Tablet as second screen works; script only on the mini, no ZENTRALE app button yet | partly (where the script lives) |
+| [laptop_retirement_leftovers.md](laptop_retirement_leftovers.md) | Things only on the laptop: repos without remote, branches, secrets, KeePass, MediaWiki, visible Ablage | yes (per item) |
+| [cloud_folder_limits.md](cloud_folder_limits.md) | Cloud folder: memory per run, 20 000 names, ~18 MiB per file, two-step emptying, phone not built | no |
