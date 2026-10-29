@@ -11,5 +11,17 @@
   "calendarDeadlineMust": "Must {time}",
   "calendarDeadlineShould": "Should: {label}",
   "calendarDeadlineShouldMissed": "Should missed",
-  "calendarWaitingForSync": "waiting for sync"
+  "calendarWaitingForSync": "waiting for sync",
+  "peepholeRecenter": "Back to center",
+  "peepholeMotionOn": "Motion steers",
+  "peepholeMotionOff": "Motion off – finger pans",
+  "peepholeMotionStarting": "Starting sensors …",
+  "peepholeMotionUnavailable": "No motion sensors – pan with your finger",
+  "peepholeHint": "Swing the phone over the table · long press: back to center",
+  "calendarTableTitle": "Peephole",
+  "calendarTableOpen": "Peephole – calendar as a table",
+  "calendarTableAllDay": "all day",
+  "calendarTableMore": "+{count} more",
+  "calendarTableToday": "Today",
+  "calendarTableEmpty": "No calendar on the phone yet."
 }

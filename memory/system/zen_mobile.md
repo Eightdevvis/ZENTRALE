@@ -90,6 +90,82 @@ schreibt PNGs nach `mobile/build/auge_vorschau/` (nicht im Repo).
 - **Kleine Augen im Chat** (Leer-Zustand, Denk-Anzeige) nutzen denselben
   Maler; die Denk-Anzeige bekommt nie Launen.
 
+## Peephole ("Guckloch", `lib/peephole/`, since 2026-10-29)
+
+Sasha's picture: a full-size digital calendar lies spread out on the table;
+you swing the phone over it and the screen shows the spot you'd be above.
+General format, not a calendar feature: **any app's large surface** (later the
+`flaeche` building block of the app engine, `memory/hub/app_motor_plan.md`)
+can be shown through it. Camera AR (ARCore) is not this; it is the
+sensor-based peephole.
+
+- **How motion maps** (`motion.dart`, pure Dart): gyroscope + accelerometer
+  via the `sensors_plus` package (game rate, ~50 Hz). A complementary filter
+  keeps "up" (gyroscope short-term, pulled toward the accelerometer, ignored
+  while the hand jerks). The turn rate is split against "up": **turning
+  around the vertical → left/right, top edge up/down → further/closer on the
+  table, right edge down → right** (`rollPanShare`). The split works lying
+  flat, at 45° or upright and never double counts. Only rates are
+  integrated; the window is clamped to the sheet, so nothing drifts away.
+  Drift: soft dead zone plus a gyroscope bias estimate that learns only while
+  the phone is still (capped, so a real slow turn is not learnt away). The
+  window glides after the motion target (low-pass), finger panning is direct.
+- **Fallbacks:** no sensor event within 2 s, a sensor error, or no plugin →
+  finger panning plus a message. Sensors stop while the app is in the
+  background (battery; the time gap is never integrated). The page locks
+  portrait (motion uses the phone's own axes).
+- **Controls:** drag pans, pinch zooms around the fingers, **long press or
+  the ⌖ button glides back home** (e.g. today), the ⟲/✋ button switches
+  motion off/on. Minimap top right (hidden when everything is visible),
+  hint pill for 5 s.
+- **Tuning constants — all in `lib/peephole/peephole_tuning.dart`:**
+  `panPixelsPerRadian` (sensitivity, 780 ≈ one phone width per 30°),
+  `rollPanShare`, `pitchPanShare`, `deadZoneRate`, `followTau`/`recenterTau`
+  (smoothing), `gravityTau`, bias learning (`stillRate`, `biasTau`,
+  `biasMax`), `sensorStartTimeout`, zoom limits (`maxZoomFactor`,
+  `minZoomFit`), `overscrollPixels`, the table's PCB grid, minimap,
+  `minTextPixels` (E-Ink: no text under 10 px on screen).
+- **Look:** the sheet lies on a "table" with a faint circuit-board grid
+  (dots, traces every 5th line, pads), eye palette, day and night.
+
+### How an app provides a surface
+
+Implement `PeepholeSurface` (`peephole_surface.dart`) and hand it to
+`PeepholeView(surface: …, motion: SensorMotionSource(), onHit: …)`:
+
+| Member | Meaning |
+|---|---|
+| `size` | sheet size in virtual units |
+| `comfortableViewWidth` | units visible across the screen at start (sets the zoom) |
+| `home` | start point, recenter target |
+| `paint(canvas, visible, style)` | canvas already in surface units; skip what's outside `visible`; `style` brings palette, ink colours, current `scale` for level of detail (`PeepholeSurface.textVisible`) |
+| `hitTest(point)` | optional: what lies under a tap → `PeepholeHit(title, detail, payload)` |
+| `repaint` | optional `Listenable` when data changes |
+
+The frame owns motion, zoom, table, minimap; the surface only paints. A
+10×10-tile demo surface in `test/peephole_test.dart` (`TileDemoSurface`) is
+the smallest example. **Future:** ARCore on the phone or the AR glasses on
+the "Mini" only change how the visible rect is chosen — the same
+`PeepholeSurface` contract stays.
+
+### First consumer: the calendar table
+
+`lib/kalender/table_surface.dart` + `table_page.dart`, opened by the table
+icon in the calendar page's app bar. Six weeks from this Monday as one
+spread: weeks as rows (ISO week in the gutter), days as columns, events with
+time and layer colour (maybe = italic/outline, deadlines ⚑ warning colour),
+the rhythm line at the bottom of each day, past days quieter, today framed
+and home. Zoomed far out the events become bars. Tap an event → sheet with
+date, time, layer, place. Built only from `Kalender.vorkommen`.
+
+Tests: `flutter test test/peephole_test.dart` — synthetic sensor streams
+(steady, drift with bias, sweeps in three postures, gaps), window math,
+the view with fake/broken/silent sensors, the calendar page action, and
+preview PNGs into `mobile/build/peephole_preview/` (not in the repo).
+
+UI strings of this part go through gen-l10n
+(`mobile/l10n.yaml`, `lib/l10n/app_de.arb` = template, `app_en.arb`; keys `peephole*`, `calendarTable*`).
+
 ## Warum das Handy ein eigener Knoten ist (kein Client des Backends)
 
 Kein Rechner läuft zuverlässig dauerhaft, das Handy soll aber von überall
@@ -254,6 +330,8 @@ familiar Google-like structure, ZENTRALE look.
 | `dienste.dart` | Die Dienste für Seiten aus `bereiche` (InheritedWidget) |
 | `chat/` | `ChatSteuerung` (Logik) und die Seiten (zeichnen nur) |
 | `auge/`, `start/`, `thema/` | Auge (Stellschrauben `auge_regler.dart`), Startseite mit Knopf-Ring, Farben Tag/Nacht |
+| `peephole/` | Peephole frame: motion mapping, window, view, tuning (`peephole_tuning.dart`) |
+| `l10n/` | gen-l10n ARB tables (German template, English) |
 | `einstellungen/` | Claude-Schlüssel von Hand + Einstellungsseite (Konto, Mitte, Kalender, KI) |
 
 Tests: `mobile/test/` (Format, Zusammenlegen, Strom-Parser, Anfrage, Auge;

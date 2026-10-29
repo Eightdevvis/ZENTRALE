@@ -140,12 +140,6 @@ abstract class AppLocalizations {
   /// **'KW {week}'**
   String calendarWeekNumber(int week);
 
-  /// Label of the all-day strip
-  ///
-  /// In de, this message translates to:
-  /// **'ganztägig'**
-  String get calendarAllDay;
-
   /// More entries than fit in a month cell or all-day strip
   ///
   /// In de, this message translates to:
@@ -175,6 +169,78 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'wartet auf Abgleich'**
   String get calendarWaitingForSync;
+
+  /// Tooltip: glide the peephole window back to its home point
+  ///
+  /// In de, this message translates to:
+  /// **'Zurück zur Mitte'**
+  String get peepholeRecenter;
+
+  /// Tooltip/state: phone motion moves the window; tap switches it off
+  ///
+  /// In de, this message translates to:
+  /// **'Bewegung steuert'**
+  String get peepholeMotionOn;
+
+  /// Tooltip/state: motion switched off by hand; tap switches it on
+  ///
+  /// In de, this message translates to:
+  /// **'Bewegung aus – Finger schiebt'**
+  String get peepholeMotionOff;
+
+  /// Waiting for the first motion sensor reading
+  ///
+  /// In de, this message translates to:
+  /// **'Sensoren starten …'**
+  String get peepholeMotionStarting;
+
+  /// Device has no usable gyroscope; finger panning only
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Bewegungssensoren – mit dem Finger schieben'**
+  String get peepholeMotionUnavailable;
+
+  /// Short hint shown when the peephole opens
+  ///
+  /// In de, this message translates to:
+  /// **'Schwenk das Handy über den Tisch · lang drücken: zurück zur Mitte'**
+  String get peepholeHint;
+
+  /// Title of the calendar spread seen through the peephole
+  ///
+  /// In de, this message translates to:
+  /// **'Guckloch'**
+  String get calendarTableTitle;
+
+  /// Tooltip of the calendar app bar action that opens the peephole
+  ///
+  /// In de, this message translates to:
+  /// **'Guckloch – Kalender als Tisch'**
+  String get calendarTableOpen;
+
+  /// Event without a time
+  ///
+  /// In de, this message translates to:
+  /// **'ganztags'**
+  String get calendarTableAllDay;
+
+  /// More events in a day cell than fit
+  ///
+  /// In de, this message translates to:
+  /// **'+{count} weitere'**
+  String calendarTableMore(int count);
+
+  /// Marks today's cell
+  ///
+  /// In de, this message translates to:
+  /// **'Heute'**
+  String get calendarTableToday;
+
+  /// No calendar data synced yet
+  ///
+  /// In de, this message translates to:
+  /// **'Noch kein Kalender auf dem Handy.'**
+  String get calendarTableEmpty;
 }
 
 class _AppLocalizationsDelegate

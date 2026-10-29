@@ -26,6 +26,7 @@ import 'views/calendar_item.dart';
 import 'views/calendar_pager.dart';
 import 'views/calendar_source.dart';
 import 'views/view_mode.dart';
+import 'table_page.dart';
 
 /// Für die Liste `bereiche` auf der Startseite.
 Widget kalenderSeite(BuildContext context) {
@@ -129,6 +130,13 @@ class _KalenderSeiteState extends State<KalenderSeite> {
       appBar: AppBar(
         title: Text(_title(context)),
         actions: [
+          IconButton(
+            key: const Key('calendar-table'),
+            tooltip: l.calendarTableOpen,
+            icon: const Icon(Icons.table_restaurant_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => CalendarTablePage(controller: widget.steuerung))),
+          ),
           IconButton(
             key: const ValueKey('calendar-today'),
             tooltip: l.calendarToday,
