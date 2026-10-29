@@ -27,3 +27,13 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tui_bauplan_over_limit.md](tui_bauplan_over_limit.md) | `memory/system/tui_bauplan.md` has 620 lines (limit 600) | no |
 | [study_plan_followups.md](study_plan_followups.md) | Study plan: ExPhy Soll, chemistry exam blocks, Parkour, PhyProg ECTS, pause test, mechanics doc | yes (partly) |
 | [calendar_form_hints.md](calendar_form_hints.md) | Hint text for greyed-out rows in the calendar Advanced window | no |
+| [claude_max_assistant.md](claude_max_assistant.md) | Assistant via Sasha's Claude Max subscription (Agent SDK, in-process MCP): blueprint, nothing built | yes (okay for measuring script, claude.ai privacy setting) |
+| [ai_initiative.md](ai_initiative.md) | KI works on her own while Sasha is away: activity log, background run, own project | yes (okay for run 1) |
+| [ai_budget_model_choice.md](ai_budget_model_choice.md) | October budget over (booked > real), default/fallback model, `claude-fable-5-1` missing in prices | yes (budget, model) |
+| [tool_search_followups.md](tool_search_followups.md) | Tool search stays off: round limit 100 → ~20–25, repeat guard, research rule, new test run, W-09 | partly (test budget) |
+| [persona_nudging.md](persona_nudging.md) | B-01 nudging vs. „bietest dich nicht an“; servant phrase, gross has no stop list, „Sekretärin“ in ziele.md | yes (how to nudge) |
+| [skills_review.md](skills_review.md) | Sasha reviews skills (incl. imported claude.ai ones) before removal (S-02) | yes |
+| [tool_merge_proposals.md](tool_merge_proposals.md) | Merge overlapping tools (W-04 proposals) | yes (decide) |
+| [measured_canon_texts.md](measured_canon_texts.md) | klein „muss Sasha bestätigen“ (W-03), qwen rule 5 „laut Suchtreffer“: change only after re-measuring | no |
+| [leitbild_checkin_stage.md](leitbild_checkin_stage.md) | Check-in scene mapped to stage 5 by an agent | yes (check) |
+| [ai_small_leftovers.md](ai_small_leftovers.md) | Skill backup returns via rsync, qwen `input_examples`, long read results (W-05, W-06) | no |
