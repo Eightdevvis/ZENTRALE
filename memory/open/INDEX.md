@@ -47,6 +47,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [mini_pc_zentrale_setup.md](mini_pc_zentrale_setup.md) | ZENTRALE not installed on the mini; cloud folder to activate; `uds` only copied; repo paths for Claude sessions | yes (login) |
 | [second_screen.md](second_screen.md) | Tablet as second screen works; script only on the mini, no ZENTRALE app button yet | partly (where the script lives) |
 | [laptop_retirement_leftovers.md](laptop_retirement_leftovers.md) | Things only on the laptop: repos without remote, branches, secrets, KeePass, MediaWiki, visible Ablage | yes (per item) |
+| [laptop_suspend_hang.md](laptop_suspend_hang.md) | Laptop does not wake after closing the lid; TLP switched off as a test since 30.10. | yes (use it, then evaluate) |
 | [cloud_folder_limits.md](cloud_folder_limits.md) | Cloud folder: memory per run, 20 000 names, ~18 MiB per file, two-step emptying, phone not built | no |
 | [phone_release_0_1_0_3.md](phone_release_0_1_0_3.md) | Phone app 0.1.0+3 (calendar colours) not built/published yet — first real self-update test | yes (RAM / build) |
 | [calendar_colours_followups.md](calendar_colours_followups.md) | Course colour table migrates on next backend restart; full suite after the colour change not run (OOM) | partly |
