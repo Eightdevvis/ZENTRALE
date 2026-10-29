@@ -20,7 +20,7 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 | **Betrieb** | Wie es läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Dateizugriffe | [betrieb/INDEX.md](betrieb/INDEX.md) |
 | **Maps** | Die Karte — seit 2026-10-22 eigene App (Repo `zentrale-karte`), hier nur Zeiger | [maps/INDEX.md](maps/INDEX.md) |
 | **Tutor** | Der Sprach-Tutor — seit 2026-10-09 eigene App (Repo `language-tutor`); hier nur Zeiger und Hub-Seite | [tutor/INDEX.md](tutor/INDEX.md) |
-| **Offen** | Sammelordner für konkrete offene Sachen, eine Datei je Sache (kein Tracker) | [offen/INDEX.md](offen/INDEX.md) |
+| **Offen** | Sammelordner für konkrete offene Sachen, eine Datei je Sache (kein Tracker) | [open/INDEX.md](open/INDEX.md) |
 
 ## Flach geblieben
 
