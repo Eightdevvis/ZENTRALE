@@ -49,3 +49,11 @@ How this folder works: [README.md](README.md). One line per open item.
 | [second_screen.md](second_screen.md) | Tablet as second screen works; script only on the mini, no ZENTRALE app button yet | partly (where the script lives) |
 | [laptop_retirement_leftovers.md](laptop_retirement_leftovers.md) | Things only on the laptop: repos without remote, branches, secrets, KeePass, MediaWiki, visible Ablage | yes (per item) |
 | [cloud_folder_limits.md](cloud_folder_limits.md) | Cloud folder: memory per run, 20 000 names, ~18 MiB per file, two-step emptying, phone not built | no |
+| [phone_release_0_1_0_3.md](phone_release_0_1_0_3.md) | Phone app 0.1.0+3 (calendar colours) not built/published yet — first real self-update test | yes (RAM / build) |
+| [calendar_colours_followups.md](calendar_colours_followups.md) | Course colour table migrates on next backend restart; full suite after the colour change not run (OOM) | partly |
+| [phone_device_checks.md](phone_device_checks.md) | Phone: back gesture, login time, reminders, peephole feel, eye shape, edit flow only tested in simulation | yes (phone) |
+| [phone_self_update_hardening.md](phone_self_update_hardening.md) | Self-update: no Ed25519 manifest signature; Play build must drop the install permission | no |
+| [phone_local_export.md](phone_local_export.md) | Phone: ZIP of local-only data to Downloads + "export everything" so uninstall loses nothing | no |
+| [phone_onboarding.md](phone_onboarding.md) | Phone: tutorial/onboarding, wanted later | yes (later) |
+| [app_engine_decisions.md](app_engine_decisions.md) | App engine: questions 3–7 open; step 1 (apps/ folders, register, install gating) not started | yes (questions) |
+| [english_renaming_wave.md](english_renaming_wave.md) | Big run renaming existing German code/docs to English: not planned or started | yes (commission) |
