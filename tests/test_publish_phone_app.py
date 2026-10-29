@@ -26,6 +26,12 @@ def _english(monkeypatch):
     monkeypatch.setenv("ZENTRALE_LANG", "en")
 
 
+@pytest.fixture(autouse=True)
+def _no_real_release_key(tmp_path, monkeypatch):
+    """bump/publish check the release key first — never the real one here."""
+    monkeypatch.setenv("ZENTRALE_ANDROID_KEY_PROPERTIES", str(tmp_path / "android" / "key.properties"))
+
+
 def test_every_message_has_a_german_text():
     tree = ast.parse(open(pub.__file__, encoding="utf-8").read())
     msgids = [n.args[0].value for n in ast.walk(tree)

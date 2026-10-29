@@ -12,20 +12,49 @@ Cloud routes: `cloud/src/phone.ts`, `cloud/README.md`.
   password are the same, PKCS12 has only one). Both chmod 600, folder 700.
   Created on the laptop. SHA-256 of the certificate:
   `B7:65:9F:32:85:20:76:D1:A4:E0:17:7D:1D:65:CB:5F:EA:BA:43:04:84:6C:84:CE:A3:46:E7:AF:C3:9F:D3:26`.
-- **Back up both files** (the .jks and the password from key.properties) into
-  the ZENTRALE vault / KeePass. **Lose the key and no installed phone can
-  ever update again** — Android only accepts an update signed with the same
-  key; every phone would have to uninstall (losing its local data) and
-  reinstall.
+- **Lose the key and no installed phone can ever update again** — Android
+  only accepts an update signed with the same key; every phone would have to
+  uninstall (losing its local data) and reinstall.
 - Never in git (`mobile/android/.gitignore` ignores `key.properties`, `*.jks`,
   `*.keystore`; the files live outside the repo anyway).
 - `mobile/android/app/build.gradle.kts` reads the file from
   `$ZENTRALE_ANDROID_KEY_PROPERTIES` or the default path above. A relative
-  `storeFile` is relative to key.properties. Missing → the release build is
-  signed with the debug key and Gradle prints a WARNING; the publish script
-  refuses such an APK.
-- Building on another machine (the PC, more RAM): copy both files there to the
-  same path (or point the env var at them).
+  `storeFile` is relative to key.properties (and must be relative, so the key
+  can be restored anywhere). Missing → the release build is signed with the
+  debug key and Gradle prints a WARNING; the publish script refuses such an APK.
+
+## The key in the vault (automatic backup, since 2026-10-29)
+
+The key belongs to the account (the publisher), not to a device
+(`memory/hub/standort_und_app.md`). So both files live as **one vault entry**
+`android/release_key` in `data/adapter/geheim.enc` (`core/adapter_geheim.py`,
+`zu: "konto"`: encrypted with the account key, synced through the Mitte to
+every computer of the account; the server never reads it). The entry is JSON
+`{"format": "zentrale-android-key/1", "store_file", "key_properties",
+"keystore_b64"}`. Code: `scripts/android_release_key.py`. Gradle stays
+file-based; the vault only fills the folder above.
+
+- **Automatic:** `bump` and `publish` first check the key. Only the vault has
+  it → restored into the folder (600, folder 700). Only this computer has it →
+  stored in the vault. Both, but different → stop with both certificate
+  fingerprints; nothing is picked. Not logged in → a warning, no check.
+- By hand: `publish_phone_app.py key status` (here? vault? same certificate
+  SHA-256?), `key backup` (refuses a DIFFERENT key already in the vault;
+  `--force-replace` replaces it and keeps the old one as
+  `android/release_key.previous`), `key restore [--to DIR]` (refuses to
+  overwrite a different local key; `--to` writes elsewhere, e.g. to compare).
+- Needs a login (`zentrale login`): without the account the entry cannot be
+  encrypted with it, so `key backup` refuses.
+- Done once on the laptop on 2026-10-29; the vault copy has the certificate
+  above (verified with `key status` and a byte compare after `key restore --to`).
+- If every computer is lost: the Mitte still holds `geheim.enc` (encrypted);
+  logging in with the account password — or its emergency key
+  (`memory/hub/knoten_beitritt.md`) — brings back the account key, and with
+  it this entry. Losing both password and emergency key loses the key.
+
+**A new computer (e.g. the PC, more RAM):** `zentrale login`, let the vault
+sync, then `bump`/`publish` restore the key by themselves — or run
+`key restore` before the first `flutter build apk --release`. No files to copy.
 
 ## One-time: uninstall and reinstall
 

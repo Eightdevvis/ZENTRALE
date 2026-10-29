@@ -259,3 +259,120 @@ msgstr "{path}: zu groß für die Cloud ({size} MiB, höchstens {limit} MiB) —
 
 msgid "The cloud folder is missing or empty on this device, but the cloud still has its files — nothing was deleted, the folder is not synced until the files are back. To empty it on purpose, delete all but two files, sync, then delete the rest."
 msgstr "Der Cloud-Ordner fehlt auf diesem Gerät oder ist leer, die Cloud hat seine Dateien aber noch — nichts gelöscht, der Ordner gleicht erst wieder ab, wenn die Dateien zurück sind. Ihn absichtlich leeren: erst alle bis auf zwei Dateien löschen, abgleichen, dann den Rest."
+
+msgid "present, but cannot be decrypted here"
+msgstr "vorhanden, aber hier nicht entschlüsselbar"
+
+msgid "present"
+msgstr "vorhanden"
+
+msgid "missing"
+msgstr "fehlt"
+
+msgid "the release signing key in the ZENTRALE vault"
+msgstr "der Release-Signaturschlüssel im ZENTRALE-Tresor"
+
+msgid "is the key here, in the vault, and the same?"
+msgstr "liegt der Schlüssel hier, im Tresor, und ist es derselbe?"
+
+msgid "store this computer's release key in the vault"
+msgstr "den Release-Schlüssel dieses Rechners im Tresor ablegen"
+
+msgid "replace a DIFFERENT key in the vault (the old one is kept)"
+msgstr "einen ANDEREN Schlüssel im Tresor ersetzen (der alte bleibt erhalten)"
+
+msgid "write the release key from the vault to this computer"
+msgstr "den Release-Schlüssel aus dem Tresor auf diesen Rechner schreiben"
+
+msgid "folder to write into instead of the Gradle location (e.g. to compare)"
+msgstr "Ordner, in den statt an den Gradle-Ort geschrieben wird (z. B. zum Vergleichen)"
+
+msgid "Stored the release key of this computer in the vault."
+msgstr "Den Release-Schlüssel dieses Rechners im Tresor abgelegt."
+
+msgid "Restored the release key from the vault to {path}."
+msgstr "Den Release-Schlüssel aus dem Tresor nach {path} zurückgeholt."
+
+msgid "logged in: {value}"
+msgstr "angemeldet: {value}"
+
+msgid "this computer: {state}"
+msgstr "dieser Rechner: {state}"
+
+msgid "vault: {state}"
+msgstr "Tresor: {state}"
+
+msgid "Stored the release key in the vault."
+msgstr "Den Release-Schlüssel im Tresor abgelegt."
+
+msgid "The vault already holds this release key."
+msgstr "Der Tresor hat diesen Release-Schlüssel schon."
+
+msgid "not logged in — the release key was not checked against the vault."
+msgstr "nicht angemeldet — der Release-Schlüssel wurde nicht mit dem Tresor abgeglichen."
+
+msgid "yes"
+msgstr "ja"
+
+msgid "no"
+msgstr "nein"
+
+msgid "NO"
+msgstr "NEIN"
+
+msgid "  certificate SHA-256: {sha}"
+msgstr "  Zertifikat SHA-256: {sha}"
+
+msgid "same key: {value}"
+msgstr "derselbe Schlüssel: {value}"
+
+msgid "{path} already holds the release key from the vault."
+msgstr "{path} hat den Release-Schlüssel aus dem Tresor schon."
+
+msgid "no release key on this computer or in the vault — a release build would be signed with the debug key."
+msgstr "kein Release-Schlüssel auf diesem Rechner oder im Tresor — ein Release-Build würde mit dem Debug-Schlüssel signiert."
+
+msgid "Replaced the release key in the vault; the old one is kept as {previous}."
+msgstr "Den Release-Schlüssel im Tresor ersetzt; der alte bleibt als {previous} erhalten."
+
+msgid "The vault has a release key, but this computer cannot decrypt it. Log in with the account that stored it ('zentrale login')."
+msgstr "Der Tresor hat einen Release-Schlüssel, aber dieser Rechner kann ihn nicht entschlüsseln. Mit dem Konto anmelden, das ihn abgelegt hat ('zentrale login')."
+
+msgid "The release key in the vault is damaged."
+msgstr "Der Release-Schlüssel im Tresor ist beschädigt."
+
+msgid "Not logged in on this computer. The release key is stored encrypted with the account — run 'zentrale login' first."
+msgstr "Auf diesem Rechner nicht angemeldet. Der Release-Schlüssel wird mit dem Konto verschlüsselt abgelegt — zuerst 'zentrale login' ausführen."
+
+msgid "Storing the release key in the vault failed — it does not read back the same."
+msgstr "Ablegen des Release-Schlüssels im Tresor fehlgeschlagen — er liest sich nicht gleich zurück."
+
+msgid "The vault has no release key."
+msgstr "Der Tresor hat keinen Release-Schlüssel."
+
+msgid "Restoring the release key failed — the files do not read back the same."
+msgstr "Zurückholen des Release-Schlüssels fehlgeschlagen — die Dateien lesen sich nicht gleich zurück."
+
+msgid "This computer and the vault hold DIFFERENT release keys (here {local}, vault {vault}). Stopped — decide by hand which one is right ('key status'), then 'key backup --force-replace' or move the local files away and 'key restore'."
+msgstr "Dieser Rechner und der Tresor haben VERSCHIEDENE Release-Schlüssel (hier {local}, Tresor {vault}). Angehalten — von Hand entscheiden, welcher stimmt ('key status'), dann 'key backup --force-replace' oder die lokalen Dateien wegräumen und 'key restore'."
+
+msgid "storeFile in key.properties must be a file name next to key.properties, not '{path}'."
+msgstr "storeFile in key.properties muss ein Dateiname neben key.properties sein, nicht '{path}'."
+
+msgid "No release key on this computer ({path})."
+msgstr "Kein Release-Schlüssel auf diesem Rechner ({path})."
+
+msgid "The vault already holds a DIFFERENT release key (certificate {vault}; this computer: {local}). Nothing was changed. Only if you are sure, run 'key backup --force-replace' (the old one is kept as {previous})."
+msgstr "Der Tresor hat schon einen ANDEREN Release-Schlüssel (Zertifikat {vault}; dieser Rechner: {local}). Nichts geändert. Nur wenn du sicher bist: 'key backup --force-replace' (der alte bleibt als {previous} erhalten)."
+
+msgid "{path} holds a DIFFERENT release key than the vault (here {local}, vault {vault}). Nothing was overwritten."
+msgstr "{path} hat einen ANDEREN Release-Schlüssel als der Tresor (hier {local}, Tresor {vault}). Nichts überschrieben."
+
+msgid "{path} exists already — nothing was overwritten."
+msgstr "{path} gibt es schon — nichts überschrieben."
+
+msgid "{path} exists but key.properties is missing — the local key is incomplete."
+msgstr "{path} ist da, aber key.properties fehlt — der lokale Schlüssel ist unvollständig."
+
+msgid "{path} exists but its keystore {store} is missing — the local key is incomplete."
+msgstr "{path} ist da, aber sein Keystore {store} fehlt — der lokale Schlüssel ist unvollständig."

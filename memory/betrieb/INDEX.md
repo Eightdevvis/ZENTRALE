@@ -11,7 +11,7 @@ hier ist „Maschine", nicht „Feature".
 | **Wachplan:** PC = Gehirn; feste Schlafenszeiten, Pi aus → PC schläft, Wecken per Router/VPN, Hochfahren vor dem Heimkommen; Schlüssel später | [wachplan.md](wachplan.md) |
 | **Systemeinheit:** Autostart als Dienst, Cmd+z-Scratchpad, Desktop-Meldungen | [systemeinheit.md](systemeinheit.md) |
 | Deployment auf den Pi: rsync, systemd, Kiosk | [deployment.md](deployment.md) |
-| **Phone app release (self-update):** release key and its backup, bump → build → publish, cloud deploy, the one-time reinstall | [phone_app_release.md](phone_app_release.md) |
+| **Phone app release (self-update):** release key and its automatic backup in the vault, bump → build → publish, cloud deploy, the one-time reinstall | [phone_app_release.md](phone_app_release.md) |
 | Hardware: Pi, Mikro, PIR, GPIO | [hardware.md](hardware.md) |
 | Pi-Bildschirm bleibt schwarz — Debug-Fährte | [display_debug.md](display_debug.md) |
 | Remote-LUKS-Unlock via Dropbear im Initramfs | [auto_unlock.md](auto_unlock.md) |

@@ -4,6 +4,12 @@
     publish_phone_app.py status              installed pubspec version vs. the published one
     publish_phone_app.py bump [--name X.Y.Z] raise the version code in mobile/pubspec.yaml
     publish_phone_app.py publish [--notes TEXT] [--apk PATH] [--build] [--dry-run]
+    publish_phone_app.py key status|backup [--force-replace]|restore [--to DIR]
+                                             the release signing key in the vault
+
+`bump` and `publish` first make sure the release key is both here and in the
+vault (scripts/android_release_key.py): restore it from the vault on a new
+computer, back it up from the one that has it, stop if the two differ.
 
 The order is: bump → build the release APK (Sasha, `flutter build apk --release`
 in mobile/; `--build` does it here, never by default — the laptop has 3.8 GB RAM)
@@ -30,6 +36,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if os.path.join(ROOT, "core") not in sys.path:
     sys.path.insert(0, os.path.join(ROOT, "core"))
 
+import android_release_key as release_key  # noqa: E402
 import cloud_api  # noqa: E402
 import konto  # noqa: E402
 from i18n import _  # noqa: E402 — UI text: core/locale/<lang>/LC_MESSAGES/zentrale.po
@@ -162,6 +169,66 @@ def upload(client, apk: str, name: str, code: int, notes: str) -> dict:
         client.zeit = old_timeout
 
 
+# ── the release key ────────────────────────────────────────────────────
+
+def ensure_key():
+    """Before bump/publish: the release key here and in the vault (or stop)."""
+    try:
+        done = release_key.ensure()
+    except release_key.ReleaseKeyError as e:
+        raise PublishError(str(e)) from None
+    if done == "restored":
+        print(_("Restored the release key from the vault to {path}.").format(path=release_key.properties_path()))
+    elif done == "backed_up":
+        print(_("Stored the release key of this computer in the vault."))
+    elif done == "no_account":
+        print(_("Warning: {text}").format(text=_("not logged in — the release key was not checked against the vault.")),
+              file=sys.stderr)
+    elif done == "missing":
+        print(_("Warning: {text}").format(text=_("no release key on this computer or in the vault — a release build "
+                                                 "would be signed with the debug key.")), file=sys.stderr)
+    return done
+
+
+def _yes_no(value) -> str:
+    if value == "unreadable":
+        return _("present, but cannot be decrypted here")
+    return _("present") if value else _("missing")
+
+
+def cmd_key(args, props_path=None, wurzel=None):
+    try:
+        if args.key_command == "status":
+            s = release_key.status(props_path, wurzel)
+            print(_("logged in: {value}").format(value=_("yes") if s["logged_in"] else _("no")))
+            print(_("this computer: {state}").format(state=_yes_no(s["local"])))
+            if s["local_sha256"]:
+                print(_("  certificate SHA-256: {sha}").format(sha=s["local_sha256"]))
+            print(_("vault: {state}").format(state=_yes_no(s["vault"])))
+            if s["vault_sha256"]:
+                print(_("  certificate SHA-256: {sha}").format(sha=s["vault_sha256"]))
+            if s["same"] is not None:
+                print(_("same key: {value}").format(value=_("yes") if s["same"] else _("NO")))
+            if s["error"]:
+                print(s["error"], file=sys.stderr)
+            return s
+        if args.key_command == "backup":
+            done = release_key.backup(args.force_replace, props_path, wurzel)
+            print({"stored": _("Stored the release key in the vault."),
+                   "unchanged": _("The vault already holds this release key."),
+                   "replaced": _("Replaced the release key in the vault; the old one is kept as {previous}.")
+                   .format(previous=release_key.PREVIOUS_ENTRY)}[done])
+            return done
+        target = os.path.join(args.to, "key.properties") if args.to else props_path
+        done = release_key.restore(target, wurzel)
+        print({"restored": _("Restored the release key from the vault to {path}."),
+               "unchanged": _("{path} already holds the release key from the vault.")}[done]
+              .format(path=target or release_key.properties_path()))
+        return done
+    except release_key.ReleaseKeyError as e:
+        raise PublishError(str(e)) from None
+
+
 # ── commands ───────────────────────────────────────────────────────────
 
 def cmd_status(args, client_factory=_client):
@@ -176,7 +243,8 @@ def cmd_status(args, client_factory=_client):
         print(_("published: nothing yet"))
 
 
-def cmd_bump(args, client_factory=_client, pubspec_path=PUBSPEC):
+def cmd_bump(args, client_factory=_client, pubspec_path=PUBSPEC, ensure=ensure_key):
+    ensure()
     with open(pubspec_path, encoding="utf-8") as f:
         text = f.read()
     name, code = read_version(text)
@@ -191,7 +259,8 @@ def cmd_bump(args, client_factory=_client, pubspec_path=PUBSPEC):
 
 
 def cmd_publish(args, client_factory=_client, pubspec_path=PUBSPEC, metadata_path=METADATA,
-                run=subprocess.run):
+                run=subprocess.run, ensure=ensure_key):
+    ensure()
     with open(pubspec_path, encoding="utf-8") as f:
         name, code = read_version(f.read())
     apk = args.apk or APK
@@ -227,9 +296,17 @@ def main(argv=None) -> int:
     u.add_argument("--apk", help=_("path of the APK (default: the Flutter release output)"))
     u.add_argument("--build", action="store_true", help=_("run 'flutter build apk --release' first (needs RAM)"))
     u.add_argument("--dry-run", action="store_true", help=_("check everything, upload nothing"))
+    k = sub.add_parser("key", help=_("the release signing key in the ZENTRALE vault"))
+    ksub = k.add_subparsers(dest="key_command", required=True)
+    ksub.add_parser("status", help=_("is the key here, in the vault, and the same?"))
+    kb = ksub.add_parser("backup", help=_("store this computer's release key in the vault"))
+    kb.add_argument("--force-replace", action="store_true",
+                    help=_("replace a DIFFERENT key in the vault (the old one is kept)"))
+    kr = ksub.add_parser("restore", help=_("write the release key from the vault to this computer"))
+    kr.add_argument("--to", help=_("folder to write into instead of the Gradle location (e.g. to compare)"))
     args = p.parse_args(argv)
     try:
-        {"status": cmd_status, "bump": cmd_bump, "publish": cmd_publish}[args.command](args)
+        {"status": cmd_status, "bump": cmd_bump, "publish": cmd_publish, "key": cmd_key}[args.command](args)
     except PublishError as e:
         print(str(e), file=sys.stderr)
         return 1
