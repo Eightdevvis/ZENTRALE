@@ -57,12 +57,39 @@ zurückführen lässt. Der Umschlag bekommt dafür drei Felder dazu:
 | Fall | Was das Handy schickt | Was der Rechner tut |
 |---|---|---|
 | **neu** | `pfad` = Ebene + UID-Name (Zeichen außer `A–Z a–z 0–9 @ . -` → `_`) + `.ics`, `inhalt` mit genau einer UID; kein `basis_sha` | annehmen, solange es Pfad und UID nirgends gibt, die Ebene da ist und kein Grabstein auf dem Pfad liegt (wie seit 28.10.) |
-| **ändern** | `pfad` = der **vorhandene** Pfad (auch fremde Namen wie `abc.ics` von Google), ganze `inhalt`, `basis_sha`, besser auch `basis` | je VEVENT (UID + RECURRENCE-ID) drei Wege: nur das Handy geändert → das Handy; nur die Mitte → die Mitte; **beide verschieden → abgelehnt**. Aus der Mitte bleibt, was das Handy nicht mitschickt und ZENTRALE nicht verwaltet (`VERWALTET` in `kalender_ics_abbildung`: DESCRIPTION, VALARMs, Google-Felder, `X-ZENTRALE-*`) |
+| **ändern** | `pfad` = der **vorhandene** Pfad (auch fremde Namen wie `abc.ics` von Google), ganze `inhalt`, `basis_sha`, besser auch `basis` | je VEVENT (UID + RECURRENCE-ID) **und darin je Feldgruppe** (unten „Merge per group of fields“) drei Wege: nur das Handy geändert → das Handy; nur die Mitte → die Mitte; **beide dieselbe Gruppe verschieden → ganzer Vorschlag abgelehnt**. Aus der Mitte bleibt, was das Handy nicht mitschickt und ZENTRALE nicht verwaltet (`VERWALTET` in `kalender_ics_abbildung`: DESCRIPTION, VALARMs, Google-Felder, `X-ZENTRALE-*`) |
 | **Vorkommen aus** | ändern: am Haupt-VEVENT `EXDATE` (gleiche Zeitform wie DTSTART) **und** das Datum in `X-ZENTRALE-AUS` | wie ändern |
 | **Vorkommen an** | ändern: das `EXDATE` weg und das Datum aus `X-ZENTRALE-AUS` | wie ändern; vergisst das Handy `X-ZENTRALE-AUS`, gleicht der Rechner die Liste an EXDATE an |
 | **Ebene wechseln** | `pfad` = `data/kalender/<neue Ebene>/<UID-Name>.ics`, `inhalt`, `basis_sha` (+ `basis`) der Datei am **alten** Ort; kein Löschen dazu | in EINEM Stand: neue Datei da, alte mit Grabstein weg — keine Doppelten, kein Löschen+Neu |
 | **löschen** | `pfad`, `"loeschen": true`, `basis_sha`; kein `inhalt` | nur, wenn die Mitte noch genau diese Fassung hat (sha gleich) → Grabstein; sonst abgelehnt |
 
+- **Merge per group of fields (since 2026-10-29, `core/vevent_merge`).**
+  Before, any change on both sides of the same VEVENT was a conflict — also
+  when the cloud only added a note and the phone moved the time. Now each
+  group below is ONE unit; per group: phone unchanged → cloud, cloud
+  unchanged → phone, both the same → fine, both different → conflict → the
+  whole proposal is rejected as before (no partial accept, code `conflict`;
+  `grund` names the event and the groups, e.g. „Widerspruch — <uid>
+  (Zeit): …“).
+
+  | group | properties |
+  |---|---|
+  | time | DTSTART DTEND DURATION RRULE RDATE EXDATE EXRULE + X-ZENTRALE-AUS, -PAUSE, -SEIT, -OHNE-ANFANG, -RRULE-ROH, -ZEIT-ROH, -ART (EXDATE and X-ZENTRALE-AUS always from the same side) |
+  | title · place · note | SUMMARY · LOCATION GEO · DESCRIPTION |
+  | look · status · busy | CATEGORIES COLOR · STATUS · TRANSP |
+  | deadline | X-ZENTRALE-TYP, X-ZENTRALE-SOLL and OUR warning VALARM (X-ZENTRALE-VORWARNUNG:TRUE or DESCRIPTION „Deadline: …“) |
+  | reminders | every other VALARM, as one set |
+  | source · style · motif | X-ZENTRALE-QUELLE + URL · X-ZENTRALE-STIL · X-ZENTRALE-MOTIV |
+  | cancel · position · extras | X-ZENTRALE-ABSAGE-NOETIG · X-ZENTRALE-POS · X-ZENTRALE-EXTRAS |
+  | anything else | one group per property name; other subcomponents one per component name |
+
+  Never compared: DTSTAMP, LAST-MODIFIED, SEQUENCE, UID, RECURRENCE-ID. When
+  something comes from the phone, DTSTAMP/LAST-MODIFIED are the later of
+  phone and cloud, SEQUENCE = cloud's + 1 if time or status came from the
+  phone. What the phone omits and ZENTRALE does not manage (and a VALARM
+  kind it has none of) counts as unchanged; a managed field it omits
+  (LOCATION) is cleared. Untouched lines keep their bytes. A new
+  `X-ZENTRALE-*` must get a group (`tests/test_vevent_merge.py` checks it).
 - **Basis:** `sha256(Mitte) == basis_sha` → die Mitte ist unverändert, das
   Handy gilt. Sonst braucht der Rechner die gesehene Fassung: aus `basis`
   (sha muss passen) oder aus seiner eigenen Basis. Hat er sie nicht → abgelehnt
@@ -106,7 +133,8 @@ zurückführen lässt. Der Umschlag bekommt dafür drei Felder dazu:
 - `X-ZENTRALE-AUS` ist `b64:` + Base64url(JSON-Liste von `"JJJJ-MM-TT"`,
   `sort_keys`), roh-JSON wird auch gelesen.
 - Prüfstein: `tests/test_abgleich_handy_aendern.py` (ein Handy nur nach
-  dieser Beschreibung, wie `tests/test_abgleich_handy.py`).
+  dieser Beschreibung, wie `tests/test_abgleich_handy.py`); the groups:
+  `tests/test_vevent_merge.py`.
 
 ### Format für fremde Knoten
 
