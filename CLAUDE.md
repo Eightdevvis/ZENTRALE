@@ -138,6 +138,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 | Betrieb | läuft: Setup, Starten, Deployment, Hardware, Sicherheit, Zugriffe | `memory/betrieb/INDEX.md` |
 | Maps | seit 2026-10-22 eigene App (Repo `zentrale-karte`), hier nur Zeiger | `memory/maps/INDEX.md` |
 | Tutor | seit 2026-10-09 eigene App (Repo `language-tutor`), hier nur Zeiger | `memory/tutor/INDEX.md` |
+| Offen | konkrete offene Sachen, eine Datei je Sache (nicht der Tracker) | `memory/offen/INDEX.md` |
 
 Flach geblieben: `memory/ueberblick.md` (Einstieg, was ZENTRALE ist) und
 `memory/claude_hinweise.md` (Architektur-Entscheidungen für mich).
@@ -150,5 +151,8 @@ Flach geblieben: `memory/ueberblick.md` (Einstieg, was ZENTRALE ist) und
   kein neuer *Bereich* entsteht.
 - Inhalte gehören in die Theme-Files, nicht in diese Datei und nicht in
   einen Index. Ein Index sagt, WO etwas steht, nie WAS gilt.
+- Offenes, das ich finde und nicht selbst erledige → eine Datei in
+  `memory/offen/` (Regeln: `memory/offen/README.md`), nicht in Chat oder
+  Gedächtnis.
 - Bei Umbenennungen/Verschiebungen: alle Stellen im ganzen Repo mitziehen,
   nicht nur im Index — auch Code-Kommentare zeigen auf `memory/`-Dateien.
