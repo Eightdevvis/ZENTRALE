@@ -56,3 +56,17 @@ How this folder works: [README.md](README.md). One line per open item.
 | [phone_onboarding.md](phone_onboarding.md) | Phone: tutorial/onboarding, wanted later | yes (later) |
 | [app_engine_decisions.md](app_engine_decisions.md) | App engine: questions 3–7 open; step 1 (apps/ folders, register, install gating) not started | yes (questions) |
 | [english_renaming_wave.md](english_renaming_wave.md) | Big run renaming existing German code/docs to English: not planned or started | yes (commission) |
+| [cloud_usage_warning_labels.md](cloud_usage_warning_labels.md) | Cloud usage warnings don't say "money" vs "outage"; brake covers only R2 storage, not Class A/B ops | no |
+| [tutor_manifest_data.md](tutor_manifest_data.md) | `language-tutor/app.toml` lacks `[daten]`; fallback entry in `core/eingebaute_apps.py` | no |
+| [sync_choice_in_tui.md](sync_choice_in_tui.md) | Per-app sync choice only in `zentrale status`, not the TUI; `/api/apps` lacks built-in apps; no rights dialog | no |
+| [pc_cloud_login.md](pc_cloud_login.md) | PC (pop-os) still on rsync — log in to the cloud; plaintext backup branches on GitHub | yes (PC on, delete branches?) |
+| [minipc_finish_setup.md](minipc_finish_setup.md) | Mini-PC: update to 41, `zentrale timers install`, restart, check calendar + KI | yes (on the Mini-PC) |
+| [map_repo_remote.md](map_repo_remote.md) | Map app repo `zentrale-karte` has no GitHub remote; backend restart; old cache | yes (create repo) |
+| [release_before_public.md](release_before_public.md) | Before going public: licence, maintainer, repo name, apt repo, personal data out, legal | yes (decisions) |
+| [core_extraction_followups.md](core_extraction_followups.md) | Core extraction after hub basics + map: calendar TUI A1 (7 writes, no rollback), A2–A16, guards E5–E8, graphs | no |
+| [homecoming_stage1.md](homecoming_stage1.md) | Stage 1 Heimkommen: check old laptop, breadboard Nano + RC522, then firmware + app `wohnung`, voice, servo lamp | yes (hardware) |
+| [cloud_privacy_leftovers.md](cloud_privacy_leftovers.md) | Cloud: invite code ↔ account link, plaintext device names, meter writes per request, lease clock drift | no |
+| [lan_key_exposure.md](lan_key_exposure.md) | API keys were LAN-readable until a4c4872 — rotate? | yes |
+| [tablet_integration.md](tablet_integration.md) | Galaxy Tab S7 FE: scrcpy / second screen / KDE Connect / ZENTRALE node — goal open | yes (pick goal) |
+| [package_data_dir.md](package_data_dir.md) | .deb/PKGBUILD copy the program per user because the core keeps data next to the code | no |
+| [pi_back_online.md](pi_back_online.md) | Pi offline; autopull will jump to release 41 — check kiosk, outpost package, sensor bridge | yes (Pi online) |
