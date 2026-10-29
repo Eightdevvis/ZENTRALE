@@ -47,7 +47,9 @@ components:
             code_ungueltig, code_noetig, name_vergeben, jemand_schneller,
             blob_fehlt (with `fehlen: [sha256…]`), pruefsumme, laenge_fehlt,
             fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
-            nicht_eingerichtet, nur_betreiber, speicher_voll, serverfehler.
+            nicht_eingerichtet, nur_betreiber, speicher_voll, serverfehler,
+            and for the phone app release: no_release, operator_only,
+            version_not_newer (with `current_version_code`), apk_missing, apk_mismatch.
         text: { type: string, description: English sentence for the user. }
     Name:
       type: string
@@ -77,6 +79,17 @@ components:
       type: string
       pattern: "^[A-Za-z0-9_=-]+$"
       maxLength: 2048
+    PhoneRelease:
+      type: object
+      description: The release manifest of the phone app (self-update, memory/system/zen_mobile.md).
+      required: [version, version_code, sha256, size, notes, published_at]
+      properties:
+        version: { type: string, pattern: "^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$", description: Android versionName. }
+        version_code: { type: integer, minimum: 1, maximum: 2100000000, description: Android versionCode; grows with every release. }
+        sha256: { $ref: "#/components/schemas/Sha256" }
+        size: { type: integer, minimum: 1, description: APK size in bytes. }
+        notes: { type: string, maxLength: 2000 }
+        published_at: { type: string, format: date-time, description: Set by the server. }
     Paket:
       type: object
       required: [version, sha256, groesse]
@@ -535,3 +548,72 @@ paths:
                         text: { type: string, description: One English sentence. }
         "401": { $ref: "#/components/responses/Fehler" }
         "403": { $ref: "#/components/responses/Fehler" }
+  /v1/phone/release:
+    get:
+      summary: The current release manifest of the phone app (any logged-in account).
+      description: The app builds the APK address from `version_code` on the same cloud; it never follows a URL.
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: The manifest
+          content: { application/json: { schema: { $ref: "#/components/schemas/PhoneRelease" } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+    put:
+      summary: Publish a release (operator only, var BETREIBER_NAMEN). Upload the APK first.
+      description: |
+        `version_code` must be higher than the published one (409 version_not_newer). The APK
+        for it must already be stored with the same size and SHA-256 (409 apk_missing /
+        apk_mismatch). Keeps the new APK and the one before it, deletes older ones.
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, version_code, sha256, size]
+              properties:
+                version: { type: string }
+                version_code: { type: integer }
+                sha256: { $ref: "#/components/schemas/Sha256" }
+                size: { type: integer }
+                notes: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Published; the stored manifest
+          content: { application/json: { schema: { $ref: "#/components/schemas/PhoneRelease" } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "409": { $ref: "#/components/responses/Fehler" }
+  /v1/phone/release/{code}.apk:
+    get:
+      summary: The APK of a release (any logged-in account).
+      security: [{ sitzung: [] }]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The APK
+          content: { application/vnd.android.package-archive: { schema: { type: string, format: binary } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+    put:
+      summary: Upload the APK of a release (operator only). Streamed to R2; R2 checks the SHA-256.
+      description: Raw body, Content-Length required, max. 96 MiB (Workers Free takes bodies up to 100 MB).
+      security: [{ sitzung: [] }]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: sha256, in: query, required: true, schema: { $ref: "#/components/schemas/Sha256" } }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses:
+        "204": { description: Stored }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "411": { $ref: "#/components/responses/Fehler" }
+        "413": { $ref: "#/components/responses/Fehler" }
+        "507": { $ref: "#/components/responses/Fehler" }

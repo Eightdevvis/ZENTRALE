@@ -90,6 +90,82 @@ schreibt PNGs nach `mobile/build/auge_vorschau/` (nicht im Repo).
 - **Kleine Augen im Chat** (Leer-Zustand, Denk-Anzeige) nutzen denselben
   Maler; die Denk-Anzeige bekommt nie Launen.
 
+## Peephole ("Guckloch", `lib/peephole/`, since 2026-10-29)
+
+Sasha's picture: a full-size digital calendar lies spread out on the table;
+you swing the phone over it and the screen shows the spot you'd be above.
+General format, not a calendar feature: **any app's large surface** (later the
+`flaeche` building block of the app engine, `memory/hub/app_motor_plan.md`)
+can be shown through it. Camera AR (ARCore) is not this; it is the
+sensor-based peephole.
+
+- **How motion maps** (`motion.dart`, pure Dart): gyroscope + accelerometer
+  via the `sensors_plus` package (game rate, ~50 Hz). A complementary filter
+  keeps "up" (gyroscope short-term, pulled toward the accelerometer, ignored
+  while the hand jerks). The turn rate is split against "up": **turning
+  around the vertical → left/right, top edge up/down → further/closer on the
+  table, right edge down → right** (`rollPanShare`). The split works lying
+  flat, at 45° or upright and never double counts. Only rates are
+  integrated; the window is clamped to the sheet, so nothing drifts away.
+  Drift: soft dead zone plus a gyroscope bias estimate that learns only while
+  the phone is still (capped, so a real slow turn is not learnt away). The
+  window glides after the motion target (low-pass), finger panning is direct.
+- **Fallbacks:** no sensor event within 2 s, a sensor error, or no plugin →
+  finger panning plus a message. Sensors stop while the app is in the
+  background (battery; the time gap is never integrated). The page locks
+  portrait (motion uses the phone's own axes).
+- **Controls:** drag pans, pinch zooms around the fingers, **long press or
+  the ⌖ button glides back home** (e.g. today), the ⟲/✋ button switches
+  motion off/on. Minimap top right (hidden when everything is visible),
+  hint pill for 5 s.
+- **Tuning constants — all in `lib/peephole/peephole_tuning.dart`:**
+  `panPixelsPerRadian` (sensitivity, 780 ≈ one phone width per 30°),
+  `rollPanShare`, `pitchPanShare`, `deadZoneRate`, `followTau`/`recenterTau`
+  (smoothing), `gravityTau`, bias learning (`stillRate`, `biasTau`,
+  `biasMax`), `sensorStartTimeout`, zoom limits (`maxZoomFactor`,
+  `minZoomFit`), `overscrollPixels`, the table's PCB grid, minimap,
+  `minTextPixels` (E-Ink: no text under 10 px on screen).
+- **Look:** the sheet lies on a "table" with a faint circuit-board grid
+  (dots, traces every 5th line, pads), eye palette, day and night.
+
+### How an app provides a surface
+
+Implement `PeepholeSurface` (`peephole_surface.dart`) and hand it to
+`PeepholeView(surface: …, motion: SensorMotionSource(), onHit: …)`:
+
+| Member | Meaning |
+|---|---|
+| `size` | sheet size in virtual units |
+| `comfortableViewWidth` | units visible across the screen at start (sets the zoom) |
+| `home` | start point, recenter target |
+| `paint(canvas, visible, style)` | canvas already in surface units; skip what's outside `visible`; `style` brings palette, ink colours, current `scale` for level of detail (`PeepholeSurface.textVisible`) |
+| `hitTest(point)` | optional: what lies under a tap → `PeepholeHit(title, detail, payload)` |
+| `repaint` | optional `Listenable` when data changes |
+
+The frame owns motion, zoom, table, minimap; the surface only paints. A
+10×10-tile demo surface in `test/peephole_test.dart` (`TileDemoSurface`) is
+the smallest example. **Future:** ARCore on the phone or the AR glasses on
+the "Mini" only change how the visible rect is chosen — the same
+`PeepholeSurface` contract stays.
+
+### First consumer: the calendar table
+
+`lib/kalender/table_surface.dart` + `table_page.dart`, opened by the table
+icon in the calendar page's app bar. Six weeks from this Monday as one
+spread: weeks as rows (ISO week in the gutter), days as columns, events with
+time and layer colour (maybe = italic/outline, deadlines ⚑ warning colour),
+the rhythm line at the bottom of each day, past days quieter, today framed
+and home. Zoomed far out the events become bars. Tap an event → sheet with
+date, time, layer, place. Built only from `Kalender.vorkommen`.
+
+Tests: `flutter test test/peephole_test.dart` — synthetic sensor streams
+(steady, drift with bias, sweeps in three postures, gaps), window math,
+the view with fake/broken/silent sensors, the calendar page action, and
+preview PNGs into `mobile/build/peephole_preview/` (not in the repo).
+
+UI strings of this part go through gen-l10n
+(`mobile/l10n.yaml`, `lib/l10n/app_de.arb` = template, `app_en.arb`; keys `peephole*`, `calendarTable*`).
+
 ## Warum das Handy ein eigener Knoten ist (kein Client des Backends)
 
 Kein Rechner läuft zuverlässig dauerhaft, das Handy soll aber von überall
@@ -153,7 +229,7 @@ aber nur in seinen Eingang `knoten/handy/` (Format:
 
 Sasha will Google Kalender ablösen — die App muss können, was Google tat.
 
-- **Ansehen:** heute und die nächsten drei Wochen als Liste. Ebenen =
+- **Ansehen:** heute und die nächsten drei Wochen als Liste (seit 29.10. auch Tag/Woche/Monat, siehe unten). Ebenen =
   Ordner: `termine` (zugesagt) voll, `uncommitted` (Optionen) leiser und
   kursiv, `rhythmus` (Schlaf, Essen) als eine dezente Zeile je Tag. Farben
   aus dem vdir (`color`), sonst aus dem Auge. Abgeschaltete und pausierte
@@ -178,12 +254,33 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   seinen Eingang; sie steht sofort in der Liste mit „wartet auf Abgleich“.
   Ein Rechner übernimmt sie nur als neuen Termin
   (`core/abgleich_vorschlaege.kalender_vorschlag_annehmen`).
-- **Ändern, Löschen, einzelne Vorkommen aus/an, Ebene wechseln:** die
-  Rechner-Seite steht seit 29.10.2026 (Umschlag mit `basis_sha`/`basis`/
-  `loeschen`, Widerspruch → abgelehnt, Quittung in `inhalt.enc`:
+- **Edit, delete, one occurrence off/on, change layer (phone side
+  2026-10-29):** tap an event → detail sheet (`event_sheet.dart`) with Edit
+  (form `eintrag_seite.dart` in edit mode: title, place, day/time, duration,
+  layer; a series keeps its first day), Delete (confirm; a series = the
+  whole series) and, for a series, "only this occurrence off" / "back on"
+  (switched-off occurrences stay visible as struck-through outlines in
+  day/week so they can go back on). Protocol:
   [../betrieb/abgleich_fremde_knoten.md](../betrieb/abgleich_fremde_knoten.md)
-  „Termine vom Handy“). In der App noch nicht gebaut — die Seite sagt es beim
-  Antippen.
+  "Termine vom Handy". `event_edit.dart` changes only the main VEVENT,
+  line by line (DESCRIPTION, foreign VALARMs etc. stay); occurrence off =
+  EXDATE in DTSTART's form + `X-ZENTRALE-AUS` (`encodeSwitchedOff`,
+  byte-identical to the core). The register `abgleich/proposals.json`
+  (`lib/mitte/proposals.dart`) keeps each change with `basis_sha` + `basis`
+  until the receipt (`eingang.handy.<pfad>` in `inhalt.enc`) matches the
+  sha256 of the envelope plaintext (built in ONE place, `envelope()` in
+  `mitte.dart`); then the inbox entry is cleared. Optimistic: the changed
+  file is in the Ablage at once ("wartet auf Abgleich"), the sync does not
+  overwrite protected paths. Rejected: a banner above the calendar, the
+  reason code translated via ARB (`reason…` keys, one per
+  `core/abgleich_vorschlaege.REASONS` code — a test checks all), both
+  versions, "propose mine again" (new basis = the cloud's current version)
+  or "take the cloud's". An undecided envelope is replaced in place (same
+  basis_sha). Vectors from the real core:
+  `scripts/handy_aendern_testvektoren.py` →
+  `test/daten/kalender_aendern_testvektoren.json` (X-ZENTRALE-AUS encoding,
+  all reason codes, edit/off/on cases incl. Google TZID and UTC series);
+  tests `test/calendar_edit_test.dart`.
 - **Erinnerungen** (`erinnerungen.dart`): jeder VALARM wird eine Android-
   Benachrichtigung (relativ zum Beginn/Ende oder fester Zeitpunkt; Google
   -PT7H ebenso wie unsere Deadline-Vorwarnung -P3D). Nach jedem Abgleich alle
@@ -197,6 +294,49 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   nicht — die Kalender-Session schaltet es frei). Die Einstellungen zeigen
   „noch nicht in der Mitte“; Vorschläge warten bis dahin im Eingang.
 
+### Calendar views: day, week, month, agenda (`lib/kalender/views/`, 2026-10-29)
+
+Sasha: "klassische Kalender-Ansicht … mit Wochen- und Tagesansicht" — the
+familiar Google-like structure, ZENTRALE look.
+
+- **Modes:** day, week, month, agenda (the old list). Switch in the app bar
+  (menu), plus a "today" button. Swipe left/right pages days/weeks/months.
+  The last mode is remembered per device (`view_mode.dart`, a file in the
+  app support folder — never in the synced Ablage). Default: week.
+- **Day/week** (`time_grid.dart`): hour grid, blocks by start/end,
+  overlapping blocks side by side (`overlap_layout.dart`: clusters, first
+  free column, grow right over free columns). All-day strip on top
+  (all-day entries, deadlines without time). Now line on today, the grid
+  opens scrolled to now − 2 h; paging keeps the vertical position. Tap a
+  block → the detail sheet; tap an empty slot → new-entry form prefilled
+  with day and time (30-min snap); tap the all-day strip → all-day entry.
+- **Month** (`month_grid.dart`): 6 × 7 days, chips as many as fit, "+n";
+  tap a day → day view.
+- **Layers:** `termine` full colour; `uncommitted` tinted, striped, drawn
+  beneath; `rhythmus` as subtle background bands (crossing midnight: each
+  day draws its slice; labels only in the day view). Deadlines: a red line
+  with a flag at the must time ("Muss 12:00 · Soll verpasst"), a dashed
+  line at the should time. Colours from vdir `color`, else from the eye.
+- **Palette** (`calendar_palette.dart`): day and night from `AugeFarben`;
+  hour lines as thin traces with a solder pad at each column edge, the now
+  line ends in a pad. No text below 10 px; every text colour is checked
+  for ≥ 4.5:1 against its own background (test).
+- **Pure layout layer:** the views only know `CalendarItem` (`calendar_item.dart`)
+  and a `CalendarItemSource`. The only bridge to `kalender.dart` is
+  `calendar_source.dart`. That makes them the future `zeitraster` building
+  block (`memory/hub/app_motor_plan.md`).
+- **Performance:** `PageView.builder` (only visible pages are built); the
+  source expands occurrences (incl. RRULE) per month on demand and keeps
+  the last 8 months (LRU), fresh after every sync. Test: 600 events with
+  weekly rules ≈ 35 ms per new month at the laptop, a cached week ≈ 0.
+- **Strings:** new UI text via gen-l10n (`mobile/l10n.yaml`,
+  `lib/l10n/app_de.arb` first, `app_en.arb`). Old German strings stay.
+- **Preview images:** `flutter test test/calendar_views_test.dart` writes
+  PNGs (day/night, overlaps, all-day, deadline, rhythm across midnight,
+  tentative, plus the real page from the core vectors) to
+  `mobile/build/kalender_vorschau/` (not in the repo), with real Roboto
+  loaded from the Flutter SDK so the text is readable.
+
 ## Aufbau `mobile/lib/`
 
 | Ordner | Aufgabe |
@@ -207,21 +347,64 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
 | `mitte/` | Schnittstelle `Mitte`, `HttpMitte` (Cloud), Abgleich, `regeln.dart` (was hin und her darf, Pfade), `abgleich_steuerung.dart` (wann) |
 | `krypto/` | Fernet, Argon2id/HKDF (Konto), Tresor (versteckte Namen) |
 | `konto/` | Anmelden/Abmelden, Sitzung im Keystore, Zugangsdaten des Adapters lesen |
-| `kalender/` | .ics lesen/schreiben, RRULE, Vorkommen, Erinnerungen, Überblick für die KI, Seiten |
+| `kalender/` | .ics lesen/schreiben, RRULE, Vorkommen, Erinnerungen, Überblick für die KI, Seiten; `views/` = day/week/month views (pure layout layer) |
 | `dienste.dart` | Die Dienste für Seiten aus `bereiche` (InheritedWidget) |
 | `chat/` | `ChatSteuerung` (Logik) und die Seiten (zeichnen nur) |
 | `auge/`, `start/`, `thema/` | Auge (Stellschrauben `auge_regler.dart`), Startseite mit Knopf-Ring, Farben Tag/Nacht |
-| `einstellungen/` | Claude-Schlüssel von Hand + Einstellungsseite (Konto, Mitte, Kalender, KI) |
+| `peephole/` | Peephole frame: motion mapping, window, view, tuning (`peephole_tuning.dart`) |
+| `l10n/` | gen-l10n ARB tables (German template, English) |
+| `einstellungen/` | Claude-Schlüssel von Hand + Einstellungsseite (Konto, Mitte, App update, Kalender, KI) |
+| `update/` | Self-update (English, see "Self-update"): manifest, download + SHA-256, controller, settings section, start-screen dot |
 
 Tests: `mobile/test/` (Format, Zusammenlegen, Strom-Parser, Anfrage, Auge;
 Krypto und Kalender gegen die Vektoren des Kerns; Mitte und Login gegen eine
 gespielte Cloud `test/falsche_cloud.dart` — nie Netz, nie echte Konten).
 
+## Self-update (`lib/update/`, since 2026-10-29)
+
+The app updates itself from **our** cloud, not from a store (Sasha:
+"selbstupdate bitte"). A separate track from Google Play.
+
+- **Flow:** a computer publishes (`scripts/publish_phone_app.py`, steps in
+  `memory/betrieb/phone_app_release.md`) → the cloud stores APK + manifest
+  `{version, version_code, sha256, size, notes, published_at}`
+  (`cloud/src/phone.ts`) → the app checks on start (quietly) and with
+  "Nach Update suchen" in settings → a newer `version_code` shows a small
+  glowing dot top right on the start screen (tap → update page) and the
+  settings section offers "Laden und installieren" → the APK is streamed to
+  `cache/updates/` and hashed on the way → right before installing it is
+  hashed again (in an isolate) → `MainActivity.kt` hands it to Android's
+  package installer through a FileProvider; Android asks the user once.
+- **Trust:** only operator accounts (`BETREIBER_NAMEN`) can publish. The app
+  asks only the cloud of its own session, with that session, and builds the
+  APK address from the version code (never a URL from the manifest). R2
+  checks the SHA-256 on upload, the cloud only accepts a manifest naming an
+  APK stored with the same size and SHA-256, the app checks size + SHA-256,
+  and Android refuses an update signed with another key (the release key,
+  `memory/betrieb/phone_app_release.md`). Not yet: an Ed25519 signature over
+  the manifest (would also protect against a compromised cloud account;
+  Android's signature check already blocks foreign APKs).
+- **Permission:** `REQUEST_INSTALL_PACKAGES`; without the "install unknown
+  apps" permission the section shows "Erlaubnis öffnen" (Android's screen for
+  this app) and then "Installieren" again.
+- **Mobile data:** on a metered network the app asks first (size in MB).
+- **Play builds:** off by `BuildConfig.SELF_UPDATE` (Gradle
+  `zentrale.distribution=play`) and at runtime when Play installed the copy.
+  The section then says the Play Store updates it.
+- **Version:** only `version_code` decides (pubspec `version: name+code`);
+  the name is for people.
+- **Text:** all from gen-l10n (`lib/l10n/app_de.arb` / `app_en.arb`, keys
+  `update*`).
+- **Tests:** `test/update_test.dart` (fake cloud via MockClient, fake Android),
+  cloud `cloud/test/phone.test.ts`, script `tests/test_publish_phone_app.py`.
+
 ## Offen
 
 1. **Auf dem Handy ausprobieren** — bisher nur Tests und Analyse. Sasha:
    APK neu bauen (nicht auf dem 3,8-GB-Laptop), einmal anmelden.
-2. Kalender in die Mitte (Kalender-Session), dann Ändern/Löschen vom Handy.
+   Self-update: deploy the cloud, uninstall the debug-signed app once,
+   install the first release-signed APK by hand (`memory/betrieb/phone_app_release.md`).
+2. Kalender in die Mitte (Kalender-Session). Ändern/Löschen vom Handy ist gebaut (29.10.), am echten Handy noch nicht ausprobiert.
 3. Argon2id-Dauer auf dem echten Handy messen; ist sie zu lang, eine native
    Umsetzung hinter dieselbe Funktion `hauptschluessel` stecken.
 4. **Später, nicht jetzt:** Tutorial/Einführung und UX-Feinschliff (Sasha,

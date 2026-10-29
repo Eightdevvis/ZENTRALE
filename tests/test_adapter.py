@@ -264,7 +264,11 @@ def test_quelle_zencloud_kein_google_kalender_gleicht_ab(monkeypatch, tmp_path):
     assert skript.main(["zentrale"]) == 0
     monkeypatch.setattr(kalender_sync_zustand, "lesen", lambda: {"letzter_versuch": "2026-01-01T00:00:00"})
     assert kalender_sync_zustand.bewerten()["problem"] is False
-    # Noch einmal: nichts Neues.
+    # Noch einmal: nichts Neues. (The sync is faked: the base knows the
+    # calendar only once it really went out — otherwise the command
+    # continues, tests/test_calendar_source_fill.py.)
+    import abgleich
+    _basis(abgleich.ordner(), ["data/kalender/termine/a.ics"])
     assert adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, "zencloud", tmp_path)["ergebnis"] == "gleich"
 
 

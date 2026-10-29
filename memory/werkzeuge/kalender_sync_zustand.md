@@ -41,6 +41,20 @@ Kalender-App"), fährt kein Gerät Google: `scripts/kalender_sync.py` endet mit
 nicht (keine Warnung „läuft nicht“). Ist `quelle=google` gesetzt, fährt jedes
 Gerät selbst und schreibt seinen eigenen Stand.
 
+**The running backend follows at once (since 2026-10-29).** Occasion:
+after switching to zencloud the alarm "Google-Sync Zugang abgelaufen" stayed,
+although `bewerten()` already ignored the old state — the backend
+(`core/main.py`) only recomputed the alarm channel at start and every ~5 min,
+and the switch happens in another process. Now
+`kalender_sync_zustand.change_stamp()` (stat of the state file and of the
+calendar app's setting) is checked on every tick of the main loop
+(`main.refresh_sync_alarm`); on a change the alarm channel is recomputed
+immediately — also when the timer writes a new Google state. The state file
+`~/.local/share/zentrale/kalender_sync.json` stays where it is (ignored,
+never deleted); back on google it counts again. Tests:
+`tests/test_calendar_source_fill.py` (`test_sync_alarm_*`,
+`test_backend_refreshes_the_alarm_at_once`).
+
 Der alte Weg (keine Einstellung, Google-Anschluss): Google fährt nur das Gerät mit dem Mietvertrag ([../hub/adapter.md](../hub/adapter.md)).
 Es legt seinen Stand nach jedem Lauf mit `bruecke: <gerät>` in den Vertrag;
 jedes andere Gerät übernimmt ihn bei seinem Timer-Lauf in die eigene Datei

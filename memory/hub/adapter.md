@@ -174,10 +174,10 @@ hat nichts außer nen haufen pforten wo man sachen rumstöpselt"*.
   herum).
 - **Die Frage kommt vom Abgleich:** der Adapter darf `abgleich` nicht
   importieren (Import-Kreis, `tests/test_kern_bauplan.py`).
-  `vor_abgleich(…, mitte_hat_kalender=None)` nimmt sie als Argument; solange
-  `core/abgleich._adapter_vorher` sie nicht mitgibt, holt `_rueckfrage()` sie
-  beim laufenden Abgleich (`sys.modules`) — Übergang, fällt mit der einen
-  Zeile in `_adapter_vorher` weg.
+  `vor_abgleich(…, mitte_hat_kalender=, basis_kennt=)` takes both as
+  arguments; since 37e1a6f `core/abgleich._adapter_vorher` passes them
+  (`_rueckfrage` and the adapter reading `basis.json` itself are gone;
+  missing one → `MitteFehler`).
 - **Altlast `kalender-mitte`:** liegt `data/adapter/anschluesse/kalender-mitte.json`
   noch, gilt sie als `kalender-haupt` mit `quelle=zencloud`; das nächste
   `kalender_quelle_setzen` schreibt die neue Datei und nimmt die alte weg. Auf
@@ -188,15 +188,61 @@ hat nichts außer nen haufen pforten wo man sachen rumstöpselt"*.
   Mengen.
 - **Offen:** ein Gerät, das früher schon den Kalender über die Cloud abglich
   (Basis kennt ihn), danach google/lokal fuhr und zurückkommt, gleicht
-  normal dreiseitig ab (seine Löschungen gehen mit) statt beiseitezulegen.
-  `basis.json` liest der Adapter direkt — sauberer wäre eine Funktion im
-  Abgleich (`abgleich.basis_kennt(ordner)`). Stöpseln zwei Geräte im selben
+  normal dreiseitig ab (seine Löschungen gehen mit) statt beiseitezulegen. Stöpseln zwei Geräte im selben
   Augenblick auf zencloud um und finden beide die Cloud leer, füllen beide
   (der Abgleich führt je UID zusammen).
+- **First fill: slow, interruptible, continuable (since 2026-10-29).**
+  Occasion: Sasha switched the laptop; the first fill (590 files, normally
+  ~13 s) hung for minutes without output, he pressed Ctrl-C, and running it
+  again only said "already zencloud".
+  - *Sign of life:* `kalender_quelle_setzen(…, report=)` reports `syncing`
+    (n = files here, `upload` = filling the empty hub) and `done`; the CLI
+    (`befehle.SignOfLife`) prints "Uploading the calendar to the cloud (N
+    files) …" and every 15 s "… still syncing (n s)". Real progress (file n
+    of N) needs a hook in core/abgleich*, not built (owned elsewhere):
+    `abgleich.abgleichen(wurzel, …, progress=None)` passes it to the hub,
+    and `HttpMitte._hochladen` (core/abgleich_mitte.py) calls
+    `progress(done, total)` after each `PUT /v1/mitte/blob/<sha>` (total =
+    `len(d["fehlen"])`). The CLI would then print it instead of the seconds.
+  - *Ctrl-C keeps zencloud* (result `interrupted`, CLI exit 130). Safe,
+    because the hub accepts a new state in ONE call (blobs first, then
+    `POST /v1/mitte/stand`; the setting file goes in the same state): either
+    nothing arrived (the hub's index has no calendar → the next sync asks,
+    gets "empty" and fills) or all of it arrived (the next sync first
+    finishes its plan, `_vorhaben_nachholen`, so the base knows the calendar
+    before `vor_abgleich` asks — nothing is set aside). Rolling back to
+    google would let the Google timer run again on a half-switched device.
+    Checked live 2026-10-29: after Sasha's Ctrl-C the timer sync completed
+    the fill, the base knows 596 `data/kalender` files, nothing set aside.
+  - *Fill pending* = `adapter_ablauf.calendar_fill_pending()`: source
+    zencloud, events here, the base knows none of them (derived, no marker
+    file). `zentrale adapter` and `zentrale adapter calendar` show it.
+  - *The same command again* continues instead of "already zencloud": it
+    only runs a sync and decides nothing beforehand (the sync's own order:
+    finish plan → `vor_abgleich` asks the hub → fill or set aside). →
+    `continued` or `incomplete` (+ reason); a new set-aside folder is
+    reported.
+  - An error in the fill sync rolls the value back only if the hub has no
+    calendar afterwards; otherwise the state went out (→ `fuellt` + error).
+- **Google timer with zencloud/lokal (checked 2026-10-29):** the timer
+  `zentrale-kalender-sync` keeps running every 3 min and refuses at once
+  (`zentrale adapter run` → "Calendar source is 'zencloud', not google",
+  exit 0; `scripts/kalender_sync.py` the same before any work): no
+  vdirsyncer, no ghost cleanup, no Google backup or rotation, no state file,
+  no file under the project touched
+  (`tests/test_calendar_source_fill.py::test_no_google_and_no_ics_work`).
+  **Deliberately not switched off by the source switch:** the setting
+  travels to every device, the switch runs on one. A device whose timer was
+  disabled there would stay disabled when another device switches back to
+  google — it would never run Google again. Doing it right means every
+  device reconciling its timer with the source (e.g. in `zentrale sync
+  --automatic`); not worth it for a run that costs nothing.
 - Tests: `tests/test_adapter.py` (`test_quelle_*`, `test_mitte_hat_kalender_vertrag`, `test_fuellen_*`, `test_der_fuellende_*`,
   `test_spaeteres_geraet_*`, `test_umstoepseln_*`, `test_alter_schalter_*`,
   `test_zwei_kalender_apps_*`, `test_cli_kalender_quelle`),
-  `tests/test_kalender_cloud.py::test_zencloud_erster_fuellt_spaeterer_legt_beiseite`.
+  `tests/test_kalender_cloud.py::test_zencloud_erster_fuellt_spaeterer_legt_beiseite`,
+  `tests/test_calendar_source_fill.py` (Ctrl-C, continuing, sign of life,
+  alarm, no Google with zencloud/lokal).
 
 ## Gebaut (2026-10-24)
 

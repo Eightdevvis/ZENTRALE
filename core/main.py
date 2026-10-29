@@ -50,6 +50,26 @@ def tageswechsel_verkabeln(waechter, event_queue: list) -> None:
         event_queue.append(DAY_CHANGED)
     waechter.anmelden(neu)
 
+
+def refresh_sync_alarm(old):
+    """Did the Google sync state or the calendar app's source change
+    (kalender_sync_zustand.change_stamp)? Then recompute the alarm channel
+    now, not at the 5-min heartbeat — both are written by other processes
+    (timer, `zentrale adapter calendar`). → the new stamp."""
+    import kalender_sync_zustand
+    try:
+        new = kalender_sync_zustand.change_stamp()
+    except Exception as e:      # noqa: BLE001 — never disturb the main loop
+        log(f"Sync stamp unreadable: {e}")
+        return old
+    if new != old and old is not None:
+        try:
+            state.set_alarms(kalender.alarme())
+        except Exception as e:
+            log(f"Alarm recompute (sync/source) failed: {e}")
+    return new
+
+
 # ZENTRALE-Root auf den Pfad legen damit wir ui importieren können
 _root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, _root)
@@ -140,9 +160,12 @@ def main():
     tageswechsel_verkabeln(tag_waechter, event_queue)
 
     _alarm_tick = 0
+    _sync_stamp = refresh_sync_alarm(None)
     while True:
         # 0️⃣ Mitternacht vorbei? (core/uhr.py — „heute" nie einfrieren)
         tag_waechter.pruefen()
+        # 0b Google sync state or calendar source changed → alarms at once
+        _sync_stamp = refresh_sync_alarm(_sync_stamp)
 
         # 1️⃣ Sensoren abfragen + State updaten
         button = read_button()

@@ -261,7 +261,7 @@ gegen dieselbe Schnittstelle):
 | Apps je Gerät | `core/abgleich_apps.py`, `core/eingebaute_apps.py` |
 | Knoten-Beschreibung, Hardware erkannt | `core/knoten.py` |
 | Der Befehl | `zentrale_cli/` (Front, Tür im Kern-Bauplan), Starter `bin/zentrale`, `pyproject.toml` (Einstiegspunkt für `pip install -e .`) |
-| Alle Texte (Englisch) | `zentrale_cli/texte.py` — Deutsch = zweites Wörterbuch mit denselben Schlüsseln |
+| Alle Texte (Englisch) | `zentrale_cli/texte.py`; translations since 2026-10-29 via the core's gettext table (`core/i18n.py`, `core/locale/de/LC_MESSAGES/zentrale.po` + `.mo`): msgid = the English text, German first (`ZENTRALE_LANG` overrides), untranslated stays English |
 | Paket | `deploy/paket.txt` + `scripts/paket_bauen.py` → `dist/` |
 | Installieren | `deploy/install.sh` (gerendert aus `install.sh.in`), Ablauf in [../betrieb/setup.md](../betrieb/setup.md) |
 | Verteilung (seit 23.10.) | apt/.deb, pacman/PKGBUILD, curl-Einzeiler aus demselben tar.gz; öffentlich erst nach Schalter + Durchsicht — [../betrieb/verteilung.md](../betrieb/verteilung.md) |

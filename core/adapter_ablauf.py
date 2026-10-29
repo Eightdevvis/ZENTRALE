@@ -85,7 +85,7 @@ def mitte_hat_kalender(ordner="data/kalender"):
     return r if r is True or r is False else None
 
 
-def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
+def kalender_quelle_setzen(iid, quelle, wurzel, report=None) -> dict:
     """Die Quelle der Kalender-App `iid` umstöpseln (Sasha 28.10.2026: ein
     Wert, eine Stelle). Setzt nur den Wert in der Einstellung (die überall
     abgleicht) und löscht nie eine Termin-Datei:
@@ -97,15 +97,36 @@ def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
               abgleichen (adapter.kalender_fuellt); geht der Abgleich nicht
               hinaus, wird der Wert zurückgenommen (→ "offline") — sonst
               legte der nächste Abgleich den eigenen Kalender beiseite.
+              (Since 2026-10-29: not if the hub has a calendar afterwards —
+              the state did go out, setting included; → "fuellt" + fehler.)
           True → die Cloud gilt: Wert setzen, der Kalender hier wandert
               beiseite (<abgleich>/kalender-vor-cloud/<zeit>/, nie gelöscht;
               nur wenn sich das Gerät noch nie mit der Mitte über ihn
               geeinigt hat), dann abgleichen. Jedes spätere Gerät tut beim
               ersten Abgleich dasselbe (adapter.vor_abgleich).
 
-    → {"ergebnis": gleich | gesetzt | fuellt | uebernimmt | ohne_mitte |
-       unbekannt | offline, "von": alte Quelle, "beiseite": Pfad|None,
-       "fehler": Text|None}"""
+    Since 2026-10-29 (the first fill of 590 files took minutes, Sasha hit
+    Ctrl-C, and running it again only said "already zencloud"):
+      → zencloud while already zencloud, but the fill is not done
+          (calendar_fill_pending): sync again WITHOUT deciding anything
+          beforehand. The sync first finishes an interrupted plan
+          (core/abgleich: _vorhaben_nachholen), then adapter.vor_abgleich
+          asks the hub itself (empty → fill, full → set aside). → "continued"
+          (done) or "incomplete" (still pending, fehler says why).
+      Ctrl-C during the sync → "interrupted": the value STAYS zencloud.
+          That is safe: the hub accepts a new state in ONE call (events and
+          setting together) — either all of it is there and the next sync
+          completes its plan, or nothing is, and the next sync (timer or the
+          same command) asks the hub and fills. Rolling back to google would
+          instead let the Google timer run again on a half-switched device.
+
+    `report(event, **kw)` (optional, for the CLI): "syncing" (n=files here,
+    upload=True when filling the empty hub) before the long sync starts,
+    "done" afterwards.
+
+    → {"ergebnis": gleich | gesetzt | fuellt | uebernimmt | continued |
+       incomplete | interrupted | ohne_mitte | unbekannt | offline,
+       "von": alte Quelle, "beiseite": Pfad|None, "fehler": Text|None}"""
     ke = kalender_einstellung
     if quelle not in ke.QUELLEN:
         raise adapter.AdapterFehler(
@@ -113,9 +134,22 @@ def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
     alt = ke.quelle(iid, wurzel)
     raus = {"ergebnis": "gleich", "von": alt, "beiseite": None, "fehler": None}
     vorher = ke.roh_lesen(iid, wurzel)
-    if alt == quelle and vorher is not None:
-        return raus
     ordner = ke.ordner(iid, wurzel)
+    if alt == quelle and vorher is not None:
+        if quelle != "zencloud" or not calendar_fill_pending(iid, wurzel):
+            return raus
+        if nur_lokal():
+            return dict(raus, ergebnis="ohne_mitte")
+        before = _set_aside_dirs()
+        fehler = _sync_reported(wurzel, ordner, report)
+        new = sorted(set(_set_aside_dirs()) - set(before))
+        raus["beiseite"] = new[-1] if new else None
+        if fehler is INTERRUPTED:
+            return dict(raus, ergebnis="interrupted")
+        if fehler or calendar_fill_pending(iid, wurzel):
+            return dict(raus, ergebnis="incomplete",
+                        fehler=fehler or "the sync did not take the calendar along")
+        return dict(raus, ergebnis="continued")
     if quelle != "zencloud":
         ke.schreiben(iid, quelle, wurzel)
         if iid == ke.HAUPT:
@@ -132,16 +166,73 @@ def kalender_quelle_setzen(iid, quelle, wurzel) -> dict:
             raus["beiseite"] = adapter.beiseite_legen(wurzel, abgleich.ordner(), ordner)
         if iid == ke.HAUPT:
             ke.alt_mitte_weg(wurzel)
-        return dict(raus, ergebnis="uebernimmt", fehler=_abgleichen(wurzel))
+        fehler = _sync_reported(wurzel, ordner, report)
+        if fehler is INTERRUPTED:
+            return dict(raus, ergebnis="interrupted")
+        return dict(raus, ergebnis="uebernimmt", fehler=fehler)
     with adapter.kalender_fuellt(ordner):
-        fehler = _abgleichen(wurzel)
+        fehler = _sync_reported(wurzel, ordner, report, upload=True)
+    if fehler is INTERRUPTED:
+        return dict(raus, ergebnis="interrupted")
     if fehler:
+        # If the state did go out (the error came afterwards), the hub
+        # rules — keep the value, the setting went out with it.
+        if mitte_hat_kalender(ordner) is True:
+            return dict(raus, ergebnis="fuellt", fehler=fehler)
         ke.roh_zurueck(iid, vorher, wurzel)
         return dict(raus, ergebnis="offline", fehler=fehler)
     if iid == ke.HAUPT and ke.alt_mitte_da(wurzel):
         ke.alt_mitte_weg(wurzel)
         _abgleichen(wurzel)
     return dict(raus, ergebnis="fuellt")
+
+
+def calendar_fill_pending(iid=None, wurzel=None) -> bool:
+    """Is the calendar app on zencloud, are there events here, and has this
+    device never agreed with the hub about them (the sync base knows no file
+    of the folder)? Then the fill or takeover is not done yet — e.g. after
+    Ctrl-C during the first fill, or on a device that just received the
+    setting. No marker file: derived from setting + base, like
+    adapter.vor_abgleich."""
+    ke = kalender_einstellung
+    iid = iid or ke.HAUPT
+    if ke.quelle(iid, wurzel) != "zencloud":
+        return False
+    folder = ke.ordner(iid, wurzel)
+    if not calendar_file_count(folder, wurzel):
+        return False
+    return not abgleich.basis_kennt(folder)
+
+
+def calendar_file_count(folder="data/kalender", wurzel=None) -> int:
+    """Number of files in the calendar folder under `wurzel` (for "Uploading
+    … (N files)" and calendar_fill_pending)."""
+    if wurzel is None:
+        return 0
+    vdir = os.path.join(str(wurzel), *folder.split("/"))
+    return sum(len(fs) for _w, _d, fs in os.walk(vdir))
+
+
+INTERRUPTED = object()           # _abgleichen: Ctrl-C (never an error text)
+
+
+def _set_aside_dirs() -> list:
+    try:
+        d = os.path.join(abgleich.ordner(), "kalender-vor-cloud")
+        return [os.path.join(d, n) for n in os.listdir(d)]
+    except OSError:
+        return []
+
+
+def _sync_reported(wurzel, folder, report, upload=False):
+    """_abgleichen, with "syncing"/"done" reported around it."""
+    if report:
+        report("syncing", n=calendar_file_count(folder, wurzel), upload=upload)
+    try:
+        return _abgleichen(wurzel)
+    finally:
+        if report:
+            report("done")
 
 
 def _stand_datei():
@@ -169,9 +260,14 @@ class Lauf:
 
 
 def _abgleichen(wurzel):
+    """→ None (went out), an error text, or INTERRUPTED (Ctrl-C — nothing is
+    half-published: the hub takes a state in ONE call, and the next sync
+    finishes a started plan)."""
     try:
         abgleich.abgleichen(str(wurzel))
         return None
+    except KeyboardInterrupt:
+        return INTERRUPTED
     except abgleich.Besetzt:
         return "a sync is already running"
     except Exception as e:      # noqa: BLE001 — offline, abgemeldet, Mitte weg

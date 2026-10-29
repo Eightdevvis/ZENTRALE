@@ -38,7 +38,7 @@ const List<Bereich> bereiche = [
 ];
 
 class Startseite extends StatefulWidget {
-  const Startseite({super.key, required this.kiOeffnen, this.knoepfe = bereiche});
+  const Startseite({super.key, required this.kiOeffnen, this.knoepfe = bereiche, this.cornerHint});
 
   /// Öffnet die KI; bekommt die Mandel des Auges in Bildschirm-Koordinaten,
   /// damit der Übergang genau dort weitermacht. Erfüllt, wenn die KI wieder zu ist.
@@ -46,6 +46,9 @@ class Startseite extends StatefulWidget {
 
   /// Die Knöpfe im Ring — sonst [bereiche]; Tests geben eigene.
   final List<Bereich> knoepfe;
+
+  /// A small hint in the top right corner (e.g. lib/update UpdateHint) — or nothing.
+  final Widget? cornerHint;
 
   @override
   State<Startseite> createState() => _StartseiteState();
@@ -185,6 +188,7 @@ class _StartseiteState extends State<Startseite> with SingleTickerProviderStateM
               ),
               for (final (i, b) in widget.knoepfe.indexed)
                 _knopf(context, b, orte[i], i, farben, nacht),
+              if (widget.cornerHint != null) Positioned(top: 4, right: 4, child: widget.cornerHint!),
             ]);
           }),
         ),

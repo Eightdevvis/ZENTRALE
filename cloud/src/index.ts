@@ -9,6 +9,7 @@ import { besitzHolen, besitzSetzen, knotenListe, knotenSetzen } from "./knoten";
 import { mitteBlob, mitteDatei, mitteEnthaelt, mitteFehlende, mitteHolen, mitteStand } from "./mitte";
 import { neuerZaehler, nutzungRoute, zaehlendeUmgebung, zaehlerSchreiben, speicherNachzaehlen, cloudflareAbfragen } from "./nutzung";
 import { installSh, paketDatei, paketInfo } from "./paket";
+import { apkGet, apkPut, releaseGet, releasePut } from "./phone";
 
 type Handler = (env: Env, anfrage: Request, p: Record<string, string>, t: number) => Promise<Response>;
 
@@ -43,6 +44,10 @@ export const ROUTEN: Route[] = [
   { methode: "GET", pfad: "/v1/besitz", handler: auth((env, _a, s) => besitzHolen(env, s)) },
   { methode: "PUT", pfad: "/v1/besitz", handler: auth((env, a, s, _p, t) => besitzSetzen(env, a, s, t)) },
   { methode: "GET", pfad: "/v1/nutzung", handler: auth((env, _a, s, _p, t) => nutzungRoute(env, s, t)) },
+  { methode: "GET", pfad: "/v1/phone/release", handler: auth((env) => releaseGet(env)) },
+  { methode: "PUT", pfad: "/v1/phone/release", handler: auth((env, a, s, _p, t) => releasePut(env, a, s, t)) },
+  { methode: "GET", pfad: "/v1/phone/release/{code}.apk", handler: auth((env, _a, _s, p) => apkGet(env, p.code)) },
+  { methode: "PUT", pfad: "/v1/phone/release/{code}.apk", handler: auth((env, a, s, p) => apkPut(env, a, s, p.code)) },
 ];
 
 /** `{name}` in /v1/mitte/datei/ may span several path segments (d/<hmac>.enc). */

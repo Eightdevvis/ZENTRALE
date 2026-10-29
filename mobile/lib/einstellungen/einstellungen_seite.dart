@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 
 import '../ablage/ablage.dart';
 import '../ki/kontext.dart';
+import '../l10n/app_localizations.dart';
 import '../konto/geheim.dart';
 import '../konto/konto.dart';
 import '../mitte/abgleich_steuerung.dart';
+import '../update/update_controller.dart';
+import '../update/update_section.dart';
 import 'einstellungen.dart';
 
 class EinstellungenSeite extends StatefulWidget {
@@ -17,11 +20,15 @@ class EinstellungenSeite extends StatefulWidget {
     required this.einstellungen,
     required this.ablage,
     required this.abgleich,
+    this.updates,
   });
 
   final Einstellungen einstellungen;
   final Ablage ablage;
   final AbgleichSteuerung abgleich;
+
+  /// The self-update section (lib/update) — none in tests that do not need it.
+  final UpdateController? updates;
 
   @override
   State<EinstellungenSeite> createState() => _EinstellungenSeiteState();
@@ -169,6 +176,10 @@ class _EinstellungenSeiteState extends State<EinstellungenSeite> {
               ? null
               : IconButton(tooltip: 'Jetzt abgleichen', icon: const Icon(Icons.sync), onPressed: _a.jetzt),
         ),
+        if (widget.updates != null) ...[
+          _titel(AppLocalizations.of(context).updateTitle),
+          UpdateSection(controller: widget.updates!),
+        ],
         _titel('Kalender'),
         ListTile(
           contentPadding: EdgeInsets.zero,

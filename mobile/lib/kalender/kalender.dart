@@ -52,7 +52,9 @@ class Vorkommen {
     this.erinnerungen = const [],
     this.wartet = false,
     this.serie = false,
-  });
+    this.switchedOff = false,
+    DateTime? occurrenceDay,
+  }) : occurrenceDay = occurrenceDay ?? tag;
 
   final DateTime tag;
   final String ebene;
@@ -80,6 +82,14 @@ class Vorkommen {
 
   /// Aus einer Regel (Routine) — am Handy nicht einzeln änderbar.
   final bool serie;
+
+  /// Hidden because this one occurrence was switched off (X-ZENTRALE-AUS /
+  /// EXDATE) — not a pause, not cancelled. Can be switched back on.
+  final bool switchedOff;
+
+  /// The series day this occurrence belongs to (before a moved occurrence's
+  /// new day) — the key for EXDATE / X-ZENTRALE-AUS.
+  final DateTime occurrenceDay;
 
   /// Beginn als Ortszeit (UTC-Träger); ganztägig = Mitternacht.
   DateTime get beginn {
@@ -174,6 +184,12 @@ class Kalender {
     return Kalender._(ebenen, eintraege, wartend);
   }
 
+  /// Ablage path of the file holding [uid] (null = unknown).
+  String? pathOf(String uid) => _eintraege.where((e) => e.stueck.uid == uid).firstOrNull?.pfad;
+
+  /// The parsed entry of [uid]: its kind ('termin' | 'routine') and data.
+  Stueck? entryOf(String uid) => _eintraege.where((e) => e.stueck.uid == uid).firstOrNull?.stueck;
+
   Ebene? ebene(String name) => ebenen.where((e) => e.name == name).firstOrNull;
 
   /// Alle Vorkommen in [von, bis] (Tage, inklusive) — auch die versteckten
@@ -220,13 +236,17 @@ class Kalender {
         final aus = {...((d['aus'] as List?) ?? const []).map((x) => '$x')};
         for (final occ in tage) {
           var tag = isoTag(occ);
-          var versteckt = aus.contains(tag) || _pausiert(s, occ, pausen);
+          final paused = _pausiert(s, occ, pausen);
+          final off = aus.contains(tag) && !paused;
+          var versteckt = aus.contains(tag) || paused;
           String? zeit = d['time'] as String?, ende = d['ende'] as String?,
               label = d['label'] as String?, ort = d['ort'] as String?;
           final ab = s.abweichungen[tag];
+          var cancelled = false;
           if (ab != null) {
             if (ab.entfaellt) {
               versteckt = true;
+              cancelled = true;
             } else {
               tag = ab.tag ?? tag;
               final t = isoTagLesen(tag);
@@ -239,7 +259,7 @@ class Kalender {
           }
           dazu(tag, _bauen(ebene.name, s, isoTagLesen(tag)!, d,
               zeit: zeit, ende: ende, label: label, ort: ort, versteckt: versteckt,
-              wartet: wartet, serie: true));
+              wartet: wartet, serie: true, switchedOff: off && !cancelled, occurrenceDay: occ));
         }
       }
     }
@@ -277,7 +297,7 @@ class Kalender {
 
   Vorkommen _bauen(String ebene, Stueck s, DateTime tag, Map<String, Object?> d,
       {String? zeit, String? ende, String? label, String? ort, bool versteckt = false,
-      bool wartet = false, bool serie = false}) {
+      bool wartet = false, bool serie = false, bool switchedOff = false, DateTime? occurrenceDay}) {
     final deadline = d['typ'] == 'deadline';
     String? sollZeit;
     final soll = d['soll_abstand'];
@@ -294,7 +314,7 @@ class Kalender {
       deadline: deadline, vorwarnung: d['vorwarnung'] as int?, sollZeit: sollZeit,
       ueberNacht: ueberNacht, motiv: d['motiv'] as String?,
       absageNoetig: d['absage_noetig'] == true, erinnerungen: s.erinnerungen,
-      wartet: wartet, serie: serie,
+      wartet: wartet, serie: serie, switchedOff: switchedOff, occurrenceDay: occurrenceDay,
     );
   }
 }

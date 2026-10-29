@@ -19,6 +19,7 @@ import 'dart:typed_data';
 import '../ablage/ablage.dart';
 import '../krypto/tresor.dart';
 import 'mitte.dart';
+import 'proposals.dart';
 import 'regeln.dart' as r;
 
 const _merkPfad = 'abgleich/stand.json';
@@ -92,11 +93,21 @@ class Abgleich {
   /// zurückgegeben hat („wartet auf Abgleich“) — Ablage-Pfade.
   static Future<Set<String>> wartend(Ablage a) async {
     final geholt = (await _merkLesen(a))['geholt'] as Map<String, dynamic>;
+    final props = await Proposals.load(a);
+    final pending = {
+      for (final p in props.list)
+        if (p.state == ProposalState.pending) p.target
+    };
     return {
       for (final p in await a.alleDateien('kalender'))
-        if (r.istTermin(p) && !geholt.containsKey(p)) p
+        if (r.istTermin(p) && (!geholt.containsKey(p) || pending.contains(p))) p
     };
   }
+
+  /// sha of the cloud version this phone last fetched for [ap] (the basis
+  /// of a change), or null if the file did not come from the cloud.
+  static Future<String?> seenSha(Ablage a, String ap) async =>
+      ((await _merkLesen(a))['geholt'] as Map<String, dynamic>)[ap] as String?;
 
   static Uint8List _bytes(String s) => Uint8List.fromList(utf8.encode(s));
 
@@ -127,6 +138,32 @@ class Abgleich {
 
     final stand = await mitte.holen();
     if (stand.kennung == null) return Ergebnis(0, 0, mitteLeer: true);
+    final entfernen = <String>{};
+
+    // ── Receipts: a computer has decided on a proposed change ──
+    final props = await Proposals.load(ablage);
+    for (final p in [...props.list]) {
+      final sent = p.sentAs;
+      if (p.envelope == null || sent == null) continue;
+      final rc = stand.receipts[sent];
+      if (rc == null || rc.envelope != p.envelope) continue;
+      entfernen.add(sent); // decided: clear it from the inbox
+      p.sentAs = null;
+      if (rc.rejected) {
+        p
+          ..state = ProposalState.rejected
+          ..code = rc.code
+          ..reason = rc.reason;
+        final cloud = r.mittePfad(p.from ?? p.target);
+        p.cloudText = stand.dateien.containsKey(cloud)
+            ? utf8.decode(await mitte.lesen(cloud), allowMalformed: true)
+            : null;
+      } else {
+        props.list.remove(p);
+        geholt.remove(p.target); // fetch the cloud's merged version
+      }
+    }
+    final protect = props.protected;
 
     // ── Erster Lauf (neu installiert oder erst jetzt angemeldet): das Eigene
     // aus dem Eingang zurück. Grundsatz (abgleich.md): die Cloud wird nie
@@ -156,6 +193,7 @@ class Abgleich {
       if (ap != null && r.holen(ap)) fern[ap] = sha;
     }
     for (final MapEntry(key: ap, value: sha) in fern.entries) {
+      if (protect.contains(ap)) continue; // own change waits for its receipt
       if (r.eigene(ap, knoten) && await ablage.lesen(ap) != null) continue;
       if (geholt[ap] == sha) continue;
       final inhalt = await mitte.lesen(r.mittePfad(ap));
@@ -165,19 +203,19 @@ class Abgleich {
     }
     // In der Mitte verschwunden → hier auch (nur, was von dort kam).
     for (final ap in geholt.keys.toList()) {
-      if (fern.containsKey(ap)) continue;
+      if (fern.containsKey(ap) || protect.contains(ap)) continue;
       await ablage.loeschen(ap);
       geholt.remove(ap);
     }
 
     // ── Bringen ──
     final schreiben = <String, Uint8List>{};
-    final entfernen = <String>{};
     final kandidaten = {
       ...await ablage.alleDateien('gespraeche'),
       ...await ablage.alleDateien('kalender'),
     };
     for (final ap in kandidaten) {
+      if (protect.contains(ap)) continue; // sent as a change below
       final mp = r.mittePfad(ap);
       final bringen = r.eigene(ap, knoten) ||
           (r.istKopf(ap) && !fern.containsKey(ap)) ||
@@ -209,13 +247,34 @@ class Abgleich {
     // Gebrachte Termine, die es hier nicht mehr gibt (übernommen und danach
     // in der Mitte gelöscht): auch aus dem Eingang.
     for (final ap in gebracht.keys.toList()) {
-      if (!r.istTermin(ap) || kandidaten.contains(ap)) continue;
+      if (!r.istTermin(ap) || kandidaten.contains(ap) || protect.contains(ap)) continue;
       if (stand.imEingang(r.mittePfad(ap))) entfernen.add(r.mittePfad(ap));
       gebracht.remove(ap);
     }
-    if (schreiben.isNotEmpty || entfernen.isNotEmpty) {
-      await mitte.eingangSenden(schreiben, entfernen);
+    // Changes to existing events: one envelope each, with basis_sha.
+    final envs = <String, Uint8List>{};
+    for (final p in props.list) {
+      if (p.state != ProposalState.pending || p.envelope != null) continue;
+      final mp = r.mittePfad(p.target);
+      Uint8List? inhalt;
+      if (!p.delete) {
+        final t = await ablage.lesen(p.target);
+        if (t == null) continue;
+        inhalt = _bytes(t);
+      }
+      final env = envelope(mp, inhalt,
+          baseSha: p.baseSha, base: p.base == null ? null : _bytes(p.base!), delete: p.delete);
+      envs[mp] = env;
+      if (p.sentAs != null && p.sentAs != mp) entfernen.add(p.sentAs!);
+      p
+        ..sentAs = mp
+        ..envelope = Tresor.sha(env);
+      nBringen++;
     }
+    if (schreiben.isNotEmpty || entfernen.isNotEmpty || envs.isNotEmpty) {
+      await mitte.eingangSenden(schreiben, entfernen, envelopes: envs);
+    }
+    await props.save(ablage);
 
     await ablage.schreiben(_merkPfad, jsonEncode({'geholt': geholt, 'gebracht': gebracht}));
     await _zustand({'kalender_in_mitte': fern.keys.any(r.istTermin)});
