@@ -1,0 +1,15 @@
+{
+  "@@locale": "en",
+  "calendarViewDay": "Day",
+  "calendarViewWeek": "Week",
+  "calendarViewMonth": "Month",
+  "calendarViewAgenda": "Agenda",
+  "calendarViewSwitch": "Change view",
+  "calendarToday": "Today",
+  "calendarWeekNumber": "W{week}",
+  "calendarMore": "+{count}",
+  "calendarDeadlineMust": "Must {time}",
+  "calendarDeadlineShould": "Should: {label}",
+  "calendarDeadlineShouldMissed": "Should missed",
+  "calendarWaitingForSync": "waiting for sync"
+}

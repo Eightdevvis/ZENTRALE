@@ -26,8 +26,19 @@ String? endeAus(TimeOfDay beginn, int minuten) {
 }
 
 class EintragSeite extends StatefulWidget {
-  const EintragSeite({super.key, required this.steuerung});
+  const EintragSeite({
+    super.key,
+    required this.steuerung,
+    this.initialDay,
+    this.initialStart,
+    this.initialAllDay = false,
+  });
   final KalenderSteuerung steuerung;
+
+  /// Prefill from a tapped slot in the day/week grid (or a month day).
+  final DateTime? initialDay;
+  final TimeOfDay? initialStart;
+  final bool initialAllDay;
 
   @override
   State<EintragSeite> createState() => _EintragSeiteState();
@@ -35,9 +46,10 @@ class EintragSeite extends StatefulWidget {
 
 class _EintragSeiteState extends State<EintragSeite> {
   final _titel = TextEditingController();
-  late DateTime _tag = tagVon(widget.steuerung.jetzt);
-  bool _ganztags = false;
-  late TimeOfDay _beginn = TimeOfDay(hour: (widget.steuerung.jetzt.hour + 1) % 24, minute: 0);
+  late DateTime _tag = tagVon(widget.initialDay ?? widget.steuerung.jetzt);
+  late bool _ganztags = widget.initialAllDay;
+  late TimeOfDay _beginn =
+      widget.initialStart ?? TimeOfDay(hour: (widget.steuerung.jetzt.hour + 1) % 24, minute: 0);
   int _dauer = 60;
   String _ebene = ebeneTermine;
   String? _fehler;

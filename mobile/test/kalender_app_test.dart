@@ -14,7 +14,9 @@ import 'package:zen_mobile/kalender/kalender_seite.dart';
 import 'package:zen_mobile/kalender/kalender_steuerung.dart';
 import 'package:zen_mobile/kalender/termin_schreiben.dart';
 import 'package:zen_mobile/kalender/ueberblick.dart';
+import 'package:zen_mobile/kalender/views/view_mode.dart';
 import 'package:zen_mobile/kalender/zeit.dart';
+import 'package:zen_mobile/l10n/app_localizations.dart';
 import 'package:zen_mobile/mitte/abgleich.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
 
@@ -112,7 +114,11 @@ void main() {
       await s.laden();
       await s.eintragen(NeuerTermin(titel: 'Vom Handy', tag: DateTime.utc(2026, 11, 19), zeit: '18:00'));
     });
-    await t.pumpWidget(MaterialApp(home: KalenderSeite(steuerung: s)));
+    await t.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: KalenderSeite(steuerung: s, initialMode: CalendarViewMode.agenda)));
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await t.pump();
     expect(find.text('Heute · 19.11.'), findsOneWidget);

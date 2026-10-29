@@ -153,7 +153,7 @@ aber nur in seinen Eingang `knoten/handy/` (Format:
 
 Sasha will Google Kalender ablösen — die App muss können, was Google tat.
 
-- **Ansehen:** heute und die nächsten drei Wochen als Liste. Ebenen =
+- **Ansehen:** heute und die nächsten drei Wochen als Liste (seit 29.10. auch Tag/Woche/Monat, siehe unten). Ebenen =
   Ordner: `termine` (zugesagt) voll, `uncommitted` (Optionen) leiser und
   kursiv, `rhythmus` (Schlaf, Essen) als eine dezente Zeile je Tag. Farben
   aus dem vdir (`color`), sonst aus dem Auge. Abgeschaltete und pausierte
@@ -197,6 +197,49 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   nicht — die Kalender-Session schaltet es frei). Die Einstellungen zeigen
   „noch nicht in der Mitte“; Vorschläge warten bis dahin im Eingang.
 
+### Calendar views: day, week, month, agenda (`lib/kalender/views/`, 2026-10-29)
+
+Sasha: "klassische Kalender-Ansicht … mit Wochen- und Tagesansicht" — the
+familiar Google-like structure, ZENTRALE look.
+
+- **Modes:** day, week, month, agenda (the old list). Switch in the app bar
+  (menu), plus a "today" button. Swipe left/right pages days/weeks/months.
+  The last mode is remembered per device (`view_mode.dart`, a file in the
+  app support folder — never in the synced Ablage). Default: week.
+- **Day/week** (`time_grid.dart`): hour grid, blocks by start/end,
+  overlapping blocks side by side (`overlap_layout.dart`: clusters, first
+  free column, grow right over free columns). All-day strip on top
+  (all-day entries, deadlines without time). Now line on today, the grid
+  opens scrolled to now − 2 h; paging keeps the vertical position. Tap a
+  block → the detail sheet; tap an empty slot → new-entry form prefilled
+  with day and time (30-min snap); tap the all-day strip → all-day entry.
+- **Month** (`month_grid.dart`): 6 × 7 days, chips as many as fit, "+n";
+  tap a day → day view.
+- **Layers:** `termine` full colour; `uncommitted` tinted, striped, drawn
+  beneath; `rhythmus` as subtle background bands (crossing midnight: each
+  day draws its slice; labels only in the day view). Deadlines: a red line
+  with a flag at the must time ("Muss 12:00 · Soll verpasst"), a dashed
+  line at the should time. Colours from vdir `color`, else from the eye.
+- **Palette** (`calendar_palette.dart`): day and night from `AugeFarben`;
+  hour lines as thin traces with a solder pad at each column edge, the now
+  line ends in a pad. No text below 10 px; every text colour is checked
+  for ≥ 4.5:1 against its own background (test).
+- **Pure layout layer:** the views only know `CalendarItem` (`calendar_item.dart`)
+  and a `CalendarItemSource`. The only bridge to `kalender.dart` is
+  `calendar_source.dart`. That makes them the future `zeitraster` building
+  block (`memory/hub/app_motor_plan.md`).
+- **Performance:** `PageView.builder` (only visible pages are built); the
+  source expands occurrences (incl. RRULE) per month on demand and keeps
+  the last 8 months (LRU), fresh after every sync. Test: 600 events with
+  weekly rules ≈ 35 ms per new month at the laptop, a cached week ≈ 0.
+- **Strings:** new UI text via gen-l10n (`mobile/l10n.yaml`,
+  `lib/l10n/app_de.arb` first, `app_en.arb`). Old German strings stay.
+- **Preview images:** `flutter test test/calendar_views_test.dart` writes
+  PNGs (day/night, overlaps, all-day, deadline, rhythm across midnight,
+  tentative, plus the real page from the core vectors) to
+  `mobile/build/kalender_vorschau/` (not in the repo), with real Roboto
+  loaded from the Flutter SDK so the text is readable.
+
 ## Aufbau `mobile/lib/`
 
 | Ordner | Aufgabe |
@@ -207,7 +250,7 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
 | `mitte/` | Schnittstelle `Mitte`, `HttpMitte` (Cloud), Abgleich, `regeln.dart` (was hin und her darf, Pfade), `abgleich_steuerung.dart` (wann) |
 | `krypto/` | Fernet, Argon2id/HKDF (Konto), Tresor (versteckte Namen) |
 | `konto/` | Anmelden/Abmelden, Sitzung im Keystore, Zugangsdaten des Adapters lesen |
-| `kalender/` | .ics lesen/schreiben, RRULE, Vorkommen, Erinnerungen, Überblick für die KI, Seiten |
+| `kalender/` | .ics lesen/schreiben, RRULE, Vorkommen, Erinnerungen, Überblick für die KI, Seiten; `views/` = day/week/month views (pure layout layer) |
 | `dienste.dart` | Die Dienste für Seiten aus `bereiche` (InheritedWidget) |
 | `chat/` | `ChatSteuerung` (Logik) und die Seiten (zeichnen nur) |
 | `auge/`, `start/`, `thema/` | Auge (Stellschrauben `auge_regler.dart`), Startseite mit Knopf-Ring, Farben Tag/Nacht |

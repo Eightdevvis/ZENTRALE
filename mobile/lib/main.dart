@@ -26,6 +26,7 @@ import 'ki/anthropic.dart';
 import 'ki/ki.dart';
 import 'konto/geheim.dart';
 import 'konto/konto.dart';
+import 'l10n/app_localizations.dart';
 import 'mitte/abgleich_steuerung.dart';
 import 'mitte/regeln.dart';
 import 'start/startseite.dart';
@@ -72,6 +73,8 @@ class ZenMobile extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'ZENTRALE',
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: zentraleThema(Brightness.light),
         darkTheme: zentraleThema(Brightness.dark),
         home: Builder(
