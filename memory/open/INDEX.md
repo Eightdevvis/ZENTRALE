@@ -15,3 +15,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [store_tutor_map_migration.md](store_tutor_map_migration.md) | Tutor and map still hard-coded, not installed through the store | no |
 | [budgeter_followups.md](budgeter_followups.md) | Budget app: German code, no import, small gaps, look | partly (look) |
 | [test_pruefstand_isolation_red.md](test_pruefstand_isolation_red.md) | `test_pruefstand_isolation` red on main (`SYSTEMD_USER`) | no |
+| [printer_adapter.md](printer_adapter.md) | Printer via pluggable adapters (core as broker): blueprint + IPP adapter not started; printer not on a shared network yet | yes (network, go) |
