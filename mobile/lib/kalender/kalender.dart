@@ -10,6 +10,7 @@
 // [Vorkommen.wartet] („wartet auf Abgleich“).
 
 import '../ablage/ablage.dart';
+import 'colours.dart';
 import 'regel.dart';
 import 'termin_lesen.dart';
 
@@ -53,6 +54,8 @@ class Vorkommen {
     this.wartet = false,
     this.serie = false,
     this.switchedOff = false,
+    this.colour = const ResolvedColour(source: 'layer'),
+    this.groupColourKey,
     DateTime? occurrenceDay,
   }) : occurrenceDay = occurrenceDay ?? tag;
 
@@ -90,6 +93,13 @@ class Vorkommen {
   /// The series day this occurrence belongs to (before a moved occurrence's
   /// new day) — the key for EXDATE / X-ZENTRALE-AUS.
   final DateTime occurrenceDay;
+
+  /// Where this occurrence's colour comes from (colours.dart, same rule as
+  /// core/calendar_colours.py): own style, span, course slot or layer.
+  final ResolvedColour colour;
+
+  /// Group key ("gruppe:uni") — for views that group like the TUI's month.
+  final String? groupColourKey;
 
   /// Beginn als Ortszeit (UTC-Träger); ganztägig = Mitternacht.
   DateTime get beginn {
@@ -132,9 +142,13 @@ class _Eintrag {
 }
 
 class Kalender {
-  Kalender._(this.ebenen, this._eintraege, this._wartend);
+  Kalender._(this.ebenen, this._eintraege, this._wartend, [this.colourTable = const {}]);
 
   final List<Ebene> ebenen;
+
+  /// The synced course colour table (data/calendar_colours.json, written by
+  /// the computers — the phone only reads it).
+  final Map<String, int> colourTable;
   final List<_Eintrag> _eintraege;
   final Set<String> _wartend;
 
@@ -181,7 +195,8 @@ class Kalender {
           titel: titel == null || titel.isEmpty ? null : titel,
           farbe: farbe == null || farbe.isEmpty ? null : farbe));
     }
-    return Kalender._(ebenen, eintraege, wartend);
+    final table = parseTable(await ablage.lesen(tableFile));
+    return Kalender._(ebenen, eintraege, wartend, table);
   }
 
   /// Ablage path of the file holding [uid] (null = unknown).
@@ -308,13 +323,19 @@ class Kalender {
     }
     final ueberNacht = ebene == ebeneRhythmus && zeit != null && ende != null &&
         zeit.length == 5 && ende.length == 5 && ende.compareTo(zeit) < 0;
+    final shownLabel = label ?? (d['label'] as String?) ?? '';
+    final bis = d['bis'] as String?;
+    final span = s.art == 'termin' && bis != null && bis != d['tag'];
+    final colour = ResolvedColour.resolve(
+        s.colour.style, entryKey(shownLabel, s.colour.sourceId), colourTable, span: span);
     return Vorkommen(
-      tag: tag, ebene: ebene, kennung: s.uid, label: label ?? (d['label'] as String?) ?? '',
+      tag: tag, ebene: ebene, kennung: s.uid, label: shownLabel,
       zeit: zeit, ende: ende, ort: ort ?? d['ort'] as String?, versteckt: versteckt,
       deadline: deadline, vorwarnung: d['vorwarnung'] as int?, sollZeit: sollZeit,
       ueberNacht: ueberNacht, motiv: d['motiv'] as String?,
       absageNoetig: d['absage_noetig'] == true, erinnerungen: s.erinnerungen,
       wartet: wartet, serie: serie, switchedOff: switchedOff, occurrenceDay: occurrenceDay,
+      colour: colour, groupColourKey: s.colour.groupKey,
     );
   }
 }

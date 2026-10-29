@@ -1,0 +1,532 @@
+{
+ "format": "zentrale-calendar-palette/1",
+ "comment": "Calendar colours, day and night: the one table of hex values (core/calendar_colours.py). xterm = the TUI's 256-colour indexes [text, fill, on_fill] (tui/ansichten/farben.py KAL); hex = their standard xterm-256 RGB. tests/test_calendar_colours.py keeps both in step; the phone bundles a byte-identical copy (mobile/assets/calendar_palette.json). opacity = how much of a colour stays when an uncommitted entry is drawn see-through (TUI DECKKRAFT: flaeche/schrift/glas).",
+ "themes": {
+  "night": {
+   "background": {
+    "hex": "#000000",
+    "xterm": 16
+   },
+   "opacity": {
+    "fill": 0.15,
+    "text": 0.45,
+    "glass": 0.15
+   },
+   "roles": {
+    "akzent": {
+     "text": "#00ff5f",
+     "fill": "#00ff5f",
+     "on_fill": "#000000",
+     "xterm": [
+      47,
+      47,
+      16
+     ]
+    },
+    "heute": {
+     "text": "#ffff5f",
+     "fill": "#ffff5f",
+     "on_fill": "#000000",
+     "xterm": [
+      227,
+      227,
+      16
+     ]
+    },
+    "t0": {
+     "text": "#00ffff",
+     "fill": "#00ffff",
+     "on_fill": "#000000",
+     "xterm": [
+      51,
+      51,
+      16
+     ]
+    },
+    "t1": {
+     "text": "#ff87ff",
+     "fill": "#ff87ff",
+     "on_fill": "#000000",
+     "xterm": [
+      213,
+      213,
+      16
+     ]
+    },
+    "t2": {
+     "text": "#af87ff",
+     "fill": "#af87ff",
+     "on_fill": "#000000",
+     "xterm": [
+      141,
+      141,
+      16
+     ]
+    },
+    "t3": {
+     "text": "#ffaf5f",
+     "fill": "#ffaf5f",
+     "on_fill": "#000000",
+     "xterm": [
+      215,
+      215,
+      16
+     ]
+    },
+    "t4": {
+     "text": "#87d7ff",
+     "fill": "#87d7ff",
+     "on_fill": "#000000",
+     "xterm": [
+      117,
+      117,
+      16
+     ]
+    },
+    "t5": {
+     "text": "#ff8787",
+     "fill": "#ff8787",
+     "on_fill": "#000000",
+     "xterm": [
+      210,
+      210,
+      16
+     ]
+    },
+    "t6": {
+     "text": "#d7afff",
+     "fill": "#d7afff",
+     "on_fill": "#000000",
+     "xterm": [
+      183,
+      183,
+      16
+     ]
+    },
+    "t7": {
+     "text": "#afffff",
+     "fill": "#afffff",
+     "on_fill": "#000000",
+     "xterm": [
+      159,
+      159,
+      16
+     ]
+    },
+    "t8": {
+     "text": "#ffd787",
+     "fill": "#ffd787",
+     "on_fill": "#000000",
+     "xterm": [
+      222,
+      222,
+      16
+     ]
+    },
+    "t9": {
+     "text": "#d78787",
+     "fill": "#d78787",
+     "on_fill": "#000000",
+     "xterm": [
+      174,
+      174,
+      16
+     ]
+    },
+    "t10": {
+     "text": "#afafff",
+     "fill": "#afafff",
+     "on_fill": "#000000",
+     "xterm": [
+      147,
+      147,
+      16
+     ]
+    },
+    "t11": {
+     "text": "#5fd7af",
+     "fill": "#5fd7af",
+     "on_fill": "#000000",
+     "xterm": [
+      79,
+      79,
+      16
+     ]
+    },
+    "sp1": {
+     "text": "#af87ff",
+     "fill": "#af87ff",
+     "on_fill": "#000000",
+     "xterm": [
+      141,
+      141,
+      16
+     ]
+    },
+    "sp2": {
+     "text": "#ffaf5f",
+     "fill": "#ffaf5f",
+     "on_fill": "#000000",
+     "xterm": [
+      215,
+      215,
+      16
+     ]
+    },
+    "sp3": {
+     "text": "#ff87ff",
+     "fill": "#ff87ff",
+     "on_fill": "#000000",
+     "xterm": [
+      213,
+      213,
+      16
+     ]
+    },
+    "sp4": {
+     "text": "#87d7ff",
+     "fill": "#87d7ff",
+     "on_fill": "#000000",
+     "xterm": [
+      117,
+      117,
+      16
+     ]
+    },
+    "wochenende": {
+     "text": "#87d7ff",
+     "fill": "#87d7ff",
+     "on_fill": "#000000",
+     "xterm": [
+      117,
+      117,
+      16
+     ]
+    },
+    "dl0": {
+     "text": "#af5f5f",
+     "fill": "#af5f5f",
+     "on_fill": "#000000",
+     "xterm": [
+      131,
+      131,
+      16
+     ]
+    },
+    "dl1": {
+     "text": "#d75f5f",
+     "fill": "#d75f5f",
+     "on_fill": "#000000",
+     "xterm": [
+      167,
+      167,
+      16
+     ]
+    },
+    "dl2": {
+     "text": "#d70000",
+     "fill": "#d70000",
+     "on_fill": "#ffffff",
+     "xterm": [
+      160,
+      160,
+      231
+     ]
+    },
+    "dl3": {
+     "text": "#ff0000",
+     "fill": "#ff0000",
+     "on_fill": "#000000",
+     "xterm": [
+      196,
+      196,
+      16
+     ]
+    },
+    "dlx": {
+     "text": "#6c6c6c",
+     "fill": "#6c6c6c",
+     "on_fill": "#000000",
+     "xterm": [
+      242,
+      242,
+      16
+     ]
+    },
+    "jetzt": {
+     "text": "#ffd700",
+     "fill": "#ffd700",
+     "on_fill": "#000000",
+     "xterm": [
+      220,
+      220,
+      16
+     ]
+    }
+   }
+  },
+  "day": {
+   "background": {
+    "hex": "#ffffff",
+    "xterm": 231
+   },
+   "opacity": {
+    "fill": 0.2,
+    "text": 0.5,
+    "glass": 0.2
+   },
+   "roles": {
+    "akzent": {
+     "text": "#00875f",
+     "fill": "#afd7af",
+     "on_fill": "#005f00",
+     "xterm": [
+      29,
+      151,
+      22
+     ]
+    },
+    "heute": {
+     "text": "#af5f00",
+     "fill": "#ffffaf",
+     "on_fill": "#875f00",
+     "xterm": [
+      130,
+      229,
+      94
+     ]
+    },
+    "t0": {
+     "text": "#005f87",
+     "fill": "#afffff",
+     "on_fill": "#005f5f",
+     "xterm": [
+      24,
+      159,
+      23
+     ]
+    },
+    "t1": {
+     "text": "#af005f",
+     "fill": "#ffd7ff",
+     "on_fill": "#87005f",
+     "xterm": [
+      125,
+      225,
+      89
+     ]
+    },
+    "t2": {
+     "text": "#5f0087",
+     "fill": "#d7d7ff",
+     "on_fill": "#5f0087",
+     "xterm": [
+      54,
+      189,
+      54
+     ]
+    },
+    "t3": {
+     "text": "#af5f00",
+     "fill": "#ffd7af",
+     "on_fill": "#875f00",
+     "xterm": [
+      130,
+      223,
+      94
+     ]
+    },
+    "t4": {
+     "text": "#005faf",
+     "fill": "#afd7ff",
+     "on_fill": "#00005f",
+     "xterm": [
+      25,
+      153,
+      17
+     ]
+    },
+    "t5": {
+     "text": "#af0000",
+     "fill": "#ffafaf",
+     "on_fill": "#870000",
+     "xterm": [
+      124,
+      217,
+      88
+     ]
+    },
+    "t6": {
+     "text": "#5f5faf",
+     "fill": "#d7afff",
+     "on_fill": "#5f0087",
+     "xterm": [
+      61,
+      183,
+      54
+     ]
+    },
+    "t7": {
+     "text": "#005f5f",
+     "fill": "#d7ffff",
+     "on_fill": "#005f5f",
+     "xterm": [
+      23,
+      195,
+      23
+     ]
+    },
+    "t8": {
+     "text": "#875f00",
+     "fill": "#ffffd7",
+     "on_fill": "#875f00",
+     "xterm": [
+      94,
+      230,
+      94
+     ]
+    },
+    "t9": {
+     "text": "#af5f5f",
+     "fill": "#ffd7d7",
+     "on_fill": "#870000",
+     "xterm": [
+      131,
+      224,
+      88
+     ]
+    },
+    "t10": {
+     "text": "#000087",
+     "fill": "#afafff",
+     "on_fill": "#000087",
+     "xterm": [
+      18,
+      147,
+      18
+     ]
+    },
+    "t11": {
+     "text": "#005f00",
+     "fill": "#d7ffd7",
+     "on_fill": "#005f00",
+     "xterm": [
+      22,
+      194,
+      22
+     ]
+    },
+    "sp1": {
+     "text": "#5f0087",
+     "fill": "#d7d7ff",
+     "on_fill": "#5f0087",
+     "xterm": [
+      54,
+      189,
+      54
+     ]
+    },
+    "sp2": {
+     "text": "#875f00",
+     "fill": "#ffd7af",
+     "on_fill": "#875f00",
+     "xterm": [
+      94,
+      223,
+      94
+     ]
+    },
+    "sp3": {
+     "text": "#af005f",
+     "fill": "#ffd7ff",
+     "on_fill": "#af005f",
+     "xterm": [
+      125,
+      225,
+      125
+     ]
+    },
+    "sp4": {
+     "text": "#005faf",
+     "fill": "#afd7ff",
+     "on_fill": "#00005f",
+     "xterm": [
+      25,
+      153,
+      17
+     ]
+    },
+    "wochenende": {
+     "text": "#005f87",
+     "fill": "#afd7ff",
+     "on_fill": "#00005f",
+     "xterm": [
+      24,
+      153,
+      17
+     ]
+    },
+    "dl0": {
+     "text": "#875f5f",
+     "fill": "#ffd7d7",
+     "on_fill": "#5f0000",
+     "xterm": [
+      95,
+      224,
+      52
+     ]
+    },
+    "dl1": {
+     "text": "#af0000",
+     "fill": "#ffafaf",
+     "on_fill": "#5f0000",
+     "xterm": [
+      124,
+      217,
+      52
+     ]
+    },
+    "dl2": {
+     "text": "#d70000",
+     "fill": "#ff8787",
+     "on_fill": "#870000",
+     "xterm": [
+      160,
+      210,
+      88
+     ]
+    },
+    "dl3": {
+     "text": "#d70000",
+     "fill": "#d70000",
+     "on_fill": "#ffffff",
+     "xterm": [
+      160,
+      160,
+      231
+     ]
+    },
+    "dlx": {
+     "text": "#6c6c6c",
+     "fill": "#e4e4e4",
+     "on_fill": "#444444",
+     "xterm": [
+      242,
+      254,
+      238
+     ]
+    },
+    "jetzt": {
+     "text": "#af8700",
+     "fill": "#ffffd7",
+     "on_fill": "#875f00",
+     "xterm": [
+      136,
+      230,
+      94
+     ]
+    }
+   }
+  }
+ }
+}

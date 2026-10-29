@@ -102,11 +102,9 @@ Listen-Sidebar heraus).
   `KURZFORMEN` (`exphy`, seit 23.10. `tp`, `ana`). Was in den geladenen Daten
   ≥ 2× vorkommt, bekommt beim ersten Auftauchen fest die nächste freie Farbe
   in `RANGFOLGE` (Cyan, Orange, Pink, Meergrün, Violett …; häufigste zuerst)
-  — garantiert verschieden, gespeichert in
-  `~/.local/state/zentrale/kalender_farben.json` (`ZENTRALE_KALENDER_FARBEN`,
-  in Tests umgelenkt), damit nichts wandert. Einmaliges rechnet sich seine
-  Farbe (crc32) und belegt keinen Platz. Farbe neu würfeln: Eintrag aus der
-  Datei löschen. Selbst wählbare Farbe je Termin wäre iCal `COLOR` (RFC 7986).
+  — garantiert verschieden. **Since 2026-10-29 the rule lives in the core**
+  and the table syncs: [calendar_colours.md](calendar_colours.md) (the TUI
+  only draws the slot the backend sends).
 - **Nie breiter als erlaubt:** alles läuft über eine Leinwand, die am Rand
   abschneidet; Titel enden mit „…".
 - **Glas (Ebene „uncommitted", 10.10.2026):** `Leinwand.glas(y, x, breite,
@@ -508,8 +506,8 @@ soll sich das ganze ganz normal als termin bearbeiten lassen".
   unter dem Titel (Luft zum nächsten Termin bleibt), in C als zweite
   Blockzeile. B zeigt nur den Live-Titel. `leer` → „<Liste> — alles
   erledigt" gedämpft, ohne Namenszeile; `fehlt` → label + „liste fehlt".
-  **Farbe fest nach der Quelle** (`kurs_rolle`, Schlüssel `quelle:<id>` in
-  der FARBTABELLE), sonst wechselte der Block bei jedem Abhaken die Farbe.
+  **Farbe fest nach der Quelle** (key `quelle:<id>`, core/calendar_colours.py,
+  [calendar_colours.md](calendar_colours.md)), sonst wechselte der Block bei jedem Abhaken die Farbe.
 - **C einheitlich** (Sasha: „wieso divergieren manche termine, bei manchen
   steht die uhrzeit davor bei manchen nicht?", `_c_zeilen`): Zeile 1 ist
   immer nur der Titel; ab 2 Zeilen Höhe darunter gedämpft die Zeit

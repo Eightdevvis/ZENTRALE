@@ -104,18 +104,20 @@ def test_c_uncommitted_quellen_termin_ist_glas_mit_allen_zeilen():
     assert any(ka.GLAS in r for tt, r in zeilen[i + 1] if "todo" in tt)
 
 
-def test_farbe_fest_nach_der_quelle_nicht_nach_dem_titel():
-    a = ka.ansicht_c(daten("week"), 140, 40)
+def test_farbe_fest_nach_der_quelle_nicht_nach_dem_titel(tmp_path):
+    import calendar_colours
+    tab = tmp_path / "c.json"
+    a = ka.ansicht_c(calendar_colours.annotate_view(daten("week"), tab), 140, 40)
     anders = dict(QUELL_TERMIN, titel_live="Bad putzen")
-    b = ka.ansicht_c(daten("week", [anders, LEER_TERMIN]), 140, 40)
+    b = ka.ansicht_c(calendar_colours.annotate_view(daten("week", [anders, LEER_TERMIN]), tab), 140, 40)
 
     def rolle(zeilen, wort):
         z = next(z for z in zeilen if wort in text(z))
         return next(r for t, r in z if wort in t)
     assert rolle(a, "Steuern") == rolle(b, "Bad putzen")
-    n = ka.farben_vergeben(daten("week", [QUELL_TERMIN, dict(QUELL_TERMIN, day="2026-10-09")]),
-                           tab := {})
-    assert n and "quelle:l_todo" in tab and "steuern" not in tab
+    d = daten("week", [QUELL_TERMIN, dict(QUELL_TERMIN, day="2026-10-09")])
+    n = calendar_colours.assign(calendar_colours.view_entries(d), slots := {})
+    assert n and "quelle:l_todo" in slots and "steuern" not in slots
 
 
 # ── Kasten „welche Liste?" ─────────────────────────────────────────────

@@ -54,6 +54,9 @@ def pfade(cal_path: Path, ics_dir: Path | None = None) -> dict:
         "json": Path(cal_path),
         "vdir": Path(ics_dir) if ics_dir else basis / "kalender",
         "neben": basis / "kalender_neben.json",
+        # Course colour table of the calendar app (core/calendar_colours.py),
+        # synced like kalender_neben.json (2026-10-29).
+        "colours": basis / "calendar_colours.json",
         "verlauf": basis / "kalender_verlauf",
         "snapshots": basis / "kalender_snapshots",
     }

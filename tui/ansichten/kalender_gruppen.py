@@ -62,14 +62,6 @@ def anzeige(roh) -> str | None:
     return NAMEN.get(k) or k.capitalize()
 
 
-def farb_schluessel(roh) -> str | None:
-    """Schlüssel in der festen Farbtabelle (kalender_ansichten.FARBTABELLE):
-    „gruppe:uni" — so bekommt eine Gruppe ihre Farbe über dieselbe Vergabe
-    wie die Kurse, ohne einem Kurs den Platz wegzunehmen."""
-    k = schluessel(roh)
-    return "gruppe:" + k if k else None
-
-
 def _hm(m) -> str:
     return "%02d:%02d" % (m // 60, m % 60)
 
@@ -112,6 +104,8 @@ def _gruppe(k: str, glieder: list) -> dict:
            "time": _hm(start), "ende": _hm(ende) if ende is not None else None,
            "kategorie": erst["roh"].get("kategorie"),
            "kategorie_name": erst["roh"].get("kategorie_name"),
+           # the group slot the backend sent (core/calendar_colours.py)
+           "colour": erst["roh"].get("colour"),
            "glieder": [t["roh"] for t in glieder]}
     return {**erst, "label": name, "start": start, "ende": ende,
             "routine": False, "aus": False,

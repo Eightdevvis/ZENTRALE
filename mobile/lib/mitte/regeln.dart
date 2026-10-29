@@ -25,9 +25,12 @@ bool _kalenderDatei(String ap) {
 /// Holt das Handy diese Datei (Ablage-Pfad)? Gespräche, Kontextpaket,
 /// Kalender (Termine + Namen/Farben der Ebenen), Zugangsdaten des Adapters
 /// (je Eintrag mit dem Kontoschlüssel verschlüsselt — der Claude-Schlüssel).
+/// Since 2026-10-29 also the calendar's course colour table
+/// (calendar_colours.json, kalender/colours.dart) — read only, never brought.
 bool holen(String ap) =>
     ap.startsWith('gespraeche/') ||
     ap == 'mobil/kontext.json' ||
+    ap == 'calendar_colours.json' ||
     ap == 'adapter/geheim.enc' ||
     _kalenderDatei(ap);
 

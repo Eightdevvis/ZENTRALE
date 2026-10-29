@@ -207,7 +207,8 @@ aber nur in seinen Eingang `knoten/handy/` (Format:
   Herunterziehen (Chat, Kalender), nach einem neuen Termin; nie zwei Läufe
   gleichzeitig (`abgleich_steuerung.dart`). Holt `data/gespraeche/**`,
   `data/mobil/kontext.json`, `data/kalender/**` (.ics, `color`,
-  `displayname`) und `data/adapter/geheim.enc`; was in der Mitte verschwindet,
+  `displayname`), `data/calendar_colours.json` (course colours, read only,
+  since 2026-10-29) und `data/adapter/geheim.enc`; was in der Mitte verschwindet,
   verschwindet hier. Bringt nur Eigenes, den `kopf.json` eines hier begonnenen
   Gesprächs (solange die Mitte keinen hat) und neue Termine als Vorschlag.
   Nach einer Neuinstallation holt es sein Eigenes aus dem Eingang zurück. Ist
@@ -231,8 +232,8 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
 
 - **Ansehen:** heute und die nächsten drei Wochen als Liste (seit 29.10. auch Tag/Woche/Monat, siehe unten). Ebenen =
   Ordner: `termine` (zugesagt) voll, `uncommitted` (Optionen) leiser und
-  kursiv, `rhythmus` (Schlaf, Essen) als eine dezente Zeile je Tag. Farben
-  aus dem vdir (`color`), sonst aus dem Auge. Abgeschaltete und pausierte
+  kursiv, `rhythmus` (Schlaf, Essen) als eine dezente Zeile je Tag. Colours:
+  see "Calendar colours" below (the layer colour is only the fallback). Abgeschaltete und pausierte
   Vorkommen (X-ZENTRALE-AUS/PAUSE, EXDATE, abgesagt) fehlen.
 - **Deadlines:** ⚑ mit Muss-Zeit und Soll-Zeit (`X-ZENTRALE-SOLL`); ist das
   Soll vorbei, das Muss noch nicht → „soll verpasst“ in Warnfarbe (Regel wie
@@ -316,7 +317,7 @@ familiar Google-like structure, ZENTRALE look.
   beneath; `rhythmus` as subtle background bands (crossing midnight: each
   day draws its slice; labels only in the day view). Deadlines: a red line
   with a flag at the must time ("Muss 12:00 · Soll verpasst"), a dashed
-  line at the should time. Colours from vdir `color`, else from the eye.
+  line at the should time. Event colours: "Calendar colours" below.
 - **Palette** (`calendar_palette.dart`): day and night from `AugeFarben`;
   hour lines as thin traces with a solder pad at each column edge, the now
   line ends in a pad. No text below 10 px; every text colour is checked
@@ -336,6 +337,34 @@ familiar Google-like structure, ZENTRALE look.
   tentative, plus the real page from the core vectors) to
   `mobile/build/kalender_vorschau/` (not in the repo), with real Roboto
   loaded from the Flutter SDK so the text is readable.
+
+### Calendar colours (`lib/kalender/colours.dart`, 2026-10-29)
+
+The same colour as the TUI and every computer — full rule and where the
+state lives: [../werkzeuge/calendar_colours.md](../werkzeuge/calendar_colours.md).
+
+- **Port, no assignment:** key (course in the title incl. short forms,
+  `quelle:<id>` from X-ZENTRALE-QUELLE/URL, `gruppe:` from CATEGORIES),
+  slot from the synced table `calendar_colours.json` (fetched by
+  `mitte/regeln.dart`, read in `Kalender.laden` → `colourTable`), unknown key
+  → `crc32 % 12`; precedence X-ZENTRALE-STIL > COLOR > span (`sp1`) > course
+  slot > layer colour. Read per VEVENT into `Stueck.colour`
+  (`EventColourInput`), resolved per occurrence into `Vorkommen.colour`
+  (`ResolvedColour`), carried by `CalendarItem.colour`.
+- **Palette:** `assets/calendar_palette.json`, a byte-identical copy of
+  `core/calendar_palette.json` (bundled, not synced; loaded once in `main()`,
+  `CalendarColourPalette.current`). Not loaded → layer colours only.
+- **Look** (`CalendarPalette.lookOf`, all views — day/week/month, agenda bar,
+  peephole table): committed = palette fill exactly (night softening removed),
+  text the role's `on_fill` if ≥ 4.5:1 else black/white; uncommitted = glass
+  (fill mixed into the background by `opacity.glass`) with frame/stripes and
+  text in the role's text colour; a style's border colour draws a frame.
+- **Tests:** `test/calendar_colours_test.dart` against
+  `test/daten/calendar_colour_vectors.json` (`scripts/calendar_colour_vectors.py`,
+  real core, made-up events), table via the Mitte rules, contrast of every
+  role day/night, previews `build/kalender_vorschau/colours_{week,day,month}_{day,night}.png`.
+- **Changed the palette or the rule?** Run the vector script, `flutter test`,
+  rebuild and publish the app (`memory/betrieb/phone_app_release.md`).
 
 ## Aufbau `mobile/lib/`
 

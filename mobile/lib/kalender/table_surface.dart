@@ -34,6 +34,7 @@ class CalendarTableSurface extends PeepholeSurface {
     required this.calendar,
     required this.today,
     required this.layerColor,
+    this.eventColor,
     required this.strings,
     this.locale = 'de',
   }) : start = _monday(today),
@@ -46,6 +47,9 @@ class CalendarTableSurface extends PeepholeSurface {
 
   /// Colour of a layer (ebene) — from the vdir colour or the eye palette.
   final Color Function(String layer) layerColor;
+
+  /// Colour of one event (course/style colour, colours.dart); null = its layer's.
+  final Color Function(Vorkommen v)? eventColor;
   final AppLocalizations strings;
   final String locale;
 
@@ -177,7 +181,7 @@ class CalendarTableSurface extends PeepholeSurface {
         for (var i = 0; i < events.length && i < fit; i++) {
           final v = events[i];
           final maybe = v.ebene == ebeneVielleicht;
-          final color = layerColor(v.ebene);
+          final color = eventColor?.call(v) ?? layerColor(v.ebene);
           if (text && i == fit - 1 && events.length > fit) {
             _tp(
               strings.calendarTableMore(events.length - i),

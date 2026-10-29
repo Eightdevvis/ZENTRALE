@@ -11,6 +11,8 @@ import '../peephole/peephole_controller.dart';
 import '../peephole/peephole_surface.dart';
 import '../peephole/peephole_view.dart';
 import 'kalender_seite.dart' show ebenenFarbe;
+import 'views/calendar_palette.dart';
+import 'views/calendar_source.dart';
 import 'kalender_steuerung.dart';
 import 'regel.dart';
 import 'table_surface.dart';
@@ -70,6 +72,10 @@ class _CalendarTablePageState extends State<CalendarTablePage> {
             calendar: s.kalender,
             today: tagVon(s.jetzt),
             layerColor: (layer) => ebenenFarbe(context, s.kalender, layer),
+            // the same colour as in every other view (course slot / own style)
+            eventColor: (v) => CalendarPalette.of(context)
+                .lookOf(itemFromOccurrence(v, ebenenFarbe(context, s.kalender, v.ebene)))
+                .accent,
             strings: t,
             locale: locale,
           );

@@ -25,7 +25,8 @@ EINGEBAUT = {
                  # sie sonst heraus): Quelle der Kalender-App zencloud
                  # (core/kalender_einstellung.py), ohne Einstellung der alte Weg
                  # mit Google-Anschluss und EINER Brücke.
-                 "daten": {"muster": ["data/kalender_neben.json", "data/kalender/**"],
+                 "daten": {"muster": ["data/kalender_neben.json", "data/calendar_colours.json",
+                                      "data/kalender/**"],
                            "abgleichen": True}},
     "graph": {"titel": "Graphen",
               "daten": {"muster": ["data/graphs.json", "data/g_*.json", "data/sleep_quality.json"],

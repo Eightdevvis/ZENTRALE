@@ -376,38 +376,26 @@ def test_c_nachttermin_zieht_die_achse_nicht_auf_sondern_zeigt_pfeil():
     assert any("Nachts" in z for z in zeilen), "gewählt: Fenster rollt hin"
 
 
-# ── Farbe je Kurs (10.10.2026) ─────────────────────────────────────────
-def test_kurs_schluessel_fasst_varianten_zusammen():
-    s = ka.titel_schluessel
-    assert s("Exphy Mathe") == s("ExPhy Tutorium") == s("Experimentalphysik mathe") \
-        == s("Experimentalphysik")
-    assert s("Analysis Saalübung") == s("Analysis I")
-    assert s("TP Sprechstunde Jonas Schömer (Mi)") == "theoretische" == s("Theoretische Physik Ia")
-    assert s("Ana Tutorium Jäger") == s("Ana Sprechstunde Brenner") == "analysis" == s("Analysis I")
-    assert s("Theoretische Physik Ia Tutorium") == s("Theoretische Physik Ia")
-    assert s("Allgemeine Chemie für Nebenfächler (Mo)") == s("Allgemeine Chemie (Do)")
-    assert s("Geigenstunde @ Geigenschule") == s("Geigenstunde")
-    assert s("") == ""
-
-
-def test_kurse_bekommen_feste_verschiedene_farben():
+# ── Farbe je Kurs (10.10.2026; rule in core/calendar_colours.py since 2026-10-29,
+#    its own tests in tests/test_calendar_colours.py) ──────────────────
+def test_kurse_bekommen_feste_verschiedene_farben(tmp_path):
+    """The TUI draws the slot the backend sends: same course = same role,
+    different courses = different roles."""
+    import calendar_colours
     titel = ["Allgemeine Chemie für Nebenfächler (Mi)", "Analysis I",
              "Experimentalphysik", "Theoretische Physik Ia", "Parkour"]
     daten = {"days": {"2026-10-%02d" % t: [{"label": l} for l in titel] for t in (5, 6)}}
-    daten["days"]["2026-10-07"] = [{"label": "Lea"}]          # einmalig: kein Platz
-    tab = {}
-    assert ka.farben_vergeben(daten, tab)
-    assert set(tab) == {ka.titel_schluessel(l) for l in titel}
-    assert len(set(tab.values())) == len(titel), "jeder Kurs eine eigene Farbe"
-    vorher = dict(tab)
-    assert not ka.farben_vergeben(daten, tab) and tab == vorher   # nichts wandert
-    alt = dict(ka.FARBTABELLE)
-    try:
-        ka.FARBTABELLE.clear(); ka.FARBTABELLE.update(tab)
-        assert ka.titel_rolle("ExPhy Tutorium") == ka.titel_rolle("Experimentalphysik")
-        assert ka.titel_rolle("Experimentalphysik") != ka.titel_rolle("Allgemeine Chemie (Mo)")
-    finally:
-        ka.FARBTABELLE.clear(); ka.FARBTABELLE.update(alt)
+    daten["days"]["2026-10-07"] = [{"label": "ExPhy Tutorium"}, {"label": "Allgemeine Chemie (Mo)"}]
+    calendar_colours.annotate_view(daten, tmp_path / "c.json")
+
+    def rolle(label):
+        e = next(e for l in daten["days"].values() for e in l if e["label"] == label)
+        return ka.kurs_rolle({"quelle": None, "farbe": e["colour"]})
+    rollen = {rolle(l) for l in titel}
+    assert len(rollen) == len(titel), "jeder Kurs eine eigene Farbe"
+    assert rolle("ExPhy Tutorium") == rolle("Experimentalphysik")
+    assert rolle("Allgemeine Chemie (Mo)") == rolle(titel[0])
+    assert ka.kurs_rolle({"quelle": None, "farbe": None}) == ka.ROLLE["termin"]   # old backend
 
 
 # ── Ebene „uncommitted" als Glas (10.10.2026) ──────────────────────────

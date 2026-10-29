@@ -1,0 +1,1231 @@
+{
+ "description": "Calendar colours, written by scripts/calendar_colour_vectors.py with core/calendar_colours.py and core/kalender_ics_abbildung.py. All events are made up.",
+ "format": "zentrale-calendar-colours/1",
+ "slot_count": 12,
+ "short_forms": {
+  "exphy": "experimentalphysik",
+  "tp": "theoretische",
+  "ana": "analysis"
+ },
+ "group_catalog": {
+  "uni": "Uni",
+  "arbeit": "Arbeit"
+ },
+ "layer_default": "#ff5500",
+ "table": {
+  "analysis": 0,
+  "experimentalphysik": 3,
+  "theoretische": 1,
+  "quelle:l_todo": 11,
+  "gruppe:uni": 2,
+  "gruppe:custom:musik": 8
+ },
+ "table_file": "{\n \"format\": \"zentrale-calendar-colours/1\",\n \"slots\": {\n  \"analysis\": 0,\n  \"experimentalphysik\": 3,\n  \"gruppe:custom:musik\": 8,\n  \"gruppe:uni\": 2,\n  \"quelle:l_todo\": 11,\n  \"theoretische\": 1\n }\n}\n",
+ "old_flat_table_file": "{\"analysis\": 3, \"x\": 12, \"y\": true}",
+ "parsed_old_flat_table": {
+  "analysis": 3
+ },
+ "fallback_slots": {
+  "analysis": 4,
+  "experimentalphysik": 10,
+  "quelle:l_todo": 11,
+  "quelle:l_haus/7": 1,
+  "gruppe:uni": 0,
+  "gruppe:custom:musik": 7,
+  "äquivalenz": 8,
+  "geigenstunde": 6,
+  "x": 3,
+  "parkour": 9,
+  "zz": 9,
+  "12": 9
+ },
+ "course_keys": {
+  "Analysis I @ HS 1": "analysis",
+  "ExPhy-Übung": "experimentalphysik",
+  "exphy": "experimentalphysik",
+  "Theoretische Physik Ia": "theoretische",
+  "Allgemeine Chemie für Nebenfächler (Mo)": "allgemeine",
+  "": "",
+  "  Chor  ": "chor",
+  "A/B": "a",
+  "TP Sprechstunde X": "theoretische",
+  "Ana Tutorium Y": "analysis",
+  "Ölkunde: Basics": "ölkunde",
+  "Kurs.2 (neu)": "kurs",
+  "–Gedankenstrich": "",
+  "Ein Wort": "ein"
+ },
+ "css3_colours": {
+  "aliceblue": "#f0f8ff",
+  "antiquewhite": "#faebd7",
+  "aqua": "#00ffff",
+  "aquamarine": "#7fffd4",
+  "azure": "#f0ffff",
+  "beige": "#f5f5dc",
+  "bisque": "#ffe4c4",
+  "black": "#000000",
+  "blanchedalmond": "#ffebcd",
+  "blue": "#0000ff",
+  "blueviolet": "#8a2be2",
+  "brown": "#a52a2a",
+  "burlywood": "#deb887",
+  "cadetblue": "#5f9ea0",
+  "chartreuse": "#7fff00",
+  "chocolate": "#d2691e",
+  "coral": "#ff7f50",
+  "cornflowerblue": "#6495ed",
+  "cornsilk": "#fff8dc",
+  "crimson": "#dc143c",
+  "cyan": "#00ffff",
+  "darkblue": "#00008b",
+  "darkcyan": "#008b8b",
+  "darkgoldenrod": "#b8860b",
+  "darkgray": "#a9a9a9",
+  "darkgreen": "#006400",
+  "darkgrey": "#a9a9a9",
+  "darkkhaki": "#bdb76b",
+  "darkmagenta": "#8b008b",
+  "darkolivegreen": "#556b2f",
+  "darkorange": "#ff8c00",
+  "darkorchid": "#9932cc",
+  "darkred": "#8b0000",
+  "darksalmon": "#e9967a",
+  "darkseagreen": "#8fbc8f",
+  "darkslateblue": "#483d8b",
+  "darkslategray": "#2f4f4f",
+  "darkslategrey": "#2f4f4f",
+  "darkturquoise": "#00ced1",
+  "darkviolet": "#9400d3",
+  "deeppink": "#ff1493",
+  "deepskyblue": "#00bfff",
+  "dimgray": "#696969",
+  "dimgrey": "#696969",
+  "dodgerblue": "#1e90ff",
+  "firebrick": "#b22222",
+  "floralwhite": "#fffaf0",
+  "forestgreen": "#228b22",
+  "fuchsia": "#ff00ff",
+  "gainsboro": "#dcdcdc",
+  "ghostwhite": "#f8f8ff",
+  "gold": "#ffd700",
+  "goldenrod": "#daa520",
+  "gray": "#808080",
+  "green": "#008000",
+  "greenyellow": "#adff2f",
+  "grey": "#808080",
+  "honeydew": "#f0fff0",
+  "hotpink": "#ff69b4",
+  "indianred": "#cd5c5c",
+  "indigo": "#4b0082",
+  "ivory": "#fffff0",
+  "khaki": "#f0e68c",
+  "lavender": "#e6e6fa",
+  "lavenderblush": "#fff0f5",
+  "lawngreen": "#7cfc00",
+  "lemonchiffon": "#fffacd",
+  "lightblue": "#add8e6",
+  "lightcoral": "#f08080",
+  "lightcyan": "#e0ffff",
+  "lightgoldenrodyellow": "#fafad2",
+  "lightgray": "#d3d3d3",
+  "lightgreen": "#90ee90",
+  "lightgrey": "#d3d3d3",
+  "lightpink": "#ffb6c1",
+  "lightsalmon": "#ffa07a",
+  "lightseagreen": "#20b2aa",
+  "lightskyblue": "#87cefa",
+  "lightslategray": "#778899",
+  "lightslategrey": "#778899",
+  "lightsteelblue": "#b0c4de",
+  "lightyellow": "#ffffe0",
+  "lime": "#00ff00",
+  "limegreen": "#32cd32",
+  "linen": "#faf0e6",
+  "magenta": "#ff00ff",
+  "maroon": "#800000",
+  "mediumaquamarine": "#66cdaa",
+  "mediumblue": "#0000cd",
+  "mediumorchid": "#ba55d3",
+  "mediumpurple": "#9370db",
+  "mediumseagreen": "#3cb371",
+  "mediumslateblue": "#7b68ee",
+  "mediumspringgreen": "#00fa9a",
+  "mediumturquoise": "#48d1cc",
+  "mediumvioletred": "#c71585",
+  "midnightblue": "#191970",
+  "mintcream": "#f5fffa",
+  "mistyrose": "#ffe4e1",
+  "moccasin": "#ffe4b5",
+  "navajowhite": "#ffdead",
+  "navy": "#000080",
+  "oldlace": "#fdf5e6",
+  "olive": "#808000",
+  "olivedrab": "#6b8e23",
+  "orange": "#ffa500",
+  "orangered": "#ff4500",
+  "orchid": "#da70d6",
+  "palegoldenrod": "#eee8aa",
+  "palegreen": "#98fb98",
+  "paleturquoise": "#afeeee",
+  "palevioletred": "#db7093",
+  "papayawhip": "#ffefd5",
+  "peachpuff": "#ffdab9",
+  "peru": "#cd853f",
+  "pink": "#ffc0cb",
+  "plum": "#dda0dd",
+  "powderblue": "#b0e0e6",
+  "purple": "#800080",
+  "red": "#ff0000",
+  "rosybrown": "#bc8f8f",
+  "royalblue": "#4169e1",
+  "saddlebrown": "#8b4513",
+  "salmon": "#fa8072",
+  "sandybrown": "#f4a460",
+  "seagreen": "#2e8b57",
+  "seashell": "#fff5ee",
+  "sienna": "#a0522d",
+  "silver": "#c0c0c0",
+  "skyblue": "#87ceeb",
+  "slateblue": "#6a5acd",
+  "slategray": "#708090",
+  "slategrey": "#708090",
+  "snow": "#fffafa",
+  "springgreen": "#00ff7f",
+  "steelblue": "#4682b4",
+  "tan": "#d2b48c",
+  "teal": "#008080",
+  "thistle": "#d8bfd8",
+  "tomato": "#ff6347",
+  "turquoise": "#40e0d0",
+  "violet": "#ee82ee",
+  "wheat": "#f5deb3",
+  "white": "#ffffff",
+  "whitesmoke": "#f5f5f5",
+  "yellow": "#ffff00",
+  "yellowgreen": "#9acd32"
+ },
+ "cases": [
+  {
+   "name": "written_analysis_0",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Analysis I @ HS 1\r\nDTSTART;TZID=Europe/Berlin:20261102T100000\r\nDTEND;TZID=Europe/Berlin:20261102T120000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000001@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I @ HS 1",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_analysis_1",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Ana Tutorium Jäger\r\nDTSTART;TZID=Europe/Berlin:20261102T140000\r\nDTEND;TZID=Europe/Berlin:20261102T150000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000002@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Ana Tutorium Jäger",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_experimentalphysik_2",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:ExPhy Übung\r\nDTSTART;TZID=Europe/Berlin:20261103T080000\r\nDTEND;TZID=Europe/Berlin:20261103T100000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000003@zentrale\r\nCATEGORIES:Uni\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "ExPhy Übung",
+    "quelle": null,
+    "kategorie": "uni",
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "experimentalphysik",
+    "slot": 3,
+    "group_key": "gruppe:uni",
+    "group_slot": 2,
+    "source": "course",
+    "role": "t3",
+    "day": {
+     "fill": "#ffd7af",
+     "text": "#875f00",
+     "border": "#875f00"
+    },
+    "night": {
+     "fill": "#ffaf5f",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_theoretische_3",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:TP Sprechstunde (Mi)\r\nDTSTART;TZID=Europe/Berlin:20261103T120000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000004@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "TP Sprechstunde (Mi)",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "theoretische",
+    "slot": 1,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t1",
+    "day": {
+     "fill": "#ffd7ff",
+     "text": "#87005f",
+     "border": "#87005f"
+    },
+    "night": {
+     "fill": "#ff87ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_parkour_4",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Parkour\r\nDTSTART;TZID=Europe/Berlin:20261104T180000\r\nDTEND;TZID=Europe/Berlin:20261104T193000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000005@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Parkour",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "parkour",
+    "slot": 9,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t9",
+    "day": {
+     "fill": "#ffd7d7",
+     "text": "#870000",
+     "border": "#870000"
+    },
+    "night": {
+     "fill": "#d78787",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_chor_5",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Chor\r\nDTSTART;TZID=Europe/Berlin:20261104T193000\r\nDTEND;TZID=Europe/Berlin:20261104T210000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000006@zentrale\r\nCATEGORIES:Musik\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Chor",
+    "quelle": null,
+    "kategorie": "custom",
+    "kategorie_name": "Musik",
+    "style": null,
+    "span": false,
+    "key": "chor",
+    "slot": 9,
+    "group_key": "gruppe:custom:musik",
+    "group_slot": 8,
+    "source": "course",
+    "role": "t9",
+    "day": {
+     "fill": "#ffd7d7",
+     "text": "#870000",
+     "border": "#870000"
+    },
+    "night": {
+     "fill": "#d78787",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_todo_6",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:todo\r\nDTSTART;TZID=Europe/Berlin:20261105T100000\r\nDTEND;TZID=Europe/Berlin:20261105T120000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000007@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nURL:zentrale://fokus/l_todo\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-QUELLE:liste:l_todo\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "todo",
+    "quelle": {
+     "art": "liste",
+     "id": "l_todo"
+    },
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "quelle:l_todo",
+    "slot": 11,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t11",
+    "day": {
+     "fill": "#d7ffd7",
+     "text": "#005f00",
+     "border": "#005f00"
+    },
+    "night": {
+     "fill": "#5fd7af",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_haus_7",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:haus\r\nDTSTART;TZID=Europe/Berlin:20261105T160000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000008@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nURL:zentrale://fokus/l_haus/7\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-QUELLE:projekt:l_haus/7\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "haus",
+    "quelle": {
+     "art": "projekt",
+     "id": "l_haus/7"
+    },
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "quelle:l_haus/7",
+    "slot": 1,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t1",
+    "day": {
+     "fill": "#ffd7ff",
+     "text": "#87005f",
+     "border": "#87005f"
+    },
+    "night": {
+     "fill": "#ff87ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_zahnarzt_8",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Zahnarzt\r\nDTSTART;TZID=Europe/Berlin:20261106T090000\r\nDTEND;TZID=Europe/Berlin:20261106T100000\r\nDTSTAMP:20261001T080000Z\r\nUID:00000000000000000000000000000009@zentrale\r\nCOLOR:gold\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-STIL:border-style: double\\; background-color: #ffd700\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Zahnarzt",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "border-style": "double",
+     "background-color": "#ffd700"
+    },
+    "span": false,
+    "key": "zahnarzt",
+    "slot": 10,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t10",
+    "day": {
+     "fill": "#ffd700",
+     "text": "#000000",
+     "border": "#000000"
+    },
+    "night": {
+     "fill": "#ffd700",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_analysis_9",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Analysis Klausur\r\nDTSTART;TZID=Europe/Berlin:20261106T130000\r\nDTEND;TZID=Europe/Berlin:20261106T150000\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000a@zentrale\r\nCOLOR:red\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-STIL:border-style: dashed\\; border-color: #ff0000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis Klausur",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "border-style": "dashed",
+     "border-color": "#ff0000"
+    },
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#ff0000"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#ff0000"
+    }
+   }
+  },
+  {
+   "name": "written_kino_10",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Kino\r\nDTSTART;TZID=Europe/Berlin:20261107T200000\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000b@zentrale\r\nCOLOR:black\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-STIL:background-color: #102030\\; color: #ffeedd\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Kino",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "background-color": "#102030",
+     "color": "#ffeedd"
+    },
+    "span": false,
+    "key": "kino",
+    "slot": 1,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t1",
+    "day": {
+     "fill": "#102030",
+     "text": "#ffeedd",
+     "border": "#ffeedd"
+    },
+    "night": {
+     "fill": "#102030",
+     "text": "#ffeedd",
+     "border": "#ffeedd"
+    }
+   }
+  },
+  {
+   "name": "written_lesen_11",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Lesen\r\nDTSTART;TZID=Europe/Berlin:20261107T210000\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000c@zentrale\r\nCOLOR:darkorange\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nX-ZENTRALE-STIL:color: #ff8800\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Lesen",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "color": "#ff8800"
+    },
+    "span": false,
+    "key": "lesen",
+    "slot": 4,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t4",
+    "day": {
+     "fill": "#afd7ff",
+     "text": "#ff8800",
+     "border": "#ff8800"
+    },
+    "night": {
+     "fill": "#87d7ff",
+     "text": "#ff8800",
+     "border": "#ff8800"
+    }
+   }
+  },
+  {
+   "name": "written_messe_12",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VEVENT\r\nSUMMARY:Messe\r\nDTSTART;VALUE=DATE:20261109\r\nDTEND;VALUE=DATE:20261112\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000d@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:SPANNE\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Messe",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": true,
+    "key": "messe",
+    "slot": null,
+    "group_key": null,
+    "group_slot": null,
+    "source": "span",
+    "role": "sp1",
+    "day": {
+     "fill": "#d7d7ff",
+     "text": "#5f0087",
+     "border": "#5f0087"
+    },
+    "night": {
+     "fill": "#af87ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "written_omas_13",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VEVENT\r\nSUMMARY:Omas Geburtstag\r\nDTSTART;VALUE=DATE:20261112\r\nDTEND;VALUE=DATE:20261113\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000e@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Omas Geburtstag",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "omas",
+    "slot": 2,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t2",
+    "day": {
+     "fill": "#d7d7ff",
+     "text": "#5f0087",
+     "border": "#5f0087"
+    },
+    "night": {
+     "fill": "#af87ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "tentative_layer",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ZENTRALE//Kalender//DE\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:DAYLIGHT\r\nDTSTART:19700329T020000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\nTZNAME:CEST\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nRRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\nTZNAME:CET\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nSUMMARY:Analysis Nachhilfe?\r\nDTSTART;TZID=Europe/Berlin:20261113T100000\r\nDTSTAMP:20261001T080000Z\r\nUID:0000000000000000000000000000000f@zentrale\r\nLAST-MODIFIED:20261001T080000Z\r\nX-ZENTRALE-ART:TERMIN\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "uncommitted",
+   "expect": {
+    "label": "Analysis Nachhilfe?",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "google_color_only",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:google_color_only@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Teammeeting\r\nCOLOR:tomato\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Teammeeting",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "background-color": "#ff6347"
+    },
+    "span": false,
+    "key": "teammeeting",
+    "slot": 11,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t11",
+    "day": {
+     "fill": "#ff6347",
+     "text": "#000000",
+     "border": "#000000"
+    },
+    "night": {
+     "fill": "#ff6347",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "thunderbird_hex_color",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:thunderbird_hex_color@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Yoga\r\nCOLOR:#00AA88\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Yoga",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "background-color": "#00aa88"
+    },
+    "span": false,
+    "key": "yoga",
+    "slot": 5,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t5",
+    "day": {
+     "fill": "#00aa88",
+     "text": "#000000",
+     "border": "#000000"
+    },
+    "night": {
+     "fill": "#00aa88",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "unknown_color_name",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:unknown_color_name@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Yoga\r\nCOLOR:nocolour\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Yoga",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "yoga",
+    "slot": 5,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t5",
+    "day": {
+     "fill": "#ffafaf",
+     "text": "#870000",
+     "border": "#870000"
+    },
+    "night": {
+     "fill": "#ff8787",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "style_beats_color",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:style_beats_color@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Analysis I\r\nCOLOR:red\r\nX-ZENTRALE-STIL:background-color: #112233\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "background-color": "#112233"
+    },
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t0",
+    "day": {
+     "fill": "#112233",
+     "text": "#ffffff",
+     "border": "#ffffff"
+    },
+    "night": {
+     "fill": "#112233",
+     "text": "#ffffff",
+     "border": "#ffffff"
+    }
+   }
+  },
+  {
+   "name": "broken_style_ignores_color",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:broken_style_ignores_color@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Analysis I\r\nCOLOR:red\r\nX-ZENTRALE-STIL:kaputt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "style_not_offered",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:style_not_offered@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Analysis I\r\nX-ZENTRALE-STIL:width: 3px\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "style_escaped",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:style_escaped@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Analysis I\r\nX-ZENTRALE-STIL:border-style: none\\; border-color: #ABC\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "border-color": "#aabbcc"
+    },
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#aabbcc"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#aabbcc"
+    }
+   }
+  },
+  {
+   "name": "short_hex_and_old_none",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:short_hex_and_old_none@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Analysis I\r\nX-ZENTRALE-STIL:--zentrale-muster: none; color: #FA0\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Analysis I",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": {
+     "color": "#ffaa00"
+    },
+    "span": false,
+    "key": "analysis",
+    "slot": 0,
+    "group_key": null,
+    "group_slot": null,
+    "source": "style",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#ffaa00",
+     "border": "#ffaa00"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#ffaa00",
+     "border": "#ffaa00"
+    }
+   }
+  },
+  {
+   "name": "categories_several",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:categories_several@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Seminar\r\nCATEGORIES:arbeit,Outlook-Tag\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Seminar",
+    "quelle": null,
+    "kategorie": "arbeit",
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "seminar",
+    "slot": 0,
+    "group_key": "gruppe:arbeit",
+    "group_slot": 4,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "categories_custom_case",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:categories_custom_case@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Chorprobe\r\nCATEGORIES:  MUSIK \r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Chorprobe",
+    "quelle": null,
+    "kategorie": "custom",
+    "kategorie_name": "  MUSIK ",
+    "style": null,
+    "span": false,
+    "key": "chorprobe",
+    "slot": 4,
+    "group_key": "gruppe:custom:musik",
+    "group_slot": 8,
+    "source": "course",
+    "role": "t4",
+    "day": {
+     "fill": "#afd7ff",
+     "text": "#00005f",
+     "border": "#00005f"
+    },
+    "night": {
+     "fill": "#87d7ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "categories_keine",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:categories_keine@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Seminar\r\nCATEGORIES:keine\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Seminar",
+    "quelle": null,
+    "kategorie": "custom",
+    "kategorie_name": "keine",
+    "style": null,
+    "span": false,
+    "key": "seminar",
+    "slot": 0,
+    "group_key": "gruppe:custom:keine",
+    "group_slot": 2,
+    "source": "course",
+    "role": "t0",
+    "day": {
+     "fill": "#afffff",
+     "text": "#005f5f",
+     "border": "#005f5f"
+    },
+    "night": {
+     "fill": "#00ffff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "source_url_only",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:source_url_only@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:x\r\nURL:zentrale://fokus/l_todo\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "x",
+    "quelle": {
+     "art": "liste",
+     "id": "l_todo"
+    },
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "quelle:l_todo",
+    "slot": 11,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t11",
+    "day": {
+     "fill": "#d7ffd7",
+     "text": "#005f00",
+     "border": "#005f00"
+    },
+    "night": {
+     "fill": "#5fd7af",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "source_url_project",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:source_url_project@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:x\r\nURL:zentrale://fokus/l_haus/7\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "x",
+    "quelle": {
+     "art": "projekt",
+     "id": "l_haus/7"
+    },
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "quelle:l_haus/7",
+    "slot": 1,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t1",
+    "day": {
+     "fill": "#ffd7ff",
+     "text": "#87005f",
+     "border": "#87005f"
+    },
+    "night": {
+     "fill": "#ff87ff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "source_bad_art",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:source_bad_art@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:x\r\nX-ZENTRALE-QUELLE:zettel:l_todo\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "x",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "x",
+    "slot": 3,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t3",
+    "day": {
+     "fill": "#ffd7af",
+     "text": "#875f00",
+     "border": "#875f00"
+    },
+    "night": {
+     "fill": "#ffaf5f",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "source_beats_url",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:source_beats_url@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:x\r\nX-ZENTRALE-QUELLE:liste:l_a\r\nURL:zentrale://fokus/l_b\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "x",
+    "quelle": {
+     "art": "liste",
+     "id": "l_a"
+    },
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "quelle:l_a",
+    "slot": 8,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t8",
+    "day": {
+     "fill": "#ffffd7",
+     "text": "#875f00",
+     "border": "#875f00"
+    },
+    "night": {
+     "fill": "#ffd787",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "empty_title",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:empty_title@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": null,
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": null,
+    "slot": null,
+    "group_key": null,
+    "group_slot": null,
+    "source": "layer",
+    "role": null,
+    "day": {
+     "fill": "#ff5500",
+     "text": "#000000",
+     "border": "#000000"
+    },
+    "night": {
+     "fill": "#ff5500",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "no_title",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:no_title@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": null,
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": null,
+    "slot": null,
+    "group_key": null,
+    "group_slot": null,
+    "source": "layer",
+    "role": null,
+    "day": {
+     "fill": "#ff5500",
+     "text": "#000000",
+     "border": "#000000"
+    },
+    "night": {
+     "fill": "#ff5500",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "unicode_course",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:unicode_course@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Äquivalenz-Seminar\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Äquivalenz-Seminar",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "äquivalenz",
+    "slot": 8,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t8",
+    "day": {
+     "fill": "#ffffd7",
+     "text": "#875f00",
+     "border": "#875f00"
+    },
+    "night": {
+     "fill": "#ffd787",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  },
+  {
+   "name": "place_in_title",
+   "ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:place_in_title@test\r\nDTSTAMP:20261001T080000Z\r\nDTSTART;VALUE=DATE:20261110\r\nSUMMARY:Geigenstunde @ Geigenschule\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+   "layer": "termine",
+   "expect": {
+    "label": "Geigenstunde @ Geigenschule",
+    "quelle": null,
+    "kategorie": null,
+    "kategorie_name": null,
+    "style": null,
+    "span": false,
+    "key": "geigenstunde",
+    "slot": 6,
+    "group_key": null,
+    "group_slot": null,
+    "source": "course",
+    "role": "t6",
+    "day": {
+     "fill": "#d7afff",
+     "text": "#5f0087",
+     "border": "#5f0087"
+    },
+    "night": {
+     "fill": "#d7afff",
+     "text": "#000000",
+     "border": "#000000"
+    }
+   }
+  }
+ ]
+}

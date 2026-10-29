@@ -29,3 +29,7 @@ dev_dependencies:
 flutter:
   generate: true
   uses-material-design: true
+  assets:
+    # Calendar palette, byte-identical copy of core/calendar_palette.json
+    # (tests/test_calendar_colours.py checks it).
+    - assets/calendar_palette.json

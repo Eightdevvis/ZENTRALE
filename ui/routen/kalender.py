@@ -9,6 +9,7 @@
 from datetime import date, datetime
 from flask import Blueprint, jsonify, request
 
+import calendar_colours  # type: ignore  – colour key/slot per entry (one rule for all fronts)
 import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import kalender_kennung  # type: ignore  – Fehler-Codes (KalenderAbgelehnt)
@@ -17,6 +18,7 @@ import kalender_kategorie  # type: ignore  – Gruppen-Katalog (CATEGORIES)
 import kalender_quelle  # type: ignore  – Titel live aus Liste/Projekt
 import kalender_rhythmus  # type: ignore  – Motive der Phasen (Tagesrhythmus)
 import kalender_sicherung  # type: ignore  – Schutzsperren (Massenlöschung, Rückfall)
+import kalender_speicher  # type: ignore  – calendar paths (colour table)
 import kalender_sync_zustand  # type: ignore  – Stand des Google-Syncs
 import lists        # type: ignore  – dynamische Listen-Registry (Todo/Sammel-Listen)
 import state         # type: ignore  – in core/, aber durch sys.path.insert auffindbar
@@ -114,6 +116,13 @@ def api_calendar():
     for liste in (out.get('days') or {}).values():
         for e in liste:
             e.setdefault('kategorie', 'keine')
+    # Colour of every entry (core/calendar_colours.py): `colour` = {key, slot,
+    # group_key, group_slot}; new recurring courses get their fixed slot in
+    # the synced table here. The fronts only draw t<slot>. Never crash the view.
+    try:
+        calendar_colours.annotate_view(out, kalender_speicher.pfade(kalender.CAL_PATH)["colours"])
+    except Exception as e:
+        state.push_log(f"KALENDER ✗  colours: {type(e).__name__}: {e}")
     return jsonify(out)
 
 
@@ -662,7 +671,7 @@ def api_calendar_kategorie():
 
 @bp.route('/api/calendar/kategorie/kurs', methods=['POST'])
 def api_calendar_kategorie_kurs():
-    """Gruppe für alle Einträge eines Kurses (titel_schluessel). Body:
+    """Gruppe für alle Einträge eines Kurses (calendar_colours.course_key). Body:
     {schluessel, kategorie, kategorie_name?, probe?} — probe: nur zeigen."""
     b = request.get_json(silent=True) or {}
     return jsonify(kalender_kennung.kategorie_fuer_kurs(

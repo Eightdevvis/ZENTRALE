@@ -13,6 +13,8 @@
 
 import 'dart:ui' show Color;
 
+import '../colours.dart' show ResolvedColour;
+
 /// What kind of entry this is — decides weight and drawing order.
 enum ItemKind {
   /// Committed appointment: full colour.
@@ -37,6 +39,7 @@ class CalendarItem {
     this.end,
     this.allDay = false,
     this.color,
+    this.colour,
     this.place,
     this.softDeadline,
     this.waiting = false,
@@ -56,8 +59,13 @@ class CalendarItem {
   final DateTime? end;
   final bool allDay;
 
-  /// Calendar colour (vdir `color`), null = the view picks one by [kind].
+  /// Layer colour (vdir `color`) — only the fallback since 2026-10-29;
+  /// null = the view picks one by [kind].
   final Color? color;
+
+  /// The event's own colour (colours.dart: style > span > course slot >
+  /// layer). null = layer colour only.
+  final ResolvedColour? colour;
   final String? place;
 
   /// Deadlines: the "should" time (before the "must" time = [start]).

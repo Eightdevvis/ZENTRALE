@@ -5,7 +5,7 @@ Sasha, 10.10.2026: „in der monatsansicht seh ich einfach lieber uni uni uni
 statt jeden tag welche fächer genau, dafür ist die wochenansicht" — gewählt:
 „Uni 08:30–16:00". Geprüft: B fasst je Tag zusammen, A/C nicht; Tab wählt die
 Gruppe, Enter zeigt ihre Glieder; das Formular schickt die Gruppe mit. Dazu:
-die TUI-Kopie von titel_schluessel rechnet wie der Kern (core/kalender_kategorie.py).
+the group colour is the group slot the backend sends (core/calendar_colours.py).
 """
 import curses
 import os
@@ -19,7 +19,7 @@ from tui.ansichten import kalender_gruppen as kg
 from tui.ansichten import kalender_werkzeuge as kw
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "core"))
-import kalender_kategorie  # noqa: E402
+import calendar_colours  # noqa: E402
 
 TAG = date(2026, 10, 7)
 HEUTE = date(2026, 10, 7)
@@ -63,10 +63,9 @@ def test_b_zeigt_uni_von_bis():
     assert "Parkour" in txt
 
 
-def test_gruppe_hat_eigene_feste_farbe():
-    tab = {}
-    d = _daten()
-    ka.farben_vergeben(d, tab)
+def test_gruppe_hat_eigene_feste_farbe(tmp_path):
+    d = calendar_colours.annotate_view(_daten(), tmp_path / "calendar_colours.json")
+    tab = calendar_colours.read_table(tmp_path / "calendar_colours.json")
     assert "gruppe:uni" in tab
     ts = kw.eintraege(d, TAG, False, monat=True)
     assert ka._rolle(ts[0]) == ka.TITEL_FARBEN[tab["gruppe:uni"]]
@@ -94,14 +93,6 @@ def test_text_wird_eng_kuerzer():
     assert kg.text(t, 12) == "08:30–16 Uni"
     assert kg.text(t, 9) == "08:30 Uni"
     assert kg.text(t, 4) == "Uni"
-
-
-def test_titel_schluessel_kopie_rechnet_wie_der_kern():
-    assert ka.KURZFORMEN == kalender_kategorie.KURZFORMEN
-    for t in ("Analysis I @ HS 1", "ExPhy-Übung", "exphy", "Theoretische Physik Ia",
-              "Allgemeine Chemie für Nebenfächler (Mo)", "", None, "  Chor  ", "A/B",
-              "TP Sprechstunde X", "Ana Tutorium Y"):
-        assert ka.titel_schluessel(t) == kalender_kategorie.titel_schluessel(t), t
 
 
 # ── Formular: Feld „Gruppe" ────────────────────────────────────────────

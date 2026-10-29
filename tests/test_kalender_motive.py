@@ -60,8 +60,9 @@ def test_phasen_sind_keine_termine():
     ts = kw.eintraege(d, MO, False)
     assert [t["label"] for t in ts] == ["Analysis I"]          # nur der Termin
     assert [t["label"] for t in kw.eintraege(d, MO, False, monat=True)] == ["Analysis I"]
+    import calendar_colours
     tab = {}
-    ka.farben_vergeben(d, tab)
+    calendar_colours.assign(calendar_colours.view_entries(d), tab)
     assert not {"schlaf", "coming", "hunger"} & set(tab)     # Phasen nehmen keine Farbe
 
 

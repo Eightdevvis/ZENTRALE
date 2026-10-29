@@ -186,8 +186,8 @@ zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
   wenn leer); `entries_in_range` reicht die Felder durch (auch an
   Routinen-Vorkommen, mit `motiv`); `/api/calendar` setzt `kategorie:
   "keine"` an jede Zeile. Lesetext der KI: `[termine · Uni]`.
-- **Kurs:** `kalender_kategorie.titel_schluessel` (aus der TUI in den Kern
-  gezogen; die TUI hat noch ihre Kopie) und
+- **Kurs:** `calendar_colours.course_key` (since 2026-10-29; before
+  `kalender_kategorie.titel_schluessel` plus a TUI copy) und
   `kalender_kennung.kategorie_fuer_kurs(schluessel, kategorie, name,
   probe=False)` — alle Einträge des Kurses in EINEM Schreibvorgang, ohne
   Phasen und `erlebt`; `probe=True` schreibt nichts.
@@ -201,9 +201,8 @@ zusammen („Uni 08:30–16:00"), sonst nichts; Standard keine.
 - **TUI:** B fasst je Tag zusammen, Formularfeld „Gruppe" —
   `kalender_ansichten_vorschau.md`. Die Kurs-Route hat seit 11.10.2026 keinen
   TUI-Aufrufer mehr (Taste G entfernt), bleibt für KI/Schnittstelle.
-  `titel_schluessel` bleibt in der TUI eine Kopie (die Tür `tui/` erlaubt nur
-  reine Helfer, `kalender_kategorie` hängt an `kalender_fehler`); ein Test
-  (`tests/test_kalender_gruppen_tui.py`) hält beide gleich.
+  The TUI copy of the course key is gone (2026-10-29): `/api/calendar`
+  sends `colour` per entry ([calendar_colours.md](calendar_colours.md)).
 - Tests: `tests/test_kalender_rhythmus.py` (beide Speicher).
 
 ## Titel aus Liste/Projekt „quelle" (10.10.2026)

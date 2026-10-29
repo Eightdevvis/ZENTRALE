@@ -250,7 +250,8 @@ def test_kategorie_fuer_kurs(cal):
 
 
 def test_titel_schluessel_wie_die_tui():
-    t = kalender_kategorie.titel_schluessel
+    import calendar_colours
+    t = calendar_colours.course_key
     assert t("Analysis I @ HS 1") == "analysis"
     assert t("ExPhy-Übung") == "experimentalphysik"
     assert t("Theoretische Physik") == "theoretische"

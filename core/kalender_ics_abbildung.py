@@ -52,6 +52,7 @@ from zoneinfo import ZoneInfo
 
 from icalendar import Alarm, Calendar, Event, Timezone, vDuration, vRecur, vText
 
+import calendar_colours
 import kalender_kategorie
 import kalender_quelle
 import kalender_regel
@@ -376,19 +377,18 @@ def _text_lesen(roh: str) -> str:
 def _stil_lesen(ev) -> dict | None:
     """X-ZENTRALE-STIL (TEXT, ent-escaped) → dict; ohne die Zeile, aber mit
     COLOR (Handy, anderer Kalender) → {"background-color": hex}. Kaputtes →
-    None (dann eben kein Stil)."""
+    None (dann eben kein Stil). The precedence itself lives in
+    core/calendar_colours.style_from_ics (the phone ports the same rule)."""
     roh = ev.get(X_STIL)
+    text = None
     if roh is not None:
         try:
             text = _text_lesen(roh.to_ical().decode("utf-8") if hasattr(roh, "to_ical")
                                else str(roh))
-            return stil_kern.pruefen(stil_kern.aus_css(text), stil_kern.KASTEN) or None
-        except (ValueError, UnicodeDecodeError):
+        except UnicodeDecodeError:
             return None
-    if ev.get("COLOR") is not None:
-        h = stil_kern.hex_aus_name(str(ev.get("COLOR")))
-        return {"background-color": h} if h else None
-    return None
+    farbe = ev.get("COLOR")
+    return calendar_colours.style_from_ics(text, None if farbe is None else str(farbe))
 
 
 def _kategorie_namen(e: dict) -> list | None:

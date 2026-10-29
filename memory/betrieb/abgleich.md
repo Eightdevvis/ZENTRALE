@@ -139,7 +139,7 @@ Daten haben nur Apps ([../hub/cloud_app.md](../hub/cloud_app.md)). Jede sagt
 in `[daten]` (app.toml; eingebaute: `core/eingebaute_apps.py`), welche
 Muster ihr gehören; `core/abgleich_apps.py` schneidet sie mit der
 Positivliste (nur was dort **genau so** steht, deny by default) und gibt
-jedes Muster nur einer App. Eingebaut: fokus, notizen, kalender (`kalender_neben.json`; Termine nur mit
+jedes Muster nur einer App. Eingebaut: fokus, notizen, kalender (`kalender_neben.json`, since 2026-10-29 `calendar_colours.json`; Termine nur mit
 Kalender-Anschluss), graph, assistent (Gedächtnis, Gespräche, Transkripte,
 Rückmeldungen, Kontextpaket, Kosten), ablage, desk, werkstatt (eigene Apps +
 Schaufenster), mail (Regeln), klavier, adapter (Pflicht: immer, nie gefragt); dazu tutor (Ersatz-Eintrag, bis sein
@@ -319,6 +319,7 @@ Inventar über `data/` (08.10.2026) und die Regel je Art:
 | **JSON mit Einträgen** | `lists.json`, `features.json`, `notes.json`, `graphs.json`, `g_*.json`, `melodies.json`, `sleep_quality.json`, `mail_rules.json`, `kalender_neben.json`, `gespraeche/*/kopf.json`, `ablage/*/kopf.json`, Tutor-Stände, `desk/*.canvas` (seit 2026-10-09: JSON Canvas, `nodes`/`edges` nach `id`) | Eintrag für Eintrag, Feld für Feld (unten). |
 | **Zähler-JSON** | `ai_usage.json` (Kostenbuch) | Wie JSON, aber haben beide eine Zahl verändert, werden beide Zuwächse addiert — sonst verschluckt der eine Rechner die Kosten des anderen. |
 | **Text** | `gedaechtnis/**/*.md`, Skills, Ablage-Fassungen `.md`, `apps/*/app.toml` (selbst gebaute Apps, seit 2026-10-10: ein Schlüssel je Zeile) | Zeilen-Zusammenführen über die Basis (Drei-Wege). |
+| **Course colours** (since 2026-10-29) | `calendar_colours.json` (calendar app, [../werkzeuge/calendar_colours.md](../werkzeuge/calendar_colours.md)) | Union of keys; a key both sides know keeps the cloud's slot — silently, no conflict copy, deletions ignored (`calendar_colours.merge`). Every device converges to the cloud's table. |
 | **Termine** (seit 2026-10-24) | `kalender/**/*.ics` | Je VEVENT (UID + RECURRENCE-ID) über die Basis, `core/abgleich_ics.py` (oben „Kalender"). |
 | **Wer zuerst kam** | `adapter/bruecke/**` (Mietvertrag, vdirsyncer-Stand) | Beide geändert → die Mitte, ohne Hinweis. |
 | **Sonstiges** (Bilder, PDFs, kaputtes JSON) | Anhänge in der Ablage, Symbole `apps/*/icon.png` | Als Ganzes. |

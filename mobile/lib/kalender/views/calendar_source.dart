@@ -91,6 +91,7 @@ CalendarItem itemFromOccurrence(Vorkommen v, Color? color) {
     end: allDay ? null : v.endeZeit,
     allDay: allDay,
     color: color,
+    colour: v.colour,
     place: v.ort,
     softDeadline: v.sollBeginn,
     waiting: v.wartet,

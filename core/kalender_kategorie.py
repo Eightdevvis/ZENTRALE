@@ -12,14 +12,12 @@
 # .ics: CATEGORIES:<Anzeigename> (Katalog: „Uni", custom: der Name). Beim
 # Lesen wird ein Name, der zum Katalog passt, wieder dessen Schlüssel.
 #
-# Dazu der Kurs-Schlüssel eines Titels (`titel_schluessel`, bis heute nur in
-# der TUI): erstes Wort ohne „@ Ort", klein, Kurzformen aufgelöst. Die TUI
-# darf ihn von hier beziehen (Tür im Bauplan nötig, wenn sie es tut).
+# The course key of a title moved to core/calendar_colours.course_key
+# (2026-10-29), together with the colour rule it serves.
 #
 # Reines Modul (nur kalender_fehler), damit Abbildung, Fassade und Kennungen
 # es ohne Import-Kreis benutzen.
 
-import re
 
 from kalender_fehler import KalenderAbgelehnt
 
@@ -126,21 +124,3 @@ def aus_namen(namen: list[str]) -> dict:
     if len(namen) > 1:
         felder["kategorien_weitere"] = namen[1:]
     return felder
-
-
-# ── Kurs-Schlüssel eines Titels ────────────────────────────────────────
-# Aus tui/ansichten/kalender_ansichten.py (dort noch eine eigene Kopie, bis
-# die TUI von hier bezieht). Kurzformen: wie Sasha Kurse abkürzt.
-KURZFORMEN = {
-    "exphy": "experimentalphysik",
-    "tp": "theoretische",       # „TP Sprechstunde …" (23.10.2026)
-    "ana": "analysis",          # „Ana Tutorium …", „Ana Sprechstunde …"
-}
-
-
-def titel_schluessel(label) -> str:
-    """Der Kurs hinter einem Titel: erstes Wort, ohne Ort, klein.
-    'Analysis I @ HS 1' → 'analysis'; 'ExPhy Übung' → 'experimentalphysik'."""
-    name = (label or "").split(" @ ")[0].strip().lower()
-    wort = re.split(r"[\s\-–:/,.()]+", name)[0] if name else ""
-    return KURZFORMEN.get(wort, wort)

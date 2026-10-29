@@ -24,6 +24,7 @@ import 'kalender.dart';
 import 'kalender_steuerung.dart';
 import 'regel.dart';
 import 'views/calendar_item.dart';
+import 'views/calendar_palette.dart';
 import 'views/calendar_pager.dart';
 import 'views/calendar_source.dart';
 import 'views/view_mode.dart';
@@ -333,7 +334,8 @@ class _Zeile extends StatelessWidget {
   Widget build(BuildContext context) {
     final schema = Theme.of(context).colorScheme;
     final vielleicht = v.ebene == ebeneVielleicht;
-    final farbe = ebenenFarbe(context, kalender, v.ebene);
+    // The same colour as in the day/week/month views (course slot / own style).
+    final farbe = CalendarPalette.of(context).lookOf(itemFromOccurrence(v, ebenenFarbe(context, kalender, v.ebene))).accent;
     final zeit = v.zeit == null ? 'ganztags' : v.zeit!;
     final unten = <Widget>[];
     if (v.ort != null) unten.add(Text(v.ort!, style: _leise(context)));

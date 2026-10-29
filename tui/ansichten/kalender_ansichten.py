@@ -24,7 +24,6 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
-import zlib
 from datetime import date, timedelta
 
 from . import kalender_deadline, kalender_ebenen, kalender_gruppen, kalender_jetzt, kalender_motive, kalender_stil
@@ -52,7 +51,7 @@ ROLLE = {
     "titel": "k_akzent",        # Kastentitel, Tagesköpfe, Monatskopf
     "heute": "k_heute",         # heutiger Tag
     "zeit": "faint",            # „10:00–18:00" in der Liste
-    # Termine, Routinen, Ganztägiges: Farbe nach Titel (titel_rolle unten);
+    # Termine, Routinen, Ganztägiges: Farbe nach Kurs (kurs_rolle unten);
     # diese drei sind nur noch der Rückfall, wenn ein Titel fehlt.
     "routine": "k_t0",
     "termin": "k_t0",
@@ -79,108 +78,34 @@ SYNC_OK_ZEIGEN = True
 SPANNEN_FARBEN = ("k_sp1", "k_sp2", "k_sp3", "k_sp4")
 TITEL_FARBEN = tuple("k_t%d" % i for i in range(12))
 
-# ── Farbe je Kurs ──────────────────────────────────────────────────────
-# Sasha, 10.10.2026: „manche kurse heißen leicht anderes, sind aber
-# dieselben. exphy = experimentalphysik … ich habe nur 4 kurse". Darum zählt
-# nur das ERSTE Wort des Titels („Analysis Saalübung" = „Analysis I",
-# „Theoretische Physik Ia Tutorium" = „Theoretische Physik Ia"), und
-# Kurzformen werden auf den vollen Namen gelegt. Neue Kurzform → hier rein.
-KURZFORMEN = {
-    "exphy": "experimentalphysik",
-    "tp": "theoretische",       # „TP Sprechstunde …" (23.10.2026)
-    "ana": "analysis",          # „Ana Tutorium …", „Ana Sprechstunde …"
-}
-# Wiederkehrendes bekommt beim ersten Auftauchen fest eine FREIE Farbe
-# (farben_vergeben); die Tabelle hält tui/ansichten/kalender.py auf Platte,
-# damit eine Farbe nie wandert. Einmaliges nimmt seine Rechen-Farbe (crc32)
-# und belegt keinen Platz.
-FARBTABELLE: dict = {}
-# Vergabe-Reihenfolge der Plätze in farben.KAL (t0…t11): die ersten fünf so
-# verschieden wie möglich (Cyan, Orange, Pink, Meergrün, Violett), damit die
-# häufigsten Kurse sich nie ähneln; danach der Rest.
-RANGFOLGE = (0, 3, 1, 11, 2, 8, 5, 4, 9, 6, 10, 7)
+# ── Colour per course (core/calendar_colours.py since 2026-10-29) ──────
+# The TUI computes no colour itself any more: the backend puts `colour` =
+# {key, slot, group_key, group_slot} on every /api/calendar entry (course in
+# the title incl. short forms, list source „quelle:<id>", group
+# „gruppe:<key>"; fixed slots in the synced table data/calendar_colours.json,
+# unknown keys crc32 % 12). Here only slot → palette role t<slot>. Without
+# `colour` (an old backend) everything takes the plain event colour.
 
 
-def titel_schluessel(label) -> str:
-    """Der Kurs hinter einem Titel: erstes Wort, ohne Ort, klein.
-
-    Bewusst eine KOPIE von core/kalender_kategorie.titel_schluessel (10.10.2026):
-    die TUI läuft auch auf dem Aussenposten ohne Kern, und kalender_kategorie
-    hängt an kalender_fehler — kein „reiner Helfer" für die Tür `tui/` in
-    memory/system/bauplan_kern.md. tests/test_kalender_gruppen_tui.py prüft,
-    dass beide gleich rechnen (auch KURZFORMEN)."""
-    name = (label or "").split(" @ ")[0].strip().lower()
-    wort = re.split(r"[\s\-–:/,.()]+", name)[0] if name else ""
-    return KURZFORMEN.get(wort, wort)
-
-
-def _rechenplatz(schluessel: str) -> int:
-    # crc32, nicht hash(): der ist je Prozess anders
-    return zlib.crc32(schluessel.encode("utf-8")) % len(TITEL_FARBEN)
+def _slot_rolle(farbe: dict | None, feld: str = "slot") -> str:
+    slot = farbe.get(feld) if isinstance(farbe, dict) else None
+    if isinstance(slot, int) and not isinstance(slot, bool) and 0 <= slot < len(TITEL_FARBEN):
+        return TITEL_FARBEN[slot]
+    return ROLLE["termin"]
 
 
 def gruppe_rolle(roh) -> str:
-    """Feste Farbe einer Gruppe (B): Schlüssel „gruppe:uni" in derselben
-    FARBTABELLE wie die Kurse (farben_vergeben)."""
-    k = kalender_gruppen.farb_schluessel(roh)
-    if not k:
-        return ROLLE["termin"]
-    platz = FARBTABELLE.get(k)
-    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
-        platz = _rechenplatz(k)
-    return TITEL_FARBEN[platz]
-
-
-def titel_rolle(label) -> str:
-    k = titel_schluessel(label)
-    if not k:
-        return ROLLE["termin"]
-    platz = FARBTABELLE.get(k)
-    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
-        platz = _rechenplatz(k)
-    return TITEL_FARBEN[platz]
+    """Fixed colour of a group (B): the group slot the backend sent."""
+    return _slot_rolle((roh or {}).get("colour") if isinstance(roh, dict) else None, "group_slot")
 
 
 def kurs_rolle(t: dict) -> str:
-    """Farbe eines normierten Eintrags: Quellen-Termin fest nach der Quelle
-    („quelle:<id>" in derselben FARBTABELLE), sonst nach dem Kurs im Titel.
-    Eine erledigte Liste („leer") ist gedämpft."""
+    """Colour of a normalised entry: the backend's slot (list source, else
+    course). A finished list ("leer") is muted."""
     q = t.get("quelle")
-    if not q:
-        return titel_rolle(t.get("label"))
-    if q["zustand"] == "leer":
+    if q and q["zustand"] == "leer":
         return ROLLE["leer"]
-    platz = FARBTABELLE.get(q["schl"])
-    if not isinstance(platz, int) or not 0 <= platz < len(TITEL_FARBEN):
-        platz = _rechenplatz(q["schl"])
-    return TITEL_FARBEN[platz]
-
-
-def farben_vergeben(daten: dict, tabelle: dict) -> bool:
-    """Jeder Kurs, der in `daten` mindestens zweimal vorkommt und noch keine
-    Farbe hat, bekommt die nächste freie in RANGFOLGE. Häufigere zuerst,
-    damit die echten Kurse die deutlichsten Farben haben. Ändert
-    `tabelle`; True, wenn etwas dazukam (dann speichern). Gruppen zählen
-    als „gruppe:<schlüssel>" mit (eigene Farbe in B), Phasen des
-    Tagesrhythmus gar nicht (sie sind Hintergrund, kein Kurs)."""
-    zahl: dict = {}
-    tage = daten.get("days") if isinstance(daten, dict) else None
-    for liste in (tage.values() if isinstance(tage, dict) else []):
-        for e in liste if isinstance(liste, list) else []:
-            if isinstance(e, dict) and not (e.get("span") or e.get("von")) \
-                    and not kalender_motive.ist_phase(e):
-                q = quelle_info(e)
-                kurs = q["schl"] if q else titel_schluessel(e.get("label"))
-                for k in (kurs, kalender_gruppen.farb_schluessel(e)):
-                    if k:
-                        zahl[k] = zahl.get(k, 0) + 1
-    neu = sorted((k for k, n in zahl.items() if n >= 2 and k not in tabelle),
-                 key=lambda k: (-zahl[k], k))
-    for k in neu:
-        belegt = set(tabelle.values())
-        frei = [p for p in RANGFOLGE if p not in belegt]
-        tabelle[k] = frei[0] if frei else _rechenplatz(k)
-    return bool(neu)
+    return _slot_rolle(t.get("farbe"))
 
 WT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
@@ -432,9 +357,9 @@ def quelle_info(e: dict) -> dict | None:
         return None
     return {"name": str(e.get("quelle_name") or e.get("label") or "?"),
             "zustand": e.get("quelle_zustand") or "ok",
-            # Farbe fest nach der Quelle, nicht nach dem Titel: sonst wechselte
-            # der Block bei jedem Abhaken die Farbe.
-            "schl": "quelle:%s" % q["id"]}
+            # Colour key (fixed by the source, not the title): computed by
+            # the backend (core/calendar_colours.source_key), only shown here.
+            "schl": (e.get("colour") or {}).get("key") if isinstance(e.get("colour"), dict) else None}
 
 
 def quelle_unterzeile(t: dict) -> str | None:
@@ -480,6 +405,8 @@ def _normiere(e: dict, iso: str, aus: bool) -> dict:
         "bis": e.get("bis") if isinstance(e.get("bis"), str) else iso,
         "key": (e.get("von"), e.get("bis"), gespeichert, e.get("layer")),
         "quelle": quelle,
+        # Colour from the backend (core/calendar_colours.annotate_view)
+        "farbe": e.get("colour") if isinstance(e.get("colour"), dict) else None,
         # Aussehen des Kastens aus der Stylebox (kalender_stil.py); {} = wie immer
         "stil": kalender_stil.von(e),
         "routine": bool(e.get("recurring")), "aus": aus,

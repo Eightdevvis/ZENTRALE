@@ -9,6 +9,7 @@
 
 import 'dart:convert';
 
+import 'colours.dart';
 import 'ics.dart';
 import 'regel.dart';
 import 'zeit.dart';
@@ -53,6 +54,9 @@ class Stueck {
   final List<Erinnerung> erinnerungen = [];
   final Map<String, Abweichung> abweichungen = {};
   final List<Pause> pausen = [];
+
+  /// Source, group and own style of the main VEVENT (colours.dart).
+  EventColourInput colour = const EventColourInput();
 
   String? get label => daten['label'] as String?;
 }
@@ -125,6 +129,7 @@ Stueck? _stueck(String uid, IcsKomponente master, List<IcsKomponente> abw) {
     }
   }
   s.erinnerungen.addAll(_erinnerungen(master));
+  s.colour = EventColourInput.fromIcs(master);
   return s;
 }
 

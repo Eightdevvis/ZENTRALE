@@ -17,6 +17,7 @@ import json
 from collections import Counter
 
 import abgleich_ics
+import calendar_colours
 
 FEHLT = None   # „gibt es auf dieser Seite nicht" (Datei oder Wert)
 
@@ -38,7 +39,8 @@ class Ergebnis:
 
 
 def art(rel: str, *fassungen) -> str:
-    """json | zaehler | zeilen | text | ganz | abgeleitet | ics | mitte — nach
+    """json | zaehler | zeilen | text | ganz | abgeleitet | ics | mitte |
+    calendar_colours — nach
     Pfad, Endung, Inhalt."""
     if rel.startswith("data/mobil/"):
         return "abgeleitet"
@@ -62,6 +64,10 @@ def art(rel: str, *fassungen) -> str:
     # Text-Regel schriebe zwei Fassungen in die Datei, kein iCalendar mehr.
     if rel.startswith("data/kalender/") and rel.endswith(".ics"):
         return "ics"
+    # The calendar's course colours (core/calendar_colours.py): union of keys,
+    # a key both sides know keeps the cloud's slot — silently, slots never move.
+    if rel == "data/calendar_colours.json":
+        return "calendar_colours"
     if rel.endswith("ai_usage.json"):
         return "zaehler"
     # .canvas (Desk View, JSON Canvas, 2026-10-09) ist JSON: nodes/edges mit
@@ -106,6 +112,8 @@ def zusammenfuehren(rel, basis, lokal, mitte, name_lokal="hier") -> Ergebnis:
         return Ergebnis(lokal)
     if a == "mitte":
         return Ergebnis(mitte)
+    if a == "calendar_colours":
+        return Ergebnis(calendar_colours.merge(basis, lokal, mitte))
     try:
         if a == "ics":
             inhalt, hinweise = abgleich_ics.zusammenfuehren(basis, lokal, mitte)

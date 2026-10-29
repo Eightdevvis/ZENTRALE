@@ -19,6 +19,7 @@ import 'dienste.dart';
 import 'einstellungen/einstellungen.dart';
 import 'einstellungen/einstellungen_seite.dart';
 import 'gespraeche/gespraeche.dart';
+import 'kalender/colours.dart';
 import 'kalender/erinnerungen.dart';
 import 'kalender/kalender_steuerung.dart';
 import 'kalender/zeit.dart';
@@ -38,6 +39,8 @@ import 'update/update_section.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   zonenLaden();
+  // The shared calendar palette (assets/calendar_palette.json = core/calendar_palette.json).
+  await CalendarColourPalette.ensureLoaded();
   final dokumente = await getApplicationDocumentsDirectory();
   final ablage = PlattenAblage(Directory('${dokumente.path}/daten'));
   await ablage.wurzel.create(recursive: true);

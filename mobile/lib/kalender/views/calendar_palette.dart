@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../thema/farben.dart';
+import '../colours.dart';
 import 'calendar_item.dart';
 
 // ── Sizes (logical px) ──────────────────────────────────────────────────────
@@ -51,11 +52,16 @@ class CalendarPalette {
     required this.tentativeDefault,
     required this.rhythmDefault,
     required this.outsideMonth,
+    this.colours,
   });
 
   final bool night;
   final Color background, text, mutedText, gridLine, hourLine, pad, today, now, warning;
   final Color eventDefault, tentativeDefault, rhythmDefault, outsideMonth;
+
+  /// The shared calendar palette of this theme (assets/calendar_palette.json,
+  /// = core/calendar_palette.json); null until loaded → layer colours only.
+  final PaletteTheme? colours;
 
   static CalendarPalette of(BuildContext context) => forTheme(Theme.of(context));
 
@@ -79,7 +85,37 @@ class CalendarPalette {
       tentativeDefault: a.schatten,
       rhythmDefault: a.falte,
       outsideMonth: Color.lerp(a.bg, a.lid, night ? .12 : .18)!,
+      colours: CalendarColourPalette.current?.of(night: night),
     );
+  }
+
+  /// How an event or tentative entry looks — the same colours as the TUI
+  /// (core/calendar_colours.block_colours): the course slot's fill with its
+  /// text colour, a style's own colours on top, the layer colour only when
+  /// there is no key. Tentative ("uncommitted") is the same colour as glass:
+  /// the fill mixed into the background by the palette's `glass` opacity,
+  /// the text in the course's text colour. Every text reaches 4.5:1.
+  ItemLook lookOf(CalendarItem i) {
+    final layer = colorOf(i);
+    final r = i.colour, pal = colours;
+    Color fill = layer, text = readableOn(layer), border = layer, accent = layer;
+    if (r != null && pal != null) {
+      final b = blockColours(r, pal, layerDefault: _hex(layer));
+      fill = hexColor(b.fill!);
+      text = hexColor(b.text!);
+      border = hexColor(b.border!);
+      final role = r.role == null ? null : pal.roles[r.role];
+      accent = role != null && r.style?['background-color'] == null ? hexColor(role.text) : fill;
+    }
+    final styled = r?.style != null && r!.style!.containsKey('border-color');
+    if (i.kind == ItemKind.tentative) {
+      final glass = pal?.opacity['glass'] ?? .16;
+      final tint = Color.lerp(background, fill, math.max(glass, .14))!;
+      return ItemLook(fill: tint, text: readableOn(tint, accent), border: styled ? border : accent,
+          accent: accent, styledBorder: styled);
+    }
+    return ItemLook(fill: fill, text: readableOn(fill, text), border: styled ? border : accent,
+        accent: accent, styledBorder: styled);
   }
 
   /// Colour of an item: its calendar colour, else one by kind.
@@ -92,8 +128,9 @@ class CalendarPalette {
         ItemKind.event => eventDefault,
       };
 
-  /// Fill of a committed block: the calendar colour, a touch softened at night.
-  Color eventFill(Color c) => night ? Color.lerp(c, background, .25)! : c;
+  /// Fill of a committed block: the colour itself (since 2026-10-29 no
+  /// night softening — the TUI's neon fills are the look).
+  Color eventFill(Color c) => c;
 
   /// Fill of a tentative block: a weak tint of its colour.
   Color tentativeFill(Color c) => Color.lerp(background, c, night ? .22 : .16)!;
@@ -108,6 +145,23 @@ class CalendarPalette {
     return contrast(Colors.black, bg) >= contrast(Colors.white, bg) ? Colors.black : Colors.white;
   }
 }
+
+/// Colours of one entry (CalendarPalette.lookOf).
+class ItemLook {
+  const ItemLook({required this.fill, required this.text, required this.border, required this.accent,
+      this.styledBorder = false});
+  final Color fill, text, border;
+
+  /// The entry's colour as a line/bar/marker on the plain background.
+  final Color accent;
+
+  /// The event's own style sets a border colour: draw a full frame.
+  final bool styledBorder;
+}
+
+Color hexColor(String hex) => Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
+
+String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
 /// WCAG contrast ratio of two opaque colours.
 double contrast(Color a, Color b) {

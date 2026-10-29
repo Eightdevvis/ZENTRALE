@@ -13,8 +13,6 @@
 # Ansichten: Auswahl, Kästen und Backend-Aufrufe gibt es nur einmal.
 
 import curses
-import json
-import os
 from datetime import date
 
 try:                                    # Pixel-Baustein (tui/pixel.py)
@@ -99,41 +97,13 @@ class Kalender:
                         "stil": "A", "sdata": None, "data": None,
                         "showhidden": False, "msg": "", "modus": "muss"}
         self.bedienung = Bedienung(self)
-        self._farben_daten = None
-        self._farben_laden()
         # Glas-Farben je (Rolle, Theme, 24 Bit?) — Mischen + bunt kostet
         self._glas_farben = {}
 
-    # ── feste Kursfarben (kalender_ansichten.farben_vergeben) ─────────
-    @staticmethod
-    def _farben_pfad():
-        return (os.environ.get("ZENTRALE_KALENDER_FARBEN")
-                or os.path.expanduser("~/.local/state/zentrale/kalender_farben.json"))
-
-    def _farben_laden(self):
-        try:
-            with open(self._farben_pfad()) as f:
-                t = json.load(f)
-            if isinstance(t, dict):
-                kalender_ansichten.FARBTABELLE.clear()
-                kalender_ansichten.FARBTABELLE.update(t)
-        except (OSError, ValueError):
-            pass
-
-    def _farben_pflegen(self, d):
-        """Neue Kurse aus frisch geladenen Daten fest einfärben und speichern."""
-        if d is self._farben_daten:
-            return
-        self._farben_daten = d
-        if kalender_ansichten.farben_vergeben(d, kalender_ansichten.FARBTABELLE):
-            pfad = self._farben_pfad()
-            try:
-                os.makedirs(os.path.dirname(pfad), exist_ok=True)
-                with open(pfad + ".neu", "w") as f:
-                    json.dump(kalender_ansichten.FARBTABELLE, f, ensure_ascii=False, indent=1)
-                os.replace(pfad + ".neu", pfad)
-            except OSError:
-                pass                    # dann eben nur für diese Sitzung
+    # Fixed course colours come from the backend since 2026-10-29
+    # (core/calendar_colours.py; `colour` on every /api/calendar entry, the
+    # table data/calendar_colours.json syncs). The old local table
+    # ~/.local/state/zentrale/kalender_farben.json is migrated there once.
 
     def oeffnen(self):
         """Startseite → Kalender: frisch laden, heute gewählt, nichts offen."""
@@ -290,7 +260,6 @@ class Kalender:
             z.addclip(by + 1, ix, "kalender: backend? (versuche gleich nochmal)", iw, C["faint"])
             return
         hoehe = bottom - (by + 1)
-        self._farben_pflegen(d)
         try:
             zeilen = stil_zeichnen(K["stil"], d, iw, hoehe, erledigte=K["showhidden"],
                                    auswahl=bed.auswahl())

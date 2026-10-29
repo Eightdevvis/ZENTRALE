@@ -32,6 +32,9 @@ SICHERN = [
     "data/ai_usage.json",
     "data/ai_calendar.json",
     "data/kalender_neben.json",
+    # Course colours of the calendar (core/calendar_colours.py, 2026-10-29):
+    # the same colour on every front and device.
+    "data/calendar_colours.json",
     "data/kalender/**",
     # Seit 2026-10-11 nach Themen: themen/ (samt Messreihen *.reihe.json),
     # ki/ (Hausregeln, Vorlagen, Skills), INDEX.md, _archiv/ und der beim

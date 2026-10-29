@@ -21,6 +21,7 @@ import copy
 import uuid
 from datetime import date
 
+import calendar_colours
 import kalender
 import kalender_deadline
 import kalender_kategorie
@@ -616,12 +617,12 @@ _OHNE_KURS = (kalender_rhythmus.EBENE, "erlebt")
 def kategorie_fuer_kurs(schluessel: str, kategorie: str, kategorie_name=None, *,
                         probe: bool = False) -> dict:
     """Allen Einträgen eines Kurses dieselbe Gruppe geben — in EINEM
-    Schreibvorgang. Kurs = kalender_kategorie.titel_schluessel (erstes Wort
+    Schreibvorgang. Kurs = calendar_colours.course_key (erstes Wort
     ohne „@ Ort", Kurzformen); `schluessel` darf auch ein ganzer Titel sein
     („Experimentalphysik", „exphy", „ExPhy Übung"). Phasen und `erlebt`
     zählen nicht. `probe=True`: nur zeigen, was getroffen würde.
     -> {schluessel, kategorie, kategorie_name, geaendert, probe, eintraege}"""
-    kurs = kalender_kategorie.titel_schluessel(schluessel)
+    kurs = calendar_colours.course_key(schluessel)
     if not kurs:
         raise KalenderAbgelehnt("TITEL-LEER", "kein Kurs angegeben")
     kat, name = kalender_kategorie.pruefen(kategorie, kategorie_name)
@@ -630,7 +631,7 @@ def kategorie_fuer_kurs(schluessel: str, kategorie: str, kategorie_name=None, *,
         _sicherstellen(data)
         treffer = [obj for _a, l, _o, obj in _alle_objekte(data)
                    if l not in _OHNE_KURS
-                   and kalender_kategorie.titel_schluessel(obj.get("label")) == kurs]
+                   and calendar_colours.course_key(obj.get("label")) == kurs]
         if not treffer:
             raise KalenderAbgelehnt("KEIN-TREFFER", f"kein Eintrag zum Kurs {kurs!r}")
         geaendert = 0

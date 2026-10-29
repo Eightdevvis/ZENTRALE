@@ -222,12 +222,13 @@ class _Chip extends StatelessWidget {
 /// Shared with the month view.
 Widget itemChip(BuildContext context, CalendarItem item, DateTime now, CalendarPalette p, ItemTap? onTap,
     {double fontSize = 11}) {
-  final c = p.colorOf(item);
   final tentative = item.kind == ItemKind.tentative;
   final deadline = item.kind == ItemKind.deadline;
   final missed = item.softMissed(now);
-  final fill = tentative || deadline ? p.tentativeFill(deadline ? p.warning : c) : p.eventFill(c);
-  final fg = p.readableOn(fill, deadline ? p.warning : (tentative ? p.text : null));
+  final look = p.lookOf(item);
+  final c = look.border;
+  final fill = deadline ? p.tentativeFill(p.warning) : look.fill;
+  final fg = deadline ? p.readableOn(fill, p.warning) : look.text;
   return GestureDetector(
     onTap: onTap == null ? null : () => onTap(item),
     child: Container(
@@ -236,7 +237,9 @@ Widget itemChip(BuildContext context, CalendarItem item, DateTime now, CalendarP
       decoration: BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(3),
-        border: tentative || missed ? Border.all(color: missed ? p.warning : c, width: 1) : null,
+        border: tentative || missed || look.styledBorder
+            ? Border.all(color: missed ? p.warning : c, width: 1)
+            : null,
       ),
       child: Text.rich(
           flagged(item.label, deadline, fontSize, fg),
@@ -484,26 +487,27 @@ class _Block extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    final c = p.colorOf(item);
+    final look = p.lookOf(item);
+    final c = look.border;
     final tentative = item.kind == ItemKind.tentative;
     final off = item.switchedOff;
-    final fill = off ? p.background : (tentative ? p.tentativeFill(c) : p.eventFill(c));
-    final fg = off ? p.mutedText : p.readableOn(fill, tentative ? p.text : null);
+    final fill = off ? p.background : look.fill;
+    final fg = off ? p.mutedText : look.text;
     final small = TextStyle(fontSize: compact ? minText : 11, color: fg, height: 1.2);
     final end = item.end;
     final time = end == null ? hhmm(item.start) : '${hhmm(item.start)}–${hhmm(end)}';
     return GestureDetector(
       onTap: onTap == null ? null : () => onTap!(item),
       child: CustomPaint(
-        painter: tentative && !off ? _StripePainter(Color.lerp(fill, c, .35)!) : null,
+        painter: tentative && !off ? _StripePainter(Color.lerp(fill, look.accent, .35)!) : null,
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: compact ? 2 : 4, vertical: 1),
           decoration: BoxDecoration(
             color: tentative && !off ? null : fill,
             borderRadius: BorderRadius.circular(4),
-            border: tentative || off
-                ? Border.all(color: off ? p.mutedText : c, width: 1)
-                : Border(left: BorderSide(color: Color.lerp(c, p.text, .25)!, width: 2)),
+            border: tentative || off || look.styledBorder
+                ? Border.all(color: off ? p.mutedText : c, width: look.styledBorder ? 1.5 : 1)
+                : Border(left: BorderSide(color: Color.lerp(fill, look.text, .45)!, width: 2)),
           ),
           child: LayoutBuilder(builder: (context, box) {
             final roomy = box.maxHeight >= 34;
