@@ -11,6 +11,7 @@
 
 import os
 
+from . import cloud_folder
 from .basis import BEENDEN
 
 # Sasha, 2026-10-10: Elektronik bleibt fest im Rad und ist ein Desk.
@@ -50,6 +51,8 @@ OEFFNEN = {
     "m": lambda u: u.karte.oeffnen(),
     "u": _tutor,
     "e": lambda u: u.desk.direkt(ELEKTRONIK_DESK),
+    # The cloud folder (2026-10-29): no view, it opens in the file manager.
+    "cloud": lambda u: cloud_folder.open_folder(u) and None,
     # Erschaffen-Rad
     "werkstatt": lambda u: u.werkstatt.oeffnen(),
     "shop": _shop,

@@ -140,6 +140,7 @@ EN = {
         "klavier": ("Melodies", "the piano"),
         "tutor": ("Tutor", "language tutor progress"),
         "cloud": ("Cloud", "account, sync, devices"),
+        "cloud_folder": ("Cloud folder", "anything you drop into ~/Zentrale/Cloud"),
         "adapter": ("Adapter", "connected services: AI keys, calendar bridge"),
     },
     "setup_apps_found": "Apps with data (on this device or in your account): {liste}",
@@ -179,6 +180,9 @@ EN = {
     "st_app_adapter": "always synced — {n} connection(s)",
     "st_way": "Sync way",
     "st_notes": "Notes",
+    "st_held_back": "Not synced (held back, everything else syncs)",
+    "st_held_too_large": "  {path} — too large for the cloud ({size} MiB)",
+    "st_held_folder": "  {n} files of the cloud folder — the folder is missing or empty on this device",
 
     # ── Geräte ──────────────────────────────────────────────────────
     "dev_title": "Devices of {name}",

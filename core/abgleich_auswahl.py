@@ -12,6 +12,7 @@ import fnmatch
 import os
 
 import ablage_ort
+import cloud_folder
 
 # Relativ zum ZENTRALE-Ordner. Bewusst NICHT dabei:
 #   data/ai_config.json            Klartext-API-Schlüssel
@@ -79,7 +80,10 @@ NICHT_ABGLEICHEN = ["data/ai_calendar.json"]
 # abgeleitet, eine Sicherung braucht es nicht. Dazu der Mietvertrag der
 # Brücke mit dem Stand von vdirsyncer (core/adapter_bruecke.py) — gilt nur
 # zwischen den Geräten — und die Zugangsdaten (GEHEIM).
-NUR_ABGLEICH = ["data/mobil/kontext.json", "data/adapter/bruecke/**"] + GEHEIM
+# Since 2026-10-29 also the cloud folder (core/cloud_folder.py): whatever the
+# user drops into ~/Zentrale/Cloud. Sync only, never the old plain-text
+# backup — it may hold anything.
+NUR_ABGLEICH = ["data/mobil/kontext.json", "data/adapter/bruecke/**", cloud_folder.PATTERN] + GEHEIM
 ABGLEICH = [m for m in SICHERN if m not in NICHT_ABGLEICHEN] + NUR_ABGLEICH
 assert not set(GEHEIM) & set(SICHERN), "Zugangsdaten gehören nie in die Sicherung"
 
@@ -88,6 +92,7 @@ assert not set(GEHEIM) & set(SICHERN), "Zugangsdaten gehören nie in die Sicheru
 # hinlegt, wandern nie.
 _KALENDER = "data/kalender/"
 _KALENDER_NAMEN = ("displayname", "color")
+_CLOUD = cloud_folder.PREFIX + "/"
 
 
 def passt(rel, muster=SICHERN):
@@ -98,6 +103,8 @@ def passt(rel, muster=SICHERN):
     # Zwischendateien von dateien.atomar_schreiben (".name.pid.ns.tmp"), die
     # ein Absturz liegen ließ, sind nie Daten.
     if name.startswith(".") and name.endswith(".tmp"):
+        return False
+    if rel.startswith(_CLOUD) and cloud_folder.excluded(rel[len(_CLOUD):]):
         return False
     if rel.startswith(_KALENDER) and (name.startswith(".") or not (
             name.endswith(".ics") or name in _KALENDER_NAMEN)):
@@ -119,7 +126,7 @@ def passt(rel, muster=SICHERN):
 # ZENTRALE-Ordner: ein Test- oder Fremd-Ordner (--quelle) behält sein
 # eigenes data/ablage. Die lesbaren Dateien obendrauf gleicht niemand ab —
 # jeder Rechner baut sie selbst (core/ablage_sichtbar.py).
-AUSSEN = {"data/ablage": ablage_ort.dokumente}
+AUSSEN = {"data/ablage": ablage_ort.dokumente, cloud_folder.PREFIX: cloud_folder.root}
 _PROJEKT = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 
@@ -130,6 +137,16 @@ def _aussen(root) -> dict:
     if os.path.realpath(root) != _PROJEKT:
         return {}
     return {k: ort for k, ort in ((k, f()) for k, f in AUSSEN.items()) if os.path.isdir(ort)}
+
+
+def create_outside(root, prefix) -> bool:
+    """Create the outside folder for `prefix` (e.g. the cloud folder) on this
+    device, but only for the real ZENTRALE folder (a test or foreign root
+    keeps its own data/<…>). -> True if it exists now."""
+    if prefix not in AUSSEN or os.path.realpath(root) != _PROJEKT:
+        return False
+    os.makedirs(AUSSEN[prefix](), exist_ok=True)
+    return True
 
 
 def pfad(root, rel) -> str:
@@ -162,12 +179,20 @@ def auswahl(root, muster=SICHERN):
                     or rel_w.replace(os.sep, "/") in aussen:
                 dirs[:] = []
                 continue
+            if (rel_w.replace(os.sep, "/") + "/").startswith(_CLOUD):
+                dirs[:] = [d for d in dirs if not cloud_folder.skip_dir(d)]
+                files = [f for f in files if not os.path.islink(os.path.join(wurzel, f))]
             for f in files:
                 rel = os.path.normpath(os.path.join(rel_w, f)).replace(os.sep, "/")
                 if passt(rel, muster):
                     raus.append(rel)
     for vorsatz, ort in aussen.items():
         for wurzel, dirs, files in os.walk(ort):
+            if vorsatz == cloud_folder.PREFIX:
+                # Do not even walk into .git, node_modules …; symlinks are
+                # never data (a link would arrive elsewhere as a copy).
+                dirs[:] = [d for d in dirs if not cloud_folder.skip_dir(d)]
+                files = [f for f in files if not os.path.islink(os.path.join(wurzel, f))]
             for f in files:
                 rel = vorsatz + "/" + os.path.relpath(os.path.join(wurzel, f), ort) \
                     .replace(os.sep, "/")

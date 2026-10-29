@@ -89,7 +89,7 @@ def test_agenten_avatare_sind_noch_leer():
         assert shop.katalog(k)["itemListElement"] == []
     kats = {k["id"]: k["anzahl"] for k in shop.uebersicht()["kategorien"]}
     assert list(kats) == list(shop.KATEGORIE_IDS)
-    assert kats["apps"] == 1 and kats["icons"] == 10 and kats["bauteile"] >= 1
+    assert kats["apps"] == 1 and kats["icons"] == 11 and kats["bauteile"] >= 1
 
 
 def test_jede_app_sagt_woher_sie_kommt():
@@ -316,7 +316,7 @@ def test_ansicht_kategorien_thema_holen(ansicht):
     v, S = ansicht, ansicht.SHOP
     assert S["active"] is False and v.z.SHOP is S
     v.oeffnen()
-    assert S["active"] and v.kategorie()["id"] == "icons" and len(_namen(v)) == 10
+    assert S["active"] and v.kategorie()["id"] == "icons" and len(_namen(v)) == 11
     assert "planen" in S["themen"] and S["thema"] is None
     # ←→ wechselt die Kategorie (rundum), das Thema geht zurück auf „alle"
     v.taste(curses.KEY_RIGHT)
@@ -357,7 +357,7 @@ def test_ansicht_zeichnet_leer_und_voll(ansicht):
     v.oeffnen()
     v.draw_shop(0, 0, 30, 120)
     alles = "\n".join(v.schirm.zeile(y) for y in range(30))
-    assert "Icons 10" in alles and "Post" in alles and "kostenlos" in alles
+    assert "Icons 11" in alles and "Post" in alles and "kostenlos" in alles
     # Tastenhinweise stehen nur in der Leiste ganz unten (Tastentabelle, 2026-10-11)
     assert "enter = holen" not in alles and "tab wechselt" not in alles
     v.taste(10)

@@ -470,6 +470,7 @@ SYM_FARBEN = {
     "desk":     _pal("#f2e6c9", "#fffaf0", "#b8875a", "#e8505b", "#5a3a22"),
     "werkstatt": _pal("#7d8a99", "#dfe7ef", "#a9b6c4", "#ff8a1f", "#2c333b"),
     "shop":     _pal("#f4d9a6", "#fff7e6", "#ffd27a", "#e8505b", "#4a2c1a"),
+    "cloud":    _pal("#cfe6ff", "#ffffff", "#7fb6f0", "#3a7bd5", "#24456e"),
 }
 _GRUND = {"nacht": (_hex("#000000"), _hex("#ffffff")),     # (hintergrund, schrift)
           "tag": (_hex("#ffffff"), _hex("#001a40"))}
@@ -708,10 +709,29 @@ def _m_shop(P, x, y, g, t):
     return P["core"], .9
 
 
+def _m_cloud(P, x, y, g, t):
+    """The cloud folder (2026-10-29): a cloud of three puffs on a flat base;
+    open, an arrow below it bobs up and down (things go in and come back)."""
+    puffs = ((10, 24, 6.5, 9.0), (18, 20, 8.0, 11.0), (24, 26, 5.5, 7.5))
+    inside = any(_in_ellipse(x, y, cx, cy, rx, ry) <= 1 for cx, cy, rx, ry in puffs)
+    if inside or (4 <= x < 29 and 26 <= y < 34):
+        if y == 33 or not any(_in_ellipse(x, y, cx, cy, rx * .85, ry * .85) <= 1
+                              for cx, cy, rx, ry in puffs) and y < 27:
+            return P["edge"], .95                                  # rim
+        return mix(P["core"], P["edge"], .25 * (1 - (y - 9) / 25)), .92
+    if g > .5:
+        hub = int(round(math.sin(t / 350) * 2)) if g >= 1 else 0
+        if 15 <= x < 18 and 37 + hub <= y < 46 + hub:
+            return P["akzent"], .95                                # shaft
+        if 36 + hub <= y < 39 + hub and abs(x + .5 - 16.5) <= (39 + hub - y) * 1.6:
+            return P["akzent"], .95                                # arrow head
+    return None
+
+
 MOTIVE = {"post": _m_post, "karte": _m_karte, "kalender": _m_kalender,
           "klavier": _m_klavier, "notizen": _m_notizen, "graph": _m_graph,
           "fokus": _m_fokus, "tutor": _m_tutor, "desk": _m_desk,
-          "werkstatt": _m_werkstatt, "shop": _m_shop}
+          "werkstatt": _m_werkstatt, "shop": _m_shop, "cloud": _m_cloud}
 # Motive, die der Schmied als „zufälliges Symbol" vergibt (2026-10-10):
 # alle festen, nicht die eigenen Apps (die kommen per symbol_eintragen dazu).
 FESTE_MOTIVE = tuple(MOTIVE)
@@ -848,7 +868,7 @@ def _hell(c):
 PILLE = {"post": "core", "karte": "akzent", "kalender": "akzent",
          "klavier": "glow", "notizen": "core", "graph": "core",
          "fokus": "core", "tutor": "core", "desk": "akzent",
-         "werkstatt": "akzent", "shop": "akzent"}
+         "werkstatt": "akzent", "shop": "akzent", "cloud": "akzent"}
 
 
 def bunt(c):

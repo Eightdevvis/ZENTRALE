@@ -304,7 +304,9 @@ def test_sashas_alte_wahl_alles_gleicht_genau_dasselbe_ab(zwei, cloud):
                                         "conversations", "documents", "desk", "apps", "mail",
                                         "music", "tutor"],
                      abgleich_weg="mitte")
-    assert abgleich_apps.offen(str(pc.wurzel), lambda: pytest.fail("nicht fragen")) == []
+    # Only the cloud folder (newer than the old areas) is undecided; it has no
+    # data here nor in the cloud → nothing to ask.
+    assert abgleich_apps.offen(str(pc.wurzel), lambda: set()) == []
     laptop.abgleichen()
     pc.abgleichen()
     assert pc.alles() == laptop.alles()

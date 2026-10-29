@@ -66,6 +66,7 @@ Zieht eine App aus (wie Tutor, Karte), kommt ihr `[daten]` aus ihrem
 | mail | `mail` |
 | music | `klavier` |
 | tutor | `tutor` (echtes `app.toml`) |
+| — (neu 2026-10-29) | `cloud_folder` — `~/Zentrale/Cloud` ([cloud_folder.md](cloud_folder.md)) |
 | — (neu 2026-10-24) | `adapter` — Pflicht: immer abgeglichen, nie gefragt ([adapter.md](adapter.md)) |
 
 Die Positivliste `core/abgleich_auswahl.py` bleibt der Schutz: ein Muster aus

@@ -42,6 +42,12 @@ def art(rel: str, *fassungen) -> str:
     Pfad, Endung, Inhalt."""
     if rel.startswith("data/mobil/"):
         return "abgeleitet"
+    # The cloud folder (core/cloud_folder.py) holds the user's own files of
+    # any kind: never merged inside (no conflict markers in someone's .md, no
+    # entry-by-entry JSON). Both changed → the cloud wins, the version from
+    # here is kept aside (abgleich._planen) with a note.
+    if rel.startswith("data/cloud/"):
+        return "ganz"
     # Der Mietvertrag der Brücke (core/adapter_bruecke.py) und der Stand von
     # vdirsyncer, der mit ihm reist: wer zuerst in der Mitte war, hat ihn.
     # Feld für Feld zusammengeführt bekäme ein Gerät den Namen, das andere die

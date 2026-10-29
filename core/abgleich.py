@@ -43,6 +43,7 @@ import abgleich_zusammenfuehren as regeln
 import adapter
 import adapter_geheim
 import ai_config
+import cloud_folder
 import dateien
 import konto
 from i18n import _
@@ -74,6 +75,7 @@ class Bericht:
         self.gesendet = []       # in der Mitte geändert
         self.beiseite = []       # auf dem Rechner beiseitegelegt
         self.hinweise = []
+        self.held_back = []      # [{path, reason, size}] — left out of this run, untouched
         self.trocken = False
 
     def als_dict(self):
@@ -452,6 +454,82 @@ def _neu_dabei(muster) -> list:
     return [x for x in muster if x not in vorher and x not in pflicht]
 
 
+# ── Held back: too large, or the cloud folder vanished (2026-10-29) ───
+# A path that is held back is left out of this run completely — not read,
+# not sent, not deleted, its base untouched (the stored base keeps it, like
+# a deselected app). So one 2 GB video in the cloud folder never breaks the
+# sync for everything else, and a cloud folder that is gone on this device
+# never turns into "deleted everywhere".
+
+# Fewer files than this may vanish from the cloud folder at once (so it can
+# be emptied); more, while the cloud still has them, are held back.
+VANISH_MIN = 3
+
+
+def _read_local(wurzel, rels):
+    """Read the local files of the selection. -> ({rel: bytes}, held
+    {rel: {reason, size}}). The size is checked BEFORE reading: a file that
+    does not fit into one cloud blob is never loaded into memory."""
+    lokal, held = {}, {}
+    for rel in rels:
+        pfad = auswahl.pfad(wurzel, rel)
+        try:
+            size = os.path.getsize(pfad)
+        except OSError:
+            continue                      # gone between listing and reading
+        if not abgleich_mitte.fits_blob(size):
+            held[rel] = {"reason": "too_large", "size": size}
+            continue
+        lokal[rel] = _lesen(pfad)
+    return lokal, held
+
+
+def _cloud_folder_vanished(basis, vorhanden, mitte) -> dict:
+    """The cloud folder is missing or empty here, but this device had agreed
+    on files in it that the cloud still has → hold them all back instead of
+    deleting them everywhere (Sasha: the cloud is never overwritten)."""
+    vorn = cloud_folder.PREFIX + "/"
+    if any(rel.startswith(vorn) for rel in vorhanden):
+        return {}
+    weg = [rel for rel in basis if rel.startswith(vorn) and rel in mitte]
+    if len(weg) < VANISH_MIN:
+        return {}
+    return {rel: {"reason": "folder_missing", "size": None} for rel in weg}
+
+
+def _cloud_folder_prepare(wurzel, muster):
+    """This device syncs the cloud folder but it does not exist yet → create
+    it, so files from the cloud have a place. Only when this device never
+    agreed on files in it; otherwise a missing folder is held back above."""
+    if cloud_folder.PATTERN in muster and not basis_kennt(cloud_folder.PREFIX):
+        try:
+            auswahl.create_outside(wurzel, cloud_folder.PREFIX)
+        except OSError as e:
+            print(f"[abgleich] cloud folder not created: {e}")
+
+
+def _held_back_notes(bericht):
+    """One note per newly held-back path (not every five minutes again)."""
+    vorher = {h.get("path") for h in _zustand_lesen().get("held_back") or []}
+    ordner_weg = False
+    for h in bericht.held_back:
+        if h["path"] in vorher:
+            continue
+        if h["reason"] == "too_large":
+            bericht.hinweise.append(
+                _("{path}: too large for the cloud ({size} MiB, at most {limit} MiB) — "
+                  "not synced, everything else goes on").format(
+                    path=_kurz(h["path"]), size=h["size"] // 2**20,
+                    limit=abgleich_mitte.MAX_BLOB // 2**20 * 3 // 4))
+        elif not ordner_weg:
+            ordner_weg = True
+            bericht.hinweise.append(
+                _("The cloud folder is missing or empty on this device, but the cloud still "
+                  "has its files — nothing was deleted, the folder is not synced until the "
+                  "files are back. To empty it on purpose, delete all but two files, sync, "
+                  "then delete the rest."))
+
+
 # ── Planen ─────────────────────────────────────────────────────────────
 
 def _planen(basis, lokal, mitte, grabsteine, art, rechner, bericht, fremd=None, neu_dabei=()):
@@ -651,6 +729,7 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
             if not trocken:
                 _vorhaben_nachholen(wurzel, mitte)
                 _adapter_vorher(wurzel, muster)
+                _cloud_folder_prepare(wurzel, muster)
             for _versuch in range(4):
                 stand, lesen, namen = mitte.holen()
                 basis_stand, basis = _basis_lesen()
@@ -674,15 +753,23 @@ def abgleichen(wurzel, trocken=False, warten=120.0) -> Bericht:
                     eingang_alt, trocken)
                 sicht.update(angenommen)
                 eingang = _quittungen_aufraeumen(eingang, gesehen, muster)
-                lokal = {rel: _lesen(auswahl.pfad(wurzel, rel))
-                         for rel in auswahl.auswahl(wurzel, muster)}
+                vorhanden = auswahl.auswahl(wurzel, muster)
+                lokal, held = _read_local(wurzel, vorhanden)
                 bericht.art = ("erstbefuellung" if stand is None else
                                "erstabgleich" if basis_stand is None else "")
                 if bericht.art == "erstbefuellung":
                     basis = {}
+                neu_dabei = _neu_dabei(muster) if bericht.art == "" else []
+                if bericht.art == "" and cloud_folder.PATTERN not in neu_dabei:
+                    held.update(_cloud_folder_vanished(basis, vorhanden, sicht))
+                for rel in held:
+                    basis.pop(rel, None)
+                    lokal.pop(rel, None)
+                    sicht.pop(rel, None)
+                bericht.held_back = [dict(v, path=rel) for rel, v in sorted(held.items())]
                 erg, aufheben = _planen(basis, lokal, sicht, inhalt.get("geloescht", {}),
-                                        bericht.art, rechner, bericht, fremd,
-                                        _neu_dabei(muster) if bericht.art == "" else ())
+                                        bericht.art, rechner, bericht, fremd, neu_dabei)
+                _held_back_notes(bericht)
                 bericht.gesendet = sorted(r for r in erg
                                           if erg[r] != m.get(r) and r not in fremd)
                 if trocken:
@@ -758,7 +845,7 @@ def _zustand_erfolg(bericht, kennung):
     jetzt = _jetzt()
     z.update(letzter_versuch=jetzt, letzter_erfolg=jetzt, fehler=None, mitte_stand=kennung,
              geholt=len(bericht.geholt) + len(bericht.beiseite),
-             gesendet=len(bericht.gesendet))
+             gesendet=len(bericht.gesendet), held_back=bericht.held_back)
     neu = [{"am": jetzt, "text": h} for h in bericht.hinweise]
     z["hinweise"] = (z.get("hinweise", []) + neu)[-MAX_HINWEISE:]
     dateien.json_schreiben(_zustand_pfad(), z)
@@ -784,6 +871,8 @@ def zustand() -> dict:
             "fehler": z.get("fehler"),
             "geholt": z.get("geholt", 0), "gesendet": z.get("gesendet", 0),
             "hinweise": z.get("hinweise", []),
+            "held_back": z.get("held_back", []),
+            "cloud_folder": cloud_folder.root(),
             "konflikte_ordner": os.path.join(ordner(), "konflikte")}
 
 

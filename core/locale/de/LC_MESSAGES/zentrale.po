@@ -76,3 +76,9 @@ msgstr "Eingang {node}: Termin {path} abgelehnt — {reason}; die Mitte bleibt, 
 
 msgid "{path}: differs from the cloud (app newly included) — the cloud wins, the version from here is kept aside"
 msgstr "{path}: auf diesem Rechner anders als in der Mitte (App neu dabei) — die Mitte gilt, die Fassung von hier ist aufgehoben"
+
+msgid "{path}: too large for the cloud ({size} MiB, at most {limit} MiB) — not synced, everything else goes on"
+msgstr "{path}: zu groß für die Cloud ({size} MiB, höchstens {limit} MiB) — nicht abgeglichen, alles andere läuft weiter"
+
+msgid "The cloud folder is missing or empty on this device, but the cloud still has its files — nothing was deleted, the folder is not synced until the files are back. To empty it on purpose, delete all but two files, sync, then delete the rest."
+msgstr "Der Cloud-Ordner fehlt auf diesem Gerät oder ist leer, die Cloud hat seine Dateien aber noch — nichts gelöscht, der Ordner gleicht erst wieder ab, wenn die Dateien zurück sind. Ihn absichtlich leeren: erst alle bis auf zwei Dateien löschen, abgleichen, dann den Rest."

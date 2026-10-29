@@ -1,0 +1,27 @@
+# ZENTRALE TUI — German UI texts (gettext). msgid = English (CLAUDE.md "Language").
+# After editing: msgfmt -o zentrale_tui.mo zentrale_tui.po (tests/test_cloud_folder.py checks they match).
+msgid ""
+msgstr ""
+"Project-Id-Version: zentrale_tui\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: de\n"
+
+msgid "no graphical session here"
+msgstr "hier läuft keine grafische Sitzung"
+
+msgid "neither xdg-open nor gio is installed"
+msgstr "weder xdg-open noch gio ist installiert"
+
+msgid "Cloud folder: the backend is not reachable"
+msgstr "Cloud-Ordner: das Backend ist nicht erreichbar"
+
+msgid "Cloud folder: it lives on the backend's machine ({path})"
+msgstr "Cloud-Ordner: er liegt auf dem Rechner des Backends ({path})"
+
+msgid "Cloud folder opened: {path}"
+msgstr "Cloud-Ordner geöffnet: {path}"
+
+msgid "Cloud folder: {path} ({reason})"
+msgstr "Cloud-Ordner: {path} ({reason})"

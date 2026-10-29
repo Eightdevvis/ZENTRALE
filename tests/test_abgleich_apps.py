@@ -112,9 +112,14 @@ def test_alte_wahl_alles_wird_zu_allen_apps_und_gleicht_dasselbe_ab(einst):
     einst.update(abgleich_bereiche=list(ALLE_BEREICHE), abgleich_weg="mitte",
                  abgleich_mitte_art="http")
     e = abgleich_apps.entscheidungen()
-    assert e == {n: True for n, a in abgleich_apps.tabelle().items() if not a["pflicht"]}
-    assert sorted(abgleich_apps.muster()) == sorted(abgleich_apps.jetzt_erlaubt(auswahl.ABGLEICH))
-    assert abgleich_apps.offen("/gibt/es/nicht", lambda: pytest.fail("nicht fragen")) == []
+    # Apps that came after the old areas (cloud_folder, 2026-10-29) are not
+    # part of the old choice: they ask once, like any new app with data.
+    later = {"cloud_folder"}
+    assert e == {n: True for n, a in abgleich_apps.tabelle().items()
+                 if not a["pflicht"] and n not in later}
+    assert sorted(abgleich_apps.muster()) == sorted(
+        m for m in abgleich_apps.jetzt_erlaubt(auswahl.ABGLEICH) if m != "data/cloud/**")
+    assert abgleich_apps.offen("/gibt/es/nicht", lambda: set()) == []
 
 
 def test_alte_wahl_teilweise(einst):

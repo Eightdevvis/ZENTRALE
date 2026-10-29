@@ -290,6 +290,22 @@ def _apps_zeilen(z, tabelle):
     return zeilen
 
 
+def held_back_lines(term, held):
+    """What the last sync left out (core/abgleich.py, held back): too-large
+    files one by one, a vanished cloud folder as one line."""
+    if not held:
+        return
+    term.sag()
+    term.sag(t("st_held_back"), "fett")
+    folder = [h for h in held if h.get("reason") == "folder_missing"]
+    for h in held:
+        if h.get("reason") == "too_large":
+            path = h["path"][5:] if h["path"].startswith("data/") else h["path"]
+            term.sag(t("st_held_too_large", path=path, size=(h.get("size") or 0) // 2**20), "warn")
+    if folder:
+        term.sag(t("st_held_folder", n=len(folder)), "warn")
+
+
 def status(term):
     d = None
     try:
@@ -324,6 +340,7 @@ def status(term):
         for h in z["hinweise"][-10:]:
             term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
+    held_back_lines(term, z.get("held_back") or [])
     if adapter.kalender_anschluss() and not timer_modul().vdirsyncer_da():
         term.sag()
         vdirsyncer_hinweis(term)

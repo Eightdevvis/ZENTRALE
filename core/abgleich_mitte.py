@@ -22,6 +22,23 @@ import cloud_api
 ZWEIG = "abgleich"
 
 
+# The cloud refuses blobs above 24 MiB (cloud/src/mitte.ts MAX_BLOB). A blob is
+# the Fernet token of a file, which is larger than the file itself.
+MAX_BLOB = 24 * 1024 * 1024
+
+
+def encrypted_size(plain_size: int) -> int:
+    """Size of the Fernet token for `plain_size` bytes: base64url of version
+    (1) + time (8) + IV (16) + AES-CBC with PKCS7 padding + HMAC (32)."""
+    raw = 1 + 8 + 16 + (plain_size // 16 + 1) * 16 + 32
+    return 4 * ((raw + 2) // 3)
+
+
+def fits_blob(plain_size: int) -> bool:
+    """Does a file of this size still fit into one blob of the cloud?"""
+    return encrypted_size(plain_size) <= MAX_BLOB
+
+
 class MitteFehler(Exception):
     """Mitte nicht erreichbar oder kaputt — für Sasha lesbar."""
 
@@ -221,7 +238,7 @@ class HttpMitte:
         self._vorrat[kennung] = (dict(schreiben), list(loeschen))
         return kennung
 
-    MAX_BLOB = 24 * 1024 * 1024
+    MAX_BLOB = MAX_BLOB
 
     def _hochladen(self, inhalte: dict):
         """Was der Server noch nicht hat, als Blob hochladen

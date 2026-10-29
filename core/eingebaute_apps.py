@@ -53,6 +53,11 @@ EINGEBAUT = {
                 "daten": {"muster": ["data/adapter/anschluesse/*.json", "data/adapter/bruecke/**",
                                      "data/adapter/geheim.enc"],
                           "abgleichen": True}},
+    # The cloud folder (core/cloud_folder.py, memory/hub/cloud_folder.md,
+    # 2026-10-29): ~/Zentrale/Cloud, anything dropped there syncs. Its own app
+    # next to the service `cloud` below, which has no data of its own.
+    "cloud_folder": {"titel": "Cloud",
+                     "daten": {"muster": ["data/cloud/**"], "abgleichen": True}},
     # Die Cloud selbst (Konto, Abgleich, Geräte, Nutzungs-Wächter): ein Dienst
     # ohne eigene Daten. Ob sie an ist, sagt abgleich.cloud_an().
     "cloud": {"titel": "Cloud", "dienst": True},

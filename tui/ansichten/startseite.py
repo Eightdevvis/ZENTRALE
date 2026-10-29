@@ -34,6 +34,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 RAD_APPS = [
     ("k", "klavier"), ("p", "post"), ("c", "kalender"), ("f", "fokus"),
     ("n", "notizen"), ("g", "graph"), ("m", "karte"), ("u", "tutor"),
+    ("cloud", "cloud"),               # 2026-10-29: opens ~/Zentrale/Cloud (cloud_folder.py)
     ("e", "elektronik"),
 ]
 # Apps mit Pixel-Symbol (tui/pixel.py): im Rad eine Pille, vorn klappt das

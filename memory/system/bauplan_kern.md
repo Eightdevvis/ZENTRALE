@@ -102,6 +102,7 @@ zählen als ein Modul.
 | `context` | 1 | Datei-Zugriff nur über die Whitelist |
 | `nutzer_ordner` | 1 | Sashas Nutzerordner (Einstellung `nutzer_ordner`, Standard ~/Zentrale) mit Input/ und Output/: anlegen, Pfade auflösen ohne Weg hinaus — seit 2026-10-11 nicht mehr für die KI (die liest die Ablage), nur noch Desk-Bilder und Werkstatt |
 | `ablage_ort` | 1 | WO die Ablage liegt (Einstellung `ablage_dir`, Standard ~/Zentrale/Ablage; Köpfe/Fassungen versteckt in `.ablage/dokumente/`) — für Ablage und Abgleich |
+| `cloud_folder` | 1 | Where the cloud folder lives (setting `cloud_folder_dir`, default ~/Zentrale/Cloud) and which files in it never sync (.git, node_modules, partial downloads …) — for sync and TUI (2026-10-29) |
 | `tabelle_formel` | 1 | Excel-Formeln: deutsch → Excel-Standard (englisch, Komma) sicher übersetzen, unbekannte Funktionen ablehnen |
 | `nutzer_angaben` | 1 | Name und Pronomen des Nutzers (Einstellungen `nutzer_name`, `nutzer_pronomen`) für die Platzhalter in den Prompt-Texten; Standard = der alte Text |
 | `zip_sicher` | 1 | Eine Zip sicher lesen und auspacken (kein `..`/absolut/Symlink, Grenzen für Zahl und Größe, Auslassen von Verstecktem/Schlüsseln) — geteilt von `skill_import` und `ablage_zip` |

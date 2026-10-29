@@ -310,6 +310,36 @@
       "@type": "ListItem",
       "position": 11,
       "item": {
+        "@type": "ImageObject",
+        "@id": "zentrale://shop/icons/cloud",
+        "identifier": "cloud",
+        "name": "Cloud",
+        "description": "Eine Wolke aus drei Bäuschen, darunter wippt ein Pfeil. Das Pixel-Symbol der App im Rad.",
+        "category": "icons",
+        "keywords": [
+          "pixel",
+          "rad",
+          "dateien"
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "pixel_motiv",
+            "value": "cloud"
+          }
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 12,
+      "item": {
         "@type": "CreativeWork",
         "@id": "zentrale://shop/hintergruende/denkadern",
         "identifier": "denkadern",
@@ -331,7 +361,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 12,
+      "position": 13,
       "item": {
         "@type": "CreativeWork",
         "@id": "zentrale://shop/hintergruende/nacht",
@@ -353,7 +383,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 13,
+      "position": 14,
       "item": {
         "@type": "CreativeWork",
         "@id": "zentrale://shop/hintergruende/tag",
@@ -375,7 +405,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 14,
+      "position": 15,
       "item": {
         "@type": "SoftwareApplication",
         "@id": "zentrale://shop/bauteile/desk-view",
@@ -398,7 +428,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 15,
+      "position": 16,
       "item": {
         "@type": "SoftwareApplication",
         "@id": "zentrale://shop/bauteile/kalender-ausschnitt",
@@ -422,7 +452,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 16,
+      "position": 17,
       "item": {
         "@type": "SoftwareApplication",
         "@id": "zentrale://shop/bauteile/liste",
@@ -446,7 +476,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 17,
+      "position": 18,
       "item": {
         "@type": "SoftwareApplication",
         "@id": "zentrale://shop/bauteile/graph-verlauf",
@@ -470,7 +500,7 @@
     },
     {
       "@type": "ListItem",
-      "position": 18,
+      "position": 19,
       "item": {
         "@type": "SoftwareApplication",
         "@id": "zentrale://shop/apps/budget",

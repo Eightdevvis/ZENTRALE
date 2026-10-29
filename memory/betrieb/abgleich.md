@@ -245,6 +245,15 @@ dabei: `data/apps/**` — die selbst gebauten Apps der Werkstatt
 (`app.toml` + `icon.png`, [../hub/werkstatt.md](../hub/werkstatt.md));
 ihr Desk liegt ohnehin in `data/desk/`.
 
+**Cloud folder (since 2026-10-29):** `~/Zentrale/Cloud` is `data/cloud/**`
+in the sync (sync only, never the backup), app `cloud_folder`. Its files are
+never merged inside (both changed → the cloud wins, the version from here
+goes to `konflikte/`). **Held back** — not read, not sent, not deleted, base
+untouched, one note, `held_back` in the state — is any file that does not fit
+into one cloud blob (> 24 MiB encrypted ≈ 18 MiB file; applies to every
+file, not only this folder), and a missing/empty cloud folder whose files
+(3 or more) the cloud still has. Details: [../hub/cloud_folder.md](../hub/cloud_folder.md).
+
 **Kalender: über die Cloud, seit 2026-10-24** ([../hub/adapter.md](../hub/adapter.md)).
 Bis dahin glich jeder Rechner selbst mit Google ab, `data/kalender/**` stand
 in `NICHT_ABGLEICHEN` (ein zweiter Weg brächte Doppelte und Geister). Jetzt
@@ -466,6 +475,7 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | Datei | Was |
 |---|---|
 | `core/abgleich_auswahl.py` | die Positivliste (auch für die Datensicherung) |
+| `core/cloud_folder.py` | cloud folder: where it lives, what in it never syncs (2026-10-29) |
 | `core/abgleich_schluessel.py` | Schlüssel anlegen, laden, ver-/entschlüsseln, versteckte Namen |
 | `core/abgleich_zusammenfuehren.py` | die Regeln oben: JSON, Zeilen, Text, Ganzes, Wer-zuerst-kam |
 | `core/abgleich_ics.py` | Termine je VEVENT (seit 2026-10-24) |
