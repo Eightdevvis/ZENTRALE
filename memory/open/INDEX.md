@@ -21,3 +21,9 @@ How this folder works: [README.md](README.md). One line per open item.
 | [list_names_english.md](list_names_english.md) | List rebuild left German names (`listen_bild`, `listen_app.md`, role `auswahl`) | no |
 | [backup_dashboard_focus_box.md](backup_dashboard_focus_box.md) | Backup dashboard draws the focus box the old way (`proj_render`, pink bars) | yes (decide) |
 | [tracker_rename_decisions.md](tracker_rename_decisions.md) | Tracker after the 11.10. rename: unclear items, German titles, items to tick off | yes (Sasha keeps the tracker) |
+| [calendar_soll_ki_tools.md](calendar_soll_ki_tools.md) | KI calendar tools/adapter don't know `soll_abstand` of deadlines | no |
+| [calendar_cloud_sync_gaps.md](calendar_cloud_sync_gaps.md) | Calendar via Mitte: switch-back deletion risk, no n/N progress, first-run and race gaps, Google timer | no |
+| [calendar_phone_merge_limits.md](calendar_phone_merge_limits.md) | Phone edits: two different occurrences off = conflict; removing by omission doesn't work | no |
+| [tui_bauplan_over_limit.md](tui_bauplan_over_limit.md) | `memory/system/tui_bauplan.md` has 620 lines (limit 600) | no |
+| [study_plan_followups.md](study_plan_followups.md) | Study plan: ExPhy Soll, chemistry exam blocks, Parkour, PhyProg ECTS, pause test, mechanics doc | yes (partly) |
+| [calendar_form_hints.md](calendar_form_hints.md) | Hint text for greyed-out rows in the calendar Advanced window | no |
