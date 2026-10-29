@@ -473,7 +473,8 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_apps.py`, `core/eingebaute_apps.py` | Apps mit Daten, die Wahl je App und Gerät, Übernahme der alten Bereiche |
 | `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |
 | `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten (Quittungen), Apps neu dabei, Vorhaben, Hinweise, Zustand |
-| `core/abgleich_vorschlaege.py` | was ein fremder Knoten vorschlagen darf: Gesprächskopf, Termine (neu/ändern/löschen/Ebene, je VEVENT ohne Überschreiben) |
+| `core/abgleich_vorschlaege.py` | was ein fremder Knoten vorschlagen darf: Gesprächskopf, Termine (neu/ändern/löschen/Ebene, je VEVENT und Feldgruppe ohne Überschreiben) |
+| `core/vevent_merge.py` | three-way merge inside one VEVENT per group of fields (time, title, note, reminders, …) — since 2026-10-29 |
 | `core/mobil_kontext.py` | Kontextpaket fürs Handy (Schicht 3) |
 | `scripts/abgleich.py` | der Befehl |
 | `ui/routen/abgleich.py` | `GET /api/abgleich` |

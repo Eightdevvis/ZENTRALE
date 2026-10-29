@@ -18,16 +18,16 @@
 # „Was in der Cloud ist, darf nie einfach so überschrieben werden“), sagt das
 # Handy, WELCHE Fassung der Mitte es gesehen hat (`basis_sha`, der sha aus
 # inhalt.enc; besser dazu die Fassung selbst, `basis`). Dann je VEVENT
-# (UID + RECURRENCE-ID) drei Wege:
+# (UID + RECURRENCE-ID) und darin je Gruppe von Feldern (core/vevent_merge,
+# since 2026-10-29: time, title, place, note, reminders, …) drei Wege:
 #
-#   nur das Handy geändert   → die Fassung vom Handy (was es nicht kennt —
-#                              DESCRIPTION, fremde VALARMs, Google-Felder —
-#                              bleibt aus der Mitte, wie VERWALTET in
-#                              kalender_ics_abbildung.zusammenfuehren)
-#   nur die Mitte geändert   → die Mitte
-#   beide verschieden        → ABGELEHNT, nichts geschrieben, beide bleiben
-#                              (nie „der Spätere gewinnt“ — anders als zwischen
-#                              zwei Rechnern in abgleich_ics)
+#   only the phone changed the group  → the phone's (what it omits and
+#                                       ZENTRALE does not manage — DESCRIPTION,
+#                                       foreign VALARMs, Google fields — stays)
+#   only the cloud changed it         → the cloud's
+#   both, differently                 → REJECTED as a whole, nothing written
+#                                       (never "the later one wins" — unlike
+#                                       between two computers in abgleich_ics)
 #
 # Löschen nur ausdrücklich (`loeschen: true` + `basis_sha`), nie, weil eine
 # Datei fehlt. Reine Funktionen: Pfade und Bytes rein, Entscheidung raus.
@@ -41,6 +41,7 @@ from zoneinfo import ZoneInfo
 
 import abgleich_ics
 import dateien
+import vevent_merge
 from i18n import _
 
 # Was ZENTRALE an einem VEVENT selbst verwaltet — GLEICH wie
@@ -120,7 +121,7 @@ REASONS = {
     "merge_unreadable": "merging gave no readable event — nothing overwritten",
     "conflict": "conflict — {details}",
     "same_file": "another proposal touches the same file",
-    "conflict_changed": "{event}: changed differently on the phone and in the cloud",
+    "conflict_changed": "{event} ({fields}): changed differently on the phone and in the cloud",
     "conflict_deleted": "{event}: deleted on one side, changed on the other",
 }
 
@@ -164,8 +165,9 @@ def _ebene_da(ebene, mitte):
 # ── Vergleichen und Übernehmen je VEVENT ───────────────────────────────
 
 def _kanon(block):
-    """Gleich im Sinn des Termins: entfaltet, ohne Zeilenende, ohne DTSTAMP
-    (den schreibt jeder Export neu), Reihenfolge egal. None bleibt None."""
+    """Gleich im Sinn des Termins: entfaltet, ohne Zeilenende, ohne DTSTAMP,
+    LAST-MODIFIED, SEQUENCE (technical, written fresh by every edit),
+    Reihenfolge egal. None bleibt None."""
     if block is None:
         return None
     zeilen = []
@@ -174,7 +176,7 @@ def _kanon(block):
             zeilen[-1] += z[1:]
         elif z.strip():
             zeilen.append(z.rstrip())
-    return tuple(sorted(z for z in zeilen if abgleich_ics._name(z) != "DTSTAMP"))
+    return tuple(sorted(z for z in zeilen if abgleich_ics._name(z) not in vevent_merge.TECHNICAL))
 
 
 def _gleich(a, b):
@@ -194,15 +196,16 @@ def _event(block):
     return kal.walk("VEVENT")[0]
 
 
-def _aus_angleichen(ev):
+def _align_switched_off(block: str) -> str:
     """X-ZENTRALE-AUS hält die genaue Liste der abgeschalteten Vorkommen; jedes
     Datum darin steht auch als EXDATE. Hat das Handy ein EXDATE entfernt (ein
     Vorkommen wieder an), muss es auch aus X-ZENTRALE-AUS — sonst läse
     ZENTRALE es weiter als aus. Ein neues EXDATE ohne Eintrag liest ZENTRALE
     ohnehin als aus (kalender_ics_abbildung._routine_lesen)."""
+    ev = _event(block)
     x = x_aus_lesen(ev.get(X_AUS))
     if not isinstance(x, list):
-        return
+        return block
     ex = set()
     werte = ev.get("EXDATE")
     for liste in (werte if isinstance(werte, list) else [werte] if werte is not None else []):
@@ -212,9 +215,10 @@ def _aus_angleichen(ev):
                 w = (w.astimezone(_TZ) if w.tzinfo else w).date()
             ex.add(w)
     neu = [a for a in x if not isinstance(a, str) or _tag(a) is None or _tag(a) in ex]
-    if neu != x:
-        ev.pop(X_AUS, None)
-        ev.add(X_AUS, x_aus_schreiben(neu))
+    if neu == x:
+        return block
+    return vevent_merge.replace_property(
+        block, X_AUS, [f"{X_AUS}:{x_aus_schreiben(neu)}"] if neu else [])
 
 
 def _tag(s):
@@ -243,33 +247,23 @@ def x_aus_schreiben(obj) -> str:
     return "b64:" + base64.urlsafe_b64encode(roh).decode("ascii")
 
 
-def _uebernehmen(p, m, rid):
-    """Die Fassung vom Handy, ergänzt um alles aus der Mitte, was ZENTRALE
-    nicht verwaltet und das Handy nicht mitgeschickt hat (wie VERWALTET in
-    kalender_ics_abbildung.zusammenfuehren: DESCRIPTION, fremde VALARMs,
-    Google-Felder, X-ZENTRALE-* — ein Knoten, der sie beim Lesen verliert,
-    löscht sie so nicht). Dazu X-ZENTRALE-AUS passend zu EXDATE."""
-    ev = _event(p)
-    if m is not None:
-        alt = _event(m)
-        verwaltet = VERWALTET_ABWEICHUNG if rid else VERWALTET
-        schon = {n for n, _w in ev.property_items(recursive=False)}
-        for n, w in alt.property_items(recursive=False):
-            if n in ("BEGIN", "END") or n in verwaltet or n in schon:
-                continue
-            ev.add(n, w)
-        if not ev.subcomponents:
-            for sub in alt.subcomponents:
-                ev.add_component(sub)
-    if not rid:
-        _aus_angleichen(ev)
-    return ev.to_ical().decode("utf-8")
+def merge_event(b, p, m, rid):
+    """One VEVENT, three ways, per group of fields (core/vevent_merge).
+    → (text, []) or (None, [conflicting groups]). b/m None = not there.
+    X-ZENTRALE-AUS is aligned to EXDATE when the time came from the phone."""
+    verwaltet = VERWALTET_ABWEICHUNG if rid else VERWALTET
+    text, from_phone, conflicts = vevent_merge.merge(b, p, m, verwaltet)
+    if conflicts:
+        return None, conflicts
+    if not rid and vevent_merge.TIME in from_phone:
+        text = _align_switched_off(text)
+    return text, []
 
 
 def dreiweg(basis: bytes, vorschlag: bytes, mitte: bytes):
-    """→ (bytes, []) oder (None, [Widersprüche]). Je VEVENT: nur der Vorschlag
-    geändert → er (ergänzt, _uebernehmen); nur die Mitte → sie; beide
-    verschieden → Widerspruch (dann wird NICHTS übernommen)."""
+    """→ (bytes, []) oder (None, [Widersprüche]). Je VEVENT: unverändert →
+    die Mitte; nur auf einer Seite da → wie bisher (weggelassen nur, wenn die
+    Mitte nichts geändert hat); sonst je Gruppe von Feldern (merge_event)."""
     tb, tp, tm = (abgleich_ics.zerlegen(x) for x in (basis, vorschlag, mitte))
     reihe = list(tm.reihe) + [k for k in tp.reihe if k not in tm.termine]
     reihe += [k for k in tb.reihe if k not in reihe]
@@ -279,12 +273,18 @@ def dreiweg(basis: bytes, vorschlag: bytes, mitte: bytes):
         name = k[0] + (f" am {k[1]}" if k[1] else "")
         if _gleich(p, m) or _gleich(p, b):
             r = m
-        elif _gleich(m, b):
-            r = None if p is None else _uebernehmen(p, m, k[1])
+        elif p is None or (m is None and b is not None):
+            if p is None and _gleich(m, b):
+                r = None                    # the phone took back a RECURRENCE-ID part
+            else:
+                widerspruch.append(_(REASONS["conflict_deleted"]).format(event=name))
+                continue
         else:
-            widerspruch.append(_(REASONS["conflict_changed"] if p is not None and m is not None
-                                 else REASONS["conflict_deleted"]).format(event=name))
-            continue
+            r, gruppen = merge_event(b, p, m, k[1])
+            if gruppen:
+                felder = ", ".join(vevent_merge.label(g, _) for g in gruppen)
+                widerspruch.append(_(REASONS["conflict_changed"]).format(event=name, fields=felder))
+                continue
         if r is not None:
             termine.append(r)
     if widerspruch:
@@ -305,8 +305,11 @@ def _schon_drin(vorschlag: bytes, mitte: bytes) -> bool:
     tp, tm = abgleich_ics.zerlegen(vorschlag), abgleich_ics.zerlegen(mitte)
     if set(tp.termine) != set(tm.termine):
         return False
-    return all(_gleich(_uebernehmen(p, tm.termine[k], k[1]), tm.termine[k])
-               for k, p in tp.termine.items())
+    for k, p in tp.termine.items():
+        m = tm.termine[k]
+        if not _gleich(p, m) and not _gleich(merge_event(m, p, m, k[1])[0], m):
+            return False
+    return True
 
 
 # ── Die eine Regel ─────────────────────────────────────────────────────

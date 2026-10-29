@@ -62,8 +62,57 @@ msgstr "Widerspruch — {details}"
 msgid "another proposal touches the same file"
 msgstr "ein anderer Vorschlag trifft dieselbe Datei"
 
-msgid "{event}: changed differently on the phone and in the cloud"
-msgstr "{event}: am Handy und in der Mitte verschieden geändert"
+msgid "{event} ({fields}): changed differently on the phone and in the cloud"
+msgstr "{event} ({fields}): am Handy und in der Mitte verschieden geändert"
+
+# Groups of fields of an event (core/vevent_merge.LABELS), named in a conflict.
+msgid "time"
+msgstr "Zeit"
+
+msgid "title"
+msgstr "Titel"
+
+msgid "place"
+msgstr "Ort"
+
+msgid "note"
+msgstr "Notiz"
+
+msgid "category and colour"
+msgstr "Kategorie und Farbe"
+
+msgid "status"
+msgstr "Status"
+
+msgid "busy/free"
+msgstr "belegt/frei"
+
+msgid "deadline"
+msgstr "Deadline"
+
+msgid "reminders"
+msgstr "Erinnerungen"
+
+msgid "source"
+msgstr "Quelle"
+
+msgid "style"
+msgstr "Aussehen"
+
+msgid "motif"
+msgstr "Motiv"
+
+msgid "needs cancelling"
+msgstr "Absage nötig"
+
+msgid "position"
+msgstr "Position"
+
+msgid "other ZENTRALE fields"
+msgstr "weitere ZENTRALE-Felder"
+
+msgid "field {name}"
+msgstr "Feld {name}"
 
 msgid "{event}: deleted on one side, changed on the other"
 msgstr "{event}: auf der einen Seite gelöscht, auf der anderen geändert"
