@@ -25,7 +25,7 @@ darüber (Hub-Schnittstelle, Apps, Werkstatt, Shop, Desk, Bausteine, Produkt):
 | Browser-Front unter /zentrale: Route, Dateien, ruhender Tab, Zugang | [browser_front.md](browser_front.md) |
 | **Fokus-Werkzeug** (Listen, Taste `f`) — Tasten, Ebenen, Bernsteinleiste; steht beim Listenprogramm | [../hub/listen_app.md](../hub/listen_app.md) |
 | Tastatur-Belegung in jedem Modus | [tastatur.md](tastatur.md) |
-| **ZEN-MOBILE** — die Handy-App (`mobile/`): Auge, KI-Chat, Kalender mit Erinnerungen, Login am Konto, Handy als eigener Knoten an der Mitte (Cloud) | [zen_mobile.md](zen_mobile.md) |
+| **ZEN-MOBILE** — die Handy-App (`mobile/`): Auge, KI-Chat, Kalender mit Erinnerungen, Login am Konto, Handy als eigener Knoten an der Mitte (Cloud), self-update from our cloud | [zen_mobile.md](zen_mobile.md) |
 
 ## Stand der Fronten (2026-10-12)
 

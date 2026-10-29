@@ -255,4 +255,93 @@ class AppLocalizationsEn extends AppLocalizations {
   String reasonUnknown(String code) {
     return 'rejected ($code)';
   }
+
+  @override
+  String get updateTitle => 'App update';
+
+  @override
+  String updateInstalled(String version, int code) {
+    return 'Installed: $version ($code)';
+  }
+
+  @override
+  String get updateCheck => 'Check for update';
+
+  @override
+  String get updateChecking => 'Looking for a new version …';
+
+  @override
+  String get updateUpToDate => 'The app is up to date.';
+
+  @override
+  String get updateNoRelease => 'No version has been published yet.';
+
+  @override
+  String get updateNotLoggedIn =>
+      'Log in to your ZENTRALE account and the app looks for updates itself.';
+
+  @override
+  String get updateDisabled => 'This copy is updated through the Play Store.';
+
+  @override
+  String updateAvailable(String version) {
+    return 'New version $version is available.';
+  }
+
+  @override
+  String updateNotes(String notes) {
+    return 'New: $notes';
+  }
+
+  @override
+  String get updateDownload => 'Download and install';
+
+  @override
+  String updateDownloading(int percent) {
+    return 'Downloading … $percent %';
+  }
+
+  @override
+  String get updateVerifying => 'Checking the file …';
+
+  @override
+  String updateMetered(int megabytes) {
+    return 'You are on mobile data. The update is about $megabytes MB.';
+  }
+
+  @override
+  String get updateDownloadAnyway => 'Download anyway';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateNeedsPermission =>
+      'Android needs to allow ZENTRALE to install updates once.';
+
+  @override
+  String get updateOpenPermission => 'Open permission';
+
+  @override
+  String get updateInstall => 'Install';
+
+  @override
+  String get updateInstallerOpened => 'Android now asks whether to install.';
+
+  @override
+  String get updateFailedNetwork => 'The cloud cannot be reached right now.';
+
+  @override
+  String get updateFailedChecksum =>
+      'The downloaded file does not match its checksum. Nothing was installed.';
+
+  @override
+  String get updateFailedServer =>
+      'The cloud did not send a valid version description.';
+
+  @override
+  String get updateFailedInstall => 'The installer could not be opened.';
+
+  @override
+  String get updateHint => 'Update available';
 }

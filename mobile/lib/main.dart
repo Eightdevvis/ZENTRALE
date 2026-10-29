@@ -26,11 +26,14 @@ import 'ki/anthropic.dart';
 import 'ki/ki.dart';
 import 'konto/geheim.dart';
 import 'konto/konto.dart';
-import 'l10n/app_localizations.dart';
 import 'mitte/abgleich_steuerung.dart';
 import 'mitte/regeln.dart';
 import 'start/startseite.dart';
+import 'l10n/app_localizations.dart';
 import 'thema/farben.dart';
+import 'update/update_controller.dart';
+import 'update/update_platform.dart';
+import 'update/update_section.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,33 +55,49 @@ Future<void> main() async {
     abgleich: abgleich,
     kalender: kalender.ueberblick,
   );
+  final updates = UpdateController(platform: const AndroidUpdatePlatform(), session: konto.sitzung);
+  // After logging in, look again (the check needs the session).
+  abgleich.addListener(() {
+    if (abgleich.angemeldet && updates.status == UpdateStatus.notLoggedIn) updates.check();
+  });
   runApp(Dienste(
     ablage: ablage,
     einstellungen: einstellungen,
     abgleich: abgleich,
     kalender: kalender,
-    child: ZenMobile(steuerung: steuerung),
+    child: ZenMobile(steuerung: steuerung, updates: updates),
   ));
   await abgleich.laden();
   unawaited(kalender.laden());
+  unawaited(updates.check()); // quietly; a newer version shows as a dot on the start screen
   await steuerung.start(); // gleicht beim Start ab
 }
 
 class ZenMobile extends StatelessWidget {
-  const ZenMobile({super.key, required this.steuerung});
+  const ZenMobile({super.key, required this.steuerung, this.updates});
 
   final ChatSteuerung steuerung;
+
+  /// Self-update (lib/update); null in tests without it.
+  final UpdateController? updates;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'ZENTRALE',
         debugShowCheckedModeBanner: false,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
         theme: zentraleThema(Brightness.light),
         darkTheme: zentraleThema(Brightness.dark),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => Startseite(
+            cornerHint: updates == null
+                ? null
+                : UpdateHint(
+                    controller: updates!,
+                    onTap: () => Navigator.of(context)
+                        .push(MaterialPageRoute<void>(builder: (_) => UpdatePage(controller: updates!))),
+                  ),
             kiOeffnen: (mandel) => Navigator.of(context).push(pupillenRoute<void>(
               mandel: mandel,
               farbe: AugeFarben.von(context).pupille,
@@ -87,7 +106,7 @@ class ZenMobile extends StatelessWidget {
                 einstellungen: () {
                   final d = Dienste.von(context);
                   return EinstellungenSeite(
-                      einstellungen: d.einstellungen, ablage: d.ablage, abgleich: d.abgleich);
+                      einstellungen: d.einstellungen, ablage: d.ablage, abgleich: d.abgleich, updates: updates);
                 },
               ),
             )),

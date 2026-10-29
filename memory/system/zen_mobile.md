@@ -353,16 +353,57 @@ familiar Google-like structure, ZENTRALE look.
 | `auge/`, `start/`, `thema/` | Auge (Stellschrauben `auge_regler.dart`), Startseite mit Knopf-Ring, Farben Tag/Nacht |
 | `peephole/` | Peephole frame: motion mapping, window, view, tuning (`peephole_tuning.dart`) |
 | `l10n/` | gen-l10n ARB tables (German template, English) |
-| `einstellungen/` | Claude-Schlüssel von Hand + Einstellungsseite (Konto, Mitte, Kalender, KI) |
+| `einstellungen/` | Claude-Schlüssel von Hand + Einstellungsseite (Konto, Mitte, App update, Kalender, KI) |
+| `update/` | Self-update (English, see "Self-update"): manifest, download + SHA-256, controller, settings section, start-screen dot |
 
 Tests: `mobile/test/` (Format, Zusammenlegen, Strom-Parser, Anfrage, Auge;
 Krypto und Kalender gegen die Vektoren des Kerns; Mitte und Login gegen eine
 gespielte Cloud `test/falsche_cloud.dart` — nie Netz, nie echte Konten).
 
+## Self-update (`lib/update/`, since 2026-10-29)
+
+The app updates itself from **our** cloud, not from a store (Sasha:
+"selbstupdate bitte"). A separate track from Google Play.
+
+- **Flow:** a computer publishes (`scripts/publish_phone_app.py`, steps in
+  `memory/betrieb/phone_app_release.md`) → the cloud stores APK + manifest
+  `{version, version_code, sha256, size, notes, published_at}`
+  (`cloud/src/phone.ts`) → the app checks on start (quietly) and with
+  "Nach Update suchen" in settings → a newer `version_code` shows a small
+  glowing dot top right on the start screen (tap → update page) and the
+  settings section offers "Laden und installieren" → the APK is streamed to
+  `cache/updates/` and hashed on the way → right before installing it is
+  hashed again (in an isolate) → `MainActivity.kt` hands it to Android's
+  package installer through a FileProvider; Android asks the user once.
+- **Trust:** only operator accounts (`BETREIBER_NAMEN`) can publish. The app
+  asks only the cloud of its own session, with that session, and builds the
+  APK address from the version code (never a URL from the manifest). R2
+  checks the SHA-256 on upload, the cloud only accepts a manifest naming an
+  APK stored with the same size and SHA-256, the app checks size + SHA-256,
+  and Android refuses an update signed with another key (the release key,
+  `memory/betrieb/phone_app_release.md`). Not yet: an Ed25519 signature over
+  the manifest (would also protect against a compromised cloud account;
+  Android's signature check already blocks foreign APKs).
+- **Permission:** `REQUEST_INSTALL_PACKAGES`; without the "install unknown
+  apps" permission the section shows "Erlaubnis öffnen" (Android's screen for
+  this app) and then "Installieren" again.
+- **Mobile data:** on a metered network the app asks first (size in MB).
+- **Play builds:** off by `BuildConfig.SELF_UPDATE` (Gradle
+  `zentrale.distribution=play`) and at runtime when Play installed the copy.
+  The section then says the Play Store updates it.
+- **Version:** only `version_code` decides (pubspec `version: name+code`);
+  the name is for people.
+- **Text:** all from gen-l10n (`lib/l10n/app_de.arb` / `app_en.arb`, keys
+  `update*`).
+- **Tests:** `test/update_test.dart` (fake cloud via MockClient, fake Android),
+  cloud `cloud/test/phone.test.ts`, script `tests/test_publish_phone_app.py`.
+
 ## Offen
 
 1. **Auf dem Handy ausprobieren** — bisher nur Tests und Analyse. Sasha:
    APK neu bauen (nicht auf dem 3,8-GB-Laptop), einmal anmelden.
+   Self-update: deploy the cloud, uninstall the debug-signed app once,
+   install the first release-signed APK by hand (`memory/betrieb/phone_app_release.md`).
 2. Kalender in die Mitte (Kalender-Session). Ändern/Löschen vom Handy ist gebaut (29.10.), am echten Handy noch nicht ausprobiert.
 3. Argon2id-Dauer auf dem echten Handy messen; ist sie zu lang, eine native
    Umsetzung hinter dieselbe Funktion `hauptschluessel` stecken.

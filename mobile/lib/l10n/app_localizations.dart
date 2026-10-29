@@ -511,6 +511,156 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'abgelehnt ({code})'**
   String reasonUnknown(String code);
+
+  /// Heading of the self-update section in settings and title of the update page.
+  ///
+  /// In de, this message translates to:
+  /// **'App-Aktualisierung'**
+  String get updateTitle;
+
+  /// The installed app version; code = Android versionCode.
+  ///
+  /// In de, this message translates to:
+  /// **'Installiert: {version} ({code})'**
+  String updateInstalled(String version, int code);
+
+  /// Button: ask the cloud for a newer version.
+  ///
+  /// In de, this message translates to:
+  /// **'Nach Update suchen'**
+  String get updateCheck;
+
+  /// Status while asking the cloud.
+  ///
+  /// In de, this message translates to:
+  /// **'Suche nach einer neuen Version …'**
+  String get updateChecking;
+
+  /// Status: no newer version.
+  ///
+  /// In de, this message translates to:
+  /// **'Die App ist aktuell.'**
+  String get updateUpToDate;
+
+  /// Status: the cloud has no release yet.
+  ///
+  /// In de, this message translates to:
+  /// **'Noch keine Version veröffentlicht.'**
+  String get updateNoRelease;
+
+  /// Status: no session, so no update check.
+  ///
+  /// In de, this message translates to:
+  /// **'Melde dich beim ZENTRALE-Konto an, dann sucht die App selbst nach Updates.'**
+  String get updateNotLoggedIn;
+
+  /// Status: self-update is off (Play build or Play install).
+  ///
+  /// In de, this message translates to:
+  /// **'Diese Fassung wird über den Play Store aktualisiert.'**
+  String get updateDisabled;
+
+  /// Status: a newer release exists.
+  ///
+  /// In de, this message translates to:
+  /// **'Neue Version {version} ist da.'**
+  String updateAvailable(String version);
+
+  /// Release notes of the new version.
+  ///
+  /// In de, this message translates to:
+  /// **'Neu: {notes}'**
+  String updateNotes(String notes);
+
+  /// Button: download the new APK and start the installer.
+  ///
+  /// In de, this message translates to:
+  /// **'Laden und installieren'**
+  String get updateDownload;
+
+  /// Download progress.
+  ///
+  /// In de, this message translates to:
+  /// **'Wird geladen … {percent} %'**
+  String updateDownloading(int percent);
+
+  /// Status while the SHA-256 is checked.
+  ///
+  /// In de, this message translates to:
+  /// **'Prüfe die Datei …'**
+  String get updateVerifying;
+
+  /// Asks before downloading on a metered network.
+  ///
+  /// In de, this message translates to:
+  /// **'Du bist im mobilen Netz. Das Update ist etwa {megabytes} MB groß.'**
+  String updateMetered(int megabytes);
+
+  /// Button: download on the metered network.
+  ///
+  /// In de, this message translates to:
+  /// **'Trotzdem laden'**
+  String get updateDownloadAnyway;
+
+  /// Button: not now.
+  ///
+  /// In de, this message translates to:
+  /// **'Später'**
+  String get updateLater;
+
+  /// The 'install unknown apps' permission is missing.
+  ///
+  /// In de, this message translates to:
+  /// **'Android muss einmal erlauben, dass ZENTRALE Updates installiert.'**
+  String get updateNeedsPermission;
+
+  /// Button: open Android's 'install unknown apps' screen.
+  ///
+  /// In de, this message translates to:
+  /// **'Erlaubnis öffnen'**
+  String get updateOpenPermission;
+
+  /// Button: hand the verified APK to Android's installer.
+  ///
+  /// In de, this message translates to:
+  /// **'Installieren'**
+  String get updateInstall;
+
+  /// Status after the system installer was opened.
+  ///
+  /// In de, this message translates to:
+  /// **'Android fragt jetzt, ob installiert werden soll.'**
+  String get updateInstallerOpened;
+
+  /// Error: network or server down.
+  ///
+  /// In de, this message translates to:
+  /// **'Die Cloud ist gerade nicht erreichbar.'**
+  String get updateFailedNetwork;
+
+  /// Error: SHA-256 or size mismatch.
+  ///
+  /// In de, this message translates to:
+  /// **'Die geladene Datei stimmt nicht mit der Prüfsumme überein. Nichts wurde installiert.'**
+  String get updateFailedChecksum;
+
+  /// Error: unreadable or invalid manifest.
+  ///
+  /// In de, this message translates to:
+  /// **'Die Cloud schickte keine gültige Versionsangabe.'**
+  String get updateFailedServer;
+
+  /// Error: Android installer could not be started.
+  ///
+  /// In de, this message translates to:
+  /// **'Der Installer ließ sich nicht öffnen.'**
+  String get updateFailedInstall;
+
+  /// Tooltip/semantics of the small dot on the start screen.
+  ///
+  /// In de, this message translates to:
+  /// **'Update verfügbar'**
+  String get updateHint;
 }
 
 class _AppLocalizationsDelegate

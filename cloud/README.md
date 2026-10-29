@@ -34,6 +34,7 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 | `src/krypto.ts` | salted HMAC, constant-time compare, tokens |
 | `src/grenzen.ts` | the Cloudflare free-tier limits (one table, with sources) |
 | `src/nutzung.ts` | self-metering, `GET /v1/nutzung`, storage brake, R2 recount, GraphQL |
+| `src/phone.ts` | phone app self-update: release manifest + APK (operator publishes, sessions read) |
 | `migrations/` | D1 schema |
 | `scripts/` | admin: invite codes, publishing a release |
 | `test/` | vitest inside the Workers runtime (`@cloudflare/vitest-plugin`) |
@@ -138,6 +139,16 @@ npm ci
 npm test          # vitest, fully local (Miniflare), no Cloudflare account needed
 npm run typecheck
 ```
+
+## Phone app releases (self-update)
+
+`GET /v1/phone/release` (manifest) and `GET /v1/phone/release/{code}.apk` for
+any session; `PUT /v1/phone/release/{code}.apk?sha256=` (raw APK ≤ 96 MiB,
+streamed to R2, R2 checks the SHA-256) and `PUT /v1/phone/release` (manifest;
+only names an APK stored with the same size and SHA-256, version code must
+grow) only for `BETREIBER_NAMEN`. R2: `phone/release.json`, `phone/apk/<code>.apk`;
+the previous APK stays, older ones are deleted. No D1 migration. Publishing:
+`scripts/publish_phone_app.py`, steps in `memory/betrieb/phone_app_release.md`.
 
 ## Secrets
 
