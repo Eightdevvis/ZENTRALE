@@ -15,7 +15,6 @@ How this folder works: [README.md](README.md). One line per open item.
 | [store_app_lifecycle.md](store_app_lifecycle.md) | Store apps: no uninstall, update or rights dialog yet | no |
 | [store_tutor_map_migration.md](store_tutor_map_migration.md) | Tutor and map still hard-coded, not installed through the store | no |
 | [budgeter_followups.md](budgeter_followups.md) | Budget app: German code, no import, small gaps, look | partly (look) |
-| [test_pruefstand_isolation_red.md](test_pruefstand_isolation_red.md) | `test_pruefstand_isolation` red on main (`SYSTEMD_USER`) | no |
 | [printer_adapter.md](printer_adapter.md) | Printer via pluggable adapters (core as broker): blueprint + IPP adapter not started; printer not on a shared network yet | yes (network, go) |
 | [smartwatch_import.md](smartwatch_import.md) | Xiaomi Smart Band 11 → ZENTRALE: Gadgetbridge test pending, no importer exists yet | yes (test on phone) |
 | [list_app_extraction.md](list_app_extraction.md) | List app (`fokus`) not pulled out of ZENTRALE yet; hub imports, direct `lists` readers, deprecated `tiefe` | no |

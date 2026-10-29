@@ -44,7 +44,10 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
                         ("RUECKMELDUNGEN", "rueckmeldungen"), ("ABGLEICH", "abgleich"),
                         ("ANBINDUNGEN", "anbindungen"),
                         # 2026-10-23: Zwischenspeicher der Cloud-Nutzung (Warnzeile).
-                        ("NUTZUNG", "nutzung")):
+                        ("NUTZUNG", "nutzung"),
+                        # 2026-10-30: Timer-Dateien (zentrale timers) nie in Sashas
+                        # echtes ~/.config/systemd/user.
+                        ("SYSTEMD_USER", "systemd_user")):
         os.environ[f"ZENTRALE_{name}_DIR"] = os.path.join(tmp, unter)
     os.environ["ZENTRALE_LOKALE_KI"] = "aus"         # kein Ollama, Chat über die Cloud
     os.environ["ZENTRALE_MAIL"] = "off"
