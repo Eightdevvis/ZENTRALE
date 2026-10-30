@@ -140,7 +140,7 @@ wires yet; they live only on the map (section 6.3).
 | "new app with data asks once: sync it?" | = the hub proposes a wire `data → sync`; same question, same place | none |
 | calendar `quelle` google/zencloud/lokal | a `calendar-source` wire of the calendar instance | none (projection only) |
 | rights word names an app (`kalender:lesen`) | allowed as "wire to that app"; new apps say `read:calendar` and the user picks the provider | small |
-| rights dialog missing ([../open/store_app_lifecycle.md](../open/store_app_lifecycle.md)) | the install dialog *is* the plug dialog: list needed ports, propose providers, user confirms | the missing piece anyway |
+| rights dialog missing | the install dialog *is* the plug dialog: list needed ports, propose providers, user confirms | built `ec0020a` |
 
 ## 2. Contracts and versioning — no forced updates
 
@@ -297,7 +297,7 @@ what ZENTRALE does, what exists.
 | 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | yes (keeper `13235f8`; wizard when a terminal is attached `527afc3`) |
 | 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes (cloud as store app: `79482b5`) |
 | 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder: wizard step, `527afc3`) |
-| 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; owned-app offer `79482b5`; plug/rights dialog no |
+| 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; owned-app offer `79482b5`; plug dialog `ec0020a` |
 | 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | core: timer, setting, self-test (`527afc3`); apps: follow repo, holds (`e24374f`) |
 | 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes (owned apps offered: `79482b5`) |
 | 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | built `d1dc8fd` (key change: `core/key_rotation.py`, `PUT /v1/konto/schluessel`) |
@@ -537,7 +537,7 @@ five stages, and stages 2–3 are the hard gate:
 
 **What we write ourselves:** the type registry (schema files), the
 compiler with its graph checks, the socket table for the editors, and the apply agent with the generation pointer. That is all. No new language.
-**Built (9/9b, `6a63d16`):** registry, compiler, generations, apply agent, fed by the CLI sync choice — [port_types.md](port_types.md).
+**Built (9/9b, `6a63d16`; 11, `ec0020a`):** registry, compiler, generations, apply agent (on the keeper since 11), fed by the CLI sync choice, `adapter calendar` and the plug dialog — [port_types.md](port_types.md).
 
 ## 7. What exists vs. what is missing
 
@@ -550,10 +550,10 @@ compiler with its graph checks, the socket table for the editors, and the apply 
 | update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
 | versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | policy (insecure warning: `d1dc8fd`; contract folder, old-release test: `b64f3e4`) |
 | packaging | one tarball, `deploy/paket.txt`, `BUNDLE.json`, holds (`e24374f`) | per-app packages as apps leave |
-| plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list; port schema, `needs`/`offers`, `/api/wires` (`6a63d16`) | plug dialog |
+| plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list; port schema, `needs`/`offers`, `/api/wires` (`6a63d16`); plug dialog (`ec0020a`) | — |
 | lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`d1dc8fd`) | Schematix display |
 | wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions | the app, piece kinds, layers, planned state, things store |
-| run pipeline | type registry, compiler, generations, apply agent (`6a63d16`) | apply agent on the timer, socket table in the editors ([../open/run_gate_followups.md](../open/run_gate_followups.md)) |
+| run pipeline | type registry, compiler, generations, apply agent (`6a63d16`), on the keeper timer (`ec0020a`) | socket table in the editors, Dart port of the rules ([../open/run_gate_followups.md](../open/run_gate_followups.md)) |
 
 ## 8. Build order — small steps, each with its acceptance test
 
@@ -573,7 +573,7 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 9 | **Built `6a63d16`.** **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /api/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
 | 9b | **Built `6a63d16`.** **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
 | 10 | **Built `79482b5`.** **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
-| 11 | **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
+| 11 | **Built `ec0020a`.** **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
 | 12 | **Built `e24374f`.** **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
 | 13 | **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
 | 14 | **Schematix v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
@@ -597,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`); step 11 (`ec0020a`): plug dialog, apply agent on the keeper, node wires in the description.

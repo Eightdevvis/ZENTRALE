@@ -1,6 +1,6 @@
 # Port types, wires and the Run gate (building kit steps 9 and 9b)
 
-**Stand 2026-10-30: built `6a63d16` (steps 9 and 9b) and step 11 (plug dialog,
+**Stand 2026-10-30: built `6a63d16` (steps 9 and 9b) and `ec0020a` (step 11: plug dialog,
 Run-gate follow-ups 1, 2, 4; plan: [building_kit_plan.md](building_kit_plan.md)
 section 8).** The type system of the
 building kit and the one gate every wiring change passes. The plan says *why*
