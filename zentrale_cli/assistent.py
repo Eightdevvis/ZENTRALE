@@ -7,7 +7,6 @@ from zentrale_cli import befehle
 from zentrale_cli.texte import t
 
 import abgleich_apps                  # noqa: E402
-import ai_config                      # noqa: E402
 
 
 def apps_ankreuzen(term, offer, table):
@@ -20,10 +19,11 @@ def apps_ankreuzen(term, offer, table):
 
 
 def cloud_einschalten():
-    """Dieses Gerät gleicht ab jetzt über die Cloud ab (Einstellungen dieses
-    Geräts, data/ai_config.json)."""
-    ai_config.set_override("abgleich_mitte_art", "http", persist=True)
-    ai_config.set_override("abgleich_weg", "mitte", persist=True)
+    """Dieses Gerät gleicht ab jetzt über die Cloud ab: installs the store
+    app `cloud` (core/builtin_store_apps.py — the one place that says what
+    "installed" means for it, building kit step 10)."""
+    import builtin_store_apps
+    builtin_store_apps.install("cloud")
 
 
 def setup(term, erster_start=False):

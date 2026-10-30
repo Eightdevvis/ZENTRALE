@@ -529,6 +529,78 @@
           }
         ]
       }
+    },
+    {
+      "@type": "ListItem",
+      "position": 20,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/apps/cloud",
+        "identifier": "cloud",
+        "name": "Cloud",
+        "description": "Your account in the ZENTRALE cloud: syncs the apps you choose between your devices (end-to-end encrypted), lists your devices and watches the free usage. Installed when you sign up or log in; removing it keeps this device local and deletes nothing in the cloud.",
+        "category": "apps",
+        "keywords": [
+          "cloud",
+          "sync"
+        ],
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Linux",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "app_name",
+            "value": "cloud"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "built_in",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 21,
+      "item": {
+        "@type": "SoftwareApplication",
+        "@id": "zentrale://shop/apps/cloud_folder",
+        "identifier": "cloud_folder",
+        "name": "Cloud folder",
+        "description": "A folder that syncs: anything you drop into ~/Zentrale/Cloud is on all your devices. Needs the Cloud app.",
+        "category": "apps",
+        "keywords": [
+          "cloud",
+          "files"
+        ],
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Linux",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "app_name",
+            "value": "cloud_folder"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "built_in",
+            "value": true
+          }
+        ]
+      }
     }
   ]
 }

@@ -147,6 +147,7 @@ EN = {
         "tutor": ("Tutor", "language tutor progress"),
         "cloud": ("Cloud", "account, sync, devices"),
         "cloud_folder": ("Cloud folder", "anything you drop into ~/Zentrale/Cloud"),
+        "budget": ("Budget", "household book: income, budgets, savings"),
         "adapter": ("Adapter", "connected services: AI keys, calendar bridge"),
     },
     "setup_apps_found": "Apps with data (on this device or in your account): {liste}",
@@ -181,6 +182,15 @@ EN = {
                            "Until then this device syncs only while you are logged in."),
     "wiz_linger_off": "This device syncs only while you are logged in ('zentrale setup' to change it).",
     "wiz_purpose_q": "What is this device for — which apps live here?",
+    # Building kit step 10: what the account owns (/v1/besitz).
+    "wiz_owned_found": "Your account owns apps that are not on this device yet: {liste}",
+    "wiz_owned_q": "Install {liste} here too?",
+    "wiz_owned_opts": [
+        ("yes", "Yes, install them here"),
+        ("no", "No, not on this device"),
+    ],
+    "wiz_owned_store": "Install {liste} from the store when you want them here (they are downloaded).",
+    "wiz_owned_not_saved": "Could not record the Cloud app in your account ({text}) — it works anyway.",
 
     # ── Updates (zentrale_cli/aktualisieren.py, building kit 5.3) ────
     "st_auto_update": "Auto-update",

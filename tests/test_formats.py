@@ -41,6 +41,7 @@ MODULES = {
     "kalender_einstellung": ("calendar-app-setting",),
     "kalender_ics": ("calendar-side-file",),
     "calendar_colours": ("calendar-colours",),
+    "account_ownership": ("account-ownership",),
 }
 EXEMPT = {
     "formats": "the registry itself",
@@ -349,6 +350,57 @@ def test_preserve_calendar_app_setting():
     assert d["quelle"] == "lokal" and d["future"] == {"x": 1}
     assert d["geaendert"]["future"] == 1 and d["geaendert"]["von"] == "zencloud"
     assert not _noted("calendar-app-setting")
+
+
+# ── account-ownership: GET/PUT /v1/besitz (core/account_ownership.py) ─
+
+def _ownership_cloud(monkeypatch, blob):
+    import account_ownership as ao
+    from cryptography.fernet import Fernet
+    key = Fernet.generate_key()
+    sent = []
+
+    class C:
+        def get(self, pfad):
+            return {"besitz": blob(key) if callable(blob) else blob}
+
+        def put(self, pfad, daten):
+            sent.append(daten["besitz"])
+            return {}
+    monkeypatch.setattr(konto, "angemeldet", lambda: True)
+    monkeypatch.setattr(konto, "konto_schluessel", lambda: key)
+    monkeypatch.setattr(konto, "client", lambda *a: C())
+    return ao, key, sent
+
+
+def test_newer_account_ownership(monkeypatch):
+    from cryptography.fernet import Fernet
+
+    def blob(key):
+        return Fernet(key).encrypt(json.dumps({"@type": "ItemList", "format": "zentrale-ownership/2",
+                                               "itemListElement": []}).encode()).decode()
+    ao, _key, sent = _ownership_cloud(monkeypatch, blob)
+    with pytest.raises(ao.OwnershipError):
+        ao.owned()
+    with pytest.raises(ao.OwnershipError):
+        ao.mark(["zentrale://shop/apps/cloud"])
+    assert sent == [] and _noted("account-ownership")
+
+
+def test_preserve_account_ownership(monkeypatch):
+    import account_ownership as ao
+    old = {"zentrale://shop/apps/cloud": "2026-10-30T10:00:00+01:00"}
+
+    def blob(key):
+        doc = json.loads(ao.Fernet(key).decrypt(ao.encode(old, key).encode()))
+        doc["future"] = {"x": 1}
+        return ao.Fernet(key).encrypt(json.dumps(doc).encode()).decode()
+    ao, key, sent = _ownership_cloud(monkeypatch, blob)
+    have = ao.mark(["zentrale://shop/apps/cloud", "zentrale://shop/apps/cloud_folder"])
+    assert have["zentrale://shop/apps/cloud"] == old["zentrale://shop/apps/cloud"]   # first date stays
+    doc, owned = ao.decode(sent[-1], key)
+    assert doc["future"] == {"x": 1} and set(owned) == set(have)
+    assert not _noted("account-ownership")
 
 
 # ── calendar-side-file: data/kalender_neben.json ─────────────────────

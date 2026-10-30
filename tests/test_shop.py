@@ -89,7 +89,17 @@ def test_agenten_avatare_sind_noch_leer():
         assert shop.katalog(k)["itemListElement"] == []
     kats = {k["id"]: k["anzahl"] for k in shop.uebersicht()["kategorien"]}
     assert list(kats) == list(shop.KATEGORIE_IDS)
-    assert kats["apps"] == 1 and kats["icons"] == 11 and kats["bauteile"] >= 1
+    assert kats["apps"] == 3 and kats["icons"] == 11 and kats["bauteile"] >= 1
+
+
+def test_cloud_and_cloud_folder_are_built_in_store_apps():
+    """Building kit step 10: listed like any app, no download (core package)."""
+    import app_register
+    for ident in ("cloud", "cloud_folder"):
+        s = shop.stueck("apps", ident)
+        assert app_register.built_in(s) and "downloadUrl" not in s
+        assert app_register.app_name(s) == ident and app_register.quelle_fehler(s) is None
+    assert not app_register.built_in(shop.stueck("apps", "budget"))
 
 
 def test_jede_app_sagt_woher_sie_kommt():
@@ -384,3 +394,29 @@ def test_ansicht_ohne_backend(ansicht, monkeypatch):
     assert ansicht.SHOP["active"] and ansicht.SHOP["msg"] == "backend nicht erreichbar"
     ansicht.taste(9); ansicht.taste(10)
     ansicht.draw_shop(0, 0, 24, 80)
+
+
+def test_ansicht_built_in_app_installs_and_removes(ansicht):
+    """Building kit step 10: Enter switches a built-in app on (no views), the
+    detail says "installed ✓", x switches it off again; the Cloud needs an
+    account and says so."""
+    import abgleich_apps
+    import curses
+    v, S = ansicht, ansicht.SHOP
+    abgleich_apps.setzen({"cloud_folder": False})
+    v.oeffnen()
+    while v.kategorie()["id"] != "apps":
+        v.taste(curses.KEY_RIGHT)
+    S["sel"] = _namen(v).index("cloud_folder")
+    v.taste(10)
+    assert S["msg"] == "installed ✓" and not S["wahl"]
+    assert "zentrale://shop/apps/cloud_folder" in S["installed"]
+    assert abgleich_apps.entscheidungen()["cloud_folder"] is True
+    v.draw_shop(0, 0, 30, 120)
+    assert any("installed ✓" in v.schirm.zeile(y) for y in range(30))
+    v.taste(ord("x"))
+    assert "zentrale://shop/apps/cloud_folder" not in S["installed"]
+    assert abgleich_apps.entscheidungen()["cloud_folder"] is False
+    S["sel"] = _namen(v).index("cloud")
+    v.taste(10)
+    assert "account" in S["msg"] and "zentrale://shop/apps/cloud" not in S["installed"]

@@ -96,6 +96,15 @@ def app_name(stueck) -> str:
     return ""
 
 
+def built_in(stueck) -> bool:
+    """additionalProperty `built_in` true: the app ships inside the core
+    package (core/builtin_store_apps.py), nothing to download."""
+    for p in stueck.get("additionalProperty") or []:
+        if isinstance(p, dict) and p.get("name") == "built_in":
+            return p.get("value") is True
+    return False
+
+
 def ordner_name(url) -> str:
     """ssh://git@github.com/x/budgeter.git → budgeter"""
     n = urllib.parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
@@ -106,7 +115,11 @@ def quelle_fehler(stueck):
     """Ein Stück der Kategorie apps muss sagen, woher es kommt
     (`downloadUrl`, ein git-Repo über https/ssh/file) und wie die App heißt
     (`app_name`). → None oder ein Satz, was fehlt (shop.pruefen macht daraus
-    einen kaputten Katalog)."""
+    einen kaputten Katalog).
+    A built-in app (`built_in` true, still inside the core package — building
+    kit step 10) has no `downloadUrl`; it only needs its `app_name`."""
+    if built_in(stueck):
+        return None if NAME.match(app_name(stueck)) else "app_name fehlt oder ist ungültig"
     url = stueck.get("downloadUrl")
     teile = urllib.parse.urlsplit(url) if isinstance(url, str) else None
     if teile is None or teile.scheme not in SCHEMATA or not teile.path.strip("/"):

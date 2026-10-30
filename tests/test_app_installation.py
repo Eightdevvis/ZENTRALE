@@ -163,7 +163,7 @@ def test_katalog_ohne_quelle_ist_kaputt(tmp_path, monkeypatch):
         k = json.load(f)
     for el in k["itemListElement"]:
         if el["item"]["category"] == "apps":
-            del el["item"]["downloadUrl"]
+            el["item"].pop("downloadUrl", None)
     p = tmp_path / "k.jsonld"
     p.write_text(json.dumps(k), encoding="utf-8")
     monkeypatch.setenv("ZENTRALE_SHOP_KATALOG", str(p))

@@ -723,10 +723,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [adresse, ansichten]
+              required: [adresse]
               properties:
                 adresse: {$ref: "#/components/schemas/Adresse"}
-                ansichten: {type: array, minItems: 1, items: {type: string}, examples: [[browser, terminal]]}
+                ansichten: {type: array, minItems: 1, items: {type: string}, examples: [[browser, terminal]],
+                            description: "required except for a built-in app (step 10)"}
       responses:
         "200":
           description: Eingerichtet
@@ -743,6 +744,7 @@ paths:
                   ordner: {type: string, description: wo die App auf diesem Rechner liegt}
                   adresse: {$ref: "#/components/schemas/Adresse"}
                   neu: {type: boolean, description: vorher nicht installiert}
+                  built_in: {type: boolean, description: "switched on, nothing downloaded (step 10)"}
         "400": {$ref: "#/components/responses/InstallFehler"}
         "402": {$ref: "#/components/responses/InstallFehler"}
         "404": {$ref: "#/components/responses/InstallFehler"}
@@ -799,6 +801,58 @@ paths:
         "200": {$ref: "#/components/responses/RunResult"}
         "404": {$ref: "#/components/responses/RunResult"}
         "409": {$ref: "#/components/responses/RunResult"}
+
+  /api/apps/remove:
+    post:
+      tags: [apps]
+      operationId: appRemove
+      summary: Remove an app from this node (building kit step 10)
+      description: >
+        Ownership and data stay, here and in the cloud. Today only built-in
+        apps (`cloud`, `cloud_folder`); a downloaded app → 501.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adresse]
+              properties:
+                adresse: {$ref: "#/components/schemas/Adresse"}
+      responses:
+        "200":
+          description: Off on this node
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adresse, name, installiert, war]
+                additionalProperties: false
+                properties:
+                  adresse: {$ref: "#/components/schemas/Adresse"}
+                  name: {type: string}
+                  installiert: {type: boolean, const: false}
+                  war: {type: boolean, description: was installed before}
+        "400": {$ref: "#/components/responses/InstallFehler"}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+        "501": {$ref: "#/components/responses/InstallFehler"}
+
+  /api/apps/installed:
+    get:
+      tags: [apps]
+      operationId: appsInstalled
+      summary: Shop addresses of the apps installed on this node (built-in and downloaded)
+      responses:
+        "200":
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adressen]
+                additionalProperties: false
+                properties:
+                  adressen: {type: array, items: {$ref: "#/components/schemas/Adresse"}}
 
   /api/apps/{name}/start:
     parameters:
@@ -1251,6 +1305,7 @@ components:
         gewaehlt: {type: array, items: {type: string}, description: Vorschlag — die bisherige Wahl, sonst alle}
         installiert: {type: boolean}
         neu: {type: boolean, description: gerade heruntergeladen (sonst lag sie schon da)}
+        built_in: {type: boolean, description: "inside the core package (building kit step 10): no views to pick, nothing downloaded"}
 
     AppKachelFrage:
       type: object
@@ -1570,14 +1625,14 @@ components:
         isBasedOn: {$ref: "#/components/schemas/Adresse"}
         additionalProperty:
           type: array
-          description: schema.org PropertyValue, z. B. `pixel_motiv` = Name des Motivs in tui/pixel.py
+          description: schema.org PropertyValue, z. B. `pixel_motiv` = Name des Motivs in tui/pixel.py; `built_in` true = the app ships inside the core package (step 10)
           items:
             type: object
             required: ["@type", name, value]
             properties:
               "@type": {const: PropertyValue}
               name: {type: string}
-              value: {type: string}
+              value: {type: [string, boolean]}
 
     ShopKatalog:
       type: object

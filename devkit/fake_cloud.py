@@ -15,6 +15,7 @@ marked (never `Sunset`) and `insecure` on its device in GET /v1/knoten;
 DELETE /v1/knoten/<name> turns that device's sessions into removed ones
 (401 device_removed) and leaves a tombstone; PUT /v1/konto/schluessel swaps
 wraps + Mitte head at once (409 when the head moved) and ends the others.
+GET/PUT /v1/besitz (build step 10): one opaque ownership string per account.
 Konten heißen nach Benutzernamen (anonym, keine Mail): '@' → 400, vergeben →
 409 name_vergeben (der Code bleibt dann frei).
 Stand: Absprache mit dem Server-Teil 2026-10-22, anonym seit 2026-10-23
@@ -54,6 +55,7 @@ class Zustand:
         self.betreiber = set()      # Namen, die GET /v1/nutzung sehen dürfen
         self.insecure = {}          # release version → {"since": ms, "link": url, "reason": text}
         self.removed = {}           # token of a removed device → (konto, knoten)
+        self.besitz = {}            # konto-name → (opaque string, iso time) — GET/PUT /v1/besitz
         self.nutzung = {"zeit": "2026-10-23T09:00:00.000Z", "grenzen_geprueft": "2026-10-23",
                         "grenzen": [], "warnungen": []}
         self.aufrufe = []           # (methode, pfad) — zum Nachsehen in Tests
@@ -64,7 +66,7 @@ class Zustand:
 
 # ── Persistence (only with FalscheCloud(datei=...)) ────────────────────
 _PERSISTED = ("codes", "konten", "sitzungen", "blobs", "kopf", "staende", "eltern",
-              "knoten", "betreiber", "nutzung", "zaehler", "insecure", "removed")
+              "knoten", "betreiber", "nutzung", "zaehler", "insecure", "removed", "besitz")
 
 
 def _encode(v):
@@ -412,6 +414,16 @@ class _Handler(BaseHTTPRequestHandler):
             z.knoten.setdefault(konto, {})[name] = dict(alt or {}, name=name, removed=removed,
                                                          removed_by=sitzung[1])
             return self._antwort(200, {"name": name, "removed": removed, "sessions_ended": len(tokens)})
+        if (m, pfad) == ("GET", "/v1/besitz"):
+            b = z.besitz.get(konto)
+            return self._antwort(200, {"besitz": b[0] if b else None, "aktualisiert": b[1] if b else None})
+        if (m, pfad) == ("PUT", "/v1/besitz"):
+            d = self._json()
+            if not isinstance(d.get("besitz"), str) or not d["besitz"]:
+                return self._fehler(400, "ungueltig", "'besitz' must be a non-empty string.")
+            jetzt = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds")
+            z.besitz[konto] = (d["besitz"], jetzt)
+            return self._antwort(200, {"aktualisiert": jetzt})
         return self._fehler(404, "unbekannt", f"No route {m} {pfad}")
 
 

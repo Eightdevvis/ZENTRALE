@@ -42,6 +42,7 @@ FORMATS = {
     "calendar-app-setting": (1, "the calendar setting"),    # kalender_einstellung
     "calendar-side-file": (1, "calendar extras"),           # data/kalender_neben.json
     "calendar-colours": (1, "calendar colours"),            # data/calendar_colours.json
+    "account-ownership": (1, "the apps your account owns"),  # GET/PUT /v1/besitz (account_ownership)
 }
 
 

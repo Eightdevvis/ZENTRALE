@@ -201,6 +201,8 @@ def test_lost_device_changes_the_account_key(two, cloud):
     assert mini.run("sync")[0] == 0
     old_inbox = _inbox_file(mini, "data/rueckmeldungen/handy.jsonl", b'{"x": 1}\n')
     old_key = konto.konto_schluessel()
+    import account_ownership
+    account_ownership.mark(["zentrale://shop/apps/cloud"])       # step 10: /v1/besitz
 
     rc, text = mini.run("devices", "remove", "laptop",
                         answers=("y", "y", "y", PW, "", "y"))
@@ -226,6 +228,8 @@ def test_lost_device_changes_the_account_key(two, cloud):
     from cryptography.fernet import Fernet
     assert Fernet(new_key).decrypt(vault["eintraege"]["ki/TEST_KEY"]["wert"].encode()) == b"geheim-123"
     assert adapter_geheim.lesen("ki/TEST_KEY", str(mini.root)) == "geheim-123"
+    # The account's ownership list follows the key.
+    assert list(account_ownership.owned()) == ["zentrale://shop/apps/cloud"]
 
     # This device syncs on without conflicts.
     b = abgleich.abgleichen(str(mini.root))

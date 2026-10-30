@@ -30,8 +30,11 @@ import tomllib
 import urllib.parse
 from datetime import datetime
 
+import account_ownership
 import app_register as reg
 import apps
+import builtin_store_apps as builtin
+import konto
 import shop
 
 _LOCK = threading.Lock()
@@ -165,6 +168,8 @@ def laden(adresse) -> dict:
     gewaehlt, installiert, neu}. `neu` = gerade heruntergeladen (sonst lag
     sie schon da)."""
     s = _stueck(adresse)
+    if reg.built_in(s):
+        return _builtin_answer(s, False)
     url, ziel, lager = _orte(s)
     with _LOCK:
         if _vorhanden(url, ziel):
@@ -191,7 +196,18 @@ def laden(adresse) -> dict:
 def installieren(adresse, ansichten) -> dict:
     """Mit den gewählten Ansichten einrichten (mindestens eine aus dem
     app.toml). Lädt vorher, falls nötig. → {name, titel, ansichten,
-    ordner, adresse, neu}. `neu` = vorher nicht installiert."""
+    ordner, adresse, neu}. `neu` = vorher nicht installiert.
+    A built-in app (step 10) needs no views: it is switched on here."""
+    s = _stueck(adresse)
+    if reg.built_in(s):
+        name = reg.app_name(s)
+        try:
+            r = builtin.install(name)
+        except builtin.BuiltinError as e:
+            raise InstallFehler(str(e), e.code)
+        shop.holen(s["@id"])
+        mark_owned(s["@id"])
+        return _builtin_answer(s, r["new"], choice=False)
     if not isinstance(ansichten, list) or not ansichten \
             or not all(isinstance(a, str) for a in ansichten):
         raise InstallFehler("welche ansichten? (mindestens eine)")
@@ -218,5 +234,53 @@ def installieren(adresse, ansichten) -> dict:
                      or datetime.now().astimezone().isoformat(timespec="seconds")})
         reg.schreiben(rest)
     shop.holen(s["@id"])                          # installiert heißt auch: geholt
+    mark_owned(s["@id"])
     return {"name": name, "titel": str(m.get("titel") or name), "ansichten": gewaehlt,
             "ordner": ziel, "adresse": s["@id"], "neu": alt is None}
+
+
+# ── Built-in apps, removing, ownership (building kit step 10) ────────
+
+def _builtin_answer(s, new, choice=True) -> dict:
+    """The answer of laden (choice: AppWahl) or installieren for a built-in
+    app: no views to pick, no folder."""
+    name = reg.app_name(s)
+    d = {"adresse": s["@id"], "name": name, "titel": str(s.get("name") or name),
+         "ansichten": [], "neu": new, "built_in": True}
+    if choice:
+        d.update(version="", gewaehlt=[], installiert=builtin.installed(name))
+    else:
+        d["ordner"] = ""
+    return d
+
+
+def mark_owned(adr) -> bool:
+    """Installed with an account = owned by the account (/v1/besitz,
+    core/account_ownership.py). Best effort: offline or logged out → False,
+    the local "geholt" (core/shop.py) still holds."""
+    if not konto.angemeldet():
+        return False
+    try:
+        account_ownership.mark([adr])
+        return True
+    except account_ownership.OwnershipError:
+        return False
+
+
+def entfernen(adresse) -> dict:
+    """Remove an app from THIS node; ownership and data stay. Today only
+    built-in apps — downloaded ones: memory/open/store_app_lifecycle.md.
+    → {adresse, name, installiert: False, war: bool}."""
+    s = _stueck(adresse)
+    if not reg.built_in(s):
+        raise InstallFehler("removing downloaded apps is not built yet", 501)
+    r = builtin.remove(reg.app_name(s))
+    return {"adresse": s["@id"], "name": r["name"], "installiert": False, "war": r["was"]}
+
+
+def installed_addresses() -> list:
+    """Shop addresses of every app installed on THIS node: built-in ones by
+    their setting, downloaded ones from the register."""
+    raus = [builtin.address(n) for n in builtin.installed_names()]
+    raus += [e["quelle"] for e in reg.lesen() if isinstance(e.get("quelle"), str)]
+    return sorted(set(raus))

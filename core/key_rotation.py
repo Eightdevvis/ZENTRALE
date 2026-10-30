@@ -31,6 +31,7 @@ import os
 
 import abgleich
 import abgleich_auswahl
+import account_ownership
 import abgleich_mitte
 import abgleich_schluessel as schluessel
 import adapter_geheim
@@ -202,4 +203,10 @@ def rotate(draft: Draft, wurzel) -> dict:
         konto._speichern(d.get("server") or c.basis, d["name"], d.get("token"), d.get("laeuft_ab"),
                          draft.konto_schluessel, d.get("knoten"))
         _follow_vault(wurzel, local_vault, vault, old_key, draft.konto_schluessel)
+    # The account's ownership list (/v1/besitz, build step 10) follows too —
+    # best effort: an unreadable list is started afresh at the next mark.
+    try:
+        account_ownership.rekey(old_key, draft.konto_schluessel)
+    except Exception:       # noqa: BLE001 — the key change itself went through
+        pass
     return {"files": sum(1 for n in write if n.startswith("d/")), "inbox_skipped": skipped}

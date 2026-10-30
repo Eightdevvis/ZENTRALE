@@ -24,7 +24,9 @@ from zentrale_cli.ausgabe import BACK
 from zentrale_cli.texte import t
 
 import abgleich_apps        # noqa: E402
+import account_ownership    # noqa: E402
 import ai_config            # noqa: E402
+import builtin_store_apps   # noqa: E402
 import cloud_folder         # noqa: E402
 import konto                # noqa: E402
 
@@ -86,6 +88,53 @@ def ask_cloud_folder(term, ctx):
     if a == BACK:
         return BACK
     befehle.choose_sync(term, {CLOUD_FOLDER_APP: a == "yes"}, show_plan=False)
+    ctx.setdefault("answered", set()).add(CLOUD_FOLDER_APP)
+    return NEXT
+
+
+def owned_elsewhere(ctx) -> list:
+    """Shop addresses the ACCOUNT owns that are not installed on this node
+    (building kit step 10): what a second device offers. Not the cloud (it
+    comes with the login) and nothing already answered in this run. Offline
+    → [] (never blocks the wizard)."""
+    if "owned" not in ctx:
+        try:
+            ctx["owned"] = sorted(account_ownership.owned())
+        except account_ownership.OwnershipError:
+            ctx["owned"] = []
+    skip = {builtin_store_apps.address("cloud")}
+    skip |= {builtin_store_apps.address(n) for n in ctx.get("answered", ())}
+    skip |= {builtin_store_apps.address(n) for n in builtin_store_apps.installed_names()}
+    return [a for a in ctx["owned"] if a not in skip]
+
+
+def _owned_name(adr) -> str:
+    ident = adr.rsplit("/", 1)[-1]
+    return befehle.app_name(ident, {})[0]
+
+
+def _offer_owned(term, ctx):
+    """"What do you plan here?", part one: the apps the account already owns.
+    Built-in ones are switched on here; downloaded ones come from the store
+    (they need git and a choice of views). → NEXT | BACK."""
+    offer = owned_elsewhere(ctx)
+    if not offer:
+        return NEXT
+    term.sag(t("wiz_owned_found", liste=", ".join(_owned_name(a) for a in offer)))
+    builtin = [a for a in offer if builtin_store_apps.by_address(a)]
+    store = [a for a in offer if not builtin_store_apps.by_address(a)]
+    if builtin:
+        a = _choose(term, ctx, t("wiz_owned_q", liste=", ".join(_owned_name(x) for x in builtin)),
+                    t("wiz_owned_opts"), "yes")
+        if a == BACK:
+            return BACK
+        for adr in builtin:
+            name = builtin_store_apps.by_address(adr)
+            if a == "yes":
+                builtin_store_apps.install(name)
+            ctx.setdefault("answered", set()).add(name)
+    if store:
+        term.sag(t("wiz_owned_store", liste=", ".join(_owned_name(a) for a in store)), "blass")
     return NEXT
 
 
@@ -122,6 +171,8 @@ def ask_purpose(term, ctx):
     apps that already have data, here or in the account."""
     import abgleich
     from zentrale_cli import assistent
+    if _offer_owned(term, ctx) == BACK:
+        return BACK
     table = abgleich_apps.tabelle()
     offer = [n for n in abgleich_apps.mit_daten(befehle.WURZEL, abgleich.cloud_pfade())
              if n != CLOUD_FOLDER_APP]
@@ -202,6 +253,16 @@ def run(term, steps=STEPS, start=0) -> int:
     return finish(term, ctx)
 
 
+def _mark_owned(term):
+    """Signup/login installs the Cloud app, and with an account installed
+    means owned (/v1/besitz) — the cloud folder too, when it is on here."""
+    adrs = [builtin_store_apps.address(n) for n in builtin_store_apps.installed_names()]
+    try:
+        account_ownership.mark(adrs)
+    except account_ownership.OwnershipError as e:
+        term.sag(t("wiz_owned_not_saved", text=str(e)), "warn")   # side matter, never blocks
+
+
 def finish(term, ctx) -> int:
     """After the last step: a local device is done; with an account the cloud
     goes on, the device registers, syncs once and gets its timers."""
@@ -213,6 +274,7 @@ def finish(term, ctx) -> int:
     from zentrale_cli import assistent
     befehle.choose_sync(term, {}, show_plan=False)   # {} = nothing decided yet: new apps ask themselves
     assistent.cloud_einschalten()
+    _mark_owned(term)
     befehle.einrichtung_merken()
     try:
         befehle.geraet_melden()

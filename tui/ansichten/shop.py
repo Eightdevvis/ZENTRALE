@@ -13,6 +13,11 @@
 # ein (POST /api/apps/installieren) und meldet es dem App-Rad
 # (`nach_installieren`, run_ui hängt eigene_apps.laden ein).
 #
+# Built-in apps (building kit step 10): Cloud and Cloud folder are in the
+# catalog with `built_in` — Enter switches them on at once (no download, no
+# views), x switches them off on this node (POST /api/apps/remove; ownership
+# and data stay). "installed ✓" comes from GET /api/apps/installed.
+#
 # Geöffnet wird sie von außen über `oeffnen()` (der Rad-Platz `shop` kommt
 # mit der Werkstatt, 2026-10-10) — hier steht kein Rad-Wissen.
 
@@ -25,6 +30,7 @@ import urllib.parse
 
 from .basis import api_call
 from .tasten import Tasten
+from .translate import _
 
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
@@ -56,6 +62,12 @@ def preis_text(stueck):
     return ("%.2f %s" % (betrag, (o or {}).get("priceCurrency", "EUR"))).replace(".", ",")
 
 
+def built_in(stueck):
+    """additionalProperty `built_in` true: inside the core package (step 10)."""
+    return any(isinstance(p, dict) and p.get("name") == "built_in" and p.get("value") is True
+               for p in stueck.get("additionalProperty") or [])
+
+
 def themen_von(stuecke):
     """Alle Themen (keywords) der Stücke, sortiert, ohne Doppelte."""
     return sorted({t for s in stuecke for t in (s.get("keywords") or []) if isinstance(t, str)})
@@ -80,6 +92,7 @@ class Shop:
             "thema": None,              # None = alle
             "stuecke": [], "sel": 0,
             "besitz": set(),            # Adressen, die geholt sind
+            "installed": set(),         # addresses installed on this node (apps)
             "geholt": None,             # eben geholt → „geholt ✓"
             "msg": "",
             "laedt": False,             # eine App wird gerade heruntergeladen
@@ -127,8 +140,16 @@ class Shop:
         S["stuecke"] = alle
         S["sel"] = max(0, min(S["sel"], len(alle) - 1))
 
+    def _installed_laden(self):
+        try:
+            r = api_call("/api/apps/installed") or {}
+        except Exception:
+            return                      # stays as it was; the catalog works anyway
+        self.SHOP["installed"] = set(r.get("adressen") or [])
+
     def _besitz_laden(self):
         S = self.SHOP
+        self._installed_laden()
         try:
             liste = _stuecke(api_call("/api/shop/besitz"))
         except Exception:
@@ -154,6 +175,9 @@ class Shop:
         if not S["stuecke"] or S["laedt"]:
             return
         s = S["stuecke"][S["sel"]]
+        if built_in(s):
+            self.builtin_installieren(s)
+            return
         S.update(laedt=True, geholt=None, msg="lade „%s\" …" % (s.get("name") or "app"))
 
         def laden():
@@ -190,6 +214,40 @@ class Shop:
         if self.nach_installieren:
             self.nach_installieren()
 
+    def builtin_installieren(self, s):
+        """A built-in app: on at once (POST /api/apps/installieren, no views)."""
+        S = self.SHOP
+        try:
+            r = api_call("/api/apps/installieren", "POST", {"adresse": s.get("@id")}, timeout=60) or {}
+        except Exception as e:
+            S["msg"] = _("not installed: ") + self._fehlertext(e)
+            return
+        S["besitz"].add(s.get("@id"))
+        S["installed"].add(s.get("@id"))
+        S.update(geholt=s.get("@id"),
+                 msg=_("installed ✓") if r.get("neu", True) else _("already installed ✓"))
+        if self.nach_installieren:
+            self.nach_installieren()
+
+    def entfernen(self):
+        """x on an installed built-in app: off on this node, nothing deleted."""
+        S = self.SHOP
+        if not S["stuecke"]:
+            return
+        s = S["stuecke"][S["sel"]]
+        if not built_in(s):
+            S["msg"] = _("removing downloaded apps is not built yet")
+            return
+        try:
+            api_call("/api/apps/remove", "POST", {"adresse": s.get("@id")}, timeout=60)
+        except Exception as e:
+            S["msg"] = _("not removed: ") + self._fehlertext(e)
+            return
+        S["installed"].discard(s.get("@id"))
+        S.update(geholt=None, msg=_("removed from this device ✓ — nothing was deleted"))
+        if self.nach_installieren:
+            self.nach_installieren()
+
     def holen(self):
         S = self.SHOP
         if not S["stuecke"]:
@@ -211,7 +269,7 @@ class Shop:
     _KAT = [("←→", "kategorie", "category")]
     _THEMA = [("tab", "thema", "theme"), ("shift+tab", "thema")]
     _STUECKE = [("↑↓", "waehlen", "select"), ("enter", "holen", "get")]
-    _APP = [("↑↓", "waehlen", "select"), ("enter", "holen", "install")]
+    _APP = [("↑↓", "waehlen", "select"), ("enter", "holen", "install"), ("x", "entfernen", "remove")]
     _ZU = [("esc", "zu", "back")]
     _WAHL = [("↑↓", "wahl_waehlen", "select"), ("space", "wahl_umschalten", "toggle"),
              ("enter", "installieren", "install"), ("esc", "wahl_zu", "cancel")]
@@ -276,6 +334,9 @@ class Shop:
             self.app_laden()
         else:
             self.holen()
+
+    def aktion_entfernen(self, _taste):
+        self.entfernen()
 
     def aktion_wahl_waehlen(self, taste):
         w = self.SHOP["wahl"]
@@ -410,7 +471,9 @@ class Shop:
             z.addclip(y, x, "für " + s["isBasedOn"], breite, C["faint"])
             y += 1
         y = min(y + 1, y0 + hoehe - 1)
-        if s.get("@id") in S["besitz"]:
+        if self.ist_app() and s.get("@id") in S["installed"]:
+            z.addclip(y, x, _("installed ✓"), breite, C["acc"] | curses.A_BOLD)
+        elif s.get("@id") in S["besitz"]:
             z.addclip(y, x, "geholt ✓", breite, C["acc"] | curses.A_BOLD)
 
     def _draw_motiv(self, name, y, x):

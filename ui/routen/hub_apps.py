@@ -9,6 +9,8 @@
 #   POST /api/apps/laden         App aus dem Schaufenster holen, Ansichten zeigen
 #   POST /api/apps/installieren  mit den gewählten Ansichten einrichten
 #                                (core/app_installation.py, seit 2026-10-25)
+#   POST /api/apps/remove        remove from this node (built-in apps, step 10)
+#   GET  /api/apps/installed     shop addresses installed on this node
 #
 # Und die Weiterleitung: gehört der Pfad einer Anfrage laut `routen` im
 # app.toml einer App, reicht der Hub sie unverändert an die App
@@ -82,3 +84,18 @@ def api_app_installieren():
         return jsonify(app_installation.installieren(body.get("adresse"), body.get("ansichten")))
     except app_installation.InstallFehler as e:
         return jsonify({"error": str(e)}), e.code
+
+
+@bp.route('/api/apps/remove', methods=['POST'])
+def api_app_remove():
+    """Body {"adresse": "zentrale://shop/apps/<id>"}: off on this node, nothing deleted."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(app_installation.entfernen(body.get("adresse")))
+    except app_installation.InstallFehler as e:
+        return jsonify({"error": str(e)}), e.code
+
+
+@bp.route('/api/apps/installed', methods=['GET'])
+def api_apps_installed():
+    return jsonify({"adressen": app_installation.installed_addresses()})
