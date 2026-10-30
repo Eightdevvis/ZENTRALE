@@ -20,8 +20,11 @@ ZENTRALE is meant to be English throughout. **Nothing new is built in German.**
   docstrings, log messages, test names, commit messages, new `memory/` docs.
 - **No hard-coded UI text.** Every string a human sees (TUI, phone app,
   notifications, CLI output, KI-facing UI labels) goes through a translation
-  table so more languages can be added later. German stays the first UI
-  language for Sasha. Use the platform standard, no own format: Flutter
+  table so more languages can be added later. **The UI goal is uniform
+  English** (Sasha, 2026-10-30: „wir brauchen keine deutschen
+  übersetzungen, eher eine englische vereinheitlichung") — no new German
+  `.po`/ARB entries; existing German UI texts are unified to English in the
+  renaming wave (`memory/open/english_renaming_wave.md`). Use the platform standard, no own format: Flutter
   `gen-l10n` with ARB files (`mobile/`), Python `gettext` (`.po`) for core/TUI/CLI.
   One table per app/front.
 - **Existing German stays until a dedicated renaming wave** (a planned, large

@@ -372,11 +372,12 @@ ebene, sachen markieren als not yet, falls man es nur plant, verschiedene
 ebenen, tailscale, lan, kabel, bluetooth, verbindungen, strom."*
 
 Not the geographic map app `zentrale-karte` ([../maps/INDEX.md](../maps/INDEX.md)).
-This is the app **Schematix** (code `schematix`; one plan in it is a
-**scheme**), built on the Desk building block ([desk_view.md](desk_view.md))
-— Sasha 29.10.: the network map is an app, not needed everywhere. It gets
-its own look; Sasha sends the style (pending), see
-[bausteine_farbe_stil.md](bausteine_farbe_stil.md) for the colour roles.
+This is the app **Schematix** (code `schematix`). One plan in it is a
+**scheme**; creating and editing schemes is **scheming** (German
+„schemen", Sasha 30.10. — a pun on the English word). Built on the Desk
+([desk_view.md](desk_view.md)) — Sasha 29.10.: an app, not needed everywhere.
+Own look; Sasha sends the style (pending), colour roles in
+[bausteine_farbe_stil.md](bausteine_farbe_stil.md).
 
 ### 6.1 The key rule: the drawing IS the wiring
 
