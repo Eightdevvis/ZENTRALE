@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 7 and 8 (`d1dc8fd`) built.** One blueprint for
+**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 5–6, 7–8 (`d1dc8fd`), 9 and 9b (`HASH9`) built.** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -95,8 +95,8 @@ logged in; the mini has no monitor and boots to a login prompt
 | hardware: `mic`, `speaker`, `display`, `gpio` | nodes (detected in `core/knoten.py`) | apps | rights `mikro`, `lautsprecher` |
 | link: `lan`, `wifi`, `wireguard`, `tailscale`, `bluetooth`, `usb`, `cable`, `power` | nodes, devices | nodes, devices | `netz` in the node description |
 
-A new port type = one entry in the port schema + a test vector + a
-reader on each side. Same procedure as a new colour role or building block.
+A new port type = one entry in the port schema + a test vector + a reader on each side. Same procedure as a new colour role or building block.
+**Built (step 9):** registry `contracts/ports/1/types.json`; how the vocabulary was cut and why: [port_types.md](port_types.md).
 
 ### 1.4 Where each wire lives (one truth, no second store)
 
@@ -110,13 +110,13 @@ The wire has exactly one owner, and the owner follows the rule from
 | app instance → provider (calendar ← google, PDF viewer ← cloud folder, assistant ← model) | the consumer app instance | **yes, without mercy** | `quelle` in `kalender-<id>.json`; new wires in the instance settings |
 | node ↔ node / device (LAN, VPN, cable, power) | observed: the node description; physical: the wiring-map app | yes | `knoten/<name>.json` `netz`; new `data/wiring/things/*.json` |
 
-The hub offers **one view over all of them**: `GET /hub/wires` (list) and
-`PUT /hub/wires/<id>` / `DELETE` (rewire). These routes *project* the
+The hub offers **one view over all of them**: `GET /api/wires` (list) and
+`PUT /api/wires/<id>` / `DELETE` (rewire; `/api/`: `/hub/…` is the apps' side). These routes *project* the
 existing settings and write back into them. `abgleich_apps` and the
 calendar `quelle` stay the stored truth, with no wire file next to them.
 Every write passes the check gate of section 6.7.
 
-Wire record (JSON, schema `core/wire.schema.json`, 2020-12):
+Wire record (JSON, schema `contracts/ports/1/ports.schema.json` `$defs/wire`, 2020-12):
 
 ```json
 {"id": "w-tutor-data-sync",
@@ -383,7 +383,7 @@ its own look; Sasha sends the style (pending), see
 - A piece on the map is a **reference** (`zentrale://…` address) to the real
   object: an app instance, a node, a port, a documented device. Never a
   copy. Same pattern as Desk tiles (`zentrale_kachel.adresse`).
-- Real wires are **derived** from `GET /hub/wires` on every draw, like Desk
+- Real wires are **derived** from `GET /api/wires` on every draw, like Desk
   strings are laid fresh from positions. The file stores them only as a
   display fallback for Obsidian, rewritten from the truth on save.
 - Drawing changes only the **sketch**. Nothing switches until you press
@@ -460,7 +460,7 @@ keyed by node id next to the canvas.
 
 ### 6.5 Pieces in the `+` picker
 
-`GET /hub/pieces` lists everything placeable, fresh on every `+` (like the
+`GET /api/pieces` lists everything placeable, fresh on every `+` (like the
 tile catalog): installed apps with their ports, preinstalled providers
 (cloud, cloud folder, adapter and its connections), nodes from
 `GET /v1/knoten`, store apps not installed (placed as planned), and device
@@ -536,8 +536,8 @@ five stages, and stages 2–3 are the hard gate:
   broken by someone else's run.
 
 **What we write ourselves:** the type registry (schema files), the
-compiler with its graph checks, the socket table for the editors, and the
-apply agent with the generation pointer. That is all. No new language.
+compiler with its graph checks, the socket table for the editors, and the apply agent with the generation pointer. That is all. No new language.
+**Built (9/9b, `HASH9`):** registry, compiler, generations, apply agent, fed by the CLI sync choice — [port_types.md](port_types.md).
 
 ## 7. What exists vs. what is missing
 
@@ -550,10 +550,10 @@ apply agent with the generation pointer. That is all. No new language.
 | update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
 | versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | policy (insecure warning: `d1dc8fd`; contract folder, old-release test: `b64f3e4`) |
 | packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
-| plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list | port schema, `needs`/`offers`, `/hub/wires`, plug dialog |
+| plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list; port schema, `needs`/`offers`, `/api/wires` (`HASH9`) | plug dialog |
 | lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`d1dc8fd`) | Schematix display |
 | wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions | the app, piece kinds, layers, planned state, things store |
-| run pipeline | JSON Schema use everywhere, atomic `aktuell` switch as a pattern | type registry, compiler, generations, apply agent, socket table |
+| run pipeline | type registry, compiler, generations, apply agent (`HASH9`) | apply agent on the timer, socket table in the editors ([../open/run_gate_followups.md](../open/run_gate_followups.md)) |
 
 ## 8. Build order — small steps, each with its acceptance test
 
@@ -570,8 +570,8 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 6 | **Built `b64f3e4`.** **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
 | 7 | **Built `d1dc8fd`.** **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
 | 8 | **Built `d1dc8fd`.** **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
-| 9 | **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /hub/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
-| 9b | **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
+| 9 | **Built `HASH9`.** **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /api/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
+| 9b | **Built `HASH9`.** **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
 | 10 | **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
 | 11 | **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
 | 12 | **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
@@ -597,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`HASH9`): type registry, compiler, Run gate ([port_types.md](port_types.md)).

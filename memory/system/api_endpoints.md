@@ -526,6 +526,7 @@ die Seite der Apps unter `/hub/…`, Tag `app-seite`). Regeln:
 | `/api/apps/<name>/start` | POST | `{name, laeuft, gestartet}`; `404 unbekannt`, `400 kein_prozess`, `503 aus` |
 | `/api/apps/<name>/stop` | POST | `{name, gestoppt}` — nur, was der Hub gestartet hat; sonst `409 fremd` |
 | *Pfade laut `routen` einer App* | alle | unverändert an die App weitergereicht (z. B. `/api/map/*` → App `karte`); App aus → `503 {"fehler": "aus"}` |
+| `/api/wires`, `/api/wires/<id>` | GET, PUT, DELETE | wires of this node, every change through the Run gate (`ui/routen/hub_wires.py`, since 2026-10-30, [port_types.md](../hub/port_types.md)) |
 
 ## Kacheln (seit 2026-10-10)
 

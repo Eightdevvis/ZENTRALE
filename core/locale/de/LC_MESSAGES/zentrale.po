@@ -514,3 +514,94 @@ msgstr "Nur lesen (von einer neueren ZENTRALE geschrieben)"
 
 msgid "Update this device ('zentrale update') to read and write it again."
 msgstr "Aktualisiere dieses Gerät ('zentrale update'), dann liest und schreibt es wieder."
+
+# ── Building kit steps 9/9b: type check and Run gate (core/sketch_compiler.py, core/generations.py)
+msgid "{where} does not fit its schema: {detail}"
+msgstr "{where} passt nicht zu seinem Schema: {detail}"
+
+msgid "the id {id} is used twice"
+msgstr "die Kennung {id} kommt zweimal vor"
+
+msgid "{where}: the port type {type} is not known"
+msgstr "{where}: den Steckertyp {type} gibt es nicht"
+
+msgid "{where}: there is no piece {ref}"
+msgstr "{where}: es gibt kein Teil {ref}"
+
+msgid "{where}: {ref} has no socket {port} that {direction}"
+msgstr "{where}: {ref} hat keine Buchse {port}, die {direction}"
+
+msgid "offers"
+msgstr "anbietet"
+
+msgid "needs"
+msgstr "braucht"
+
+msgid "{wire}: {need} needs {need_type}, {offer} offers {offer_type}"
+msgstr "{wire}: {need} braucht {need_type}, {offer} bietet {offer_type}"
+
+msgid "{wire}: {need} needs {type} {range}, {offer} offers {version}"
+msgstr "{wire}: {need} braucht {type} {range}, {offer} bietet {version}"
+
+msgid "{where} needs {type} on its socket {port} — nothing is plugged in"
+msgstr "{where} braucht {type} an der Buchse {port} — nichts ist eingesteckt"
+
+msgid "{piece}: the socket {port} takes at most {max}, {count} are plugged in"
+msgstr "{piece}: die Buchse {port} nimmt höchstens {max}, eingesteckt sind {count}"
+
+msgid "a loop over {type}: {path}"
+msgstr "eine Schleife über {type}: {path}"
+
+msgid "{resource} has more than one owner: {owners}"
+msgstr "{resource} hat mehr als einen Besitzer: {owners}"
+
+msgid "{wire}: owned by {owner}, but {type} wires belong to {expected}"
+msgstr "{wire}: gehört {owner}, aber {type}-Kabel gehören {expected}"
+
+msgid "{where} is live but {planned} is only planned (not yet)"
+msgstr "{where} ist echt, aber {planned} ist nur geplant (noch nicht)"
+
+msgid "{wire} is broken — its provider is gone or speaks a newer version"
+msgstr "{wire} ist kaputt — der Anbieter fehlt oder spricht eine neuere Fassung"
+
+msgid "{wire} needs {type} {range}, but {node} speaks {have} — not yet: needs an update on {node}"
+msgstr "{wire} braucht {type} {range}, aber {node} spricht {have} — noch nicht: {node} braucht ein Update"
+
+msgid "no version of it"
+msgstr "keine Fassung davon"
+
+msgid "{wire}: {node} has no apply agent — it can only be read, not changed"
+msgstr "{wire}: {node} hat keinen Umsetzer — nur lesen, nicht ändern"
+
+msgid "{to} → {frm} on {owner}"
+msgstr "{to} → {frm} auf {owner}"
+
+msgid "(was: {old})"
+msgstr "(vorher: {old})"
+
+msgid "{wire} did not take effect"
+msgstr "{wire} hat nicht gewirkt"
+
+msgid "live"
+msgstr "an"
+
+msgid "off"
+msgstr "aus"
+
+msgid "planned"
+msgstr "geplant"
+
+msgid "broken"
+msgstr "kaputt"
+
+msgid "the body must be the wire with this id"
+msgstr "der Inhalt muss das Kabel mit dieser Kennung sein"
+
+msgid "there is no such wire"
+msgstr "dieses Kabel gibt es nicht"
+
+msgid "Not changed — {text}"
+msgstr "Nicht geändert — {text}"
+
+msgid "Changed back — the change did not take effect: {text}"
+msgstr "Zurückgenommen — die Änderung hat nicht gewirkt: {text}"

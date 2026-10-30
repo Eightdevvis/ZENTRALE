@@ -154,6 +154,17 @@ def setzen(neu: dict):
     ai_config.set_override(EINSTELLUNG, alles, persist=True)
 
 
+def replace(choice: dict):
+    """Store exactly `choice` as this device's decisions (the sync wires of
+    core/wires.py write through here). Nothing is written when it is what
+    the setting already says — a round trip leaves the file byte-identical."""
+    new = {str(k): v is True for k, v in choice.items()}
+    if ai_config.setting(EINSTELLUNG) is not None and entscheidungen() == new \
+            and list(entscheidungen()) == list(new):
+        return
+    ai_config.set_override(EINSTELLUNG, new, persist=True)
+
+
 def muster() -> list:
     """Die Muster der Positivliste, die dieses Gerät abgleicht. Pflicht-Apps
     (der Adapter) immer, egal, was gewählt ist."""

@@ -22,7 +22,8 @@ import kacheln
 import lists
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten", "/api/apps")   # /api/kachel* deckt /api/kacheln mit
+PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten", "/api/apps",
+            "/api/wires")   # /api/kachel* deckt /api/kacheln mit
 METHODEN = {"get", "put", "post", "delete", "patch"}
 
 

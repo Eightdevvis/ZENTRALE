@@ -23,6 +23,10 @@ ui/
 tui/
 prompts/
 openapi.yaml
+# The type registry and schemas of the building kit (core/port_types.py reads
+# them at run time: every sync choice passes the Run gate, step 9b).
+contracts/ports/1/ports.schema.json
+contracts/ports/1/types.json
 
 # ── Start und Abgleich ──────────────────────────────────────────────────
 scripts/start_tui.sh

@@ -192,7 +192,24 @@ def neue_apps_fragen(term, cloud=True):
         term.sag(t("new_apps_hint", liste=", ".join(app_name(n)[0] for n in neu)), "warn")
         return
     for n in neu:
-        abgleich_apps.setzen({n: term.ja(t("ask_new_app", name=app_name(n)[0]))})
+        choose_sync(term, {n: term.ja(t("ask_new_app", name=app_name(n)[0]))})
+
+
+def choose_sync(term, choice, show_plan=True) -> bool:
+    """A sync choice ({app: True|False}) through the one gate (building kit
+    step 9b, core/generations.py): compile → diff → switch → apply. A change
+    the compiler refuses is shown and nothing is written; a failed health
+    check rolls back. → True when the choice is in effect."""
+    import generations
+    r = generations.choose_sync(choice, root=WURZEL)
+    for e in r["errors"]:
+        term.sag(t("wiring_refused", text=e["text"]), "warn")
+    if r["rolled_back"]:
+        term.sag(t("wiring_rolled_back", text="; ".join(r["problems"])), "warn")
+    if r.ok and show_plan:
+        for line in r["diff"]:
+            term.sag("  " + line, "blass")
+    return r.ok
 
 
 def neue_apps_beim_start(term):

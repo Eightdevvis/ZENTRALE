@@ -85,7 +85,7 @@ def ask_cloud_folder(term, ctx):
                 t("wiz_cloud_folder_opts"), "no" if now is False else "yes")
     if a == BACK:
         return BACK
-    abgleich_apps.setzen({CLOUD_FOLDER_APP: a == "yes"})
+    befehle.choose_sync(term, {CLOUD_FOLDER_APP: a == "yes"}, show_plan=False)
     return NEXT
 
 
@@ -142,7 +142,7 @@ def ask_purpose(term, ctx):
             return CANCEL
     on = [befehle.app_name(n, table)[0] for n in offer if choice[n]]
     term.sag(t("setup_choice_saved", liste=", ".join(on)) if on else t("setup_choice_none"))
-    abgleich_apps.setzen(choice)
+    befehle.choose_sync(term, choice, show_plan=False)
     return NEXT
 
 
@@ -211,7 +211,7 @@ def finish(term, ctx) -> int:
         term.sag(t("setup_local_ok"), "gut")
         return 0
     from zentrale_cli import assistent
-    abgleich_apps.setzen({})                 # {} = nothing decided yet: new apps ask themselves
+    befehle.choose_sync(term, {}, show_plan=False)   # {} = nothing decided yet: new apps ask themselves
     assistent.cloud_einschalten()
     befehle.einrichtung_merken()
     try:

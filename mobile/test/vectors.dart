@@ -7,6 +7,9 @@ const _folder = {
   'kalender_testvektoren.json': 'calendar-ics/1',
   'kalender_aendern_testvektoren.json': 'calendar-ics/1',
   'calendar_colour_vectors.json': 'calendar-colours/1',
+  'port_vectors.json': 'ports/1',
+  'ports.schema.json': 'ports/1',
+  'types.json': 'ports/1',
 };
 
 String vectorPath(String name) {

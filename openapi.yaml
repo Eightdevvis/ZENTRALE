@@ -50,6 +50,11 @@ tags:
       `adresse` weiter (Methode, Pfad, Abfrage, Körper, Inhalts-Köpfe hin;
       Status, Inhalts-Köpfe, Körper zurück; nie Authorization/Cookie). App
       aus, nicht erreichbar oder länger als 30 s → 503 `{"fehler": "aus"}`.
+  - name: wires
+    description: >
+      Wires of this node (building kit steps 9/9b, memory/hub/port_types.md):
+      a projection of the stored truths; every change passes the one gate
+      (compile → diff → switch, core/generations.py).
   - name: app-seite
     description: >
       Was eine Prozess-App selbst beantwortet (unter ihrer `adresse`, nur auf
@@ -747,6 +752,54 @@ paths:
         "503": {$ref: "#/components/responses/InstallFehler"}
         "504": {$ref: "#/components/responses/InstallFehler"}
 
+  /api/wires:
+    get:
+      tags: [wires]
+      operationId: wiresList
+      summary: Pieces and wires of this node (a projection, no store of its own)
+      description: >
+        Sync wires come from the setting `abgleich_apps` of this node,
+        calendar-source wires from `quelle` of each calendar instance. Full
+        item schemas: contracts/ports/1/ports.schema.json.
+      responses:
+        "200":
+          description: The projection
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [node, pieces, wires]
+                properties:
+                  node: {type: string}
+                  pieces: {type: array, items: {$ref: "#/components/schemas/Piece"}}
+                  wires: {type: array, items: {$ref: "#/components/schemas/Wire"}}
+
+  /api/wires/{wid}:
+    parameters:
+      - {name: wid, in: path, required: true, schema: {type: string}, description: "wire id, may contain '/' (sync/minipc/tutor)"}
+      - {name: plan, in: query, required: false, schema: {type: string, enum: ["1", "true", "yes"]}, description: only plan (diff), do not switch}
+    put:
+      tags: [wires]
+      operationId: wirePut
+      summary: Plug or re-plug one wire — through the gate (compile → diff → switch)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Wire"}
+      responses:
+        "200": {$ref: "#/components/responses/RunResult"}
+        "400": {$ref: "#/components/responses/RunResult"}
+        "409": {$ref: "#/components/responses/RunResult"}
+    delete:
+      tags: [wires]
+      operationId: wireDelete
+      summary: Unplug one wire (state off) — through the gate
+      responses:
+        "200": {$ref: "#/components/responses/RunResult"}
+        "404": {$ref: "#/components/responses/RunResult"}
+        "409": {$ref: "#/components/responses/RunResult"}
+
   /api/apps/{name}/start:
     parameters:
       - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
@@ -1057,8 +1110,54 @@ components:
             required: [ok]
             properties:
               ok: {const: true}
+    RunResult:
+      description: >
+        The result of Run (core/generations.run). Refused (400/404/409) →
+        nothing was written, `errors` pinned to pieces/wires. A failed health
+        check after the switch rolls back (`rolled_back`, `problems`).
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok, errors]
+            properties:
+              ok: {type: boolean}
+              diff: {type: array, items: {type: string}, description: "plan lines: + new, - gone, ~ changed"}
+              errors: {type: array, items: {$ref: "#/components/schemas/CompileError"}}
+              generation: {type: [string, "null"]}
+              rolled_back: {type: boolean}
+              problems: {type: array, items: {type: string}}
 
   schemas:
+    Wire:
+      type: object
+      description: One wire (contracts/ports/1/ports.schema.json $defs/wire is the full schema).
+      required: [id, from, to, type, owner, state]
+      properties:
+        id: {type: string}
+        from: {type: string, examples: ["zentrale://cloud/port/sync"]}
+        to: {type: string, examples: ["zentrale://tutor/port/data"]}
+        type: {type: string, examples: [sync]}
+        owner: {type: string, examples: ["node:minipc"]}
+        state: {enum: [live, off, broken, planned]}
+        seen: {type: string}
+    Piece:
+      type: object
+      description: One piece (contracts/ports/1/ports.schema.json $defs/piece is the full schema).
+      required: [id, ref, kind]
+      properties:
+        id: {type: string}
+        ref: {type: string}
+        kind: {enum: [node, app, device]}
+    CompileError:
+      type: object
+      required: [code, text]
+      properties:
+        code: {type: string, examples: [unmet-requirement, double-owner, cycle]}
+        text: {type: string, description: for people, in the UI language}
+        piece: {type: string}
+        wire: {type: string}
+        port: {type: string}
     App:
       type: object
       required: [name, titel, version, art, adresse, laeuft, gestartet_vom_hub, autostart,

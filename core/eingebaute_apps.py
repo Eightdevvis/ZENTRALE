@@ -75,3 +75,43 @@ ERSATZ = {
                                    "tutor/data/staende/**", "tutor/data/es/**"],
                         "abgleichen": True}},
 }
+
+# ── Ports (building kit step 9, memory/hub/port_types.md) ───────────────
+#
+# What each built-in app needs and offers, in the manifest's English keys
+# `needs` / `offers` (contracts/ports/1/ports.schema.json, $defs/manifestPorts).
+# An app whose data may sync has the socket `data` that takes a `sync` wire
+# (0..1: off = stays on this device); the adapter must sync (`pflicht`), so
+# its socket takes exactly one. tests/test_port_types.py checks every entry
+# against the schema and that each app with `daten` has the socket.
+_DATA_SYNC = {"id": "data", "type": "sync", "range": "^1", "occurrences": [0, 1]}
+
+PORTS = {
+    "fokus": {"needs": [_DATA_SYNC]},
+    "notizen": {"needs": [_DATA_SYNC]},
+    "kalender": {"needs": [_DATA_SYNC]},
+    "graph": {"needs": [_DATA_SYNC]},
+    "assistent": {"needs": [_DATA_SYNC,
+                            # optional until the plug dialog (step 11) wires it
+                            {"id": "model", "type": "model", "range": "^1", "occurrences": [0, 1]}]},
+    "ablage": {"needs": [_DATA_SYNC], "offers": [{"id": "files", "type": "files"}]},
+    "desk": {"needs": [_DATA_SYNC]},
+    "werkstatt": {"needs": [_DATA_SYNC]},
+    "mail": {"needs": [_DATA_SYNC]},
+    "klavier": {"needs": [_DATA_SYNC]},
+    "adapter": {"needs": [dict(_DATA_SYNC, occurrences=[1, 1])],
+                "offers": [{"id": "model", "type": "model"},
+                           {"id": "google", "type": "calendar-source"}]},
+    "cloud_folder": {"needs": [_DATA_SYNC], "offers": [{"id": "files", "type": "files"}]},
+    "cloud": {"offers": [{"id": "sync", "type": "sync"},
+                         {"id": "calendar", "type": "calendar-source"}]},
+    "tutor": {"needs": [_DATA_SYNC]},
+}
+
+# One calendar instance (core/kalender_einstellung.py) is its own piece: it
+# takes exactly one `calendar-source` wire (google / zencloud / local).
+INSTANCE_PORTS = {"kalender": {"needs": [{"id": "source", "type": "calendar-source", "range": "^1"}]}}
+
+# What every node offers by itself (its platform): the local calendar
+# source. Hardware ports come from the node description (core/knoten.py).
+NODE_PORTS = {"offers": [{"id": "calendar-local", "type": "calendar-source"}]}

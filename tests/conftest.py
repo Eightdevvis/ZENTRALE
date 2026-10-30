@@ -425,6 +425,9 @@ def _konto_frisch(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _format_notes_fresh(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_FORMAT_NOTES", str(_test_ordner / "format_notes.json"))
+    # Generations of the Run gate (core/generations.py, building kit step 9b):
+    # never the real ~/.local/state, never a previous test's. Only a path.
+    monkeypatch.setenv("ZENTRALE_GENERATIONS", str(_test_ordner / "generations"))
     yield
 
 

@@ -207,6 +207,9 @@ EN = {
     "check_failed": "Self-test failed: {text}",
     "tm_healed": "New version since the timers were last set up — refreshed: {liste}",
     "ask_new_app": "{name} has data — sync it with your account?",
+    # The one gate for wiring changes (building kit step 9b, core/generations.py).
+    "wiring_refused": "Not changed — {text}",
+    "wiring_rolled_back": "Changed back — the change did not take effect: {text}",
     "new_apps_hint": "Not synced yet, waiting for your decision: {liste}. Run 'zentrale sync' in a terminal.",
 
     # ── Abgleich ────────────────────────────────────────────────────

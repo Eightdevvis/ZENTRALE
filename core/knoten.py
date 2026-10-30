@@ -14,6 +14,7 @@ import os
 import shutil
 
 import dateien
+import port_types
 
 SORTEN = ("gehirn", "vollknoten", "aussenposten", "medienknoten", "fremd")
 _PROJEKT = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -89,4 +90,8 @@ def beschreibung(sorte="vollknoten", sys_wurzel="/", umgebung=None, beigetreten=
             "hardware": hardware(sys_wurzel, umgebung),
             "dienste": ["backend", "tui", "abgleich"],
             "apps": [], "programm": fassung(wurzel),
-            "netz": {"lan": None, "wireguard_oeffentlich": None, "ssh_oeffentlich": None}}
+            "netz": {"lan": None, "wireguard_oeffentlich": None, "ssh_oeffentlich": None},
+            # Building kit step 9b (memory/hub/port_types.md): the port type
+            # versions this node speaks, and that it runs the apply agent
+            # (core/generations.py). A description without them = unmanaged.
+            "types": port_types.supported(), "apply_agent": port_types.APPLY_AGENT}

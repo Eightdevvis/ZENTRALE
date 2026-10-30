@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zentrale:ports:1",
+  "title": "ZENTRALE building kit: port types, pieces, wires, sketches, generations (major 1)",
+  "description": "One schema file with every item of the building kit (memory/hub/building_kit_plan.md 1 and 6.7; reasoning: memory/hub/port_types.md). Validate an item against `{\"$ref\": \"urn:zentrale:ports:1#/$defs/<item>\"}` or the same document with a top-level `$ref`. Terms follow TOSCA v2.0 (node types = piece kinds, capabilities = offers, requirements = needs, relationship types, occurrences) and NetBox for the physical layers (interface, cable, power port). Within major 1 only additive changes (plan 2.2 rule 1).",
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+    },
+    "portType": {
+      "description": "A port type: a registered family, optionally with a qualifier for the families that take one (event:calendar-changed, tile:list, read:calendar).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}(:[a-z0-9][a-z0-9._-]{0,63})?$"
+    },
+    "version": {
+      "description": "SemVer 2.0.0 core version (no pre-release, no build).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "range": {
+      "description": "A SemVer range, npm style subset: ^1, ^1.2, ~1.2, an exact 1.2.3, or * (any).",
+      "type": "string",
+      "pattern": "^(\\*|[\\^~]?(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*)){0,2})$"
+    },
+    "requirementString": {
+      "description": "Short form of a need: type, optionally @range (sync@^1).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}(:[a-z0-9][a-z0-9._-]{0,63})?(@(\\*|[\\^~]?(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*)){0,2}))?$"
+    },
+    "capabilityString": {
+      "description": "Short form of an offer: type, optionally @version (sync@1.0.0).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}(:[a-z0-9][a-z0-9._-]{0,63})?(@(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))?$"
+    },
+    "occurrences": {
+      "description": "TOSCA occurrences [min, max]; max may be \"UNBOUNDED\".",
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"oneOf": [{"type": "integer", "minimum": 1}, {"const": "UNBOUNDED"}]}
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "portId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+    },
+    "need": {
+      "description": "A requirement (TOSCA). `id` names the socket on the piece (default: the type); `range` the accepted versions of the type (default ^<major the registry knows>); `occurrences` how many wires it takes (default from the registry); `access` read or write for data-like types.",
+      "oneOf": [
+        {"$ref": "#/$defs/requirementString"},
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "id": {"$ref": "#/$defs/portId"},
+            "type": {"$ref": "#/$defs/portType"},
+            "range": {"$ref": "#/$defs/range"},
+            "occurrences": {"$ref": "#/$defs/occurrences"},
+            "access": {"enum": ["read", "write", "readwrite"]},
+            "legacy": {"type": "boolean", "description": "Read from the old keys (rechte/liefert): granted by the rights check, not enforced by the compiler until the plug dialog wires it."}
+          }
+        }
+      ]
+    },
+    "offer": {
+      "description": "A capability (TOSCA). `id` names the socket (default: the type); `version` the version of the type it speaks (default: the registry's).",
+      "oneOf": [
+        {"$ref": "#/$defs/capabilityString"},
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "id": {"$ref": "#/$defs/portId"},
+            "type": {"$ref": "#/$defs/portType"},
+            "version": {"$ref": "#/$defs/version"},
+            "legacy": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "manifestPorts": {
+      "description": "The port part of an app manifest (app.toml read as JSON, or a built-in app in core/eingebaute_apps.py). Other manifest keys are not this contract's business.",
+      "type": "object",
+      "properties": {
+        "needs": {"type": "array", "items": {"$ref": "#/$defs/need"}},
+        "offers": {"type": "array", "items": {"$ref": "#/$defs/offer"}}
+      }
+    },
+    "typeEntry": {
+      "description": "One port type family in the registry.",
+      "type": "object",
+      "required": ["version", "layer", "relationship", "scope"],
+      "properties": {
+        "version": {"$ref": "#/$defs/version"},
+        "layer": {"enum": ["data", "services", "hardware", "network", "power"]},
+        "relationship": {"enum": ["DependsOn", "ConnectsTo", "HostedOn", "AttachesTo"],
+                         "description": "TOSCA normative relationship type of a wire of this type."},
+        "scope": {"enum": ["node", "instance", "link"],
+                  "description": "Who owns a wire of this type (plan 1.4): node = the node the consumer is stationed on, counted per node; instance = the consumer piece, synced; link = observed/documented connection between nodes and devices."},
+        "qualifier": {"enum": ["none", "name"], "default": "none"},
+        "cycles": {"enum": ["forbidden", "allowed"]},
+        "occurrences": {"$ref": "#/$defs/occurrences"},
+        "netbox": {"type": "string", "description": "The NetBox term for the physical layers."},
+        "description": {"type": "string"}
+      }
+    },
+    "registry": {
+      "type": "object",
+      "required": ["format", "types"],
+      "properties": {
+        "format": {"const": "zentrale-port-types/1"},
+        "types": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"$ref": "#/$defs/typeEntry"}
+        }
+      }
+    },
+    "address": {
+      "type": "string",
+      "pattern": "^zentrale://[a-z0-9][a-z0-9._-]*/([^\\s?#]*)$"
+    },
+    "portAddress": {
+      "description": "<piece ref>port/<port id> (zentrale://cloud/port/sync).",
+      "type": "string",
+      "pattern": "^zentrale://[a-z0-9][a-z0-9._-]*/([^\\s?#]*/)?port/[a-z][a-z0-9._-]{0,63}$"
+    },
+    "pieceId": {
+      "type": "string",
+      "pattern": "^(node|app|device):[A-Za-z0-9][A-Za-z0-9._/@-]{0,127}$"
+    },
+    "piece": {
+      "description": "A piece (TOSCA node template): a node (with its platform ports: hardware, local calendar, folders), an app instance, a device without ZENTRALE. `ref` is the real object's address — never a copy.",
+      "type": "object",
+      "required": ["id", "ref", "kind"],
+      "properties": {
+        "id": {"$ref": "#/$defs/pieceId"},
+        "ref": {"$ref": "#/$defs/address"},
+        "kind": {"enum": ["node", "app", "device"]},
+        "title": {"type": "string", "maxLength": 120},
+        "state": {"enum": ["live", "documented", "planned"], "default": "live"},
+        "on": {"type": "array", "items": {"$ref": "#/$defs/pieceId"},
+               "description": "Nodes this piece is stationed on (apps)."},
+        "managed": {"type": "boolean",
+                    "description": "Nodes: runs the apply agent. False = unmanaged, read-only, never targeted."},
+        "types": {"type": "object",
+                  "propertyNames": {"$ref": "#/$defs/name"},
+                  "additionalProperties": {"$ref": "#/$defs/version"},
+                  "description": "Nodes: the port type versions this node supports (from its node description)."},
+        "role": {"type": "string", "description": "Devices: NetBox device role (router, switch, printer, power-bank …)."},
+        "needs": {"type": "array", "items": {"$ref": "#/$defs/need"}},
+        "offers": {"type": "array", "items": {"$ref": "#/$defs/offer"}},
+        "owns": {"type": "array", "items": {"type": "string", "minLength": 1},
+                 "description": "Resources this piece is the one owner of (file:data/lists.json)."}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "node"}}},
+         "then": {"properties": {"id": {"pattern": "^node:"}}}},
+        {"if": {"properties": {"kind": {"const": "app"}}},
+         "then": {"properties": {"id": {"pattern": "^app:"}}}}
+      ]
+    },
+    "wire": {
+      "description": "One connection from an offered port to a needed port of the same type (plan 1.4).",
+      "type": "object",
+      "required": ["id", "from", "to", "type", "owner", "state"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$"},
+        "from": {"$ref": "#/$defs/portAddress"},
+        "to": {"$ref": "#/$defs/portAddress"},
+        "type": {"$ref": "#/$defs/portType"},
+        "owner": {"$ref": "#/$defs/pieceId"},
+        "state": {"enum": ["live", "off", "broken", "planned"]},
+        "seen": {"type": "string"}
+      }
+    },
+    "sketch": {
+      "type": "object",
+      "required": ["format", "pieces", "wires"],
+      "properties": {
+        "format": {"const": "zentrale-sketch/1"},
+        "pieces": {"type": "array"},
+        "wires": {"type": "array"}
+      }
+    },
+    "generation": {
+      "description": "A compiled sketch: self-contained, hashed (sha256 over the JCS form of format + pieces + wires).",
+      "type": "object",
+      "required": ["format", "hash", "pieces", "wires"],
+      "properties": {
+        "format": {"const": "zentrale-generation/1"},
+        "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "made": {"type": "string"},
+        "pieces": {"type": "array", "items": {"$ref": "#/$defs/piece"}},
+        "wires": {"type": "array", "items": {"$ref": "#/$defs/wire"}}
+      }
+    }
+  }
+}
