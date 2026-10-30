@@ -1,6 +1,6 @@
 # Schematix — the wiring map app
 
-**Stand 2026-10-30: step 13 built (`64821b8`, v1, read-only); step 14 (`6d27b1c`, v2: schemes, planned and documented pieces, things); step 15 (v3: rewire by drawing, Run).** The app `schematix`
+**Stand 2026-10-30: step 13 built (`64821b8`, v1, read-only); step 14 (`6d27b1c`, v2: schemes, planned and documented pieces, things); step 15 (`9c6cc74`, v3: rewire by drawing, Run).** The app `schematix`
 (plan: [building_kit_plan.md](building_kit_plan.md) sections 6 and 8, steps
 13–15; look: [schematix_style.md](schematix_style.md)). One plan is a
 **scheme**; making and changing schemes is **scheming** (Sasha's pun on

@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 5–6, 7–8 (`d1dc8fd`), 9 and 9b (`6a63d16`), 10–12, 13 (`64821b8`), 14 (`6d27b1c`) built.** One blueprint for
+**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 5–6, 7–8 (`d1dc8fd`), 9 and 9b (`6a63d16`), 10–12, 13 (`64821b8`), 14 (`6d27b1c`), 15 (`9c6cc74`) built.** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -551,8 +551,8 @@ compiler with its graph checks, the socket table for the editors, and the apply 
 | packaging | one tarball, `deploy/paket.txt`, `BUNDLE.json`, holds (`e24374f`) | per-app packages as apps leave |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list; port schema, `needs`/`offers`, `/api/wires` (`6a63d16`); plug dialog (`ec0020a`) | — |
 | lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`d1dc8fd`) | Schematix display |
-| wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions; Schematix v1–v2 (steps 13–14) | rewire by drawing |
-| run pipeline | type registry, compiler, generations, apply agent (`6a63d16`), on the keeper timer (`ec0020a`) | socket table in the editors, Dart port of the rules ([../open/run_gate_followups.md](../open/run_gate_followups.md)) |
+| wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions; Schematix v1–v3 (steps 13–15) | phone front; same version without effect in the updater |
+| run pipeline | type registry, compiler, generations, apply agent (`6a63d16`), on the keeper timer (`ec0020a`) | socket table in the phone, Dart port of the rules ([../open/run_gate_followups.md](../open/run_gate_followups.md)) |
 
 ## 8. Build order — small steps, each with its acceptance test
 
@@ -576,7 +576,7 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 12 | **Built `e24374f`.** **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
 | 13 | **Built `64821b8`.** **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
 | 14 | **Built `6d27b1c`.** **Schematix v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
-| 15 | **Schematix v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
+| 15 | **Built `9c6cc74`.** **Schematix v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
 
 **Final acceptance — fresh reinstall on the Mini-PC, no manual work:**
 remove the installation on the mini (cloud data untouched), run the
@@ -596,4 +596,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`); step 11 (`ec0020a`): plug dialog, apply agent on the keeper, node wires in the description; step 13 (`64821b8`): Schematix v1 ([schematix.md](schematix.md)); step 14 (`6d27b1c`): schemes, planned and documented pieces, things store, starter scheme.
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`); step 11 (`ec0020a`): plug dialog, apply agent on the keeper, node wires in the description; step 13 (`64821b8`): Schematix v1 ([schematix.md](schematix.md)); step 14 (`6d27b1c`): schemes, planned and documented pieces, things store, starter scheme; step 15 (`9c6cc74`): rewire by drawing, Run from the board, same version settable.
