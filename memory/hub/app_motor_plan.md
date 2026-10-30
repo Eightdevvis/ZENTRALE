@@ -35,7 +35,7 @@ unten).
 - **Dieselbe App überall.** Das folgt aus der Regel „Apps syncen ohne Gnade"
   und aus [../leitbild.md](../leitbild.md) („überall deploybar"). Heute ist
   die Kalender-Logik doppelt da, in Python (Kern) und Dart (Handy), und nur
-  über die Testvektoren gleich gehalten (`mobile/test/daten/kalender_testvektoren.json`).
+  über die Testvektoren gleich gehalten (`contracts/calendar-ics/1/kalender_testvektoren.json`).
   Mit jedem weiteren Knoten (Pi, Browser, AR) käme eine weitere Kopie dazu.
   Ein Paket für alle Knoten beendet das.
 - **Keine eigenen Formate** ([hub_bauplan.md](hub_bauplan.md) „Standards

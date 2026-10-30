@@ -93,7 +93,7 @@ new assignments skip taken slots.
 - `tests/test_calendar_colours.py`: keys, assignment, precedence, palette vs.
   TUI indexes, phone copy identical, table format, migration, merge,
   annotation, route, vectors current.
-- `scripts/calendar_colour_vectors.py` → `mobile/test/daten/calendar_colour_vectors.json`
+- `scripts/calendar_colour_vectors.py` → `contracts/calendar-colours/1/calendar_colour_vectors.json`
   (made-up events as real .ics, written by the core): change the core → run
   it, then `flutter test` (`test/calendar_colours_test.dart`, also writes
   `build/kalender_vorschau/colours_*.png`).

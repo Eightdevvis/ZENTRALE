@@ -346,7 +346,7 @@ re-encrypted (no client uses it yet).
 
 ### Testvektoren für andere Oberflächen
 
-`tests/daten/konto_testvektoren.json`: festes Passwort, Salz und KDF-Werte →
+`contracts/account-keys/1/konto_testvektoren.json`: festes Passwort, Salz und KDF-Werte →
 `hauptschluessel`, `anmelde_schluessel`, `verpack_schluessel`; feste
 Notfall-Bytes → Base32-Text, `notfall_schluessel`, `notfall_beweis`; dazu
 `verpackt_passwort`/`verpackt_notfall` mit fester Zeit und festem IV (nur zum

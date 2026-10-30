@@ -16,6 +16,7 @@ same accounts.
 import contextlib
 import os
 import secrets
+import shutil
 import socket
 import sys
 
@@ -56,8 +57,8 @@ class Workspace:
     def build_release(self, version) -> str:
         """Tarball <version> from the checkout as it is now, new files not yet
         committed included (scripts/paket_bauen.py, the same builder and positive
-        list as a real release). Step 6 of the plan adds an archive of
-        every released tarball; then old code comes from there."""
+        list as a real release). Old code of a published release comes from
+        the release archive instead (ensure_release)."""
         sys.path.append(os.path.join(self.checkout, "scripts"))
         import paket_bauen
         path, _info = paket_bauen.bauen(version, root=self.checkout, ziel_ordner=self.releases, stufe=1,
@@ -66,10 +67,21 @@ class Workspace:
         return path
 
     def ensure_release(self, version) -> str:
-        """A tarball someone put into releases/ is used as it is; one built from
-        the checkout is rebuilt, so a profile always gets today's code."""
+        """A tarball someone put into releases/ is used as it is; an earlier
+        published release comes from the release archive with its true old
+        code (scripts/release_archive.py, rebuilt from its commit once);
+        anything else — the checkout's own deploy/RELEASE too — is built from
+        the checkout, rebuilt each time so a profile always gets today's code."""
         path = self.release_path(version)
         if os.path.exists(path) and not os.path.exists(path + FROM_CHECKOUT):
+            return path
+        sys.path.append(os.path.join(self.checkout, "scripts"))
+        import release_archive
+        if version in release_archive.RELEASES and version != self.current_release():
+            shutil.copyfile(release_archive.ensure(version), path + ".part")
+            os.replace(path + ".part", path)
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(path + FROM_CHECKOUT)
             return path
         return self.build_release(version)
 

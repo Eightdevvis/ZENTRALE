@@ -5,7 +5,7 @@
 # nie Passwort, Schlüssel oder Klartext. Hier steht NUR Rechnen — kein Netz,
 # keine Datei, kein Terminal —, damit jede andere Oberfläche (Handy in Dart,
 # Browser mit WebCrypto + argon2-wasm, Brille …) dasselbe aus der Doku
-# nachbauen kann. Prüfstein dafür: tests/daten/konto_testvektoren.json.
+# nachbauen kann. Prüfstein dafür: contracts/account-keys/1/konto_testvektoren.json.
 #
 #   passwort ─Argon2id(salz, t, m, p)→ hauptschluessel (32 B)
 #   hauptschluessel ─HKDF info="zentrale/anmelden/v1"→ anmelde_schluessel (an den Server)

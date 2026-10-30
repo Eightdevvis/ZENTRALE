@@ -216,7 +216,7 @@ Umschläge, nur über die Routen der Cloud
 - **Anmelden:** `POST /v1/vorab {name}` → `{salz, kdf}`; Argon2id → HKDF →
   `POST /v1/sitzung {name, anmelde_schluessel, knoten}` → `{token, laeuft_ab,
   verpackt_passwort}`; `konto_schluessel` = Fernet(verpack_schluessel) auf
-  `verpackt_passwort`. Prüfstein `tests/daten/konto_testvektoren.json`. Der
+  `verpackt_passwort`. Prüfstein `contracts/account-keys/1/konto_testvektoren.json`. Der
   **Schlüssel** der Mitte ist dann der `konto_schluessel` (44 Zeichen wie
   oben), nicht `abgleich.schluessel`.
 - **Lesen:** `GET /v1/mitte` → `{kennung, namen}`; `kennung` null = noch kein
@@ -233,7 +233,7 @@ Umschläge, nur über die Routen der Cloud
   `fehlen` hochladen, nochmal. Die Rechner übernehmen beim nächsten Stand alle
   Namen der Basis, der Eingang bleibt also erhalten.
 - Prüfsteine: Dart-Tests in `mobile/test/` gegen eine gespielte Cloud und gegen
-  `mobile/test/daten/mitte_testvektoren.json` (erzeugt mit dem echten Kern von
+  `contracts/cloud-sync/1/mitte_testvektoren.json` (erzeugt mit dem echten Kern von
   `scripts/handy_testvektoren.py`); Rechner-Seite `tests/test_abgleich_handy.py`.
 
 **Der Knotenname:** Rechner heißen wie ihr Hostname (`0RAMMachine`,

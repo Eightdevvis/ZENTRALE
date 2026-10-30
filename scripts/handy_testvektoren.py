@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Testvektoren fürs Handy (mobile/test/daten/) — erzeugt mit dem ECHTEN Kern.
+"""Testvektoren fürs Handy (contracts/cloud-sync/1, contracts/calendar-ics/1) — erzeugt mit dem ECHTEN Kern.
 
 Das Handy baut Mitte und Kalender in Dart nach (memory/system/zen_mobile.md).
 Damit beide Seiten nie auseinanderlaufen, rechnet dieses Skript die
@@ -33,7 +33,9 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 
-ZIEL = Path(ROOT) / "mobile" / "test" / "daten"
+CONTRACTS = Path(ROOT) / "contracts"      # contracts/README.md
+ZIEL = {"mitte_testvektoren.json": CONTRACTS / "cloud-sync" / "1",
+        "kalender_testvektoren.json": CONTRACTS / "calendar-ics" / "1"}
 FEST = dt.datetime(2026, 10, 1, 8, 0, tzinfo=dt.timezone.utc)
 
 
@@ -47,7 +49,7 @@ def _fernet_fest(schluessel: bytes, klar: bytes, zeit: int, iv: bytes) -> str:
 
 def mitte_vektoren() -> dict:
     import abgleich_schluessel as schluessel
-    konto = json.loads((Path(ROOT) / "tests" / "daten" / "konto_testvektoren.json").read_text())
+    konto = json.loads((CONTRACTS / "account-keys" / "1" / "konto_testvektoren.json").read_text())
     k = konto["konto_schluessel"].encode("ascii")
     t = schluessel.Tresor(k)
     pfade = ["data/gespraeche/20261008-101500-a1b2c3/handy.jsonl",
@@ -326,11 +328,11 @@ def neue_termine() -> list:
 
 
 def main():
-    ZIEL.mkdir(parents=True, exist_ok=True)
     for name, daten in (("mitte_testvektoren.json", mitte_vektoren()),
                         ("kalender_testvektoren.json", kalender_vektoren())):
-        (ZIEL / name).write_text(json.dumps(daten, ensure_ascii=False, indent=1) + "\n", "utf-8")
-        print(f"{ZIEL / name}")
+        ZIEL[name].mkdir(parents=True, exist_ok=True)
+        (ZIEL[name] / name).write_text(json.dumps(daten, ensure_ascii=False, indent=1) + "\n", "utf-8")
+        print(f"{ZIEL[name] / name}")
 
 
 if __name__ == "__main__":

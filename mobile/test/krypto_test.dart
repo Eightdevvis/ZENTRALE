@@ -1,7 +1,7 @@
 // Der Krypto-Nachbau des Handys gegen die Testvektoren des Kerns
-// (tests/daten/konto_testvektoren.json, kopiert nach test/daten/) und gegen
+// (contracts/account-keys/1/konto_testvektoren.json, dieselbe Datei) und gegen
 // Vektoren der Mitte, die scripts/handy_testvektoren.py mit dem echten Kern
-// erzeugt (test/daten/mitte_testvektoren.json).
+// erzeugt (contracts/cloud-sync/1/mitte_testvektoren.json).
 
 import 'dart:convert';
 import 'dart:io';
@@ -10,9 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zen_mobile/krypto/fernet.dart';
 import 'package:zen_mobile/krypto/konto_schluessel.dart';
 import 'package:zen_mobile/krypto/tresor.dart';
+import 'vectors.dart';
 
 Map<String, dynamic> _json(String name) =>
-    jsonDecode(File('test/daten/$name').readAsStringSync()) as Map<String, dynamic>;
+    jsonDecode(File(vectorPath(name)).readAsStringSync()) as Map<String, dynamic>;
 
 List<int> _hex(String h) =>
     [for (var i = 0; i < h.length; i += 2) int.parse(h.substring(i, i + 2), radix: 16)];

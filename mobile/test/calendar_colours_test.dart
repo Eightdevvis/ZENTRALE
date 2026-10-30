@@ -20,8 +20,9 @@ import 'package:zen_mobile/mitte/regeln.dart';
 import 'package:zen_mobile/thema/farben.dart';
 
 import 'calendar_views_test.dart' show app, at, loadFonts, now, phone, previewPage, snapshot;
+import 'vectors.dart';
 
-final vectors = jsonDecode(File('test/daten/calendar_colour_vectors.json').readAsStringSync()) as Map<String, dynamic>;
+final vectors = jsonDecode(File(vectorPath('calendar_colour_vectors.json')).readAsStringSync()) as Map<String, dynamic>;
 final palette = CalendarColourPalette.fromJson(File(CalendarColourPalette.asset).readAsStringSync());
 
 void main() {

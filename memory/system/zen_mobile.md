@@ -223,8 +223,8 @@ aber nur in seinen Eingang `knoten/handy/` (Format:
 - **Krypto** (`lib/krypto/`, Paket `cryptography` + `crypto`): Fernet aus
   AES-128-CBC und HMAC-SHA256 (HMAC zuerst geprüft), HKDF-SHA256, Argon2id
   (rein Dart, im Isolate), versteckte Namen per HMAC. Prüfsteine:
-  `test/daten/konto_testvektoren.json` (Kopie des Kerns) und
-  `test/daten/mitte_testvektoren.json` (erzeugt mit dem echten Kern).
+  `contracts/account-keys/1/konto_testvektoren.json` (dieselbe Datei wie der Kern) und
+  `contracts/cloud-sync/1/mitte_testvektoren.json` (erzeugt mit dem echten Kern).
 
 ## Der Kalender (`lib/kalender/`, seit 2026-10-28)
 
@@ -242,7 +242,7 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   `kalender_ics_abbildung.lesen` (Art, Spannen, Routinen, `seit`, Pausen,
   Aus-Tage, RECURRENCE-ID, Extras), `regel.dart` rechnet RRULE wie dateutil,
   `kalender.dart` die Vorkommen wie `kalender.entries_in_range`. Prüfstein:
-  `test/daten/kalender_testvektoren.json` — erzeugt von
+  `contracts/calendar-ics/1/kalender_testvektoren.json` — erzeugt von
   `scripts/handy_testvektoren.py` mit dem echten Kern aus ausgedachten,
   echt geformten Terminen (Wochen-/Monatsregeln, INTERVAL, COUNT, UNTIL,
   EXDATE, Pausen, verschobene/abgesagte Vorkommen, Spannen, Phasen über
@@ -279,7 +279,7 @@ Sasha will Google Kalender ablösen — die App muss können, was Google tat.
   or "take the cloud's". An undecided envelope is replaced in place (same
   basis_sha). Vectors from the real core:
   `scripts/handy_aendern_testvektoren.py` →
-  `test/daten/kalender_aendern_testvektoren.json` (X-ZENTRALE-AUS encoding,
+  `contracts/calendar-ics/1/kalender_aendern_testvektoren.json` (X-ZENTRALE-AUS encoding,
   all reason codes, edit/off/on cases incl. Google TZID and UTC series);
   tests `test/calendar_edit_test.dart`.
 - **Erinnerungen** (`erinnerungen.dart`): jeder VALARM wird eine Android-
@@ -360,7 +360,7 @@ state lives: [../werkzeuge/calendar_colours.md](../werkzeuge/calendar_colours.md
   (fill mixed into the background by `opacity.glass`) with frame/stripes and
   text in the role's text colour; a style's border colour draws a frame.
 - **Tests:** `test/calendar_colours_test.dart` against
-  `test/daten/calendar_colour_vectors.json` (`scripts/calendar_colour_vectors.py`,
+  `contracts/calendar-colours/1/calendar_colour_vectors.json` (`scripts/calendar_colour_vectors.py`,
   real core, made-up events), table via the Mitte rules, contrast of every
   role day/night, previews `build/kalender_vorschau/colours_{week,day,month}_{day,night}.png`.
 - **Changed the palette or the rule?** Run the vector script, `flutter test`,

@@ -19,8 +19,9 @@ import 'package:zen_mobile/kalender/zeit.dart';
 import 'package:zen_mobile/l10n/app_localizations.dart';
 import 'package:zen_mobile/mitte/abgleich.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
+import 'vectors.dart';
 
-final _v = jsonDecode(File('test/daten/kalender_testvektoren.json').readAsStringSync())
+final _v = jsonDecode(File(vectorPath('kalender_testvektoren.json')).readAsStringSync())
     as Map<String, dynamic>;
 
 /// Die Vektor-Dateien kommen wie im Betrieb über die Mitte aufs Handy.

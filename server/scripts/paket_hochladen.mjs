@@ -14,6 +14,12 @@
 // bytes in D1 (nutzung_wert 'r2_bytes') go up by the package size; the daily
 // cron recount corrects any drift (e.g. a re-uploaded version).
 // --ohne-bremse skips the check (the upload then may cost money).
+//
+// Old-release gate (memory/hub/building_kit_plan.md 2.4, build step 6): before
+// anything is uploaded, tests/test_alte_fassung.py runs — every released
+// version must still sync with this one. Red (or skipped) → nothing published.
+// There is no switch to skip it.
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -44,6 +50,19 @@ const sha = createHash("sha256").update(readFileSync(paket)).digest("hex");
 const groesse = statSync(paket).size;
 if (sha !== info.sha256 || groesse !== info.groesse) {
   console.error(`neueste.json does not match the package (sha256 ${sha}, ${groesse} bytes).`);
+  process.exit(1);
+}
+
+// The old-release test, from the checkout this script lives in.
+const repo = resolve(CLOUD, "..");
+const python = existsSync(resolve(repo, "venv/bin/python")) ? resolve(repo, "venv/bin/python") : "python3";
+console.log("Old-release test (tests/test_alte_fassung.py) …");
+const alt = spawnSync(python, ["-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", "tests/test_alte_fassung.py"],
+  { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const altText = `${alt.stdout ?? ""}${alt.stderr ?? ""}`;
+if (alt.status !== 0 || !/\d+ passed/.test(altText) || /skipped|deselected/.test(altText)) {
+  console.error(altText.trim().split("\n").slice(-20).join("\n"));
+  console.error("The old-release test is red — an earlier release would stop syncing. Nothing uploaded.");
   process.exit(1);
 }
 

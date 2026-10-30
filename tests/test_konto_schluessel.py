@@ -1,6 +1,6 @@
 """Das Schlüssel-Schema des Kontos (core/konto_schluessel.py, Bauplan v1).
 
-Die Testvektoren in tests/daten/konto_testvektoren.json sind für ANDERE
+Die Testvektoren in contracts/account-keys/1/konto_testvektoren.json sind für ANDERE
 Oberflächen da (Handy/Dart, Browser/WebCrypto+argon2-wasm …): wer das Schema
 nachbaut, prüft sich Byte für Byte daran. Hier wird zweierlei geprüft:
   1. Python rechnet genau diese Werte (eingefroren — eine Änderung am Schema
@@ -18,7 +18,8 @@ import pytest
 
 import konto_schluessel as ks
 
-VEKTOREN = os.path.join(os.path.dirname(__file__), "daten", "konto_testvektoren.json")
+VEKTOREN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "contracts", "account-keys", "1", "konto_testvektoren.json")
 
 
 def _hkdf_von_hand(ikm: bytes, info: bytes, laenge=32) -> bytes:

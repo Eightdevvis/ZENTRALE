@@ -14,8 +14,9 @@ import 'package:zen_mobile/kalender/kalender.dart';
 import 'package:zen_mobile/kalender/regel.dart';
 import 'package:zen_mobile/kalender/termin_schreiben.dart';
 import 'package:zen_mobile/kalender/zeit.dart';
+import 'vectors.dart';
 
-final _v = jsonDecode(File('test/daten/kalender_testvektoren.json').readAsStringSync())
+final _v = jsonDecode(File(vectorPath('kalender_testvektoren.json')).readAsStringSync())
     as Map<String, dynamic>;
 
 Map<String, Object?> _form(Vorkommen o) => {

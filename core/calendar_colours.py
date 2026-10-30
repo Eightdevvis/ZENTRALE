@@ -12,7 +12,7 @@
 #     — the TUI reads the slot from there;
 #   - the phone ports key + lookup + precedence (mobile/lib/kalender/colours.dart)
 #     and is pinned to this module by test vectors
-#     (scripts/calendar_colour_vectors.py → mobile/test/daten/calendar_colour_vectors.json).
+#     (scripts/calendar_colour_vectors.py → contracts/calendar-colours/1/calendar_colour_vectors.json).
 #
 # Vocabulary:
 #   key   what an event's colour follows: the course in its title ("analysis"),

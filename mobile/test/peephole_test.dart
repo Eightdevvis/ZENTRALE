@@ -32,6 +32,7 @@ import 'package:zen_mobile/peephole/peephole_surface.dart';
 import 'package:zen_mobile/peephole/peephole_tuning.dart';
 import 'package:zen_mobile/peephole/peephole_view.dart';
 import 'package:zen_mobile/thema/farben.dart';
+import 'vectors.dart';
 
 // ── Synthetic sensors ───────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ Widget app(Widget home, {bool night = false}) => MaterialApp(
 
 // ── Calendar data (same vectors as kalender_app_test) ───────────────────────
 
-final _v = jsonDecode(File('test/daten/kalender_testvektoren.json').readAsStringSync()) as Map<String, dynamic>;
+final _v = jsonDecode(File(vectorPath('kalender_testvektoren.json')).readAsStringSync()) as Map<String, dynamic>;
 
 Future<SpeicherAblage> _ablage() async {
   final m = SpeicherMitte();

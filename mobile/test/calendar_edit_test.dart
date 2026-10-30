@@ -28,10 +28,11 @@ import 'package:zen_mobile/l10n/app_localizations_en.dart';
 import 'package:zen_mobile/mitte/abgleich.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
 import 'package:zen_mobile/mitte/proposals.dart';
+import 'vectors.dart';
 
-final _edit = jsonDecode(File('test/daten/kalender_aendern_testvektoren.json').readAsStringSync())
+final _edit = jsonDecode(File(vectorPath('kalender_aendern_testvektoren.json')).readAsStringSync())
     as Map<String, dynamic>;
-final _cal = jsonDecode(File('test/daten/kalender_testvektoren.json').readAsStringSync()) as Map<String, dynamic>;
+final _cal = jsonDecode(File(vectorPath('kalender_testvektoren.json')).readAsStringSync()) as Map<String, dynamic>;
 
 final _now = DateTime.utc(2026, 11, 2, 9);
 

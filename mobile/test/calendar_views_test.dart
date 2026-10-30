@@ -28,6 +28,7 @@ import 'package:zen_mobile/l10n/app_localizations.dart';
 import 'package:zen_mobile/mitte/abgleich.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
 import 'package:zen_mobile/thema/farben.dart';
+import 'vectors.dart';
 
 // ── Synthetic week: Mon 16.11. … Sun 22.11.2026, now Thu 19.11. 10:20 ─────
 
@@ -131,7 +132,7 @@ void phone(WidgetTester t) {
 
 // ── The real calendar from the core's test vectors ──────────────────────────
 
-final _v = jsonDecode(File('test/daten/kalender_testvektoren.json').readAsStringSync()) as Map<String, dynamic>;
+final _v = jsonDecode(File(vectorPath('kalender_testvektoren.json')).readAsStringSync()) as Map<String, dynamic>;
 
 Future<SpeicherAblage> vectorAblage() async {
   final m = SpeicherMitte();

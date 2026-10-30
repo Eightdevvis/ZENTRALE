@@ -152,9 +152,9 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
 
 | Contract | Version today | Description | Vectors today |
 |---|---|---|---|
-| cloud API | path `/v1` | `server/openapi.yaml` | `tests/daten/konto_testvektoren.json` |
+| cloud API | path `/v1` | `server/openapi.yaml` | `contracts/account-keys/1/konto_testvektoren.json` |
 | key schema | HKDF infos `…/v1` | [knoten_beitritt.md](knoten_beitritt.md) | same |
-| Mitte format (`inhalt.enc`, envelope, hidden names) | `"format": 1` | [../betrieb/abgleich.md](../betrieb/abgleich.md) | `mobile/test/daten/mitte_testvektoren.json` |
+| Mitte format (`inhalt.enc`, envelope, hidden names) | `"format": 1` | [../betrieb/abgleich.md](../betrieb/abgleich.md) | `contracts/cloud-sync/1/mitte_testvektoren.json` |
 | node description | none | `core/knoten.py` | none |
 | manifest `app.toml` | none (`motor = "1"` planned) | [hub_bauplan.md](hub_bauplan.md) | none |
 | tiles / views | `zentrale_kachel.v = 2` | `openapi.yaml` | none |

@@ -14,7 +14,7 @@
 // The palette (hex, day + night) is the core's file core/calendar_palette.json,
 // bundled byte-identical as assets/calendar_palette.json.
 //
-// Pinned to the core by test/daten/calendar_colour_vectors.json
+// Pinned to the core by contracts/calendar-colours/1/calendar_colour_vectors.json
 // (scripts/calendar_colour_vectors.py). Docs: memory/werkzeuge/calendar_colours.md.
 
 import 'dart:convert';

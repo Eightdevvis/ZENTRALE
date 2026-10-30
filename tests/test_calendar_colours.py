@@ -272,7 +272,7 @@ def test_route_sends_colour(tmp_path, monkeypatch):
 
 # ── Phone vectors are current ───────────────────────────────────────────
 def test_phone_vectors_are_current():
-    target = ROOT / "mobile/test/daten/calendar_colour_vectors.json"
+    target = ROOT / "contracts/calendar-colours/1/calendar_colour_vectors.json"
     out = subprocess.run([sys.executable, str(ROOT / "scripts/calendar_colour_vectors.py"), "--stdout"],
                          capture_output=True, text=True, check=True, cwd=ROOT,
                          env={**os.environ, "PYTHONHASHSEED": "0"}).stdout

@@ -1,6 +1,6 @@
 // Das Schlüssel-Schema des Kontos, nur Rechnen — nachgebaut aus der Doku
 // (memory/hub/knoten_beitritt.md „Schlüssel", Vorbild core/konto_schluessel.py),
-// Prüfstein: test/daten/konto_testvektoren.json (Kopie der Datei des Kerns).
+// Prüfstein: contracts/account-keys/1/konto_testvektoren.json (dieselbe Datei wie der Kern).
 //
 //   passwort ─Argon2id(salz, t, m, p)→ hauptschluessel (32 B)
 //   hauptschluessel ─HKDF info="zentrale/anmelden/v1"→ anmelde_schluessel → Server

@@ -4,7 +4,7 @@
 The phone edits existing .ics files in Dart (mobile/lib/kalender/event_edit.dart)
 and sends them as proposals (memory/betrieb/abgleich_fremde_knoten.md,
 "Termine vom Handy"). This script writes what the core expects into
-mobile/test/daten/kalender_aendern_testvektoren.json:
+contracts/calendar-ics/1/kalender_aendern_testvektoren.json:
 
   x_aus     lists of days -> X-ZENTRALE-AUS exactly as the core encodes them
   reasons   every reason code of core/abgleich_vorschlaege.REASONS (the phone
@@ -32,7 +32,7 @@ from icalendar import Calendar  # noqa: E402
 import abgleich_vorschlaege as vs  # noqa: E402
 import kalender_ics_abbildung as abb  # noqa: E402
 
-TARGET = Path(ROOT) / "mobile" / "test" / "daten" / "kalender_aendern_testvektoren.json"
+TARGET = Path(ROOT) / "contracts" / "calendar-ics" / "1" / "kalender_aendern_testvektoren.json"
 FIXED = dt.datetime(2026, 10, 1, 8, 0, tzinfo=dt.timezone.utc)
 UID_R = "1" * 32 + "@zentrale"
 UID_T = "2" * 32 + "@zentrale"

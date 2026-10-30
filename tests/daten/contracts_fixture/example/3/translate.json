@@ -1,0 +1,7 @@
+{
+ "description": "Fixture: major 3 turned `title` into an object with a language.",
+ "cases": [
+  {"old": {"format": 2, "title": "Milch", "done": false},
+   "new": {"format": 3, "title": {"text": "Milch", "lang": "de"}, "done": false}}
+ ]
+}

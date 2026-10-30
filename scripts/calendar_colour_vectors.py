@@ -12,7 +12,7 @@ crc32 fallback) → resolved role/style → final hex day and night.
     venv/bin/python scripts/calendar_colour_vectors.py      # writes the file
     venv/bin/python scripts/calendar_colour_vectors.py --stdout
 
-Target: mobile/test/daten/calendar_colour_vectors.json. Then `flutter test`
+Target: contracts/calendar-colours/1/calendar_colour_vectors.json. Then `flutter test`
 in mobile/. tests/test_calendar_colours.py fails while the file is stale.
 """
 import datetime as dt
@@ -29,7 +29,7 @@ import kalender_ics_abbildung as abb  # noqa: E402
 import kalender_kategorie  # noqa: E402
 import stil  # noqa: E402
 
-TARGET = Path(ROOT) / "mobile" / "test" / "daten" / "calendar_colour_vectors.json"
+TARGET = Path(ROOT) / "contracts" / "calendar-colours" / "1" / "calendar_colour_vectors.json"
 FIXED_NOW = dt.datetime(2026, 10, 1, 8, 0, tzinfo=dt.timezone.utc)
 LAYER_DEFAULT = "#ff5500"          # what the phone's vdir `color` file says
 

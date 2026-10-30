@@ -1,0 +1,9 @@
+{
+ "description": "Fixture: major 2 renamed `name` to `title`.",
+ "cases": [
+  {"old": {"format": 1, "name": "Milch", "done": false},
+   "new": {"format": 2, "title": "Milch", "done": false}},
+  {"old": {"format": 1, "name": "Brot", "done": true, "future": [1]},
+   "new": {"format": 2, "title": "Brot", "done": true, "future": [1]}}
+ ]
+}

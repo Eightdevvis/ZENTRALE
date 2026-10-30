@@ -22,9 +22,10 @@ import 'package:zen_mobile/mitte/http_mitte.dart';
 import 'package:zen_mobile/mitte/mitte.dart';
 
 import 'falsche_cloud.dart';
+import 'vectors.dart';
 
 Map<String, dynamic> _json(String n) =>
-    jsonDecode(File('test/daten/$n').readAsStringSync()) as Map<String, dynamic>;
+    jsonDecode(File(vectorPath(n)).readAsStringSync()) as Map<String, dynamic>;
 
 final _konto = _json('konto_testvektoren.json');
 final _mitteV = _json('mitte_testvektoren.json');
