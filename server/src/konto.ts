@@ -9,11 +9,15 @@
 //   DELETE /v1/sitzung         log out
 //   POST   /v1/notfall         emergency key → verpackt_notfall + restricted token
 //   PUT    /v1/konto/passwort  new salt/kdf/anmelde_schluessel/verpackt_passwort
+//   PUT    /v1/konto/schluessel change the account key (lost or stolen device,
+//                               build step 8): new wraps + the re-encrypted
+//                               Mitte in ONE transaction, all other sessions end
 
 import { drossel, erfolg, fehlschlag, ip, pruefen } from "./drossel";
 import { HttpFehler, KB, b64Lesen, b64u, json, jsonLesen, text, ungueltig } from "./hilfe";
 import { HASH_ART, gleich, hmac, neuerHash, neuesToken, schluesselHash, sha256Hex, zufall } from "./krypto";
 import { nameLesen, neuerNameLesen } from "./name";
+import { KOPF_IST, aufraeumen, schneller, standPlanen } from "./mitte";
 import { codeHash } from "./paket";
 
 export const SITZUNG_TAGE = 90;
@@ -28,7 +32,9 @@ export interface Sitzung {
   token_hash: string;
   konto_id: string;
   knoten: string;
-  art: "normal" | "notfall";
+  /** "removed": the device was removed (DELETE /v1/knoten/{name}); the row
+   *  stays until it expires only so the device hears why (401 device_removed). */
+  art: "normal" | "notfall" | "removed";
 }
 
 interface KontoZeile {
@@ -109,15 +115,23 @@ const NICHT_ANGEMELDET = () =>
   new HttpFehler(401, "nicht_angemeldet", "You are not logged in (or the session has expired).",
     { "WWW-Authenticate": "Bearer" });
 
-/** The session of this request, or null (no / unknown / expired token). */
+const ENTFERNT = () =>
+  new HttpFehler(401, "device_removed",
+    "This device was removed from the account. Log in again to add it back.",
+    { "WWW-Authenticate": "Bearer" });
+
+/** The session of this request, or null (no / unknown / expired token).
+ *  A session of a removed device → 401 device_removed. */
 export async function sitzungFinden(db: D1Database, anfrage: Request, jetzt: number): Promise<Sitzung | null> {
   const token = bearer(anfrage);
   if (!token) return null;
   const token_hash = await sha256Hex(token);
-  return db
+  const s = await db
     .prepare("SELECT token_hash, konto_id, knoten, art FROM sitzungen WHERE token_hash = ? AND laeuft_ab > ?")
     .bind(token_hash, jetzt)
     .first<Sitzung>();
+  if (s?.art === "removed") throw ENTFERNT();
+  return s;
 }
 
 /** A full session (not the restricted emergency one), else 401/403. */
@@ -312,4 +326,56 @@ export async function passwortSetzen(env: Env, anfrage: Request, jetzt: number):
     env.DB.prepare("DELETE FROM sitzungen WHERE konto_id = ? AND token_hash != ?").bind(s.konto_id, behalten),
   ]);
   return json({ geaendert: iso(jetzt) });
+}
+
+/** Change the account key (build step 8, "device lost or stolen?"). The key
+ *  SCHEMA stays (HKDF infos /v1): the client made a new random konto_schluessel,
+ *  wrapped it with the password and a NEW emergency key, and uploaded the
+ *  whole Mitte re-encrypted as blobs. This route swaps everything in one D1
+ *  transaction — the new head, the new wraps, the new emergency proof — or
+ *  nothing (409 when someone synced in between). Needs the current password
+ *  (`altes_anmelde_schluessel`, rate limited like a login); may set a new one
+ *  at the same time. All other sessions end: every other device must log in
+ *  again and gets the new key from `verpackt_passwort`. */
+export async function schluesselWechseln(env: Env, anfrage: Request, s: Sitzung, jetzt: number): Promise<Response> {
+  const MAX_WECHSEL = 4 * 1024 * KB;
+  const d = await jsonLesen(anfrage, MAX_WECHSEL);
+  const salz = salzLesen(d);
+  const kdf = kdfLesen(d);
+  const anmelde = schluesselLesen(d, "anmelde_schluessel");
+  const verpackt_passwort = verpacktLesen(d, "verpackt_passwort");
+  const verpackt_notfall = verpacktLesen(d, "verpackt_notfall");
+  const beweis = schluesselLesen(d, "notfall_beweis");
+  const alt = schluesselLesen(d, "altes_anmelde_schluessel");
+  const stand = d.stand;
+  if (stand === null || typeof stand !== "object" || Array.isArray(stand)) throw ungueltig("The field 'stand' is missing.");
+  const k = await env.DB.prepare("SELECT * FROM konten WHERE id = ?").bind(s.konto_id).first<KontoZeile>();
+  if (!k) throw NICHT_ANGEMELDET();
+
+  const dr = await drossel(env, "passwort", k.name, ip(anfrage), jetzt);
+  await pruefen(env.DB, dr, jetzt);
+  if (!(await pruefeHash(alt, anmeldeHash(k)))) {
+    await fehlschlag(env.DB, dr, jetzt);
+    throw new HttpFehler(401, "falsche_anmeldung", "The password is wrong.");
+  }
+  await erfolg(env.DB, dr);
+
+  const plan = await standPlanen(env, stand as Record<string, unknown>, s.konto_id, jetzt);
+  const ah = await neuerHash(anmelde);
+  const nh = await neuerHash(beweis);
+  const db = env.DB;
+  const r = await db.batch([
+    ...plan.anweisungen,
+    db.prepare(
+      `UPDATE konten SET salz = ?, kdf = ?, anmelde_hash = ?, anmelde_salz = ?, notfall_hash = ?, notfall_salz = ?,
+                         hash_art = ?, verpackt_passwort = ?, verpackt_notfall = ?, geaendert = ?
+        WHERE id = ? AND ${KOPF_IST}`,
+    ).bind(salz, JSON.stringify(kdf), ah.hash, ah.salz, nh.hash, nh.salz, HASH_ART, verpackt_passwort,
+      verpackt_notfall, jetzt, s.konto_id, s.konto_id, plan.kennung),
+    db.prepare(`DELETE FROM sitzungen WHERE konto_id = ? AND token_hash != ? AND art != 'removed' AND ${KOPF_IST}`)
+      .bind(s.konto_id, s.token_hash, s.konto_id, plan.kennung),
+  ]);
+  if (r[plan.kopfIndex].meta.changes !== 1) throw schneller();
+  await aufraeumen(db, s.konto_id);
+  return json({ kennung: plan.kennung, geaendert: iso(jetzt) });
 }

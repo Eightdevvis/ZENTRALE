@@ -376,3 +376,103 @@ msgstr "{path} ist da, aber key.properties fehlt — der lokale Schlüssel ist u
 
 msgid "{path} exists but its keystore {store} is missing — the local key is incomplete."
 msgstr "{path} ist da, aber sein Keystore {store} fehlt — der lokale Schlüssel ist unvollständig."
+
+# zentrale_cli/texte.py — build steps 7 and 8 (insecure release, leave, remove, key change)
+msgid "Devices of {name}"
+msgstr "Geräte von {name}"
+
+msgid "No devices yet."
+msgstr "Noch keine Geräte."
+
+msgid "insecure version since {since} — {link}"
+msgstr "unsichere Version seit {since} — {link}"
+
+msgid "removed {zeit} (from {by})"
+msgstr "entfernt {zeit} (von {by})"
+
+msgid "left {zeit}"
+msgstr "ausgetreten {zeit}"
+
+msgid "Security"
+msgstr "Sicherheit"
+
+msgid "this version ({version}) is marked insecure since {since} — {link}\nIt keeps syncing. Update with 'zentrale update', or remove this device."
+msgstr "diese Version ({version}) gilt seit {since} als unsicher — {link}\nSie gleicht weiter ab. Aktualisieren mit 'zentrale update' oder dieses Gerät entfernen."
+
+msgid "Removed"
+msgstr "Entfernt"
+
+msgid "this device was removed from your account ({zeit}). 'zentrale login' adds it\nback; 'zentrale leave' finishes leaving."
+msgstr "dieses Gerät wurde aus deinem Konto entfernt ({zeit}). 'zentrale login' nimmt es\nwieder auf; 'zentrale leave' schließt den Austritt ab."
+
+msgid "This device was removed from your account. Run 'zentrale login' to add it back, or 'zentrale leave' to finish leaving."
+msgstr "Dieses Gerät wurde aus deinem Konto entfernt. 'zentrale login' nimmt es wieder auf, 'zentrale leave' schließt den Austritt ab."
+
+msgid "'{device}' leaves the account {name}: it disappears from your devices, is logged\nout here and its background timers stop. Your data in the cloud and on your\nother devices stays."
+msgstr "'{device}' tritt aus dem Konto {name} aus: es verschwindet aus deinen Geräten, wird\nhier abgemeldet und seine Hintergrund-Timer halten an. Deine Daten in der Cloud und\nauf deinen anderen Geräten bleiben."
+
+msgid "This device is not logged in. Leaving only stops its background timers."
+msgstr "Dieses Gerät ist nicht angemeldet. Austreten hält nur seine Hintergrund-Timer an."
+
+msgid "Leave now?"
+msgstr "Jetzt austreten?"
+
+msgid "The cloud was not reachable: logged out here, but '{device}' still shows in\n'zentrale devices'. Remove it from another device: 'zentrale devices remove {device}'."
+msgstr "Die Cloud war nicht erreichbar: hier abgemeldet, aber '{device}' steht noch in\n'zentrale devices'. Von einem anderen Gerät entfernen: 'zentrale devices remove {device}'."
+
+msgid "Also delete the ZENTRALE data on this device ({paths})?"
+msgstr "Auch die ZENTRALE-Daten auf diesem Gerät löschen ({paths})?"
+
+msgid "This is a developer checkout: 'leave' never deletes its data."
+msgstr "Das ist ein Entwickler-Checkout: 'leave' löscht dessen Daten nie."
+
+msgid "'{device}' has left. The data on this device was kept."
+msgstr "'{device}' ist ausgetreten. Die Daten auf diesem Gerät sind geblieben."
+
+msgid "'{device}' has left. The data on this device was deleted."
+msgstr "'{device}' ist ausgetreten. Die Daten auf diesem Gerät sind gelöscht."
+
+msgid "Usage: zentrale devices remove <name>"
+msgstr "Aufruf: zentrale devices remove <name>"
+
+msgid "'{device}' is this device. Use 'zentrale leave' to take it out."
+msgstr "'{device}' ist dieses Gerät. Zum Austreten: 'zentrale leave'."
+
+msgid "Remove '{device}' from your account? It is logged out at once and its next sync\nsays it was removed. What is stored on that device itself stays there."
+msgstr "'{device}' aus deinem Konto entfernen? Es wird sofort abgemeldet, und sein nächster\nAbgleich sagt, dass es entfernt wurde. Was auf dem Gerät selbst liegt, bleibt dort."
+
+msgid "Remove '{device}'?"
+msgstr "'{device}' entfernen?"
+
+msgid "'{device}' was removed ({n} session(s) ended)."
+msgstr "'{device}' wurde entfernt ({n} Sitzung(en) beendet)."
+
+msgid "Was the device lost or stolen?"
+msgstr "Ist das Gerät verloren oder gestohlen?"
+
+msgid "Whoever has it may have your account key and what was synced to it. Changing\nthe account key protects everything from now on:\n  • every file in the cloud is encrypted again with a new key,\n  • you get a NEW emergency key — the old one stops working,\n  • ALL your other devices, the phone too, are logged out and must log in again."
+msgstr "Wer es hat, hat womöglich deinen Kontoschlüssel und alles, was dorthin abgeglichen\nwurde. Einen neuen Kontoschlüssel zu setzen schützt alles ab jetzt:\n  • jede Datei in der Cloud wird mit einem neuen Schlüssel neu verschlüsselt,\n  • du bekommst einen NEUEN Notfallschlüssel — der alte gilt nicht mehr,\n  • ALLE anderen Geräte, auch das Handy, werden abgemeldet und müssen sich neu anmelden."
+
+msgid "Change the account key now?"
+msgstr "Kontoschlüssel jetzt wechseln?"
+
+msgid "The account key stays as it is."
+msgstr "Der Kontoschlüssel bleibt, wie er ist."
+
+msgid "New password too (Enter = keep the current one): "
+msgstr "Auch ein neues Passwort (Enter = das jetzige behalten): "
+
+msgid "Syncing first, so nothing of this device is left out …"
+msgstr "Erst abgleichen, damit nichts von diesem Gerät fehlt …"
+
+msgid "Encrypting everything again with the new key …"
+msgstr "Alles wird mit dem neuen Schlüssel neu verschlüsselt …"
+
+msgid "The account key was not changed."
+msgstr "Der Kontoschlüssel wurde nicht gewechselt."
+
+msgid "The account key was changed ({n} files). Log in again on your other devices."
+msgstr "Der Kontoschlüssel ist gewechselt ({n} Dateien). Auf deinen anderen Geräten neu anmelden."
+
+msgid "{n} unreadable file(s) in a phone inbox were dropped."
+msgstr "{n} unlesbare Datei(en) in einem Handy-Eingang wurden verworfen."

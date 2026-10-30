@@ -136,6 +136,29 @@ export async function mitteBlob(env: Env, anfrage: Request, konto: string, sha: 
 
 export async function mitteStand(env: Env, anfrage: Request, konto: string, jetzt: number): Promise<Response> {
   const d = await jsonLesen(anfrage, MAX_STAND);
+  const plan = await standPlanen(env, d, konto, jetzt);
+  const r = await env.DB.batch(plan.anweisungen);
+  if (r[plan.kopfIndex].meta.changes !== 1) throw schneller();
+  await aufraeumen(env.DB, konto);
+  return json({ kennung: plan.kennung });
+}
+
+/** A planned stand: the D1 statements of one compare-and-swap. They must run
+ *  in ONE batch (D1 runs a batch as one transaction); `kopfIndex` is the head
+ *  update — 0 changes there = someone was faster. More statements guarded by
+ *  `kopfIst(kennung)` may follow in the same batch (key change, src/konto.ts). */
+export interface StandPlan {
+  kennung: string;
+  anweisungen: D1PreparedStatement[];
+  kopfIndex: number;
+}
+
+/** SQL condition "the head of account ? is ?" (bind konto, kennung). */
+export const KOPF_IST = "EXISTS (SELECT 1 FROM mitte_kopf WHERE konto_id = ? AND kennung IS ?)";
+
+/** Check a stand body {basis, schreiben, verweise, loeschen}, store inline
+ *  blobs, and plan the compare-and-swap. Throws 400/409/413/507. */
+export async function standPlanen(env: Env, d: Record<string, unknown>, konto: string, jetzt: number): Promise<StandPlan> {
   const basis = d.basis ?? null;
   if (basis !== null && typeof basis !== "string") throw ungueltig("'basis' must be a stand id or null.");
   const objekt = (feld: string) => {
@@ -169,7 +192,7 @@ export async function mitteStand(env: Env, anfrage: Request, konto: string, jetz
 
   if (inline > 0) await speicherPruefen(env, inline);
 
-  // Cheap early answer; the real check is the transaction below.
+  // Cheap early answer; the real check is the transaction.
   if ((await kopf(env.DB, konto)) !== basis) throw schneller();
 
   // Referenced blobs must already be uploaded.
@@ -187,7 +210,7 @@ export async function mitteStand(env: Env, anfrage: Request, konto: string, jetz
   }
 
   // Inline blobs first (content-addressed, so writing them is harmless even
-  // if the compare-and-swap below loses).
+  // if the compare-and-swap loses).
   const neu: Neu[] = verweise.map(([n, h]) => ({ n, h: h as string, g: groessen.get(h as string) ?? 0 }));
   const blobZeilen: D1PreparedStatement[] = [];
   for (const [n, wert] of schreiben) {
@@ -206,36 +229,35 @@ export async function mitteStand(env: Env, anfrage: Request, konto: string, jetz
   const namen = JSON.stringify([...neu.map((x) => x.n), ...(loeschen as string[])]);
   // Every statement runs only while the head is still `basis`; the head moves
   // last. D1 runs a batch as one transaction, so it is all or nothing.
-  const bedingung = "EXISTS (SELECT 1 FROM mitte_kopf WHERE konto_id = ? AND kennung IS ?)";
   const db = env.DB;
-  const r = await db.batch([
+  const anweisungen = [
     db.prepare("INSERT OR IGNORE INTO mitte_kopf (konto_id, kennung) VALUES (?, NULL)").bind(konto),
-    db.prepare(`INSERT INTO mitte_staende (konto_id, kennung, basis, erstellt) SELECT ?, ?, ?, ? WHERE ${bedingung}`)
+    db.prepare(`INSERT INTO mitte_staende (konto_id, kennung, basis, erstellt) SELECT ?, ?, ?, ? WHERE ${KOPF_IST}`)
       .bind(konto, kennung, basis, jetzt, konto, basis),
     db.prepare(
       `INSERT INTO mitte_dateien (konto_id, kennung, name, sha256, groesse)
        SELECT konto_id, ?, name, sha256, groesse FROM mitte_dateien
-        WHERE konto_id = ? AND kennung IS ? AND name NOT IN (SELECT value FROM json_each(?)) AND ${bedingung}`,
+        WHERE konto_id = ? AND kennung IS ? AND name NOT IN (SELECT value FROM json_each(?)) AND ${KOPF_IST}`,
     ).bind(kennung, konto, basis, namen, konto, basis),
     db.prepare(
       `INSERT INTO mitte_dateien (konto_id, kennung, name, sha256, groesse)
        SELECT ?, ?, json_extract(value, '$.n'), json_extract(value, '$.h'), json_extract(value, '$.g')
-         FROM json_each(?) WHERE ${bedingung}`,
+         FROM json_each(?) WHERE ${KOPF_IST}`,
     ).bind(konto, kennung, JSON.stringify(neu), konto, basis),
     db.prepare("UPDATE mitte_kopf SET kennung = ? WHERE konto_id = ? AND kennung IS ?").bind(kennung, konto, basis),
-  ]);
-  if (r[4].meta.changes !== 1) throw schneller();
+  ];
+  return { kennung, anweisungen, kopfIndex: 4 };
+}
 
-  // Housekeeping: drop file lists of old stands (their ids stay for enthaelt).
+/** Housekeeping after a new stand: drop file lists of old stands (their ids stay for enthaelt). */
+export async function aufraeumen(db: D1Database, konto: string): Promise<void> {
   await db.prepare(
     `DELETE FROM mitte_dateien WHERE konto_id = ? AND kennung IN (
        SELECT kennung FROM mitte_staende WHERE konto_id = ? ORDER BY nr DESC LIMIT -1 OFFSET ?)`,
   ).bind(konto, konto, DATEILISTEN_BEHALTEN).run();
-
-  return json({ kennung });
 }
 
-function schneller(): HttpFehler {
+export function schneller(): HttpFehler {
   return new HttpFehler(409, "jemand_schneller",
     "Someone else changed the data first. Fetch the current stand and merge again.");
 }

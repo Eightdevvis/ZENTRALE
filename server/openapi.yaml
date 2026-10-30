@@ -20,6 +20,12 @@ info:
     `{"fehler": "<code>", "text": "<English sentence>"}`.
     Session: `Authorization: Bearer <token>` (90 days, bound to the device name).
     No CORS.
+
+    Insecure releases (build step 7): a client sends its version in the
+    request header `Zentrale-Release`. If that version is marked insecure
+    (D1 table `insecure_releases`), every answer carries `Deprecation:
+    @<unix seconds>` (RFC 9745) and `Link: <advisory>; rel="deprecation";
+    type="text/html"`. Everything keeps working; `Sunset` is never sent.
 servers:
   - url: https://zentrale-cloud.example.workers.dev
 components:
@@ -46,7 +52,8 @@ components:
             falsche_anmeldung, falscher_notfallschluessel, zu_viele_versuche,
             code_ungueltig, code_noetig, name_vergeben, jemand_schneller,
             blob_fehlt (with `fehlen: [sha256…]`), pruefsumme, laenge_fehlt,
-            fremder_knoten, kein_paket, nicht_gefunden, methode_falsch,
+            fremder_knoten, unknown_device, device_removed (401: this device was
+            removed from the account), kein_paket, nicht_gefunden, methode_falsch,
             nicht_eingerichtet, nur_betreiber, speicher_voll, serverfehler,
             and for the phone app release: no_release, operator_only,
             version_not_newer (with `current_version_code`), apk_missing, apk_mismatch.
@@ -288,6 +295,49 @@ paths:
         "400": { $ref: "#/components/responses/Fehler" }
         "401": { $ref: "#/components/responses/Fehler" }
         "429": { $ref: "#/components/responses/Fehler" }
+  /v1/konto/schluessel:
+    put:
+      summary: Change the account key (device lost or stolen). New wraps and the re-encrypted Mitte in one transaction; all other sessions end.
+      description: |
+        The key schema stays (HKDF infos /v1). The client made a new random
+        account key, wrapped it with the (current or a new) password and with a
+        NEW emergency key, uploaded every file of the Mitte re-encrypted as blobs
+        (POST /v1/mitte/fehlende, PUT /v1/mitte/blob/{sha256}) and sends here the
+        new stand like POST /v1/mitte/stand. Head, wraps and emergency proof
+        change together or not at all. The old emergency key stops working.
+        `altes_anmelde_schluessel` (current password) is required and rate
+        limited like a login. JSON body max. 4 MiB.
+      security: [{ sitzung: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis, altes_anmelde_schluessel, stand]
+              properties:
+                salz: { type: string }
+                kdf: { $ref: "#/components/schemas/Kdf" }
+                anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
+                verpackt_passwort: { $ref: "#/components/schemas/Fernet" }
+                verpackt_notfall: { $ref: "#/components/schemas/Fernet" }
+                notfall_beweis: { $ref: "#/components/schemas/B64u32" }
+                altes_anmelde_schluessel: { $ref: "#/components/schemas/B64u32" }
+                stand:
+                  type: object
+                  description: Same as the body of POST /v1/mitte/stand ({basis, verweise, schreiben, loeschen}).
+      responses:
+        "200":
+          description: Changed; this session stays, all others ended.
+          content:
+            application/json:
+              schema: { type: object, required: [kennung], properties: { kennung: { type: string }, geaendert: { type: string, format: date-time } } }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "409":
+          description: "jemand_schneller: the Mitte moved meanwhile. Nothing changed; read again and retry."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
+        "429": { $ref: "#/components/responses/Fehler" }
   /v1/mitte:
     get:
       summary: The current stand of the Mitte (holen).
@@ -439,7 +489,15 @@ paths:
                 type: object
                 required: [knoten]
                 properties:
-                  knoten: { type: array, items: { type: object, description: See core/knoten.schema.json. } }
+                  knoten:
+                    type: array
+                    items:
+                      type: object
+                      description: |
+                        See core/knoten.schema.json. Added by the server on every read:
+                        `insecure: {since, link, reason}` when the device's `programm` is a
+                        release marked insecure. A removed device stays as a tombstone with
+                        `removed` (date-time) and `removed_by` (device name).
         "401": { $ref: "#/components/responses/Fehler" }
   /v1/knoten/{name}:
     put:
@@ -462,6 +520,31 @@ paths:
         "400": { $ref: "#/components/responses/Fehler" }
         "401": { $ref: "#/components/responses/Fehler" }
         "403": { $ref: "#/components/responses/Fehler" }
+    delete:
+      summary: Remove a device from the account (also itself — `zentrale leave`). Its sessions end; its next call gets 401 device_removed. Its description becomes a tombstone {…, removed, removed_by}.
+      security: [{ sitzung: [] }]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[\\p{L}\\p{N}@._-]{1,64}$" }
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, removed, sessions_ended]
+                properties:
+                  name: { type: string }
+                  removed: { type: string, format: date-time }
+                  sessions_ended: { type: integer }
+        "400": { $ref: "#/components/responses/Fehler" }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "404":
+          description: "unknown_device: no description and no session under this name"
+          content: { application/json: { schema: { $ref: "#/components/schemas/Fehler" } } }
   /v1/besitz:
     get:
       summary: Ownership of the account (schema.org ItemList, encrypted as one opaque string).

@@ -234,9 +234,11 @@ def test_second_device_offline_and_removed(ws):
     gone = profiles.create(ws, "gone", state="removed", release="41", params={"account": "laptop"})
     with ws.cloud():
         r = gone.zentrale("sync")
-        assert r.returncode == 1 and "Not logged in" in r.stderr
+        assert r.returncode == 1 and ("removed from your account" in r.stdout + r.stderr
+                                      or "aus deinem Konto entfernt" in r.stdout + r.stderr)
         r = first.zentrale("devices")
-    assert r.returncode == 0 and "away" in r.stdout and "gone" not in r.stdout
+    assert r.returncode == 0 and "away" in r.stdout and "gone" in r.stdout      # as a tombstone
+    assert "removed" in r.stdout or "entfernt" in r.stdout
 
 
 def test_guard_never_the_real_installation(ws, tmp_path):

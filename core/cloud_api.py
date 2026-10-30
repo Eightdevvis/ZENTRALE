@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 
 import ai_config
+import cloud_notices
 
 # Die eine Stelle für die Adresse der Cloud (Sasha trägt die echte ein).
 VORGABE = "https://zentrale-cloud.sevendevs.workers.dev"
@@ -42,6 +43,12 @@ _TEXTE = {
 }
 
 
+# 401 for a device that was removed from the account (DELETE /v1/knoten/<name>).
+DEVICE_REMOVED = "device_removed"
+REMOVED_TEXT = ("This device was removed from your account. Run 'zentrale login' to add it back, "
+                "or 'zentrale leave' to finish leaving.")
+
+
 class Client:
     """Ein Aufruf = eine Methode. `token` = Sitzung (Bearer) oder None."""
 
@@ -54,7 +61,10 @@ class Client:
         url = self.basis + pfad
         if abfrage:
             url += "?" + urllib.parse.urlencode(abfrage)
-        kopf = {"Accept": "application/json", "User-Agent": "zentrale-hub"}
+        # Zentrale-Release: the server warns an insecure release (Deprecation +
+        # Link, never Sunset — memory/hub/building_kit_plan.md 2.3).
+        kopf = {"Accept": "application/json", "User-Agent": "zentrale-hub",
+                cloud_notices.RELEASE_HEADER: cloud_notices.release()}
         body = None
         if daten is not None:
             body = json.dumps(daten).encode("utf-8")
@@ -69,8 +79,11 @@ class Client:
             with urllib.request.urlopen(anfrage, timeout=self.zeit) as r:
                 inhalt = r.read()
                 status = r.status
+                cloud_notices.observe(status, "", r.headers)
         except urllib.error.HTTPError as e:
-            raise self._fehler(e.code, e.read()) from None
+            fehler = self._fehler(e.code, e.read())
+            cloud_notices.observe(e.code, fehler.code, e.headers)
+            raise fehler from None
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             grund = getattr(e, "reason", e)
             raise CloudFehler(f"Cannot reach the ZENTRALE cloud at {self.basis} ({grund}).",
@@ -91,6 +104,9 @@ class Client:
             code, text = str(d.get("fehler") or ""), str(d.get("text") or "")
         except (ValueError, AttributeError):
             pass
+        if code == DEVICE_REMOVED:
+            import i18n
+            text = i18n._(REMOVED_TEXT)
         return CloudFehler(text or _TEXTE.get(status) or f"The cloud answered with error {status}.",
                            code, status)
 

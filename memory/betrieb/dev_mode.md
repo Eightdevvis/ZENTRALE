@@ -60,7 +60,7 @@ in `STEPS`. New state = one line in `STATES`; new journey stage = one function.
 | fresh | install (install.sh with an invite code, keeper timers, no login) |
 | logged-in | install → login (the whole setup wizard: create, or log in when the account exists; every later step takes its default) |
 | offline | … → the cloud address leads nowhere |
-| removed | … → the server ends this device's sessions and drops its description (what build step 8 will do); next sync: "Not logged in" |
+| removed | … → what `zentrale devices remove` does on the server (build step 8): this device's sessions become removed ones, its description a tombstone; next sync: "this device was removed" |
 | wizard | install → wizard: `new --step n` answers the first n wizard steps and stops (0 = before the first question); the next `zentrale setup` in the profile picks up at step n (built 2026-10-30) |
 
 "On an old release N" is orthogonal: every state takes a start release.

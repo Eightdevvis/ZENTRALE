@@ -19,9 +19,11 @@ import json
 import os
 import re
 import unicodedata
+import urllib.parse
 
 import ai_config
 import cloud_api
+import cloud_notices
 import dateien
 import konto_schluessel as ks
 
@@ -103,6 +105,7 @@ def angemeldet() -> bool:
 
 
 def _speichern(server, name, token, laeuft_ab, konto_schluessel: bytes, knoten):
+    cloud_notices.clear_removed()          # logged in (again): the device is back
     dateien.json_schreiben(datei(), {
         "format": 2, "server": server, "name": name, "token": token,
         "laeuft_ab": laeuft_ab, "knoten": knoten,
@@ -230,11 +233,30 @@ def abmelden() -> bool:
             cloud_api.Client(d.get("server"), token=d["token"], zeit=10).delete("/v1/sitzung")
         except cloud_api.CloudFehler:
             pass   # offline abmelden geht trotzdem; die Sitzung läuft dort ab
+    cloud_notices.clear_removed()
     try:
         os.remove(datei())
         return True
     except FileNotFoundError:
         return bool(d)
+
+
+# ── Devices (build step 8, memory/hub/building_kit_plan.md) ───────────
+
+def remove_device(name: str) -> dict:
+    """Remove a device from the account (DELETE /v1/knoten/<name>): its
+    sessions end, its description becomes a tombstone. Also for this device
+    itself (`zentrale leave`). → {name, removed, sessions_ended}."""
+    d = lesen()
+    if d is None:
+        raise KontoFehler("Not logged in. Run 'zentrale login' first.")
+    c = cloud_api.Client(d.get("server"), token=d.get("token"))
+    try:
+        return c.delete("/v1/knoten/" + urllib.parse.quote(name, safe=""))
+    except cloud_api.CloudFehler as e:
+        if e.code == "unknown_device":
+            raise KontoFehler(f"There is no device '{name}' on this account.") from None
+        raise KontoFehler(str(e)) from None
 
 
 # ── Notfall und Passwort ───────────────────────────────────────────────

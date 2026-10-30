@@ -35,6 +35,8 @@ EN = {
     "cmd_sync": ("sync", "sync now with your account (--automatic: quiet, for the timer)"),
     "cmd_status": ("status", "account, device, last sync, what is synced"),
     "cmd_devices": ("devices", "list all devices of your account"),
+    "cmd_devices_remove": ("devices remove <name>", "remove another device (sold, lost, stolen) from your account"),
+    "cmd_leave": ("leave", "take this device out of your account (data stays unless you ask)"),
     "cmd_adapter": ("adapter", "connected services (AI keys, calendar) and which device bridges"),
     "cmd_adapter_setup": ("adapter setup", "bring in what this device already has connected"),
     "cmd_adapter_run": ("adapter run", "run the calendar bridge once (what the timer does)"),
@@ -81,6 +83,7 @@ EN = {
     "passwords_differ": "The passwords do not match. Please try again.",
     "yes_no": " [y/n] ",
     "yes_no_default_yes": " [Y/n] ",
+    "yes_no_default_no": " [y/N] ",
     "cancelled": "Cancelled. Nothing was changed.",
     "working_key": "Deriving your key (this takes a moment) …",
 
@@ -243,12 +246,55 @@ EN = {
     "st_held_folder": "  {n} files of the cloud folder — the folder is missing or empty on this device",
 
     # ── Geräte ──────────────────────────────────────────────────────
-    "dev_title": "Devices of {name}",
-    "dev_none": "No devices yet.",
+    "devices_title": "Devices of {name}",
+    "devices_none": "No devices yet.",
     "dev_registered": "This device is registered as '{name}'.",
     "dev_this": "(this device)",
     "hw": {"gpu": "GPU", "bildschirm": "display", "mikro": "mic", "lautsprecher": "speaker"},
     "dev_seen": "last seen {zeit}",
+    # Build steps 7 and 8 (memory/hub/building_kit_plan.md)
+    "dev_insecure": "insecure version since {since} — {link}",
+    "dev_removed": "removed {zeit} (from {by})",
+    "dev_left": "left {zeit}",
+    "st_insecure": "Security",
+    "st_insecure_text": ("this version ({version}) is marked insecure since {since} — {link}\n"
+                         "It keeps syncing. Update with 'zentrale update', or remove this device."),
+    "st_removed": "Removed",
+    "st_removed_text": ("this device was removed from your account ({zeit}). 'zentrale login' adds it\n"
+                        "back; 'zentrale leave' finishes leaving."),
+    "sync_removed": ("This device was removed from your account. Run 'zentrale login' to add it back, "
+                     "or 'zentrale leave' to finish leaving."),
+    "leave_intro": ("'{device}' leaves the account {name}: it disappears from your devices, is logged\n"
+                    "out here and its background timers stop. Your data in the cloud and on your\n"
+                    "other devices stays."),
+    "leave_local": "This device is not logged in. Leaving only stops its background timers.",
+    "leave_confirm": "Leave now?",
+    "leave_offline": ("The cloud was not reachable: logged out here, but '{device}' still shows in\n"
+                      "'zentrale devices'. Remove it from another device: 'zentrale devices remove {device}'."),
+    "leave_delete_ask": "Also delete the ZENTRALE data on this device ({paths})?",
+    "leave_delete_checkout": "This is a developer checkout: 'leave' never deletes its data.",
+    "leave_done": "'{device}' has left. The data on this device was kept.",
+    "leave_done_deleted": "'{device}' has left. The data on this device was deleted.",
+    "rm_usage": "Usage: zentrale devices remove <name>",
+    "rm_self": "'{device}' is this device. Use 'zentrale leave' to take it out.",
+    "rm_intro": ("Remove '{device}' from your account? It is logged out at once and its next sync\n"
+                 "says it was removed. What is stored on that device itself stays there."),
+    "rm_confirm": "Remove '{device}'?",
+    "rm_done": "'{device}' was removed ({n} session(s) ended).",
+    "rm_lost": "Was the device lost or stolen?",
+    "rot_offer": ("Whoever has it may have your account key and what was synced to it. Changing\n"
+                  "the account key protects everything from now on:\n"
+                  "  • every file in the cloud is encrypted again with a new key,\n"
+                  "  • you get a NEW emergency key — the old one stops working,\n"
+                  "  • ALL your other devices, the phone too, are logged out and must log in again."),
+    "rot_ask": "Change the account key now?",
+    "rot_not_now": "The account key stays as it is.",
+    "rot_new_password": "New password too (Enter = keep the current one): ",
+    "rot_sync_first": "Syncing first, so nothing of this device is left out …",
+    "rot_working": "Encrypting everything again with the new key …",
+    "rot_emergency_not_saved": "The account key was not changed.",
+    "rot_done": "The account key was changed ({n} files). Log in again on your other devices.",
+    "rot_inbox_skipped": "{n} unreadable file(s) in a phone inbox were dropped.",
 
     # ── Adapter (core/adapter.py) ───────────────────────────────────
     "ad_title": "Adapter — connected services",

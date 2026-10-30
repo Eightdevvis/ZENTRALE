@@ -4,12 +4,13 @@
 // No CORS: the clients are the CLI and the installer, not browsers.
 
 import { HttpFehler, fehlerAntwort, jetzt } from "./hilfe";
-import { abmelden, angemeldet, anmelden, kontoAnlegen, notfall, passwortSetzen, vorab } from "./konto";
-import { besitzHolen, besitzSetzen, knotenListe, knotenSetzen } from "./knoten";
+import { abmelden, angemeldet, anmelden, kontoAnlegen, notfall, passwortSetzen, schluesselWechseln, vorab } from "./konto";
+import { besitzHolen, besitzSetzen, knotenEntfernen, knotenListe, knotenSetzen } from "./knoten";
 import { mitteBlob, mitteDatei, mitteEnthaelt, mitteFehlende, mitteHolen, mitteStand } from "./mitte";
 import { neuerZaehler, nutzungRoute, zaehlendeUmgebung, zaehlerSchreiben, speicherNachzaehlen, cloudflareAbfragen } from "./nutzung";
 import { installSh, paketDatei, paketInfo } from "./paket";
 import { apkGet, apkPut, releaseGet, releasePut } from "./phone";
+import { markInsecure } from "./release";
 
 type Handler = (env: Env, anfrage: Request, p: Record<string, string>, t: number) => Promise<Response>;
 
@@ -33,6 +34,7 @@ export const ROUTEN: Route[] = [
   { methode: "DELETE", pfad: "/v1/sitzung", handler: (env, a, _p, t) => abmelden(env, a, t) },
   { methode: "POST", pfad: "/v1/notfall", handler: (env, a, _p, t) => notfall(env, a, t) },
   { methode: "PUT", pfad: "/v1/konto/passwort", handler: (env, a, _p, t) => passwortSetzen(env, a, t) },
+  { methode: "PUT", pfad: "/v1/konto/schluessel", handler: auth((env, a, s, _p, t) => schluesselWechseln(env, a, s, t)) },
   { methode: "GET", pfad: "/v1/mitte", handler: auth((env, _a, s) => mitteHolen(env, s.konto_id)) },
   { methode: "GET", pfad: "/v1/mitte/datei/{name}", handler: auth((env, _a, s, p) => mitteDatei(env, s.konto_id, p.name)) },
   { methode: "POST", pfad: "/v1/mitte/fehlende", handler: auth((env, a, s) => mitteFehlende(env, a, s.konto_id)) },
@@ -41,6 +43,7 @@ export const ROUTEN: Route[] = [
   { methode: "GET", pfad: "/v1/mitte/enthaelt/{kennung}", handler: auth((env, _a, s, p) => mitteEnthaelt(env, s.konto_id, p.kennung)) },
   { methode: "GET", pfad: "/v1/knoten", handler: auth((env, _a, s) => knotenListe(env, s)) },
   { methode: "PUT", pfad: "/v1/knoten/{name}", handler: auth((env, a, s, p, t) => knotenSetzen(env, a, s, p.name, t)) },
+  { methode: "DELETE", pfad: "/v1/knoten/{name}", handler: auth((env, _a, s, p, t) => knotenEntfernen(env, s, p.name, t)) },
   { methode: "GET", pfad: "/v1/besitz", handler: auth((env, _a, s) => besitzHolen(env, s)) },
   { methode: "PUT", pfad: "/v1/besitz", handler: auth((env, a, s, _p, t) => besitzSetzen(env, a, s, t)) },
   { methode: "GET", pfad: "/v1/nutzung", handler: auth((env, _a, s, _p, t) => nutzungRoute(env, s, t)) },
@@ -120,7 +123,9 @@ export default {
     // Self-metering: count D1 rows and R2 ops of this request, write them
     // after the answer (one upsert, never fails the request).
     const z = neuerZaehler();
-    const antwort = await antworten(anfrage, zaehlendeUmgebung(env, z));
+    const zenv = zaehlendeUmgebung(env, z);
+    // An insecure release gets `Deprecation` + `Link` on every answer and keeps working (src/release.ts).
+    const antwort = await markInsecure(zenv, anfrage, await antworten(anfrage, zenv));
     ctx.waitUntil(zaehlerSchreiben(env.DB, z, jetzt(), 1));
     return antwort;
   },

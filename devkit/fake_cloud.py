@@ -9,6 +9,12 @@ Passwort, altes_anmelde_schluessel beim Passwortwechsel, Knoten nur unter dem
 eigenen Namen, Blobs nach sha256 (400 pruefsumme / blob_fehlt),
 Compare-and-Swap auf den Kopf der Mitte (409 jemand_schneller),
 GET /v1/nutzung nur für `betreiber` (sonst 403 nur_betreiber).
+Build steps 7 and 8 (2026-10-30): `insecure` {version: {since, link, reason}}
+→ `Deprecation`/`Link` on every answer to a client whose `Zentrale-Release` is
+marked (never `Sunset`) and `insecure` on its device in GET /v1/knoten;
+DELETE /v1/knoten/<name> turns that device's sessions into removed ones
+(401 device_removed) and leaves a tombstone; PUT /v1/konto/schluessel swaps
+wraps + Mitte head at once (409 when the head moved) and ends the others.
 Konten heißen nach Benutzernamen (anonym, keine Mail): '@' → 400, vergeben →
 409 name_vergeben (der Code bleibt dann frei).
 Stand: Absprache mit dem Server-Teil 2026-10-22, anonym seit 2026-10-23
@@ -23,6 +29,7 @@ every request reloads and saves it under a file lock, so several dev commands
 
 import base64
 import contextlib
+import datetime
 import fcntl
 import hashlib
 import json
@@ -45,6 +52,8 @@ class Zustand:
         self.knoten = {}            # konto-name → {knoten-name: beschreibung}
         self.paket = None           # (version, bytes)
         self.betreiber = set()      # Namen, die GET /v1/nutzung sehen dürfen
+        self.insecure = {}          # release version → {"since": ms, "link": url, "reason": text}
+        self.removed = {}           # token of a removed device → (konto, knoten)
         self.nutzung = {"zeit": "2026-10-23T09:00:00.000Z", "grenzen_geprueft": "2026-10-23",
                         "grenzen": [], "warnungen": []}
         self.aufrufe = []           # (methode, pfad) — zum Nachsehen in Tests
@@ -55,7 +64,7 @@ class Zustand:
 
 # ── Persistence (only with FalscheCloud(datei=...)) ────────────────────
 _PERSISTED = ("codes", "konten", "sitzungen", "blobs", "kopf", "staende", "eltern",
-              "knoten", "betreiber", "nutzung", "zaehler")
+              "knoten", "betreiber", "nutzung", "zaehler", "insecure", "removed")
 
 
 def _encode(v):
@@ -92,6 +101,7 @@ def _load(z, datei):
         if name in d:
             setattr(z, name, _decode(d[name]))
     z.sitzungen = {k: tuple(v) if isinstance(v, list) else v for k, v in z.sitzungen.items()}
+    z.removed = {k: tuple(v) if isinstance(v, list) else v for k, v in z.removed.items()}
 
 
 def _save(z, datei):
@@ -140,6 +150,10 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/octet-stream" if roh is not None
                          else "application/json")
         self.send_header("Content-Length", str(len(body)))
+        i = self.z.insecure.get((self.headers.get("Zentrale-Release") or "").strip())
+        if i:
+            self.send_header("Deprecation", f"@{int(i['since']) // 1000}")
+            self.send_header("Link", f'<{i["link"]}>; rel="deprecation"; type="text/html"')
         self.end_headers()
         self.wfile.write(body)
 
@@ -166,6 +180,50 @@ class _Handler(BaseHTTPRequestHandler):
     def _roh(self):
         n = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(n)
+
+    # ── Mitte stand + key change (shared by /v1/mitte/stand and /v1/konto/schluessel)
+    def _stand_pruefen(self, konto, d):
+        """→ None or (status, code, text)."""
+        if d.get("basis") != self.z.kopf.get(konto):
+            return 409, "jemand_schneller", "Someone else was faster."
+        if any(s not in self.z.blobs for s in d.get("verweise", {}).values()):
+            return 400, "blob_fehlt", "A referenced blob is missing."
+        return None
+
+    def _stand_setzen(self, konto, d):
+        z = self.z
+        neu = dict(z.staende.get(d.get("basis"), {}))
+        for name, sha in d.get("verweise", {}).items():
+            neu[name] = z.blobs[sha]
+        for name, b64 in d.get("schreiben", {}).items():
+            neu[name] = base64.b64decode(b64)
+        for name in d.get("loeschen", []):
+            neu.pop(name, None)
+        z.zaehler += 1
+        kennung = f"s{z.zaehler:04d}"
+        z.staende[kennung], z.eltern[kennung] = neu, d.get("basis")
+        z.kopf[konto] = kennung
+        return kennung
+
+    def _schluessel_wechseln(self, konto):
+        """PUT /v1/konto/schluessel: current password, then stand + wraps at once."""
+        z, d = self.z, self._json()
+        k = z.konten[konto]
+        if _hash(d.get("altes_anmelde_schluessel") or "") != k["hash"]:
+            return self._fehler(401, "falsche_anmeldung", "The password is wrong.")
+        if int(d["kdf"].get("m", 0)) < 19456:
+            return self._fehler(400, "ungueltig", "Key derivation too weak.")
+        fehler = self._stand_pruefen(konto, d.get("stand") or {})
+        if fehler:
+            return self._fehler(*fehler)
+        kennung = self._stand_setzen(konto, d["stand"])
+        k.update(salz=d["salz"], kdf=d["kdf"], hash=_hash(d["anmelde_schluessel"]),
+                 verpackt_passwort=d["verpackt_passwort"], verpackt_notfall=d["verpackt_notfall"],
+                 notfall_beweis=_hash(d["notfall_beweis"]))
+        eigen = self.headers.get("Authorization", "")[7:]
+        for t in [t for t, s in z.sitzungen.items() if s[0] == konto and t != eigen]:
+            del z.sitzungen[t]
+        return self._antwort(200, {"kennung": kennung})
 
     # ── Verteiler ──────────────────────────────────────────────────────
     def _gehen(self, methode):
@@ -241,6 +299,9 @@ class _Handler(BaseHTTPRequestHandler):
             z.sitzungen[token] = (_name(d), d.get("knoten") or "")
             return self._antwort(200, {"token": token, "laeuft_ab": "2099-01-01T00:00:00Z",
                                        "verpackt_passwort": k["verpackt_passwort"]})
+        if self.headers.get("Authorization", "")[7:] in z.removed:
+            return self._fehler(401, "device_removed",
+                                "This device was removed from the account. Log in again to add it back.")
         if (m, pfad) == ("DELETE", "/v1/sitzung"):
             kopf = self.headers.get("Authorization", "")[7:]
             z.sitzungen.pop(kopf, None)
@@ -286,6 +347,8 @@ class _Handler(BaseHTTPRequestHandler):
         konto = self._konto()
         if konto is None:
             return self._fehler(403, "nur_passwort", "This session may only set a new password.")
+        if (m, pfad) == ("PUT", "/v1/konto/schluessel"):
+            return self._schluessel_wechseln(konto)
         if (m, pfad) == ("GET", "/v1/nutzung"):
             if konto not in z.betreiber:
                 return self._fehler(403, "nur_betreiber", "Usage figures are only for the operator of this cloud.")
@@ -311,22 +374,10 @@ class _Handler(BaseHTTPRequestHandler):
             return self._antwort(200, {})
         if (m, pfad) == ("POST", "/v1/mitte/stand"):
             d = self._json()
-            if d.get("basis") != z.kopf.get(konto):
-                return self._fehler(409, "jemand_schneller", "Someone else was faster.")
-            if any(s not in z.blobs for s in d.get("verweise", {}).values()):
-                return self._fehler(400, "blob_fehlt", "A referenced blob is missing.")
-            neu = dict(z.staende.get(d.get("basis"), {}))
-            for name, sha in d.get("verweise", {}).items():
-                neu[name] = z.blobs[sha]
-            for name, b64 in d.get("schreiben", {}).items():
-                neu[name] = base64.b64decode(b64)
-            for name in d.get("loeschen", []):
-                neu.pop(name, None)
-            z.zaehler += 1
-            kennung = f"s{z.zaehler:04d}"
-            z.staende[kennung], z.eltern[kennung] = neu, d.get("basis")
-            z.kopf[konto] = kennung
-            return self._antwort(200, {"kennung": kennung})
+            fehler = self._stand_pruefen(konto, d)
+            if fehler:
+                return self._fehler(*fehler)
+            return self._antwort(200, {"kennung": self._stand_setzen(konto, d)})
         if m == "GET" and pfad.startswith("/v1/mitte/enthaelt/"):
             gesucht, k = unquote(pfad.rsplit("/", 1)[1]), z.kopf.get(konto)
             while k is not None and k != gesucht:
@@ -339,7 +390,28 @@ class _Handler(BaseHTTPRequestHandler):
             z.knoten.setdefault(konto, {})[name] = self._json()
             return self._antwort(200, {})
         if (m, pfad) == ("GET", "/v1/knoten"):
-            return self._antwort(200, {"knoten": list(z.knoten.get(konto, {}).values())})
+            liste = []
+            for b in z.knoten.get(konto, {}).values():
+                b = {k: v for k, v in b.items() if k != "insecure"}
+                i = z.insecure.get(str(b.get("programm")))
+                if i:
+                    since = datetime.datetime.fromtimestamp(int(i["since"]) / 1000, datetime.timezone.utc)
+                    b["insecure"] = {"since": since.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+                                     "link": i["link"], "reason": i.get("reason", "")}
+                liste.append(b)
+            return self._antwort(200, {"knoten": liste})
+        if m == "DELETE" and pfad.startswith("/v1/knoten/"):
+            name = unquote(pfad.rsplit("/", 1)[1])
+            tokens = [t for t, s in z.sitzungen.items() if s[0] == konto and s[1] == name]
+            alt = z.knoten.get(konto, {}).get(name)
+            if alt is None and not tokens:
+                return self._fehler(404, "unknown_device", "There is no device with this name on your account.")
+            for t in tokens:
+                z.removed[t] = z.sitzungen.pop(t)
+            removed = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+            z.knoten.setdefault(konto, {})[name] = dict(alt or {}, name=name, removed=removed,
+                                                         removed_by=sitzung[1])
+            return self._antwort(200, {"name": name, "removed": removed, "sessions_ended": len(tokens)})
         return self._fehler(404, "unbekannt", f"No route {m} {pfad}")
 
 

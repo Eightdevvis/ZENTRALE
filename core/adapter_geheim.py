@@ -199,6 +199,30 @@ def umschluesseln(ziel: str = None, wurzel=None) -> int:
     return n
 
 
+def rekey(raw: bytes, old_key: bytes, new_key: bytes) -> bytes:
+    """The bytes of a geheim.enc with every account-key entry ("zu": "konto")
+    re-encrypted from `old_key` to `new_key` (account key change, core/key_rotation.py).
+    Device-key entries and entries the old key cannot open stay as they are.
+    Raises GeheimFehler when the file itself is damaged."""
+    from cryptography.fernet import Fernet, InvalidToken
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        raise GeheimFehler("The vault (geheim.enc) is damaged.") from None
+    if not isinstance(d, dict) or not isinstance(d.get("eintraege"), dict):
+        raise GeheimFehler("The vault (geheim.enc) is damaged.")
+    old, new = Fernet(old_key), Fernet(new_key)
+    for name, e in d["eintraege"].items():
+        if not isinstance(e, dict) or e.get("zu") != "konto":
+            continue
+        try:
+            plain = old.decrypt(str(e.get("wert") or "").encode("ascii"))
+        except (InvalidToken, ValueError):
+            continue
+        d["eintraege"][name] = dict(e, wert=new.encrypt(plain).decode("ascii"))
+    return json.dumps(d, ensure_ascii=False, indent=2).encode("utf-8")
+
+
 def vor_abmelden(wurzel=None) -> int:
     """Vor dem Abmelden: alles auf den Geräteschlüssel, sonst wäre nach dem
     Abmelden kein Schlüssel mehr lesbar."""

@@ -18,6 +18,8 @@ BEFEHLE = {
     ("sync",): befehle.sync,
     ("status",): befehle.status,
     ("devices",): befehle.devices,
+    ("devices", "remove"): befehle.devices_remove,
+    ("leave",): befehle.leave,
     ("adapter",): befehle.adapter_liste,
     ("adapter", "setup"): befehle.adapter_setup,
     ("adapter", "run"): befehle.adapter_lauf,
@@ -31,8 +33,8 @@ BEFEHLE = {
 }
 
 # Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
-MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, dev.dev,
-                  aktualisieren.command, befehle.version}
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, befehle.devices_remove,
+                  dev.dev, aktualisieren.command, befehle.version}
 
 
 def _entwickler_checkout() -> bool:

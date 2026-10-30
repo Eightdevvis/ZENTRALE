@@ -117,13 +117,17 @@ def step_offline(p, say):
 
 
 def step_removed(p, say):
-    """What `zentrale devices remove` will do on the server (build step 8): this
-    device's sessions end and its description goes. Its next sync gets 401."""
+    """What `zentrale devices remove` does on the server (build step 8,
+    DELETE /v1/knoten/<name>): this device's sessions turn into removed ones
+    and its description into a tombstone. Its next sync says it was removed."""
+    import datetime
+    removed = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     with p.ws.cloud_edit() as z:
         for token in [t for t, s in z.sitzungen.items() if s[1] == p.name]:
-            del z.sitzungen[token]
-        for konto in z.knoten.values():
-            konto.pop(p.name, None)
+            z.removed[token] = z.sitzungen.pop(token)
+        for konto, nodes in z.knoten.items():
+            if p.name in nodes:
+                nodes[p.name] = dict(nodes[p.name], removed=removed, removed_by="dev")
 
 
 STEPS = {

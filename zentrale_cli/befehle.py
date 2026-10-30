@@ -3,6 +3,7 @@ Rückgabewert (0 = gut). Gerechnet wird im Kern; hier wird nur gefragt und
 gezeigt."""
 
 import os
+import shutil
 
 from zentrale_cli import WURZEL
 from zentrale_cli.aktualisieren import kanal
@@ -19,6 +20,7 @@ import adapter_bruecke     # noqa: E402
 import adapter_geheim      # noqa: E402
 import ai_config           # noqa: E402
 import cloud_api           # noqa: E402
+import cloud_notices       # noqa: E402
 import cloud_nutzung       # noqa: E402
 import dateien             # noqa: E402
 import knoten              # noqa: E402
@@ -268,6 +270,13 @@ def sync(term, args=()):
         return 1
     if automatisch and abgleich.weg() != "mitte":
         return 0                         # Timer läuft, Gerät gleicht (noch) nicht so ab
+    if abgleich.mitte_art() == "http" and cloud_notices.removed():
+        # Removed from the account (build step 8): the timer stays quiet,
+        # `status` says why; a new login clears it.
+        if automatisch:
+            return 0
+        term.sag(t("sync_removed"), "warn")
+        return 1
     _ki_uebernehmen(term, still=True)
     vorher = _ki_werte()
     neue_apps_fragen(term)
@@ -280,6 +289,10 @@ def sync(term, args=()):
             return 0
         term.sag(t("sync_busy"))
         return 1
+    except abgleich_mitte.MitteFehler:
+        if automatisch and cloud_notices.removed():
+            return 0                     # just learned it was removed: quiet from now on
+        raise
     _ki_neu_melden(term, vorher, automatisch)
     if automatisch and not (b.geholt or b.gesendet or b.hinweise or b.beiseite):
         return 0
@@ -392,11 +405,32 @@ def status(term):
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
     held_back_lines(term, z.get("held_back") or [])
     update_hint(term)
+    node_notice_lines(term, logged_in=bool(d))
     if adapter.kalender_anschluss() and not timer_modul().vdirsyncer_da():
         term.sag()
         vdirsyncer_hinweis(term)
     nutzung_warnung(term)
     return 0
+
+
+def node_notice_lines(term, logged_in=True):
+    """What the cloud said about this device (core/cloud_notices.py):
+    insecure release (build step 7), removed from the account (step 8)."""
+    removed = cloud_notices.removed() if logged_in else None
+    insecure = cloud_notices.insecure()
+    if not (removed or insecure):
+        return
+    term.sag()
+    if removed:
+        term.sag(t("st_removed") + ": " + t("st_removed_text", zeit=_kurzzeit(removed)), "warn")
+    if insecure:
+        term.sag(t("st_insecure") + ": " + t("st_insecure_text", version=insecure.get("version"),
+                                              since=_kurzzeit(insecure.get("since")),
+                                              link=insecure.get("link") or "—"), "fehler")
+
+
+def _kurzzeit(iso):
+    return str(iso or "?")[:16].replace("T", " ")
 
 
 # ── Adapter (core/adapter.py, memory/hub/adapter.md) ───────────────────
@@ -720,9 +754,9 @@ def devices(term):
     except cloud_api.CloudFehler as e:
         raise konto.KontoFehler(str(e)) from None
     liste = antwort.get("knoten", []) if isinstance(antwort, dict) else antwort
-    term.sag(t("dev_title", name=konto.lesen()["name"]), "fett")
+    term.sag(t("devices_title", name=konto.lesen()["name"]), "fett")
     if not liste:
-        term.sag("  " + t("dev_none"))
+        term.sag("  " + t("devices_none"))
     for k in sorted(liste or [], key=lambda k: str(k.get("name"))):
         hw = k.get("hardware") or {}
         hat = ", ".join(t("hw")[n] for n in ("gpu", "bildschirm", "mikro", "lautsprecher")
@@ -732,6 +766,135 @@ def devices(term):
         term.sag(f"     {k.get('sorte', '?')} · {hat} · {k.get('programm', '?')} · "
                  + t("dev_seen", zeit=str(k.get("zuletzt_gesehen", "?"))[:16].replace("T", " ")),
                  "blass")
+        if k.get("removed"):
+            weg = (t("dev_left", zeit=_kurzzeit(k["removed"])) if k.get("removed_by") == k.get("name")
+                   else t("dev_removed", zeit=_kurzzeit(k["removed"]), by=k.get("removed_by") or "?"))
+            term.sag("     " + weg, "warn")
+        i = k.get("insecure")
+        if isinstance(i, dict):
+            term.sag("     " + t("dev_insecure", since=_kurzzeit(i.get("since")), link=i.get("link") or "—"),
+                     "fehler")
+    node_notice_lines(term)
+    return 0
+
+
+# ── Leave and remove (build step 8, memory/hub/building_kit_plan.md 5.1) ──
+
+def _local_data_paths():
+    """What 'leave' may delete on request: this installation's data/ and the
+    sync folder (it holds the last synced state in plain text)."""
+    return [p for p in (os.path.join(WURZEL, "data"), abgleich.ordner()) if os.path.exists(p)]
+
+
+def leave(term):
+    """`zentrale leave`: on the device itself. Removed from the account
+    (tombstone), logged out, keeper timers off; local data kept unless the
+    person asks (default: keep)."""
+    d = konto.lesen() if konto.angemeldet() else None
+    device = (d or {}).get("knoten") or dateien.knoten()
+    term.sag(t("leave_intro", device=device, name=d["name"]) if d else t("leave_local"))
+    if not term.ja(t("leave_confirm"), vorgabe=False):
+        term.sag(t("cancelled"))
+        return 1
+    offline = False
+    if d:
+        try:
+            konto.remove_device(device)
+        except konto.KontoFehler:
+            offline = not cloud_notices.removed()     # removed already = nothing left to do there
+        adapter_geheim.vor_abmelden()
+        konto.abmelden()
+    tm = timer_modul()
+    if tm.verfuegbar():
+        tm.entfernen()
+    if offline:
+        term.sag(t("leave_offline", device=device), "warn")
+    pfade = _local_data_paths()
+    geloescht = False
+    if pfade and os.path.exists(os.path.join(WURZEL, ".git")):
+        term.sag(t("leave_delete_checkout"), "blass")
+    elif pfade and term.ja(t("leave_delete_ask", paths=", ".join(pfade)), vorgabe=False):
+        for p in pfade:
+            shutil.rmtree(p, ignore_errors=True)
+        geloescht = True
+    term.sag(t("leave_done_deleted" if geloescht else "leave_done", device=device), "gut")
+    return 0
+
+
+def devices_remove(term, args=()):
+    """`zentrale devices remove <name>`: from another device. Asks "lost or
+    stolen?" — only then it offers changing the account key (Sasha 30.10.)."""
+    if len(args) != 1:
+        term.fehler(t("rm_usage"))
+        return 2
+    name = args[0]
+    d = konto.lesen() if konto.angemeldet() else None
+    if not d:
+        term.sag(t("not_logged_in"))
+        return 1
+    if name == d.get("knoten"):
+        term.sag(t("rm_self", device=name))
+        return 1
+    term.sag(t("rm_intro", device=name))
+    if not term.ja(t("rm_confirm", device=name), vorgabe=False):
+        term.sag(t("cancelled"))
+        return 1
+    lost = term.ja(t("rm_lost"), vorgabe=False)
+    r = konto.remove_device(name)
+    term.sag(t("rm_done", device=name, n=r.get("sessions_ended", 0)), "gut")
+    if lost:
+        return rotate_key_dialog(term)
+    return 0
+
+
+def _optional_new_password(term):
+    while True:
+        p1 = term.geheim(t("rot_new_password"))
+        if not p1:
+            return None
+        try:
+            konto.passwort_pruefen(p1)
+        except konto.KontoFehler as e:
+            term.sag(str(e), "warn")
+            continue
+        if term.geheim(t("ask_password_again")) == p1:
+            return p1
+        term.sag(t("passwords_differ"), "warn")
+
+
+def rotate_key_dialog(term):
+    """Offer changing the account key (core/key_rotation.py). Says BEFORE
+    the confirmation that all other devices must log in again."""
+    import key_rotation
+    term.sag()
+    for zeile in t("rot_offer").splitlines():
+        term.sag(zeile, "warn")
+    if not term.ja(t("rot_ask"), vorgabe=False):
+        term.sag(t("rot_not_now"))
+        return 0
+    pw = term.geheim(t("ask_password_old"))
+    neu = _optional_new_password(term)
+    term.sag(t("working_key"), "blass")
+    draft = key_rotation.Draft(pw, neu)
+    term.sag()
+    term.sag("  " + t("emergency_title"), "warn", "fett")
+    term.sag()
+    term.sag("      " + draft.notfall_text, "fett")
+    term.sag()
+    for zeile in t("emergency_warning").splitlines():
+        term.sag("  " + zeile, "warn")
+    term.sag()
+    if not term.ja(t("emergency_confirm")):
+        term.sag(t("rot_emergency_not_saved"))
+        return 1
+    if abgleich.cloud_an() and abgleich.weg() == "mitte":
+        term.sag(t("rot_sync_first"), "blass")
+        abgleich.abgleichen(WURZEL)
+    term.sag(t("rot_working"), "blass")
+    r = key_rotation.rotate(draft, WURZEL)
+    term.sag(t("rot_done", n=r["files"]), "gut")
+    if r["inbox_skipped"]:
+        term.sag(t("rot_inbox_skipped", n=r["inbox_skipped"]), "warn")
     return 0
 
 
