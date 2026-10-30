@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 5–6, 7–8 (`d1dc8fd`), 9 and 9b (`6a63d16`) built.** One blueprint for
+**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 5–6, 7–8 (`d1dc8fd`), 9 and 9b (`6a63d16`), 10–12, 13 (`64821b8`) built.** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -574,7 +574,7 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 10 | **Built `79482b5`.** **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
 | 11 | **Built `ec0020a`.** **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
 | 12 | **Built `e24374f`.** **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
-| 13 | **Built (see History).** **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
+| 13 | **Built `64821b8`.** **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
 | 14 | **Schematix v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
 | 15 | **Schematix v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
 
@@ -596,4 +596,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`); step 11 (`ec0020a`): plug dialog, apply agent on the keeper, node wires in the description; step 13: Schematix v1 ([schematix.md](schematix.md)).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`); step 11 (`ec0020a`): plug dialog, apply agent on the keeper, node wires in the description; step 13 (`64821b8`): Schematix v1 ([schematix.md](schematix.md)).
