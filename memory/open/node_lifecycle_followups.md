@@ -1,6 +1,6 @@
 # Building kit steps 7 and 8: what is left after the build
 
-**Stand 2026-10-30:** Open. Found while building steps 7 and 8 (`6924069`,
+**Stand 2026-10-30:** Open. Found while building steps 7 and 8 (`d1dc8fd`,
 [../hub/building_kit_plan.md](../hub/building_kit_plan.md)). Item 1 **waits
 for Sasha** (deploy).
 

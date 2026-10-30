@@ -131,7 +131,7 @@ Auf dem neuen Gerät, einmal:
 Wiederholbar: läuft es nochmal, prüft es nur und repariert, was fehlt.
 Austreten (Gerät verkauft/verloren): Knoten-Beschreibung als Grabstein,
 sein öffentlicher Schlüssel fliegt aus Router und `authorized_keys`.
-**Built `6924069`** (building kit step 8): `zentrale leave` / `zentrale devices
+**Built `d1dc8fd`** (building kit step 8): `zentrale leave` / `zentrale devices
 remove <name>` → `DELETE /v1/knoten/<name>`; tombstone = the description plus
 `removed`, `removed_by`. Router/`authorized_keys` are not touched yet.
 
@@ -324,7 +324,7 @@ gegen dieselbe Schnittstelle):
 | Mindestlänge Passwort | 10 Zeichen (nur Client) |
 | Fehler 401 | Client sagt „Wrong username or password." bzw. „Not logged in" |
 
-### Kontoschlüssel wechseln (built `6924069`, building kit step 8)
+### Kontoschlüssel wechseln (built `d1dc8fd`, building kit step 8)
 
 Only offered when a removed device was lost or stolen (Sasha 30.10.). **The
 key schema stays** (HKDF infos `…/v1`, vectors unchanged): a new random

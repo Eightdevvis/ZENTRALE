@@ -230,7 +230,7 @@ in `~/.config/zentrale/abgleich.schluessel` (nur für Sasha lesbar), **nie in
 Neuer Rechner = Schritt 5. Das Handy bekommt die Zeile ebenfalls aus KeePass
 (in den sicheren Speicher der App). Schlüssel wechseln ist auf dem git-Weg
 bewusst nicht gebaut (alles neu verschlüsseln) — braucht es erst, wenn er
-einmal draußen war. **Über die Cloud (`http`) gebaut `6924069`:** `zentrale devices
+einmal draußen war. **Über die Cloud (`http`) gebaut `d1dc8fd`:** `zentrale devices
 remove` fragt „lost or stolen?" und bietet dann den Kontoschlüssel-Wechsel an
 (`core/key_rotation.py`, Ablauf in [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
 „Kontoschlüssel wechseln"). ⚠ Das Handy trägt Schlüssel und GitHub-Token mit sich: geht es
