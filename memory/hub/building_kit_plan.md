@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan; build steps 0–3 built (`13235f8`, `527afc3`).** One blueprint for
+**Stand 2026-10-30: plan; build steps 0–3 (`13235f8`, `527afc3`), 7 and 8 (`6924069`) built.** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -205,9 +205,9 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
   old version's crypto is found broken, the cloud keeps serving it but
   marks the node "insecure" (Schematix, `status`, `devices`); the owner
   decides whether to update or remove it. The headers `Deprecation`
-  (RFC 9745) carry that warning; `Sunset` is never sent.
-- An old node lacks new features, nothing else: a port type it does not
-  know shows as `broken` on its side with "needs a newer ZENTRALE".
+  (RFC 9745) carry that warning; `Sunset` is never sent. Built `6924069`: D1
+  table `insecure_releases` (data), header `Zentrale-Release`, `server/README.md`.
+- An old node lacks new features, nothing else: an unknown port type shows `broken` ("needs a newer ZENTRALE").
 
 ### 2.4 How it is tested
 
@@ -301,7 +301,7 @@ what ZENTRALE does, what exists.
 | 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; plug/rights dialog no; owned-app offer no |
 | 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | core: timer, setting, self-test (`527afc3`); apps: no |
 | 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes except owned-app offer |
-| 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | no |
+| 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | built `6924069` (key change: `core/key_rotation.py`, `PUT /v1/konto/schluessel`) |
 
 ### 5.2 What keeps a node alive
 
@@ -548,10 +548,10 @@ apply agent with the generation pointer. That is all. No new language.
 | sync | per-app choice, cloud wins, held-back files | format check on read, preserve test |
 | timers | `zentrale timers` (sync, calendar, update), installer call, re-run on every update, self-heal (`527afc3`) | — |
 | update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
-| versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | contract folder, old-release test, Sunset headers, policy |
+| versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | contract folder, old-release test, policy (insecure warning: built `6924069`) |
 | packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list | port schema, `needs`/`offers`, `/hub/wires`, plug dialog |
-| lifecycle | join by login | `leave`, `devices remove`, session end per node, tombstone; key rotation option (lost/stolen, after step 8) |
+| lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`6924069`) | Schematix display |
 | wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions | the app, piece kinds, layers, planned state, things store |
 | run pipeline | JSON Schema use everywhere, atomic `aktuell` switch as a pattern | type registry, compiler, generations, apply agent, socket table |
 
@@ -568,8 +568,8 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 4 | **Mini-PC by hand once** ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)): update to the release with steps 1–3 | after a reboot without login, `zentrale devices` on the laptop shows the mini seen < 10 min ago |
 | 5 | **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
 | 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
-| 7 | **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
-| 8 | **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
+| 7 | **Built `6924069`.** **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
+| 8 | **Built `6924069`.** **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
 | 9 | **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /hub/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
 | 9b | **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
 | 10 | **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
@@ -597,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`6924069`), key change on the unchanged key schema.

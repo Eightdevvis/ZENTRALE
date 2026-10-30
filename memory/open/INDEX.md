@@ -72,3 +72,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [package_data_dir.md](package_data_dir.md) | .deb/PKGBUILD copy the program per user because the core keeps data next to the code | no |
 | [pi_back_online.md](pi_back_online.md) | Pi offline; autopull will jump to release 41 — check kiosk, outpost package, sensor bridge | yes (Pi online) |
 | [building_kit_decisions.md](building_kit_decisions.md) | Building kit: Schematix style pending (needed before build step 13) | yes (style) |
+| [node_lifecycle_followups.md](node_lifecycle_followups.md) | Building kit steps 7/8 leftovers: server deploy (migration 0004), phone texts/header, router keys, old stands | yes (deploy) |

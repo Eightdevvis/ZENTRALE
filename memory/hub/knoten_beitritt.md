@@ -131,6 +131,9 @@ Auf dem neuen Gerät, einmal:
 Wiederholbar: läuft es nochmal, prüft es nur und repariert, was fehlt.
 Austreten (Gerät verkauft/verloren): Knoten-Beschreibung als Grabstein,
 sein öffentlicher Schlüssel fliegt aus Router und `authorized_keys`.
+**Built `6924069`** (building kit step 8): `zentrale leave` / `zentrale devices
+remove <name>` → `DELETE /v1/knoten/<name>`; tombstone = the description plus
+`removed`, `removed_by`. Router/`authorized_keys` are not touched yet.
 
 ## Was heute im Weg steht (Reihenfolge)
 
@@ -237,7 +240,10 @@ Sitzung als `Authorization: Bearer <token>`.
 | `PUT /v1/mitte/blob/<sha256>` | rohe Bytes (bis 24 MiB) → 204; Prüfsumme falsch → 400 `pruefsumme` |
 | `POST /v1/mitte/stand` | `{basis: kennung|null, verweise: {name: sha256}, schreiben: {name: base64}, loeschen: [...]}` (JSON bis 4 MiB, `schreiben` zusammen bis 256 KiB) → 200 `{kennung}` oder **409** `jemand_schneller` (Compare-and-Swap auf den Kopf in D1); verwiesener Blob fehlt → 400 `blob_fehlt` mit `fehlen` |
 | `GET /v1/mitte/enthaelt/<kennung>` | `{enthaelt: bool}` |
-| `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben); schreiben nur der eigene Name der Sitzung; GET → `{knoten: [...]}` |
+| `PUT /v1/knoten/<name>` / `GET /v1/knoten` | Knoten-Beschreibung (Klartext-Metadaten ohne Inhalt, siehe oben); schreiben nur der eigene Name der Sitzung; GET → `{knoten: [...]}`, since 2026-10-30 with `insecure: {since, link, reason}` on a device whose `programm` is marked insecure (computed on read) |
+| `DELETE /v1/knoten/<name>` | (2026-10-30, step 8) remove a device, also itself: its sessions become `removed` (next call → 401 `device_removed`), its description a tombstone `{…, removed, removed_by}`; unknown → 404 `unknown_device`. Logging in again adds it back |
+| `PUT /v1/konto/schluessel` | (2026-10-30, step 8) change the account key — see "Kontoschlüssel wechseln" below |
+| Header `Zentrale-Release` | (2026-10-30, step 7) the client's version; a release in D1 `insecure_releases` gets `Deprecation: @<unix s>` (RFC 9745) + `Link: <…>; rel="deprecation"` on every answer, never `Sunset`; everything keeps working |
 | `GET/PUT /v1/besitz` | Besitz des Kontos (schema.org `ItemList`, verschlüsselt als ein Blob): `{besitz: string|null, aktualisiert}` / PUT `{besitz: string}` |
 | `GET /v1/nutzung` | nur Konten aus der Var `BETREIBER_NAMEN`, sonst 403 `nur_betreiber` → `{zeit, grenzen_geprueft, grenzen: [{id, name, used, limit, unit, period, percent, level, source, self, cloudflare, cloudflare_at, costs_money}], warnungen: [{id, name, level, percent, text}]}`; `level` = `ok`/`50`/`80`/`95`/`voll`. Gratis-Grenzen und Zählweise: [../betrieb/cloud.md](../betrieb/cloud.md) |
 | Bremse | `PUT /v1/mitte/blob/…` und Inline-Dateien eines Stands → **507** `speicher_voll`, wenn R2 dadurch über den Gratis-Speicher käme (Var `BREMSE_SPEICHER`, Vorgabe `an`) |
@@ -317,6 +323,26 @@ gegen dieselbe Schnittstelle):
 | Einladungscode | `ZB-XXXX-XXXX-XXXX-XXXX`; der Client schickt ihn groß und ohne Leerzeichen |
 | Mindestlänge Passwort | 10 Zeichen (nur Client) |
 | Fehler 401 | Client sagt „Wrong username or password." bzw. „Not logged in" |
+
+### Kontoschlüssel wechseln (built `6924069`, building kit step 8)
+
+Only offered when a removed device was lost or stolen (Sasha 30.10.). **The
+key schema stays** (HKDF infos `…/v1`, vectors unchanged): a new random
+`konto_schluessel`, wrapped with the password (current or new) and with a
+**new** emergency key (shown once, confirmed; the old one unwrapped the old
+key, so it stops working). `core/key_rotation.py` syncs first, then
+re-encrypts the whole Mitte under the new key — `inhalt.enc`, every
+`d/<name>.enc` under its new hidden name, each inbox file
+`knoten/<k>/<name>.enc` (unreadable ones are dropped), and the account-key
+entries inside `data/adapter/geheim.enc` (`adapter_geheim.rekey`) — uploads
+the blobs and sends ONE `PUT /v1/konto/schluessel` {password parts,
+`verpackt_notfall`, `notfall_beweis`, `altes_anmelde_schluessel`, `stand`
+like `POST /v1/mitte/stand`}. The server swaps head, wraps and emergency
+proof in one D1 transaction (409 = the Mitte moved → read again, max. 3×)
+and ends every other session; other devices and the phone log in again and
+get the new key. Limits: old encrypted stands and blobs stay on the server
+(readable with the old key, only with a session); `besitz` is not
+re-encrypted (no client uses it yet).
 
 ### Testvektoren für andere Oberflächen
 

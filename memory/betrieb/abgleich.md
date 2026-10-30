@@ -228,9 +228,12 @@ in `~/.config/zentrale/abgleich.schluessel` (nur für Sasha lesbar), **nie in
    aus KeePass einfügen. Er prüft sie gegen die Mitte, bevor er sie ablegt.
 
 Neuer Rechner = Schritt 5. Das Handy bekommt die Zeile ebenfalls aus KeePass
-(in den sicheren Speicher der App). Schlüssel wechseln ist bewusst nicht
-gebaut (alles neu verschlüsseln) — braucht es erst, wenn er einmal draußen
-war. ⚠ Das Handy trägt Schlüssel und GitHub-Token mit sich: geht es
+(in den sicheren Speicher der App). Schlüssel wechseln ist auf dem git-Weg
+bewusst nicht gebaut (alles neu verschlüsseln) — braucht es erst, wenn er
+einmal draußen war. **Über die Cloud (`http`) gebaut `6924069`:** `zentrale devices
+remove` fragt „lost or stolen?" und bietet dann den Kontoschlüssel-Wechsel an
+(`core/key_rotation.py`, Ablauf in [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
+„Kontoschlüssel wechseln"). ⚠ Das Handy trägt Schlüssel und GitHub-Token mit sich: geht es
 verloren, den Token bei GitHub sperren und den Schlüssel als „draußen"
 behandeln.
 
@@ -483,6 +486,7 @@ zuletzt, Hinweise) und über `GET /api/abgleich`.
 | `core/abgleich_mitte.py` | die vier Handgriffe, Umsetzung git und http (`HttpMitte`) |
 | `core/abgleich_apps.py`, `core/eingebaute_apps.py` | Apps mit Daten, die Wahl je App und Gerät, Übernahme der alten Bereiche |
 | `core/konto.py`, `core/konto_schluessel.py`, `core/cloud_api.py` | Konto, Schlüssel-Schema, Draht zur Cloud |
+| `core/cloud_notices.py`, `core/key_rotation.py` | what the cloud said about this device (insecure release, removed) · account key change (2026-10-30) |
 | `core/abgleich.py` | ein Abgleich von vorn bis hinten: Basis, Eingang fremder Knoten (Quittungen), Apps neu dabei, Vorhaben, Hinweise, Zustand |
 | `core/abgleich_vorschlaege.py` | was ein fremder Knoten vorschlagen darf: Gesprächskopf, Termine (neu/ändern/löschen/Ebene, je VEVENT und Feldgruppe ohne Überschreiben) |
 | `core/vevent_merge.py` | three-way merge inside one VEVENT per group of fields (time, title, note, reminders, …) — since 2026-10-29 |

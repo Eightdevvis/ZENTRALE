@@ -34,6 +34,7 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 | `src/krypto.ts` | salted HMAC, constant-time compare, tokens |
 | `src/grenzen.ts` | the Cloudflare free-tier limits (one table, with sources) |
 | `src/nutzung.ts` | self-metering, `GET /v1/nutzung`, storage brake, R2 recount, GraphQL |
+| `src/release.ts` | insecure releases: `Deprecation` + `Link` headers, `insecure` on devices |
 | `src/phone.ts` | phone app self-update: release manifest + APK (operator publishes, sessions read) |
 | `migrations/` | D1 schema |
 | `scripts/` | admin: invite codes, publishing a release |
@@ -83,6 +84,27 @@ Synced files arrive already encrypted (Fernet) under HMAC'd names.
 - **Limits**: JSON bodies 16 KiB, ownership 1 MiB, device description 16 KiB,
   stand JSON 4 MiB (inline part 256 KiB), blob 24 MiB, 20 000 names per
   stand / `fehlende` call.
+- **Insecure releases** (building kit step 7, `memory/hub/building_kit_plan.md`
+  2.3): every version keeps syncing forever. A version found insecure is
+  marked as data, by hand:
+  `npx wrangler d1 execute zentrale --remote --command "INSERT INTO insecure_releases (version, since, link, reason) VALUES ('41', <ms since epoch>, '<advisory url>', '<one sentence>')"`
+  (delete the row to unmark). Clients send their version in the header
+  `Zentrale-Release`; a marked one gets `Deprecation: @<unix seconds>`
+  (RFC 9745) and `Link: <url>; rel="deprecation"; type="text/html"` on every
+  answer, errors included. `Sunset` is never sent. `GET /v1/knoten` adds
+  `insecure: {since, link, reason}` to each device on a marked `programm`
+  (computed on read, never stored).
+- **Removing a device** (step 8): `DELETE /v1/knoten/{name}` from any session
+  of the account (also its own — `zentrale leave`). Its sessions become
+  `art = 'removed'` (kept until they expire, so the device hears 401
+  `device_removed` instead of a bare "not logged in"); its description
+  becomes a tombstone `{…, removed, removed_by}`. Logging in again adds it back.
+- **Changing the account key** (step 8, lost or stolen device):
+  `PUT /v1/konto/schluessel` = new password parts + new emergency wrap/proof +
+  `altes_anmelde_schluessel` (rate limited) + a `stand` like
+  `POST /v1/mitte/stand` with the re-encrypted Mitte. Head, wraps and
+  emergency proof change in ONE D1 batch, guarded by the compare-and-swap
+  (409 → nothing changed); all other sessions end. Key schema unchanged.
 - No CORS, no request bodies or tokens in logs.
 
 ## Free-tier usage
