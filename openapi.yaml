@@ -970,6 +970,57 @@ paths:
         "200": {$ref: "#/components/responses/Ok"}
         "404": {$ref: "#/components/responses/SchematixError"}
 
+  /api/schematix/run:
+    post:
+      tags: [schematix]
+      operationId: schematixRun
+      summary: Run the drawing — check → diff (→ switch with apply)
+      description: >
+        The drawn changes (wires) of this node with the whole scheme: planned
+        pieces and wires and documented things are checked with them (stages
+        2–3 of the compiler) and never applied; this node's part goes through
+        generations.run. A wire another node owns is refused ("run Schematix
+        there"). Refused → 409, errors pinned to pieces and wires.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                changes: {type: array, items: {$ref: "#/components/schemas/Wire"}}
+                scheme: {type: [string, "null"]}
+                apply: {type: boolean, description: "false (default) = the diff only"}
+      responses:
+        "200": {$ref: "#/components/responses/RunResult"}
+        "409": {$ref: "#/components/responses/RunResult"}
+
+  /api/schematix/same-version:
+    put:
+      tags: [schematix]
+      operationId: schematixSameVersion
+      summary: The nodes this node keeps the same ZENTRALE version as (Sasha 30.10.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nodes]
+              properties:
+                nodes: {type: array, items: {type: string}}
+      responses:
+        "200":
+          description: Stored (it goes out with the node description)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [same_version]
+                properties:
+                  same_version: {type: array, items: {type: string}}
+        "400": {$ref: "#/components/responses/SchematixError"}
+
   /api/apps/remove:
     post:
       tags: [apps]

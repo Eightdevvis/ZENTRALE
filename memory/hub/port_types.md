@@ -200,5 +200,5 @@ decided" when it first chooses, as `setzen` always did.
 ## Not yet
 
 Open item [../open/run_gate_followups.md](../open/run_gate_followups.md): the
-compiler's graph rules are not ported to Dart. Link-scoped plugs (network,
-power) have no store yet — they come with Schematix's things store (step 14).
+compiler's graph rules are not ported to Dart. Link-scoped wires (network,
+power) live with Schematix since step 14: documented ones in their thing's `links`, planned ones in the scheme ([schematix.md](schematix.md)); the apply agent never writes them.

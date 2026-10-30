@@ -15,9 +15,9 @@
                    "needs": [{"id": "charge", "type": "power"}], "offers": ["power"]},
     "charger": {"title": "Charger", "netbox": "power-outlet", "needs": [], "offers": ["power"]},
     "tablet": {"title": "Tablet", "netbox": "tablet",
-               "needs": ["tailscale", "wifi", "power"], "offers": ["tailscale"]},
+               "needs": ["tailscale", "wifi", "power"], "offers": [{"id": "tailscale-out", "type": "tailscale"}]},
     "phone": {"title": "Phone", "netbox": "phone",
-              "needs": ["tailscale", "wifi", "power"], "offers": ["tailscale", "bluetooth"]},
+              "needs": ["tailscale", "wifi", "power"], "offers": [{"id": "tailscale-out", "type": "tailscale"}, "bluetooth"]},
     "printer": {"title": "Printer", "netbox": "printer",
                 "needs": ["lan", "wifi", "power"], "offers": ["print", "scan"]},
     "bluetooth-device": {"title": "Bluetooth device", "netbox": "bluetooth",
@@ -25,6 +25,6 @@
   },
   "node_links": {
     "needs": ["lan", "wifi", "wireguard", "tailscale", "power", "bluetooth"],
-    "offers": ["tailscale"]
+    "offers": [{"id": "tailscale-out", "type": "tailscale"}]
   }
 }

@@ -229,7 +229,7 @@ HOME_THINGS = (("router", "router", "Router (Flint 2)", "192.168.50.254"),
 TABLET = {"id": "tablet", "kind": "tablet", "title": "Tablet",
           "notes": "Tailscale to the Mini-PC — live today (Sasha 30.10.).",
           "links": [{"id": "tailscale/minipc/tablet", "type": "tailscale", "state": "live",
-                     "from": "zentrale://hub/node/minipc/port/tailscale",
+                     "from": "zentrale://hub/node/minipc/port/tailscale-out",
                      "to": kinds.thing_ref("tablet") + "port/tailscale"}]}
 
 

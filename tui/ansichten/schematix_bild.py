@@ -139,7 +139,7 @@ def _side(app, y0, x0, h, w):
     y += 1
     z.addclip(y, x0, _("LAYERS"), w, farbe(app, "bright"))
     y += 1
-    wires = m.get("wires") or []
+    wires = list(({w["id"]: w for w in m.get("wires") or []} | {k: dict(v) for k, v in S["pending"].items()}).values())
     for i, (layer, name) in enumerate(CHIPS):
         n = sum(1 for wi in wires if wi.get("layer") == layer)
         on = S["layers"].get(layer, True)
@@ -239,6 +239,51 @@ def _picker(app, top, mx, h, w):
         z.addclip(y0 + 1 + j, x0 + 2, ("› " if on else "  ") + text, mw - 4, farbe(app, "focus" if on else "ink"))
 
 
+def _panel(app, top, mx, h, w, title, rows, sel=None, width=64):
+    """A framed panel in the middle of the board: rows of (text, role)."""
+    z = app.z
+    mw, mh = min(width, w - 4), min(len(rows) + 3, h - 2)
+    y0, x0 = top + (h - mh) // 2, mx + (w - mw) // 2
+    for j in range(mh):
+        _fill(app, y0 + j, x0, mw)
+    z.draw_box(y0, x0, mh, mw, title, farbe(app, "focus"))
+    room = mh - 3
+    first = 0 if sel is None or sel < room else min(sel - room + 1, len(rows) - room)
+    for j, (text, role) in enumerate(rows[first:first + room]):
+        on = sel is not None and first + j == sel
+        z.addclip(y0 + 1 + j, x0 + 2, ("› " if on else "  ") + text, mw - 4, farbe(app, "focus" if on else role))
+
+
+STATE_SIGN = {"live": "━", "off": "┄", "planned": "╌", "broken": "✕"}
+
+
+def _plugs(app, top, mx, h, w):
+    """p: the wires of the focused piece — x unplugs / plugs one (Run applies)."""
+    pl = app.S["plugs"]
+    rows = []
+    for wi in pl["wires"]:
+        sign = STATE_SIGN.get(wi.get("state"), "·")
+        tail = "  ⟳ " + _("not run yet") if wi.get("pending") else ""
+        rows.append(("%s %-15s %-30s %s%s" % (sign, wi.get("type"), wi["id"], wi.get("state"), tail),
+                     "ink" if wi.get("state") == "live" else "dim"))
+    _panel(app, top, mx, h, w, _("plugs of {p}").format(p=pl.get("piece")),
+           rows or [(_("nothing is plugged into this piece"), "dim")], pl["sel"] if rows else None, 76)
+
+
+def _run(app, top, mx, h, w):
+    """r: what Run would do — the diff (enter switches) or the errors."""
+    r = app.S["run"]
+    if r.get("ok"):
+        rows = [("✓ " + _("the scheme compiles"), "solder")]
+        rows += [(line, "ink") for line in r.get("diff") or []] or [(_("nothing to switch"), "dim")]
+        if r.get("diff"):
+            rows.append((_("enter switches · esc goes back"), "dim"))
+    else:
+        rows = [("✕ " + _("refused — nothing switched"), "abgelehnt")]
+        rows += [("✕ " + (e.get("text") or e.get("code") or "?"), "abgelehnt") for e in r.get("errors") or []]
+    _panel(app, top, mx, h, w, _("run · check → diff → switch"), rows, None, 90)
+
+
 def zeichnen(app, top, mx, h, w):
     S, z = app.S, app.z
     if S["map"] is None or S["canvas"] is None:
@@ -259,5 +304,9 @@ def zeichnen(app, top, mx, h, w):
     _status(app, top + h - 2, x0 + 1, iw - 2)
     if S["picker"] is not None:
         _picker(app, top, mx, h, w)
+    if S["plugs"] is not None:
+        _plugs(app, top, mx, h, w)
+    if S["run"] is not None:
+        _run(app, top, mx, h, w)
     if S["ebene"] == "colours":
         _colours(app, top, mx, h, w)

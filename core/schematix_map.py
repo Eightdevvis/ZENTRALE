@@ -160,9 +160,34 @@ def build(own_sketch, this_node, own_versions, descriptions=(), notes=()) -> dic
             mw = _map_wire(w, name, app_refs)
             if mw:
                 out_wires.append(mw)
+    out_wires += _same_version_wires(pieces.values())
     return {"format": MAP, "node": this_node, "pieces": list(pieces.values()),
             "wires": sorted(out_wires, key=lambda w: w["id"]),
-            "layers": [{"id": layer} for layer in LAYERS], "notes": list(notes)}
+            "layers": [{"id": layer} for layer in LAYERS], "notes": list(notes),
+            # the socket table for the board (plan 6.7 stage 1): same type = fits;
+            # scope says where a drawn wire lives (link → the scheme)
+            "types": {n: {"layer": e["layer"], "scope": e["scope"]} for n, e in port_types.types().items()}}
+
+
+SAME_VERSION = "same-version"
+
+
+def _same_version_wires(pieces):
+    """"Same version" between nodes (Sasha 30.10., plan 2.2 rule 5): drawn
+    from the node that is followed to the node that follows. A setting of
+    the following node (core/schematix_versions.py), not a port — never
+    compiled, set with `s` in Schematix."""
+    nodes = {p.get("node"): p for p in pieces if p.get("kind") == "node"}
+    out = []
+    for name, p in nodes.items():
+        for other in (p.get("versions") or {}).get("same_version") or []:
+            if other in nodes and other != name:
+                out.append({"id": f"{SAME_VERSION}/{other}/{name}", "type": SAME_VERSION, "layer": "services",
+                            "from": wires.port(wires.node_ref(other), "version"),
+                            "to": wires.port(wires.node_ref(name), "version"),
+                            "state": "live", "owner": wires.node_id(name), "node": name,
+                            "from_piece": wires.node_id(other), "to_piece": wires.node_id(name)})
+    return out
 
 
 # ── Layout: a cross-section ─────────────────────────────────────────────

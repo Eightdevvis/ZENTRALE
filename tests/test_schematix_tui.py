@@ -215,3 +215,86 @@ def test_the_real_starter_scheme_drawn(welt, _test_ordner, monkeypatch):  # noqa
     c.folgen(c.element("device:router")); c.springen()
     text = _bild(u, s, "14_home_router")
     assert "Router (Flint 2)" in text and "not yet" in text
+
+
+# ── Step 15: rewire by drawing ──────────────────────────────────────────
+
+def test_an_unfitting_socket_shows_a_red_x_and_refuses(offen):
+    u, s = offen
+    c = u.SCHEMATIX["canvas"]
+    c.fokus = "app:cloud"
+    _t(u, "v")
+    c.ziel = "app:pdf@laptop"                                  # PDF viewer needs files, cloud offers sync
+    text = _bild(u, s, "15_red_x")
+    assert "✕" in text
+    before = list(c.verbindungen)
+    _t(u, 10)
+    assert c.modus == "ruhe" and c.verbindungen == before      # did not attach
+    assert u.SCHEMATIX["msg"] == "✕ PDF viewer needs `files`, Cloud offers `sync`"
+    text = _bild(u, s, "15_refused")
+    assert "✕ PDF viewer needs `files`" in text                # the short error at the socket
+
+
+def test_a_fitting_wire_waits_for_run(offen):
+    u, _s = offen
+    c = u.SCHEMATIX["canvas"]
+    c.fokus = "app:cloud"
+    _t(u, "v")
+    c.ziel = "app:fokus@laptop"
+    _t(u, 10)                                                  # wired already: "unplug it?"
+    assert "unplug" in u.schematix.status_text()
+    _t(u, "y")
+    assert u.SCHEMATIX["pending"]["sync/laptop/fokus"]["state"] == "off"
+    assert "scheming" in u.schematix.titel()
+
+
+def test_unplug_in_the_plugs_panel_then_run_shows_the_diff_and_switches(offen):
+    u, s = offen
+    from tui import ansichten as A
+    sent = []
+    real = A.schematix.api_call
+    A.schematix.api_call = lambda p, m="GET", b=None, **k: sent.append((p, b)) or real(p, m, b, **k)
+    try:
+        u.SCHEMATIX["canvas"].fokus = "app:fokus@laptop"
+        _t(u, "p")
+        text = _bild(u, s, "15_plugs")
+        assert "sync/laptop/fokus" in text
+        _t(u, "x")
+        assert u.SCHEMATIX["pending"]["sync/laptop/fokus"]["state"] == "off"
+        _t(u, 27, "r")
+        assert sent[-1][0] == "/api/schematix/run" and sent[-1][1]["apply"] is False
+        assert sent[-1][1]["changes"][0]["id"] == "sync/laptop/fokus"
+        text = _bild(u, s, "15_run_diff")
+        assert "the scheme compiles" in text and "~ Tutor data" in text
+        _t(u, 10)                                              # enter switches
+        runs = [b for p, b in sent if p == "/api/schematix/run"]
+        assert runs[-1]["apply"] is True and u.SCHEMATIX["pending"] == {}
+        assert "switched" in u.SCHEMATIX["msg"]
+    finally:
+        A.schematix.api_call = real
+
+
+def test_run_errors_are_pinned_on_the_board(offen):
+    u, s = offen
+    from tui import ansichten as A
+    real = A.schematix.api_call
+    refused = {"ok": False, "diff": [], "errors": [{"code": "unmet-requirement", "piece": "app:fokus",
+                                                    "text": "app:fokus needs sync — nothing is plugged in"}]}
+    A.schematix.api_call = lambda p, m="GET", b=None, **k: refused if p == "/api/schematix/run" \
+        else real(p, m, b, **k)
+    try:
+        _t(u, "r")
+        assert u.SCHEMATIX["fehler"] == {"app:fokus@laptop": "app:fokus needs sync — nothing is plugged in"}
+        text = _bild(u, s, "15_run_refused")
+        assert "refused — nothing switched" in text
+        _t(u, 27)
+        assert "✕ app:fokus needs sync" in _bild(u, s, "15_pinned")
+    finally:
+        A.schematix.api_call = real
+
+
+def test_same_version_from_another_node(offen):
+    u, _s = offen
+    u.SCHEMATIX["canvas"].fokus = "node:minipc"
+    _t(u, "s")
+    assert _puts(u, "/api/schematix/same-version")

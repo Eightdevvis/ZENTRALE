@@ -33,6 +33,18 @@ def _ask(u):
     _fokus("device:router")(u); _t(u, "d")
 
 
+def _connect(u):
+    _fokus("app:cloud")(u); _t(u, "v")
+
+
+def _plugs(u):
+    _fokus("app:cloud")(u); _t(u, "p")             # two wires: ↑↓ go round
+
+
+def _run(u):
+    _board(u); _t(u, "r")
+
+
 def _picker(u):
     _board(u); _t(u, "+")
 
@@ -56,6 +68,9 @@ ZUSTAENDE = {
     "grab": _grab,
     "ask": _ask,
     "picker": _picker,
+    "connect": _connect,
+    "plugs": _plugs,
+    "run": _run,
     "colours": _colours,
     "farbe:kreis": _farbe,
     "farbe:regler": lambda u: _farbe(u, TAB),

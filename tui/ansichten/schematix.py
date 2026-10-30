@@ -18,12 +18,15 @@
 # Keys (one table, tasten.py; mainstream and collision-free letters):
 #   ↑↓←→ select · W A S D move the view · enter grab / drop · + add a piece
 #   · d remove a planned piece · m make a planned thing real (documented)
+#   · v draw a wire (red ✕ on a socket that does not fit) · p plugs of a
+#   piece (x unplugs / plugs) · r Run: check → diff → enter switches
+#   · s on another node: same version as that one
 #   · 1–5 layers on/off · i versions panel of a node · c colours · esc back
 
 import threading
 import time
 
-from . import schematix_bild
+from . import schematix_bild, schematix_draht as draht
 from .basis import api_call
 from .schematix_arten import ART, Piece, node_height
 from .tasten import Tasten
@@ -46,28 +49,40 @@ _TAIL = [("+", "neu", "add"), ("1/2/3/4/5", "ebene", "layers"), ("c", "farben", 
          ("esc", "zu", "back")] + _PAN[1:]
 _GRAB = [("enter", "greifen", "grab")]
 _REMOVE = [("d", "entfernen", "remove"), ("del", "entfernen")]
+_WIRE = [("v", "verbinden", "draw wire"), ("p", "stecker", "plugs")]
+_RUN = [("r", "run", "run")]
 
 
-def elements(m, layers, offen=()):
+def elements(m, layers, offen=(), fehler=None):
     """Canvas elements for the visible pieces (things hide with the hardware
-    layer)."""
+    layer); an error Run pinned to a piece goes with it."""
+    fehler = fehler or {}
     out = []
     for p in m.get("pieces") or []:
         if p.get("kind") == "device" and not layers.get("hardware", True):
             continue
         h = node_height(p, p["id"] in offen) if p.get("kind") == "node" else p.get("h", 4)
         out.append({"id": p["id"], "art": ART, "x": p.get("x", 0), "y": p.get("y", 0),
-                    "w": p.get("w", 20), "h": h, "piece": p, "offen": p["id"] in offen})
+                    "w": p.get("w", 20), "h": h, "piece": p, "offen": p["id"] in offen,
+                    **({"fehler": fehler[p["id"]]} if p["id"] in fehler else {})})
     return out
+
+
+def with_pending(m, pending):
+    """The map's wires with the changes not run yet laid over them."""
+    out = {w["id"]: w for w in m.get("wires") or []}
+    for wid, w in (pending or {}).items():
+        out[wid] = dict(out.get(wid, {}), **w)
+    return list(out.values())
 
 
 def wire_style(w):
     return {"off": "off", "planned": "planned"}.get(w.get("state"), "pcb")
 
 
-def connections(m, layers, visible):
+def connections(m, layers, visible, pending=None):
     out = []
-    for w in m.get("wires") or []:
+    for w in with_pending(m, pending):
         layer = w.get("layer") or "data"
         if not layers.get(layer, True):
             continue
@@ -80,8 +95,11 @@ def connections(m, layers, visible):
             label = _("not yet")
         elif w.get("type") != "sync":
             label = str(w.get("type"))
+        if w.get("pending"):
+            label = "⟳ " + (_("unplugged") if w.get("state") == "off" else _("plugged")) + " · r"
         out.append({"id": w["id"], "von": w["from_piece"], "nach": w["to_piece"],
-                    "rolle": "layer-" + layer, "stil": wire_style(w), "rolle_ende": "solder",
+                    "rolle": "focus" if w.get("pending") else "layer-" + layer,
+                    "stil": wire_style(w), "rolle_ende": "solder",
                     **({"label": label} if label else {})})
     return out
 
@@ -105,6 +123,15 @@ def body_of(m):
     return {"stand": (m.get("scheme") or {}).get("stand"), "pieces": pieces, "wires": wires}
 
 
+def _antwort(e):
+    """The JSON body of an HTTP error (Run answers 409 with the errors)."""
+    try:
+        import json
+        return json.loads(e.read().decode("utf-8"))
+    except Exception:
+        return {"ok": False, "errors": [{"text": str(getattr(e, "reason", e))}]}
+
+
 class Schematix:
     """State in self.S (also z.SCHEMATIX, so fenster.py sees the focus)."""
 
@@ -121,6 +148,10 @@ class Schematix:
             "ebene": "board",           # board | colours
             "colour_sel": 0, "farbe": None,
             "picker": None,             # {"pieces": [...], "sel": i} behind +
+            "pending": {},              # wire id → drawn change, not run yet (step 15)
+            "plugs": None,              # {"wires": [...], "sel": i}: the plugs panel (p)
+            "run": None,                # the answer of Run (diff or errors) while it is open
+            "fehler": {},               # piece id → error Run pinned to it
             "msg": "", "geladen": 0.0, "laedt": False,
         }
 
@@ -168,13 +199,14 @@ class Schematix:
         """Build the board from the map; keep focus and view."""
         S = self.S
         m = S["map"] or {}
-        els = elements(m, S["layers"], S["offen"])
+        els = elements(m, S["layers"], S["offen"], S["fehler"])
         vis = {e["id"] for e in els}
-        cons = connections(m, S["layers"], vis)
+        cons = connections(m, S["layers"], vis, S["pending"])
         c = S["canvas"]
         if c is None:
             c = cv.Canvas(self.arten, els, cons)
             c.weich, c.uhr = True, self.uhr
+            c.passt = lambda a, b: draht.misfit((a or {}).get("piece"), (b or {}).get("piece"))
             S["canvas"] = c
             S["zentrieren"] = True
         else:
@@ -224,11 +256,17 @@ class Schematix:
 
     # ── Keys: ONE table ───────────────────────────────────────────────
     TASTEN = Tasten.zusammen({
-        "board": _SELECT + _TAIL,
-        "piece": _SELECT + _GRAB + _TAIL,
-        "node": _SELECT + _GRAB + [("i", "versionen", "versions")] + _TAIL,
-        "planned": _SELECT + _GRAB + _REMOVE + _TAIL,
-        "thing": _SELECT + _GRAB + [("m", "dokumentieren", "make real")] + _REMOVE + _TAIL,
+        "board": _SELECT + _RUN + _TAIL,
+        "piece": _SELECT + _GRAB + _WIRE + _RUN + _TAIL,
+        "node": _SELECT + _GRAB + [("i", "versionen", "versions"), ("s", "gleiche_fassung", "same version")]
+        + _WIRE + _RUN + _TAIL,
+        "planned": _SELECT + _GRAB + _REMOVE + _WIRE + _RUN + _TAIL,
+        "thing": _SELECT + _GRAB + [("m", "dokumentieren", "make real")] + _REMOVE + _WIRE + _RUN + _TAIL,
+        "connect": [("↑↓←→", "ziel", "target"), _PAN[0], ("enter/v", "verbinden", "connect"),
+                    ("esc", "zurueck", "cancel")] + _PAN[1:],
+        "plugs": [("↑↓", "stecker_waehlen", "select"), ("x", "umstecken", "unplug / plug"),
+                  ("esc", "stecker_zu", "back")],
+        "run": [("enter", "ausfuehren", "switch"), ("esc", "run_zu", "back")],
         "grab": [("↑↓←→", "bewegen", "move"), _PAN[0], ("enter", "ablegen", "drop"),
                  ("esc", "zurueck", "cancel")] + _PAN[1:],
         "ask": [("y", "ja", "yes"), ("j", "ja"), ("n/esc", "nein", "no")],
@@ -246,7 +284,13 @@ class Schematix:
             return "colours"
         if S["picker"] is not None:
             return "picker"
+        if S["run"] is not None:
+            return "run"
+        if S["plugs"] is not None:
+            return "plugs"
         c = S["canvas"]
+        if c is not None and c.modus == "verbinden":
+            return "connect"
         if c is not None and c.modus == "greifen":
             return "grab"
         if c is not None and c.modus == "frage":
@@ -272,10 +316,40 @@ class Schematix:
         return None
 
     def _ergebnis(self, erg):
+        S = self.S
         if erg.art == "zu":
-            self.S["active"] = False
+            S["active"] = False
+        elif erg.art == "abgelehnt":                 # refused, never greyed out (step 15)
+            S["msg"] = "✕ " + erg.grund
+            S["fehler"] = {erg.element["id"]: erg.grund}
+            self.board_neu()
+        elif erg.art == "geaendert" and erg.grund == "verbunden":
+            self._gezogen(S["canvas"].verbindungen[-1])
+        elif erg.art == "geaendert" and erg.grund == "geloest":
+            self._umstecken(S.pop("loesen", None))
         elif erg.art == "geaendert":
             self.speichern()
+
+    def _gezogen(self, v):
+        """A wire drawn on the board → what it stands for: a link is planned
+        in the scheme (stored now), anything else waits for Run."""
+        S = self.S
+        c = S["canvas"]
+        a, b = c.element(v["von"])["piece"], c.element(v["nach"])["piece"]
+        w, where = draht.wire_for(a, b, (S["map"] or {}).get("types") or {})
+        if w is None:
+            return
+        known = {x["id"] for x in with_pending(S["map"], S["pending"])}
+        if where == "planned":
+            if w["id"] not in known:
+                S["map"]["wires"].append(w)
+                self.speichern()
+            else:
+                self.board_neu()
+            return
+        S["pending"][w["id"]] = dict(w, pending=True)
+        S["msg"] = _("{type} plugged — r runs it").format(type=w["type"])
+        self.board_neu()
 
     # board (the canvas does the moving)
     def aktion_waehlen(self, taste):
@@ -306,6 +380,144 @@ class Schematix:
         """Only planned pieces leave the scheme by hand — live ones leave it
         when they leave reality."""
         return self.S["canvas"].aktion_loeschen(taste)
+
+    aktion_ziel = aktion_waehlen
+
+    def aktion_verbinden(self, taste):
+        S = self.S
+        c = S["canvas"]
+        erg = c.aktion_verbinden(taste)
+        if c.modus == "frage" and c.frage and c.frage.get("was") == "loesen":
+            # v onto a pair that is wired already: the canvas asks "unplug?"
+            S["loesen"] = next((w for w in with_pending(S["map"], S["pending"])
+                                if w["id"] == c.frage["id"]), None)
+        return erg
+
+    # p: the plugs of a piece
+    def aktion_stecker(self, _taste):
+        S = self.S
+        p = self.fokus_piece() or {}
+        mine = [w for w in with_pending(S["map"], S["pending"])
+                if p.get("id") in (w.get("from_piece"), w.get("to_piece"))]
+        S["plugs"] = {"wires": sorted(mine, key=lambda w: w["id"]), "sel": 0, "piece": p.get("id")}
+
+    def aktion_stecker_waehlen(self, taste):
+        pl = self.S["plugs"]
+        n = len(pl["wires"]) or 1
+        pl["sel"] = (pl["sel"] + (-1 if taste == "up" else 1)) % n
+
+    def aktion_stecker_zu(self, _taste):
+        self.S["plugs"] = None
+
+    def aktion_umstecken(self, _taste):
+        S = self.S
+        pl = S["plugs"]
+        if not pl["wires"]:
+            S["msg"] = _("nothing is plugged into this piece")
+            return
+        self._umstecken(pl["wires"][pl["sel"] % len(pl["wires"])])
+        sel = pl["sel"]
+        self.aktion_stecker(None)
+        S["plugs"]["sel"] = min(sel, max(0, len(S["plugs"]["wires"]) - 1))
+
+    def _umstecken(self, w):
+        """x on a wire (plugs panel, or v onto a pair already wired)."""
+        S = self.S
+        if w is None:
+            self.board_neu()
+            return
+        what, neu, msg = draht.toggled(w, (S["map"] or {}).get("node"))
+        if what == "no":
+            S["msg"] = msg
+            self.board_neu()
+            return
+        if what == "revert":
+            S["pending"].pop(w["id"], None)
+        elif what == "drop":
+            S["map"]["wires"] = [x for x in S["map"]["wires"] if x["id"] != w["id"]]
+            self.speichern()
+        else:
+            S["pending"][w["id"]] = neu
+            S["msg"] = _("{wire}: {state} — r runs it").format(wire=w["id"], state=neu["state"])
+        self.board_neu()
+
+    # r: Run = check → diff → (enter) switch
+    def _run(self, apply):
+        S = self.S
+        changes = [draht.core(w) for w in S["pending"].values()]
+        body = {"changes": changes, "scheme": S["scheme"], "apply": apply}
+        try:
+            r = api_call("/api/schematix/run", "POST", body, timeout=60)
+        except Exception as e:
+            r = _antwort(e)
+        if not isinstance(r, dict):
+            return {"ok": False, "errors": [{"text": _("the backend is not reachable")}]}
+        return r
+
+    def aktion_run(self, _taste):
+        S = self.S
+        r = self._run(False)
+        S["run"] = r
+        S["fehler"] = self._angeheftet(r)
+        self.board_neu()
+
+    def aktion_ausfuehren(self, _taste):
+        S = self.S
+        r, S["run"] = S["run"], None
+        if not (r.get("ok") and r.get("diff")):
+            return
+        done = self._run(True)
+        S["fehler"] = self._angeheftet(done)
+        if done.get("ok"):
+            S["pending"] = {}
+            S["msg"] = _("switched — {n} change(s) in effect").format(n=len(done.get("diff") or []))
+            self.laden()
+        elif done.get("rolled_back"):
+            S["msg"] = _("rolled back: {p}").format(p="; ".join(done.get("problems") or []))
+        else:
+            S["run"] = done
+        self.board_neu()
+
+    def aktion_run_zu(self, _taste):
+        self.S["run"] = None
+
+    def _angeheftet(self, r):
+        """Errors of Run → {map piece id: text} (pinned on the board)."""
+        S = self.S
+        m = S["map"] or {}
+        node = m.get("node")
+        ids = {p["id"] for p in m.get("pieces") or []}
+        by_wire = {w["id"]: w for w in with_pending(m, S["pending"])}
+        out = {}
+        for e in r.get("errors") or []:
+            pid = e.get("piece")
+            if pid and pid.startswith("app:") and pid not in ids:
+                pid = "%s@%s" % (pid, node)
+            if (not pid or pid not in ids) and e.get("wire") in by_wire:
+                pid = by_wire[e["wire"]].get("to_piece")
+            if pid in ids:
+                out.setdefault(pid, e.get("text") or e.get("code"))
+        return out
+
+    # s: same version (a setting of THIS node, Sasha 30.10.)
+    def aktion_gleiche_fassung(self, _taste):
+        S = self.S
+        p = self.fokus_piece() or {}
+        me = next((x for x in (S["map"] or {}).get("pieces") or [] if x.get("this")), {})
+        if p.get("this") or not me:
+            S["msg"] = _("pick another node: this one then keeps its version")
+            return
+        now = set((me.get("versions") or {}).get("same_version") or [])
+        now ^= {p.get("node")}
+        try:
+            api_call("/api/schematix/same-version", "PUT", {"nodes": sorted(now)})
+        except Exception as e:
+            S["msg"] = _("not stored: {e}").format(e=getattr(e, "reason", e))
+            return
+        self.laden()
+        text = _("{me} keeps the same version as {other}") if p.get("node") in now \
+            else _("{me} follows its own updates again")
+        S["msg"] = text.format(me=me.get("node"), other=p.get("node"))
 
     def aktion_ebene(self, taste):
         S = self.S
@@ -439,11 +651,14 @@ class Schematix:
 
     # ── Drawing ───────────────────────────────────────────────────────
     def titel(self):
-        return "schematix · " + _("scheme") + " " + self.S["scheme"]
+        t = "schematix · " + _("scheme") + " " + self.S["scheme"]
+        return t + (" · " + _("scheming… r runs it") if self.S["pending"] else "")
 
     def status_text(self):
         """The question while asking, otherwise the last message."""
         c = self.S["canvas"]
+        if c is not None and c.modus == "frage" and c.frage.get("was") == "loesen":
+            return _("wired already — unplug it? y / n")
         if c is not None and c.modus == "frage":
             p = self.fokus_piece() or {}
             return _("remove {title} from the scheme? y / n").format(title=p.get("title") or p.get("id"))

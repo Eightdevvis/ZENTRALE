@@ -21,5 +21,13 @@
   (`pc`, `pi`, `laptop`, `minipc`). A node that joins under another name
   shows as its own live piece; the planned one stays until removed (`d`).
   A "this is that one" action could re-point the planned piece.
+- **Same version has no effect yet.** The setting is stored, published and
+  drawn (step 15), but `zentrale update --automatic` does not follow the
+  other node's version yet (plan 2.2 rule 5: "makes them follow each
+  other"). Needs a rule: hold an update until the followed node has it, or
+  fetch exactly its release.
+- **Dart.** The socket table and the misfit text exist in Python only (the
+  phone has no Schematix); the compiler's graph rules are not in Dart either
+  ([run_gate_followups.md](run_gate_followups.md)).
 - **Editing a thing** (title, address, notes) goes by hand in its JSON file
   for now; the board only makes planned things real (`m`).

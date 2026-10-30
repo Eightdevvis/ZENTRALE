@@ -52,6 +52,8 @@ MAP = {
          "state": "live", "band": "cloud", "needs": [], "offers": [{"id": "sync", "type": "sync"}],
          "x": 40, "y": 0, "w": 24, "h": 4},
         _app("fokus", "laptop", 0), _app("tutor", "minipc", 55, "off"),
+        dict(_app("pdf", "laptop", 26, "open"), title="PDF viewer",
+             needs=[{"id": "files", "type": "files"}], x=26, y=14),
         _node("laptop", 0, this=True), _node("minipc", 50), _node("pc", 100, state="planned"),
         {"id": "device:router", "ref": "zentrale://schematix/things/router/", "kind": "device",
          "title": "Router", "role": "router", "state": "planned", "band": "things",
@@ -59,6 +61,9 @@ MAP = {
          "x": 60, "y": 32, "w": 24, "h": 4},
     ],
     "wires": [_wire("fokus", "laptop"), _wire("tutor", "minipc", "off")],
+    "types": {"sync": {"layer": "data", "scope": "node"}, "files": {"layer": "data", "scope": "instance"},
+              "lan": {"layer": "network", "scope": "link"}, "power": {"layer": "power", "scope": "link"},
+              "tailscale": {"layer": "network", "scope": "link"}},
 }
 
 
@@ -83,4 +88,9 @@ def answer(path, method):
         return {"pieces": copy.deepcopy(PIECES)}
     if p.startswith("/api/schematix/schemes/"):
         return copy.deepcopy(MAP)
+    if p == "/api/schematix/run":
+        return {"ok": True, "errors": [], "diff": ["~ Tutor data → Cloud sync on minipc: live → off"],
+                "generation": "sha256:" + "0" * 64, "rolled_back": False, "problems": []}
+    if p == "/api/schematix/same-version":
+        return {"same_version": ["minipc"]}
     return {"ok": True}
