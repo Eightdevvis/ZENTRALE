@@ -47,6 +47,7 @@ FORMATS = {
     "node-wires": (1, "another device's wiring"),          # `wires` in a node description (core/wires.py)
     "node-versions": (1, "another device's versions"),     # `versions` in a node description (core/schematix_versions.py)
     "schematix-palette": (1, "the colours of Schematix"),   # data/schematix/palette.json (core/schematix_store.py)
+    "schematix-thing": (1, "a documented thing"),           # data/schematix/things/*.json (core/schematix_store.py)
 }
 
 

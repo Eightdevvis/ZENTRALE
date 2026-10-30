@@ -1,6 +1,7 @@
 """Schematix: a way to every view of its key table (tests/test_tastentabellen.py
 presses every key there). The map is tests/_schematix_fake.py: the node
-`minipc` in the middle has a piece in every direction."""
+`minipc` in the middle has a piece in every direction; `pc` is a planned
+node, `router` a planned thing."""
 import test_fussleiste as F
 from tui import zentrale_tui as zt
 
@@ -17,9 +18,23 @@ def _board(u):
     F.zeichnen(u)
 
 
-def _node(u):
-    _board(u)
-    u.SCHEMATIX["canvas"].fokus = "node:minipc"
+def _fokus(pid):
+    def aufbau(u):
+        _board(u)
+        u.SCHEMATIX["canvas"].fokus = pid
+    return aufbau
+
+
+def _grab(u):
+    _fokus("node:minipc")(u); _t(u, 10)
+
+
+def _ask(u):
+    _fokus("device:router")(u); _t(u, "d")
+
+
+def _picker(u):
+    _board(u); _t(u, "+")
 
 
 def _colours(u):
@@ -34,7 +49,13 @@ def _farbe(u, *mehr):
 
 ZUSTAENDE = {
     "board": _board,
-    "node": _node,
+    "piece": _fokus("app:fokus@laptop"),
+    "node": _fokus("node:minipc"),
+    "planned": _fokus("node:pc"),
+    "thing": _fokus("device:router"),
+    "grab": _grab,
+    "ask": _ask,
+    "picker": _picker,
     "colours": _colours,
     "farbe:kreis": _farbe,
     "farbe:regler": lambda u: _farbe(u, TAB),

@@ -9,13 +9,16 @@
 # same canvas, wires laid fresh from positions every frame); the pieces are
 # one canvas art (schematix_arten.py); panels and colours: schematix_bild.py.
 # The map itself is never computed here — GET /api/schematix/map lays it from
-# the truths (this node's projection, the other nodes' descriptions), so the
-# drawing is the wiring: nothing on the board is a copy.
+# the truths (this node's projection, the other nodes' descriptions, the
+# documented things) with the places and planned pieces of the scheme, so
+# the drawing is the wiring: nothing on the board is a copy. After every
+# change the whole board goes back (PUT /api/schematix/schemes/<name>), like
+# the Desk sends the whole desk.
 #
 # Keys (one table, tasten.py; mainstream and collision-free letters):
-#   ↑↓←→ select · W A S D move the view · 1–5 layers on/off (sync, services,
-#   hardware, network, power) · i versions panel of a node · c colours ·
-#   esc back
+#   ↑↓←→ select · W A S D move the view · enter grab / drop · + add a piece
+#   · d remove a planned piece · m make a planned thing real (documented)
+#   · 1–5 layers on/off · i versions panel of a node · c colours · esc back
 
 import threading
 import time
@@ -35,10 +38,14 @@ except ImportError:                     # started as a script: tui/ is on the pa
 
 LAYERS = ("data", "services", "hardware", "network", "power")
 REFRESH_S = 30.0                        # the map is laid fresh this often while open
+SCHEME = "home"
 
 _PAN = [("W/A/S/D", "schieben", "move view"), ("alt+↑↓←→", "schieben"), ("shift+↑↓←→", "schieben")]
-_BOARD = ([("↑↓←→", "waehlen", "select"), _PAN[0], ("1/2/3/4/5", "ebene", "layers"),
-           ("c", "farben", "colours"), ("esc", "zu", "back")] + _PAN[1:])
+_SELECT = [("↑↓←→", "waehlen", "select"), _PAN[0]]
+_TAIL = [("+", "neu", "add"), ("1/2/3/4/5", "ebene", "layers"), ("c", "farben", "colours"),
+         ("esc", "zu", "back")] + _PAN[1:]
+_GRAB = [("enter", "greifen", "grab")]
+_REMOVE = [("d", "entfernen", "remove"), ("del", "entfernen")]
 
 
 def elements(m, layers, offen=()):
@@ -79,6 +86,25 @@ def connections(m, layers, visible):
     return out
 
 
+def body_of(m):
+    """The whole board for PUT /api/schematix/schemes/<name>: every place,
+    the planned pieces (with the address they will have), the planned wires."""
+    planned = {p["id"] for p in m.get("pieces") or [] if p.get("state") == "planned"}
+    pieces = []
+    for p in m.get("pieces") or []:
+        d = {k: int(p.get(k, 0)) for k in ("x", "y", "w", "h")}
+        d["id"] = p["id"]
+        if p["id"] in planned:
+            d["planned"] = {k: p.get(k) for k in ("kind", "ref", "title", "node", "thing_kind",
+                                                  "address", "store") if p.get(k)}
+        pieces.append(d)
+    ids = {p["id"] for p in m.get("pieces") or []}
+    wires = [{k: w.get(k) for k in ("id", "from_piece", "to_piece", "type", "from", "to", "owner")}
+             for w in m.get("wires") or [] if w.get("state") == "planned"
+             and w.get("from_piece") in ids and w.get("to_piece") in ids]
+    return {"stand": (m.get("scheme") or {}).get("stand"), "pieces": pieces, "wires": wires}
+
+
 class Schematix:
     """State in self.S (also z.SCHEMATIX, so fenster.py sees the focus)."""
 
@@ -90,24 +116,25 @@ class Schematix:
         self.starten = lambda f: threading.Thread(target=f, daemon=True).start()
         self.uhr = time.monotonic
         self.S = z.SCHEMATIX = {
-            "active": False, "map": None, "palette": None, "canvas": None,
+            "active": False, "map": None, "palette": None, "canvas": None, "scheme": SCHEME,
             "layers": {layer: True for layer in LAYERS}, "offen": set(),
             "ebene": "board",           # board | colours
             "colour_sel": 0, "farbe": None,
+            "picker": None,             # {"pieces": [...], "sel": i} behind +
             "msg": "", "geladen": 0.0, "laedt": False,
         }
 
     # ── Data ──────────────────────────────────────────────────────────
     def oeffnen(self):
         S = self.S
-        S.update(active=True, ebene="board", farbe=None, msg="")
+        S.update(active=True, ebene="board", farbe=None, picker=None, msg="")
         self.laden()
 
     def laden(self):
-        """The map and the palette, fresh (on open, then every REFRESH_S)."""
+        """The map with the scheme and the palette, fresh."""
         S = self.S
         try:
-            m = api_call("/api/schematix/map", timeout=15)
+            m = api_call("/api/schematix/map?scheme=" + S["scheme"], timeout=15)
         except Exception as e:
             S["msg"] = _("the map is not reachable: {e}").format(e=getattr(e, "reason", e))
             m = S["map"]
@@ -121,9 +148,12 @@ class Schematix:
             self.board_neu()
 
     def pflegen(self):
-        """While open: lay the map fresh now and then (in the background)."""
+        """While open: lay the map fresh now and then (in the background) —
+        not while something is in the hand."""
         S = self.S
-        if not S["active"] or S["laedt"] or self.uhr() - S["geladen"] < REFRESH_S:
+        c = S["canvas"]
+        busy = c is not None and c.modus != "ruhe"
+        if not S["active"] or S["laedt"] or busy or self.uhr() - S["geladen"] < REFRESH_S:
             return
 
         def los():
@@ -153,6 +183,36 @@ class Schematix:
             if c.fokus not in vis:
                 c.fokus = None
 
+    def speichern(self):
+        """The whole board back into the scheme; the answer is the new map.
+        Changed elsewhere (409) → reload and say so."""
+        S = self.S
+        m = S["map"] or {}
+        c = S["canvas"]
+        places = {e["id"]: e for e in c.elemente}
+        pieces = []
+        for p in m.get("pieces") or []:
+            e = places.get(p["id"])
+            if e is None and p.get("kind") == "device" and not S["layers"].get("hardware", True):
+                pieces.append(p)                     # hidden by a layer, not removed
+            elif e is not None:
+                pieces.append(dict(p, x=e["x"], y=e["y"]))
+        known = {p["id"] for p in m.get("pieces") or []}
+        pieces += [dict(e["piece"], x=e["x"], y=e["y"]) for e in c.elemente if e["id"] not in known]
+        m = dict(m, pieces=pieces)
+        try:
+            neu = api_call("/api/schematix/schemes/" + S["scheme"], "PUT", body_of(m), timeout=15)
+        except Exception as e:
+            if getattr(e, "code", None) == 409:
+                self.laden()
+                S["msg"] = _("the scheme was changed elsewhere — reloaded, the last change is lost")
+            else:
+                S["msg"] = _("not stored: {e}").format(e=getattr(e, "reason", e))
+            return
+        if isinstance(neu, dict) and neu.get("pieces") is not None:
+            S["map"] = neu
+            self.board_neu()
+
     def bewegt_sich(self):
         c = self.S["canvas"]
         return bool(self.S["active"] and c is not None and c.bewegt_sich())
@@ -164,8 +224,15 @@ class Schematix:
 
     # ── Keys: ONE table ───────────────────────────────────────────────
     TASTEN = Tasten.zusammen({
-        "board": _BOARD,
-        "node": _BOARD[:1] + [("i", "versionen", "versions")] + _BOARD[1:],
+        "board": _SELECT + _TAIL,
+        "piece": _SELECT + _GRAB + _TAIL,
+        "node": _SELECT + _GRAB + [("i", "versionen", "versions")] + _TAIL,
+        "planned": _SELECT + _GRAB + _REMOVE + _TAIL,
+        "thing": _SELECT + _GRAB + [("m", "dokumentieren", "make real")] + _REMOVE + _TAIL,
+        "grab": [("↑↓←→", "bewegen", "move"), _PAN[0], ("enter", "ablegen", "drop"),
+                 ("esc", "zurueck", "cancel")] + _PAN[1:],
+        "ask": [("y", "ja", "yes"), ("j", "ja"), ("n/esc", "nein", "no")],
+        "picker": [("↑↓", "wahl", "select"), ("enter", "nehmen", "take"), ("esc", "wahl_zu", "cancel")],
         "colours": [("↑↓", "farbe_waehlen", "select"), ("enter", "farbe_aendern", "change"),
                     ("x", "farbe_zurueck", "default"), ("esc", "farben_zu", "back")],
     }, {"farbe": (Tasten(Farbwaehler.TASTEN),
@@ -177,8 +244,19 @@ class Schematix:
             return "farbe:" + S["farbe"].ansicht()
         if S["ebene"] == "colours":
             return "colours"
+        if S["picker"] is not None:
+            return "picker"
+        c = S["canvas"]
+        if c is not None and c.modus == "greifen":
+            return "grab"
+        if c is not None and c.modus == "frage":
+            return "ask"
         p = self.fokus_piece()
-        return "node" if p and p.get("kind") == "node" else "board"
+        if not p:
+            return "board"
+        if p.get("state") == "planned":
+            return "thing" if p.get("kind") == "device" else "planned"
+        return "node" if p.get("kind") == "node" else "piece"
 
     def taste(self, ch):
         if ch == -1:
@@ -189,19 +267,45 @@ class Schematix:
         erg = self.TASTEN.verteilen(self, ansicht, ch)
         if ansicht.startswith("farbe:"):
             self._farbe_ergebnis(erg)
-        elif isinstance(erg, cv.Ergebnis) and erg.art == "zu":
-            self.S["active"] = False
+        elif isinstance(erg, cv.Ergebnis):
+            self._ergebnis(erg)
         return None
 
-    # board
+    def _ergebnis(self, erg):
+        if erg.art == "zu":
+            self.S["active"] = False
+        elif erg.art == "geaendert":
+            self.speichern()
+
+    # board (the canvas does the moving)
     def aktion_waehlen(self, taste):
         return self.S["canvas"].aktion_waehlen(taste)
+
+    aktion_bewegen = aktion_waehlen
 
     def aktion_schieben(self, taste):
         return self.S["canvas"].aktion_schieben(taste)
 
+    def aktion_greifen(self, taste):
+        return self.S["canvas"].aktion_greifen(taste)
+
+    aktion_ablegen = aktion_greifen
+
     def aktion_zu(self, taste):
         return self.S["canvas"].aktion_zu(taste)
+
+    aktion_zurueck = aktion_zu
+
+    def aktion_ja(self, taste):
+        return self.S["canvas"].aktion_ja(taste)
+
+    def aktion_nein(self, taste):
+        return self.S["canvas"].aktion_nein(taste)
+
+    def aktion_entfernen(self, taste):
+        """Only planned pieces leave the scheme by hand — live ones leave it
+        when they leave reality."""
+        return self.S["canvas"].aktion_loeschen(taste)
 
     def aktion_ebene(self, taste):
         S = self.S
@@ -214,6 +318,83 @@ class Schematix:
         if p:
             self.S["offen"] ^= {p["id"]}
             self.board_neu()
+
+    def aktion_dokumentieren(self, _taste):
+        """A planned thing becomes real: its file in the things store, same
+        reference (zentrale://schematix/things/<id>/) — the piece stays."""
+        S = self.S
+        p = self.fokus_piece()
+        tid = str(p["ref"]).rstrip("/").rsplit("/", 1)[-1]
+        body = {"kind": p.get("thing_kind") or p.get("role"), "title": p.get("title")}
+        if p.get("address"):
+            body["address"] = p["address"]
+        try:
+            api_call("/api/schematix/things/" + tid, "PUT", body)
+        except Exception as e:
+            S["msg"] = _("not documented: {e}").format(e=getattr(e, "reason", e))
+            return
+        self.laden()
+        S["msg"] = _("{title} is real now (documented)").format(title=p.get("title"))
+
+    # + : the picker (GET /api/pieces, fresh every time)
+    def aktion_neu(self, _taste):
+        S = self.S
+        try:
+            pieces = (api_call("/api/pieces") or {}).get("pieces") or []
+        except Exception as e:
+            S["msg"] = _("pieces not readable: {e}").format(e=getattr(e, "reason", e))
+            return
+        S["picker"] = {"pieces": pieces, "sel": 0}
+
+    def aktion_wahl(self, taste):
+        w = self.S["picker"]
+        n = len(w["pieces"]) or 1
+        w["sel"] = (w["sel"] + (-1 if taste == "up" else 1)) % n
+
+    def aktion_wahl_zu(self, _taste):
+        self.S["picker"] = None
+
+    def aktion_nehmen(self, _taste):
+        S = self.S
+        w, S["picker"] = S["picker"], None
+        if not w["pieces"]:
+            return
+        e = w["pieces"][w["sel"] % len(w["pieces"])]
+        p = self._neues_stueck(e)
+        if p is None:
+            return
+        el = {"id": p["id"], "art": ART, "x": 0, "y": 0, "w": p["w"], "h": p["h"], "piece": p,
+              "offen": False}
+        S["canvas"].neu_ablegen(el)               # in the hand: enter drops (stored), esc takes it back
+
+    def _neues_stueck(self, e):
+        """A picker entry → a new planned piece, or None (it is already there:
+        the focus jumps to it)."""
+        S = self.S
+        have = {p["id"] for p in S["map"]["pieces"]}
+        node = (self.fokus_piece() or {}).get("node") or S["map"].get("node")
+        if e.get("group") == "device":
+            n = 1
+            while "device:%s-%d" % (e["thing_kind"], n) in have:
+                n += 1
+            tid = "%s-%d" % (e["thing_kind"], n)
+            return {"id": "device:" + tid, "ref": "zentrale://schematix/things/%s/" % tid, "kind": "device",
+                    "thing_kind": e["thing_kind"], "role": e.get("role"), "title": e.get("title"),
+                    "state": "planned", "band": "things", "needs": e.get("needs") or [],
+                    "offers": e.get("offers") or [], "w": 24, "h": 4}
+        pid = e["id"] if e.get("kind") == "node" else "%s@%s" % (e["id"], node)
+        if pid in have or e["id"] in have:
+            S["canvas"].fokus = pid if pid in have else e["id"]
+            S["msg"] = _("{title} is already on the scheme").format(title=e.get("title"))
+            return None
+        if e.get("kind") == "node":
+            name = e["id"].split(":", 1)[1]
+            return {"id": pid, "ref": e["ref"], "kind": "node", "title": e.get("title"), "state": "planned",
+                    "band": "nodes", "node": name, "needs": [], "offers": [], "w": 42, "h": 5}
+        return {"id": pid, "ref": e["ref"], "kind": "app", "title": e.get("title"), "state": "planned",
+                "band": "software", "node": node, "name": e["id"].split(":", 1)[1],
+                "store": e.get("store"), "needs": e.get("needs") or [], "offers": e.get("offers") or [],
+                "w": 24, "h": 4}
 
     # colours (the knobs: Sasha tunes, we only measure)
     def aktion_farben(self, _taste):
@@ -258,7 +439,15 @@ class Schematix:
 
     # ── Drawing ───────────────────────────────────────────────────────
     def titel(self):
-        return "schematix · " + _("account map")
+        return "schematix · " + _("scheme") + " " + self.S["scheme"]
+
+    def status_text(self):
+        """The question while asking, otherwise the last message."""
+        c = self.S["canvas"]
+        if c is not None and c.modus == "frage":
+            p = self.fokus_piece() or {}
+            return _("remove {title} from the scheme? y / n").format(title=p.get("title") or p.get("id"))
+        return self.S["msg"]
 
     def draw(self, top, mx, h, w):
         self.pflegen()

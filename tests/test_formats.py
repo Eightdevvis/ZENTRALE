@@ -49,7 +49,7 @@ MODULES = {
     "plug_store": ("plug-wires",),
     "wires": ("node-wires",),
     "schematix_versions": ("node-versions",),
-    "schematix_store": ("schematix-palette",),
+    "schematix_store": ("schematix-palette", "schematix-thing"),
 }
 EXEMPT = {
     "formats": "the registry itself",
@@ -587,3 +587,31 @@ def test_preserve_schematix_palette():
     d = json.load(open(p, encoding="utf-8"))
     assert d["future"] == [1] and d["roles"] == {"ink": "#123456", "dim": "#654321"}
     assert not _noted("schematix-palette")
+
+
+# ── schematix-thing: data/schematix/things/<id>.json (core/schematix_store.py) ──
+
+def _thing_file(d):
+    path = os.path.join(schematix_store.folder(), "things", d["id"] + ".json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(d, f)
+    return path
+
+
+def test_newer_schematix_thing():
+    p = _thing_file({"format": "zentrale-thing/2", "id": "router", "kind": "router"})
+    before = open(p, "rb").read()
+    assert schematix_store.things() == []                         # not interpreted
+    with pytest.raises(formats.NewerFormat):
+        schematix_store.write_thing({"id": "router", "kind": "router"})
+    assert open(p, "rb").read() == before and _noted("schematix-thing")
+
+
+def test_preserve_schematix_thing():
+    p = _thing_file({"format": schematix_store.THING_FORMAT, "id": "router", "kind": "router",
+                     "future": {"a": 1}})
+    schematix_store.write_thing({"id": "router", "kind": "router", "title": "Flint 2"})
+    d = json.load(open(p, encoding="utf-8"))
+    assert d["future"] == {"a": 1} and d["title"] == "Flint 2"
+    assert not _noted("schematix-thing")

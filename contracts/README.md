@@ -16,7 +16,7 @@ later the server (`server/test/`). No copies.
 | `calendar-ics` | 1 | `kalender_testvektoren.json` (read, occurrences, new events), `kalender_aendern_testvektoren.json` (edit) | `scripts/handy_testvektoren.py`, `scripts/handy_aendern_testvektoren.py` | the phone's calendar tests |
 | `calendar-colours` | 1 | `calendar_colour_vectors.json` | `scripts/calendar_colour_vectors.py` | `tests/test_calendar_colours.py` (current), `mobile/test/calendar_colours_test.dart` |
 | `ports` | 1 | `ports.schema.json` (JSON Schema 2020-12: port, need, offer, manifest ports, registry, piece, wire, sketch, generation), `types.json` (the type registry), `port_vectors.json` — built-in manifests, item vectors, sketches that must compile or fail with pinned errors (doc: `memory/hub/port_types.md`) | registry and schema by hand; vectors `scripts/port_vectors.py` | `tests/test_port_types.py`, `tests/test_wiring_run.py`, `mobile/test/ports_test.dart` |
-| `schematix` | 1 | `kinds.json` — kinds of things without ZENTRALE (router, switch, cable, power bank …) with their ports, and the link sockets of node pieces; `palette.json` — default colour roles (doc: `memory/hub/schematix.md`) | by hand | `tests/test_schematix.py` |
+| `schematix` | 1 | `kinds.json` — kinds of things without ZENTRALE (router, switch, cable, power bank …) with their ports, and the link sockets of node pieces; `thing.schema.json` — a documented thing (`zentrale-thing/1`); `palette.json` — default colour roles (doc: `memory/hub/schematix.md`) | by hand | `tests/test_schematix.py` |
 
 The read rule for the file formats (`format` fields: unknown major →
 read-only, unknown fields preserved) is `core/formats.py`, tested per format

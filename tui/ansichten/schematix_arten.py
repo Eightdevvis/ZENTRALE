@@ -85,11 +85,14 @@ class Piece:
                 lines.append([(sign + " ", "solder"), (text, "text" if p["sync"] != "open" else "leise")])
             elif p.get("source"):
                 lines.append([(_("source: {s}").format(s=p["source"]), "leise")])
-        # The state stands in the first line, so even a small piece says it.
+        # The state takes the second line (what a live piece would say there
+        # is not true yet), with where it will be — readable without colour.
+        where = " · ".join(str(x) for x in (p.get("role") if kind == "device" else None,
+                                            p.get("address")) if x)
         if lines and p.get("state") == "planned":
-            lines[0] = lines[0] + [("  ◇ " + _("not yet"), "planned")]
+            lines[1:] = [[("◇ " + _("not yet"), "planned"), ((" · " + where) if where else "", "leise")]]
         elif lines and p.get("state") == "documented":
-            lines[0] = lines[0] + [("  ▣ " + _("documented"), "leise")]
+            lines[1:] = [[("▣ " + _("documented"), "leise"), ((" · " + where) if where else "", "leise")]]
         if el.get("fehler"):
             lines.insert(1, [("✕ " + el["fehler"], "abgelehnt")])
         return lines[:max(0, h)]

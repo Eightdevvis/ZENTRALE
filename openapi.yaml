@@ -811,7 +811,9 @@ paths:
     get:
       tags: [schematix]
       operationId: schematixMap
-      summary: The map of the account, laid out as a cross-section
+      summary: The map of the account, laid out as a cross-section, with a scheme
+      parameters:
+        - {name: scheme, in: query, required: false, schema: {type: string}, description: "a scheme (default home, made from heimnetz.md the first time); empty = the live map alone"}
       description: >
         This node's projection (/api/wires) plus every other node's
         description in the cloud (GET /v1/knoten): one piece per app on a
@@ -879,6 +881,94 @@ paths:
         "400": {$ref: "#/components/responses/SchematixError"}
         "404": {$ref: "#/components/responses/SchematixError"}
         "409": {$ref: "#/components/responses/SchematixError"}
+
+  /api/schematix/schemes:
+    get:
+      tags: [schematix]
+      operationId: schematixSchemes
+      summary: The schemes (one JSON Canvas file each)
+      responses:
+        "200":
+          description: Names
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schemes]
+                properties:
+                  schemes: {type: array, items: {type: string}}
+
+  /api/schematix/schemes/{name}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,39}$"}}
+    put:
+      tags: [schematix]
+      operationId: schematixSchemeSave
+      summary: The board → the scheme file (places, planned pieces and wires)
+      description: >
+        The whole board as the TUI holds it, with the `stand` of the last
+        load. Planned pieces and wires are exactly what is sent; live
+        pieces keep coming from the truth; unknown keys in the file stay.
+        Changed elsewhere since → 409 with the new stand, nothing written.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pieces]
+              properties:
+                stand: {type: [string, "null"]}
+                pieces:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, x, y, w, h]
+                    properties:
+                      id: {type: string}
+                      x: {type: integer}
+                      y: {type: integer}
+                      w: {type: integer}
+                      h: {type: integer}
+                      planned: {type: object, description: "kind, ref, title, node, thing_kind, address, store"}
+                wires: {type: array, items: {type: object}}
+      responses:
+        "200":
+          description: The map with the scheme
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SchematixMap"}
+        "400": {$ref: "#/components/responses/SchematixError"}
+        "409": {$ref: "#/components/responses/SchematixError"}
+        "422": {$ref: "#/components/responses/SchematixError"}
+
+  /api/schematix/things/{tid}:
+    parameters:
+      - {name: tid, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9-]{0,39}$"}}
+    put:
+      tags: [schematix]
+      operationId: schematixThingPut
+      summary: Document a thing (contracts/schematix/1/thing.schema.json); a planned one becomes real
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [kind]}
+      responses:
+        "200":
+          description: The thing as stored
+          content:
+            application/json:
+              schema: {type: object, required: [format, id, kind]}
+        "400": {$ref: "#/components/responses/SchematixError"}
+        "409": {$ref: "#/components/responses/SchematixError"}
+    delete:
+      tags: [schematix]
+      operationId: schematixThingDelete
+      summary: Remove a documented thing (its piece leaves the map)
+      responses:
+        "200": {$ref: "#/components/responses/Ok"}
+        "404": {$ref: "#/components/responses/SchematixError"}
 
   /api/apps/remove:
     post:
@@ -1427,6 +1517,13 @@ components:
       properties:
         format: {const: zentrale-schematix-map/1}
         node: {type: string, description: this node}
+        scheme:
+          type: object
+          description: the scheme laid over the live map (absent for the live map alone)
+          properties:
+            name: {type: string}
+            stand: {type: [string, "null"]}
+            planned: {type: array, items: {type: string}}
         pieces:
           type: array
           items:

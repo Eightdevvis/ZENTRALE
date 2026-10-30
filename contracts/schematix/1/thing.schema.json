@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zentrale:schematix:thing:1",
+  "title": "A thing without ZENTRALE, documented in Schematix (major 1)",
+  "description": "One file per thing in data/schematix/things/<id>.json (synced): a router, switch, cable, power bank, charger … — real but outside software (state documented, memory/hub/building_kit_plan.md 6.3). Its piece on the map is device:<id> with the address zentrale://schematix/things/<id>/; its kind gives its ports (contracts/schematix/1/kinds.json). `links` are its physical and network connections (wires of the link-scoped port types, owned by the thing). Readers keep fields they do not know (core/formats.py).",
+  "type": "object",
+  "required": ["format", "id", "kind"],
+  "properties": {
+    "format": {"const": "zentrale-thing/1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"},
+    "kind": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+    "title": {"type": "string", "maxLength": 120},
+    "notes": {"type": "string", "maxLength": 4000},
+    "address": {"type": "string", "maxLength": 200, "description": "where it is reached, e.g. 192.168.50.254"},
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "to", "type"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$"},
+          "from": {"type": "string", "pattern": "^zentrale://[a-z0-9][a-z0-9._-]*/([^\\s?#]*/)?port/[a-z][a-z0-9._-]{0,63}$"},
+          "to": {"type": "string", "pattern": "^zentrale://[a-z0-9][a-z0-9._-]*/([^\\s?#]*/)?port/[a-z][a-z0-9._-]{0,63}$"},
+          "type": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+          "state": {"enum": ["live", "off", "broken"], "default": "live"}
+        }
+      }
+    }
+  }
+}

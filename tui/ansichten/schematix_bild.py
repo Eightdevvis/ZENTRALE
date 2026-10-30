@@ -178,8 +178,9 @@ def focus_lines(p, wires):
 def _status(app, y, x, w):
     S, z = app.S, app.z
     m = S["map"] or {}
-    if S["msg"]:
-        z.addclip(y, x, S["msg"], w, farbe(app, "abgelehnt"))
+    msg = app.status_text()
+    if msg:
+        z.addclip(y, x, msg, w, farbe(app, "abgelehnt"))
         return
     notes = m.get("notes") or []
     nodes = sum(1 for p in m.get("pieces") or [] if p.get("kind") == "node")
@@ -216,6 +217,28 @@ def _colours(app, top, mx, h, w):
         f.zeichne(z, top + fy, mx + fx, fh, fw)
 
 
+GROUPS = {"installed": "app", "provider": "provider", "node": "node", "store": "store", "device": "thing"}
+
+
+def _picker(app, top, mx, h, w):
+    """The `+` picker: everything placeable, by group (GET /api/pieces)."""
+    S, z = app.S, app.z
+    pk = S["picker"]
+    rows = ["%-8s %s" % (GROUPS.get(e.get("group"), e.get("group")), e.get("title") or e.get("id"))
+            for e in pk["pieces"]] or [_("nothing to place")]
+    mw, mh = min(50, w - 4), min(len(rows) + 4, h - 2)
+    y0, x0 = top + (h - mh) // 2, mx + (w - mw) // 2
+    for j in range(mh):
+        _fill(app, y0 + j, x0, mw)
+    z.draw_box(y0, x0, mh, mw, _("add a piece · planned until it is real"), farbe(app, "focus"))
+    room = mh - 3
+    sel = pk["sel"] % max(1, len(rows))
+    first = max(0, min(sel - room + 1, len(rows) - room)) if sel >= room else 0
+    for j, text in enumerate(rows[first:first + room]):
+        on = first + j == sel
+        z.addclip(y0 + 1 + j, x0 + 2, ("› " if on else "  ") + text, mw - 4, farbe(app, "focus" if on else "ink"))
+
+
 def zeichnen(app, top, mx, h, w):
     S, z = app.S, app.z
     if S["map"] is None or S["canvas"] is None:
@@ -234,5 +257,7 @@ def zeichnen(app, top, mx, h, w):
             z.safe_addstr(top + 3 + j, x0 + bw, "│", farbe(app, "dim"))
         _side(app, top + 3, x0 + bw + 2, bh, side - 2)
     _status(app, top + h - 2, x0 + 1, iw - 2)
+    if S["picker"] is not None:
+        _picker(app, top, mx, h, w)
     if S["ebene"] == "colours":
         _colours(app, top, mx, h, w)

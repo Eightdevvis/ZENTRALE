@@ -122,3 +122,96 @@ def test_esc_closes(offen):
     u, _s = offen
     _t(u, 27)
     assert u.SCHEMATIX["active"] is False
+
+
+# ── Step 14: scheming — move, add, remove, make real ────────────────────
+
+def _puts(u, prefix):
+    return [p for m, p in u.aufrufe if m == "PUT" and p.startswith(prefix)]
+
+
+def test_moving_a_piece_sends_the_whole_board(offen):
+    u, _s = offen
+    u.SCHEMATIX["canvas"].fokus = "node:minipc"
+    _t(u, 10, curses.KEY_RIGHT, curses.KEY_RIGHT, 10)
+    assert _puts(u, "/api/schematix/schemes/home")
+
+
+def test_plus_places_a_planned_thing_in_the_hand(offen):
+    u, s = offen
+    _t(u, "+")
+    assert u.SCHEMATIX["picker"]["pieces"]
+    text = _bild(u, s, "14_picker")
+    assert "ADD A PIECE" in text.upper() and "Switch" in text
+    u.SCHEMATIX["picker"]["sel"] = 2                           # the switch (a kind of thing)
+    _t(u, 10)
+    c = u.SCHEMATIX["canvas"]
+    assert c.modus == "greifen" and c.fokus == "device:switch-1"
+    assert c.element("device:switch-1")["piece"]["state"] == "planned"
+    _t(u, 10)
+    assert _puts(u, "/api/schematix/schemes/home")
+
+
+def test_a_live_piece_already_there_is_not_placed_twice(offen):
+    u, _s = offen
+    _t(u, "+", 10)                                             # minipc: already on the scheme
+    assert u.SCHEMATIX["canvas"].fokus == "node:minipc" and "already" in u.SCHEMATIX["msg"]
+
+
+def test_d_removes_a_planned_piece_after_asking(offen, monkeypatch):
+    from tui import ansichten as A
+    u, s = offen
+    sent = []
+    real = A.schematix.api_call
+    monkeypatch.setattr(A.schematix, "api_call",
+                        lambda p, m="GET", b=None, **k: sent.append(b) or real(p, m, b, **k))
+    u.SCHEMATIX["canvas"].fokus = "device:router"
+    _t(u, "d")
+    assert "remove Router from the scheme? y / n" in _bild(u, s)
+    _t(u, "y")
+    ids = {p["id"] for p in sent[-1]["pieces"]}
+    assert "device:router" not in ids and "node:pc" in ids
+    assert sent[-1]["stand"] == "s1"
+
+
+def test_m_makes_a_planned_thing_real(offen):
+    u, _s = offen
+    u.SCHEMATIX["canvas"].fokus = "device:router"
+    _t(u, "m")
+    assert _puts(u, "/api/schematix/things/router")
+
+
+def test_the_real_starter_scheme_drawn(welt, _test_ordner, monkeypatch):  # noqa: F811
+    """The TUI against the real core (Flask test client): the scheme "home"
+    from heimnetz.md — planned router, live tablet link, this node live."""
+    import ai_config
+    from tui import ansichten as A
+    monkeypatch.setattr(ai_config, "_CONFIG_PATH", str(_test_ordner / "ai_config.json"))
+    monkeypatch.setattr(ai_config, "_overrides", {})
+    monkeypatch.setattr(ai_config, "_config", {"abgleich_apps": {"fokus": True, "tutor": False}})
+    monkeypatch.setenv("ZENTRALE_NODE_NAME", "laptop")
+    monkeypatch.setenv("ZENTRALE_LANG", "en")
+    monkeypatch.setenv("ZENTRALE_ABGLEICH_MITTE_ART", "datei")
+    from ui.app import app
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    u = welt()
+
+    def api(path, method="GET", body=None, timeout=3.0, **_k):
+        r = client.open(path, method=method, json=body)
+        return r.json
+    monkeypatch.setattr(A.schematix, "api_call", api)
+    s = _schirm(u)
+    u.schematix.oeffnen()
+    _bild(u, s, "14_home_top")
+    c = u.SCHEMATIX["canvas"]
+    c.fokus = "node:laptop"
+    c.folgen(c.element("node:laptop")); c.springen()
+    text = _bild(u, s, "14_home_nodes")
+    assert "▣ LAPTOP" in text and "◂ this device" in text
+    router = c.element("device:router")["piece"]
+    assert router["state"] == "planned" and router["address"] == "192.168.50.254"
+    c.fokus = "device:router"
+    c.folgen(c.element("device:router")); c.springen()
+    text = _bild(u, s, "14_home_router")
+    assert "Router (Flint 2)" in text and "not yet" in text

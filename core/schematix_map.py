@@ -41,7 +41,7 @@ SYNC_STATES = {"live": "synced", "off": "off"}
 APP_W, APP_H = 24, 4
 NODE_W, NODE_H = 42, 5
 THING_W, THING_H = 24, 4
-GAP_X, GAP_Y = 3, 2
+GAP_X, GAP_Y = 3, 1
 BAND_GAP = 4
 
 

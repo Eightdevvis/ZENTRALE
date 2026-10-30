@@ -110,6 +110,77 @@ def set_role(role, value) -> dict:
     return palette()
 
 
+# ── Things (documented devices, step 14) ──────────────────────────────────
+
+THING_FORMAT = "zentrale-thing/1"
+
+
+def _things_dir():
+    return os.path.join(folder(), "things")
+
+
+def _thing_path(tid):
+    if not isinstance(tid, str) or not tid or "/" in tid or tid.startswith("."):
+        raise StoreError("a thing id is lowercase letters, digits and -")
+    return os.path.join(_things_dir(), tid + ".json")
+
+
+def _thing_validator():
+    import jsonschema
+    with open(os.path.join(CONTRACT, "thing.schema.json"), encoding="utf-8") as f:
+        return jsonschema.Draft202012Validator(json.load(f))
+
+
+def check_thing(d) -> list:
+    return [e.message for e in _thing_validator().iter_errors(d)]
+
+
+def things() -> list:
+    """Every readable thing (a newer major is skipped, one note; a broken
+    file is skipped — never overwritten)."""
+    out = []
+    try:
+        names = sorted(os.listdir(_things_dir()))
+    except FileNotFoundError:
+        return out
+    for n in names:
+        if not n.endswith(".json") or n.startswith("."):
+            continue
+        try:
+            d = _read_json(os.path.join(_things_dir(), n))
+            formats.check(d, "schematix-thing")
+        except (StoreError, formats.NewerFormat):
+            continue
+        if isinstance(d, dict) and not check_thing(d):
+            out.append(d)
+    return out
+
+
+def write_thing(d) -> dict:
+    """Create or replace one thing (fields this version does not know stay)."""
+    if not isinstance(d, dict):
+        raise StoreError("a thing is an object")
+    path = _thing_path(d.get("id"))
+    old = _read_json(path)
+    if isinstance(old, dict):
+        formats.check(old, "schematix-thing")         # newer → NewerFormat, nothing written
+    new = formats.keep_unknown(old, dict(d, format=THING_FORMAT))
+    errors = check_thing(new)
+    if errors:
+        raise StoreError("thing: " + "; ".join(errors))
+    _write_json(path, new)
+    return new
+
+
+def delete_thing(tid):
+    path = _thing_path(tid)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        raise StoreError("there is no such thing", 404)
+    datasync.notify_change(path)
+
+
 def _lum(hexv):
     out = []
     for i in (1, 3, 5):

@@ -43,6 +43,7 @@ def _wire(app, node, state="live"):
 
 MAP = {
     "format": "zentrale-schematix-map/1", "node": "laptop", "notes": [],
+    "scheme": {"name": "home", "stand": "s1", "planned": ["node:pc", "device:router"]},
     "layers": [{"id": x} for x in ("data", "services", "hardware", "network", "power")],
     "bands": [{"id": "cloud", "y": 0}, {"id": "software", "y": 8}, {"id": "nodes", "y": 20},
               {"id": "things", "y": 32}],
@@ -61,6 +62,17 @@ MAP = {
 }
 
 
+PIECES = [
+    {"group": "node", "id": "node:minipc", "ref": "zentrale://hub/node/minipc/", "kind": "node",
+     "title": "minipc", "needs": [], "offers": [], "state": "live"},
+    {"group": "store", "id": "app:budget", "ref": "zentrale://budget/", "kind": "app", "title": "Budget",
+     "needs": [], "offers": [], "state": "planned"},
+    {"group": "device", "id": "kind:switch", "kind": "device", "thing_kind": "switch", "title": "Switch",
+     "role": "switch", "ref": None, "state": "planned", "needs": [{"id": "uplink", "type": "lan"}],
+     "offers": [{"id": "lan", "type": "lan"}]},
+]
+
+
 def answer(path, method):
     p = path.split("?")[0]
     if p == "/api/schematix/map":
@@ -68,5 +80,7 @@ def answer(path, method):
     if p.startswith("/api/schematix/palette"):
         return _palette()
     if p == "/api/pieces":
-        return {"pieces": []}
+        return {"pieces": copy.deepcopy(PIECES)}
+    if p.startswith("/api/schematix/schemes/"):
+        return copy.deepcopy(MAP)
     return {"ok": True}

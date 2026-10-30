@@ -216,6 +216,7 @@ zählen als ein Modul.
 | `desk` | 2 | Desk View: eine `.canvas`-Datei (JSON Canvas 1.0) pro Desk in `desk_ordner` (Standard `data/desk/`): auflisten, anlegen, laden in Zellen (1 Spalte = 10 px, 1 Zeile = 20 px), ganz speichern mit `stand`-Schutz, umbenennen, löschen (seit 2026-10-10); Fremdes in der Datei bleibt stehen |
 | `schematix_map` | 2 | Schematix: the map of an account from this node's projection and the other nodes' descriptions (`GET /v1/knoten`), one piece per app on a node, wires with their layer, laid out as a cross-section (since 2026-10-30, step 13) |
 | `schematix_pieces` | 2 | Schematix's `+` picker: installed apps, providers, nodes, store apps not installed, device kinds (since 2026-10-30, step 13) |
+| `schematix_scheme` | 2 | A scheme of Schematix (since 2026-10-30, step 14): one JSON Canvas 1.0 file per scheme in `data/schematix/schemes/` with the `zentrale` key per node/edge; planned pieces and wires live only there, live ones come from the truth, documented things from the things store; the starter scheme "home" from heimnetz.md; load → save keeps every unknown key |
 | `desk_bild` | 2 | Bilder auf dem Desk: aus `~/Zentrale/Input` (oder einem Pfad) nach `<desk_ordner>/bilder/` kopieren, nur echte Bilder; Vorschau über `bild_vorschau` mit „weg"/„kein bild"; was die TUI zum Öffnen braucht (Pfad, `bild_betrachter`) |
 | `werkstatt` | 2 | Werkstatt (seit 2026-10-10): selbst gebaute Apps aus Vorlagen — `<apps_ordner>/<slug>/app.toml` (dasselbe Manifest wie Prozess-Apps, ohne `start`, mit `vorlage`/`desk`) + `icon.png` aus einem Bild in Input/ (über `bild_vorschau`); anlegen, umbenennen, Symbol ändern, löschen; Kurzname prüfen (reserviert, vergeben); Desks umbenennen/löschen mit Blick auf Apps, die auf sie zeigen |
 | `app_verwaltung` | 2 | Prozess-Apps des Hubs (seit 2026-10-22): Liste für `GET /api/apps` (läuft?), starten, nur Eigenes stoppen (Marken im Laufzeit-Ordner überleben den Hot Reload), Autostart mit dem Backend (`autostart = true`, Einstellung `apps_autostart`) |
@@ -318,7 +319,7 @@ egal woran, ging durch dieselbe Datei.
 | `kachel` | Kacheln: Inhalt einer Kachel holen, Aktion weiterreichen (über `core/kacheln.py`, seit 2026-10-10) |
 | `hub_apps` | Apps des Hubs (seit 2026-10-22): `GET /api/apps`, Start/Stopp, und die Weiterleitung der Pfade, die eine App laut `routen` besitzt (über `core/app_verwaltung.py`, `core/app_weiterleitung.py`; hängt direkt nach `zugang` ein) |
 | `hub_wires` | Wires of this node (since 2026-10-30, building kit steps 9/9b): `GET /api/wires` (projection), `PUT`/`DELETE /api/wires/<id>` through the Run gate (`core/generations.py`) |
-| `schematix` | Schematix (since 2026-10-30, building kit steps 13–15): `GET /api/schematix/map`, `GET /api/pieces`, palette (`/api/schematix/palette…`) |
+| `schematix` | Schematix (since 2026-10-30, building kit steps 13–15): `GET /api/schematix/map`, `GET /api/pieces`, palette (`/api/schematix/palette…`), schemes (`GET /api/schematix/schemes`, `PUT /api/schematix/schemes/<name>`), things (`PUT`/`DELETE /api/schematix/things/<id>`) |
 | `shop` | Schaufenster: Katalog, Kategorien/Themen, ein Stück, holen, Besitz (über `core/shop.py`, seit 2026-10-10) |
 | `werkstatt` | Werkstatt: eigene Apps auflisten, Namen prüfen, bauen, ändern, löschen; Vorlagen, Bilder fürs Symbol (über `core/werkstatt.py`, seit 2026-10-10) |
 

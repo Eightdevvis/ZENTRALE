@@ -11,6 +11,9 @@
 #                                      (core/schematix_pieces.py)
 #   GET  /api/schematix/palette        colour roles + measured contrast
 #   PUT  /api/schematix/palette/<role> one role ({"value": "#rrggbb" | null})
+#   GET  /api/schematix/schemes        the schemes (step 14)
+#   PUT  /api/schematix/schemes/<name> the board → the .canvas file (core/schematix_scheme.py)
+#   PUT/DELETE /api/schematix/things/<id>  document a thing / remove it
 #
 # Routes layer (layer 5, memory/system/bauplan_kern.md).
 
@@ -18,6 +21,7 @@ from flask import Blueprint, jsonify, request
 
 import schematix_map     # type: ignore  – in core/, through sys.path.insert
 import schematix_pieces  # type: ignore
+import schematix_scheme  # type: ignore
 import schematix_store   # type: ignore
 import schematix_versions  # type: ignore
 import wires             # type: ignore
@@ -40,8 +44,55 @@ def live_map():
 
 @bp.route('/api/schematix/map')
 def api_schematix_map():
+    """The map with a scheme (?scheme=<name>, default "home", created from
+    heimnetz.md the first time); ?scheme= (empty) = the live map alone."""
     m, _d = live_map()
-    return jsonify(schematix_map.layout(m))
+    name = request.args.get("scheme", schematix_scheme.STARTER)
+    if not name:
+        return jsonify(schematix_map.layout(m))
+    try:
+        return jsonify(schematix_scheme.scheme_map(m, name))
+    except schematix_store.StoreError as e:
+        return _error(e)
+
+
+@bp.route('/api/schematix/schemes')
+def api_schematix_schemes():
+    return jsonify({"schemes": schematix_scheme.names()})
+
+
+@bp.route('/api/schematix/schemes/<name>', methods=['PUT'])
+def api_schematix_scheme_save(name):
+    """The board as the TUI holds it: places, planned pieces and wires, `stand`."""
+    body = request.get_json(silent=True) or {}
+    m, _d = live_map()
+    try:
+        return jsonify(schematix_scheme.save(name, body, m))
+    except schematix_scheme.SchemeConflict as e:
+        return jsonify({"error": str(e), "stand": e.stand}), 409
+    except schematix_store.StoreError as e:
+        return _error(e)
+
+
+@bp.route('/api/schematix/things/<tid>', methods=['PUT'])
+def api_schematix_thing_put(tid):
+    """Document a thing (a planned device becomes real: same reference)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(schematix_store.write_thing(dict(body, id=tid)))
+    except schematix_store.StoreError as e:
+        return _error(e)
+    except formats.NewerFormat as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@bp.route('/api/schematix/things/<tid>', methods=['DELETE'])
+def api_schematix_thing_delete(tid):
+    try:
+        schematix_store.delete_thing(tid)
+    except schematix_store.StoreError as e:
+        return _error(e)
+    return jsonify({"ok": True})
 
 
 @bp.route('/api/pieces')

@@ -13,3 +13,13 @@
 - **App titles.** Built-in apps still carry German titles (`Listen`) on the
   map; the English names live in `zentrale_cli/texte.py`. Unify in the
   renaming wave ([english_renaming_wave.md](english_renaming_wave.md)).
+- **Install from the scheme.** A store app placed with `+` is planned; its
+  action "install" (plan 6.3: the normal store install with the plug
+  dialog) is not on the board yet — install it in the store, the piece
+  turns live by itself.
+- **Planned node names.** The starter scheme uses the names of heimnetz.md
+  (`pc`, `pi`, `laptop`, `minipc`). A node that joins under another name
+  shows as its own live piece; the planned one stays until removed (`d`).
+  A "this is that one" action could re-point the planned piece.
+- **Editing a thing** (title, address, notes) goes by hand in its JSON file
+  for now; the board only makes planned things real (`m`).
