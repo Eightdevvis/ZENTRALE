@@ -1,6 +1,6 @@
 # Port types, wires and the Run gate (building kit steps 9 and 9b)
 
-**Stand 2026-10-30: built (steps 9 and 9b, see the hash in
+**Stand 2026-10-30: built `6a63d16` (steps 9 and 9b; plan:
 [building_kit_plan.md](building_kit_plan.md) section 8).** The type system of the
 building kit and the one gate every wiring change passes. The plan says *why*
 (sections 1, 2, 6.7); this file says *what was built and how the vocabulary
