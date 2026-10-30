@@ -58,6 +58,10 @@ SICHERN = [
     # Anschlüsse — nie ein Geheimnis darin (Schema). Die Zugangsdaten
     # (geheim.enc) stehen bewusst NICHT hier, sondern unten in GEHEIM.
     "data/adapter/anschluesse/*.json",
+    # Plugs of app instances from the plug dialog (core/plug_store.py, building
+    # kit step 11): wires like "assistant model ← adapter", owned by the
+    # instance and synced like the calendar source. No secret in them.
+    "data/adapter/plugs/*.json",
     "tutor/data/tutor_config.json",
     "tutor/data/aktiver_stand",
     "tutor/data/staende/**",

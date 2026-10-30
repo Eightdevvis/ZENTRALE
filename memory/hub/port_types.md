@@ -1,7 +1,8 @@
 # Port types, wires and the Run gate (building kit steps 9 and 9b)
 
-**Stand 2026-10-30: built `6a63d16` (steps 9 and 9b; plan:
-[building_kit_plan.md](building_kit_plan.md) section 8).** The type system of the
+**Stand 2026-10-30: built `6a63d16` (steps 9 and 9b) and step 11 (plug dialog,
+Run-gate follow-ups 1, 2, 4; plan: [building_kit_plan.md](building_kit_plan.md)
+section 8).** The type system of the
 building kit and the one gate every wiring change passes. The plan says *why*
 (sections 1, 2, 6.7); this file says *what was built and how the vocabulary
 was decided*. Sasha: *„niemand darf je einen kaputten Sketch kompilieren und
@@ -18,9 +19,12 @@ sein Netzwerk verbuggen."*
 | Ports of an app: `needs`/`offers`, old `rechte`/`liefert`/`[daten]` | `core/app_ports.py`; built-ins declare theirs in `core/eingebaute_apps.py` (`PORTS`, `INSTANCE_PORTS`, `NODE_PORTS`) |
 | Wires as a projection, write-back into the owners | `core/wires.py` |
 | The compiler (stage 2 + 3, the hard gate) | `core/sketch_compiler.py` |
-| Run: diff, generations, switch, apply agent, roll-back; `choose_sync` | `core/generations.py` |
-| HTTP | `GET /api/wires`, `PUT`/`DELETE /api/wires/<id>` (`ui/routen/hub_wires.py`, `openapi.yaml`) |
-| Tests | `tests/test_port_types.py`, `tests/test_wiring_run.py`, `mobile/test/ports_test.dart` |
+| Run: diff, generations, switch, apply agent, roll-back; `choose_sync`; `keep` (the agent on the keeper) | `core/generations.py` |
+| Plug dialog (step 11): sockets, providers, confirm → one run | `core/plugs.py`; install side `core/app_installation.plug` |
+| Where plugs without an older home live | `core/plug_store.py` |
+| HTTP | `GET /api/wires`, `PUT`/`DELETE /api/wires/<id>` (`ui/routen/hub_wires.py`); `GET`/`POST /api/apps/<name>/plugs` (`ui/routen/hub_apps.py`); `openapi.yaml` |
+| Fronts | `zentrale apps install/plug`, `zentrale adapter calendar` (`zentrale_cli/befehle.py`); TUI store (`tui/ansichten/shop.py`) |
+| Tests | `tests/test_port_types.py`, `tests/test_wiring_run.py`, `tests/test_plug_dialog.py`, `mobile/test/ports_test.dart` |
 
 The routes are under `/api/`, not `/hub/` as the plan first wrote: `/hub/…`
 is the side every app answers itself (`/hub/gesund`, `/hub/ereignis`).
@@ -104,21 +108,90 @@ Generations are self-contained JSON, `hash` = sha256 over the JCS form (RFC
 (`~/.local/state/zentrale/generations`, setting `generations`).
 
 **Fed by:** the CLI sync choice (`befehle.choose_sync`: new app asks,
-wizard cloud folder, wizard purpose, wizard finish) and the routes. A device
+wizard cloud folder, wizard purpose, wizard finish), `zentrale adapter
+calendar`, the plug dialog and the routes. Nothing else writes the owners
+(`abgleich_apps.setzen/replace`, `kalender_einstellung.schreiben`,
+`adapter_ablauf.kalender_quelle_setzen`, `plug_store.write`): guard
+`test_nothing_outside_the_gate_writes_the_owners_of_wires`.
+
+**The apply agent on the keeper** (`generations.keep`, run by `zentrale sync
+--automatic` every 5 minutes, so the keeper re-run on update needs nothing
+new). Idempotent. It reconciles only what the node owns by itself
+(node-scoped: its sync choices, hardware plugs) toward its current
+generation and rolls back on a failed health check. Instance wires
+(calendar source, instance plugs) sync between nodes: another node may have
+re-plugged them through its own gate, so they are never pushed back — the
+keeper *adopts* them (compiles the projection, switches, note "adopted what
+arrived through sync"). A device that never chose (`abgleich_apps` unset)
+gets no sync enforcement, so new apps stay "everything". No generation yet
+→ nothing happens.
+
+**`adapter calendar`:** a new source = the calendar-source wire through
+`generations.run`, with `wires.calendar_writer` (progress + the writer's
+whole answer for the CLI's own sentences). `interrupted` counts as done for
+the health check (the value stays zencloud on purpose). The same source
+again only finishes an unfinished first fill
+(`adapter_ablauf.calendar_fill_continue`, writes no setting).
+
+**Wire states in the UI** go through `pgettext("wire state", …)`: the bare
+word "off" also means "Auto-update off" in `zentrale status`, and a German
+text for the bare msgid turned that into "aus" (it broke
+`test_wizard_step_n_picks_up_there`).
+
+## Plug dialog (step 11)
+
+The install dialog *is* the plug dialog (plan 1.5, 5.1 step 4).
+`plugs.sockets(app)` lists the needs to ask — not old rights words
+(`legacy`: the rights check grants them today) and not the `data` → `sync`
+socket (the new-app question of the sync choice asks that, as before) —
+each with the providers on this node (same type, version in range;
+node-scoped types only from the app's node) and the wire already plugged
+in. `plugs.confirm(app, {socket: provider | None})` turns the answers into
+wires and makes **one** run: `None` = refused, the wire is kept `off`
+("declared, unplugged", toward the first provider). Errors come back with
+`need`, the socket they are pinned to. `app_installation.plug` adds the
+install rule: a required socket (min ≥ 1) still without a live wire →
+the store app is withdrawn from this node's register (folder stays;
+installing again only asks). Without that the node's whole wiring would no
+longer compile.
+
+**Where the new wires live** (`core/plug_store.py`, plan 1.4): `sync` and
+`calendar-source` keep their homes; every other plug by the scope of its
+type — instance: `data/adapter/plugs/<app>.json` (synced "without mercy",
+in the positive list, owned by the adapter's data next to the calendar
+settings), node: `plugs-<node>.json` next to the app register (never
+synced). Format `zentrale-plugs/1` with the read rule (`plug-wires` in
+`core/formats.py`). Wire ids: `plug/<app>/<socket>`, node scope
+`plug/<node>/<app>/<socket>`. The projection only shows plugs whose both
+ends are pieces here; a synced file naming an app installed elsewhere stays
+untouched.
+
+**Fronts, one rule set:** `zentrale apps install <name>` (fetch, install
+with all views, dialog) and `zentrale apps plug <name>` (ask again, also for
+built-ins like the assistant's `model`); without a terminal everything
+stays off and a required socket withdraws. The TUI store opens the dialog
+after installing (`GET`/`POST /api/apps/<name>/plugs`): ↑↓ socket, ←→
+provider or "leave it off", enter plugs in, esc leaves everything off.
+
+## A node's wires in its description (follow-up 4)
+
+`zentrale` puts `wires: {format: "zentrale-node-wires/1", wires}` — the
+node's own node-scoped wires (`wires.node_section`) — into its description
+(`PUT /v1/knoten/<name>`, stored as sent; no server change). The keeper
+sends it when the hash changed since the last time (`generations.description_due`,
+marker in the generation store). Only that node writes it; other nodes and
+Schematix read it with `wires.wires_of_description` (read rule: a newer
+major gives no wires and one note; only wires owned by that node that pass
+the item check). A device
 that never chose (`abgleich_apps` unset = everything) starts from "nothing
 decided" when it first chooses, as `setzen` always did.
 
 ## What later steps build on
 
-- **Step 11 (plug dialog):** `app_ports.of_app(name)` lists the needs; offers
-  of every piece come from `wires.sketch()`; a proposal is a wire, the
-  confirmation is `generations.run` (refused → errors pinned to the port).
-  Refusing = a wire with `state: off`. A new store app with `needs` and no
-  wire fails the compile only for needs with min ≥ 1 — the dialog must wire
-  those before the install counts.
 - **Steps 13–15 (Schematix):** `GET /api/wires` is the read-only map data
   (pieces with ports, wires with layer via the registry); other nodes join
-  as `wires.piece_of_description(<GET /v1/knoten entry>)` (managed or not);
+  as `wires.piece_of_description(<GET /v1/knoten entry>)` (managed or not),
+  their own wires as `wires.wires_of_description(<entry>)`;
   `PUT …?plan=1` gives the diff for the Run button; errors carry piece/wire
   ids to pin on the drawing; the socket table for the red ✕ is the registry
   (`port_types.entry`, same type = fits). Planned pieces and wires already
@@ -127,6 +200,5 @@ decided" when it first chooses, as `setzen` always did.
 ## Not yet
 
 Open item [../open/run_gate_followups.md](../open/run_gate_followups.md): the
-apply agent is not on the keeper timer, `zentrale adapter calendar` writes the
-calendar source around the gate, the compiler's graph rules are not ported
-to Dart, other nodes' wires are not projected (each node sees its own).
+compiler's graph rules are not ported to Dart. Link-scoped plugs (network,
+power) have no store yet — they come with Schematix's things store (step 14).

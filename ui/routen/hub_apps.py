@@ -12,6 +12,7 @@
 #   POST /api/apps/remove        remove from this node (built-in apps, step 10)
 #   GET  /api/apps/installed     shop addresses installed on this node (+ holds)
 #   POST /api/apps/hold          hold an extracted app at its version (step 12)
+#   GET/POST /api/apps/<name>/plugs   the plug dialog (building kit step 11)
 #
 # Und die Weiterleitung: gehört der Pfad einer Anfrage laut `routen` im
 # app.toml einer App, reicht der Hub sie unverändert an die App
@@ -27,6 +28,7 @@ from flask import Blueprint, Response, jsonify, request
 import app_installation   # type: ignore  – in core/, durch sys.path.insert auffindbar
 import app_verwaltung      # type: ignore  – in core/, durch sys.path.insert auffindbar
 import app_weiterleitung   # type: ignore
+import plugs               # type: ignore
 
 bp = Blueprint('hub_apps', __name__)
 
@@ -111,3 +113,30 @@ def api_app_hold():
         return jsonify(app_installation.hold(body.get("adresse"), body.get("hold") is True))
     except app_installation.InstallFehler as e:
         return jsonify({"error": str(e)}), e.code
+
+
+# ── Plug dialog (building kit step 11, core/plugs.py) ─────────────────
+#
+#   GET  /api/apps/<name>/plugs   the sockets to ask, with the providers here
+#   POST /api/apps/<name>/plugs   {"choices": {socket: provider port | null}}
+#                                 → one run through the gate; a required
+#                                 socket left unplugged withdraws the install
+
+@bp.route('/api/apps/<name>/plugs', methods=['GET'])
+def api_app_plugs(name):
+    if not plugs.known(name):
+        return jsonify({"error": "unknown app"}), 404
+    return jsonify({"name": name, "sockets": plugs.sockets(name)})
+
+
+@bp.route('/api/apps/<name>/plugs', methods=['POST'])
+def api_app_plugs_confirm(name):
+    body = request.get_json(silent=True) or {}
+    choices = body.get("choices")
+    if not isinstance(choices, dict) or not all(v is None or isinstance(v, str) for v in choices.values()):
+        return jsonify({"error": "choices: {socket: provider port or null}"}), 400
+    try:
+        r = app_installation.plug(name, choices)
+    except app_installation.InstallFehler as e:
+        return jsonify({"error": str(e)}), e.code
+    return jsonify(r), (200 if r["ok"] and not r["withdrawn"] else 409)

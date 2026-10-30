@@ -271,6 +271,131 @@ def _self_heal(term):
         term.sag(t("tm_error", text=r["fehler"]), "warn")
 
 
+# ── Apps from the store and the plug dialog (building kit step 11) ─────
+
+def apps(term, args=()):
+    """`zentrale apps install <name|address>` · `zentrale apps plug <name>`."""
+    args = list(args)
+    if len(args) == 2 and args[0] == "install":
+        return apps_install(term, args[1])
+    if len(args) == 2 and args[0] == "plug":
+        return 0 if plug_dialog(term, args[1]) else 1
+    term.fehler(t("apps_usage"))
+    return 2
+
+
+def apps_install(term, what):
+    """Fetch an app from the store, install it with all its views, then the
+    plug dialog. A required socket left unplugged → the install does not
+    count (app_installation.plug withdraws it)."""
+    import app_installation
+    address = what if what.startswith("zentrale://") else "zentrale://shop/apps/" + what
+    try:
+        offer = app_installation.laden(address)
+        r = app_installation.installieren(address, offer["gewaehlt"])
+    except app_installation.InstallFehler as e:
+        term.fehler(str(e))
+        return 1
+    term.sag(t("apps_installed", name=r["titel"]), "gut")
+    return 0 if plug_dialog(term, r["name"]) else 1
+
+
+def _ask_socket(term, s):
+    """One socket → the chosen provider port, None (left off), or KEEP."""
+    if not s["providers"]:
+        term.sag(t("plug_no_provider", type=s["type"]), "warn")
+        return KEEP
+    if not term.interaktiv:
+        return KEEP if s["wire"] else None
+    old = (s["wire"] or {}).get("from") if (s["wire"] or {}).get("state") == "live" else None
+    options = [(p["port"], p["title"]) for p in s["providers"]] + [(OFF, t("plug_leave_off"))]
+    pick = term.choose(t("plug_ask", socket=s["title"], type=s["type"]), options,
+                       default=old or s["providers"][0]["port"])
+    return None if pick == OFF else pick
+
+
+KEEP, OFF = object(), "-"
+
+
+def plug_dialog(term, name) -> bool:
+    """The plug dialog (core/plugs.py) at the terminal: per socket the
+    providers this node has, the person picks one or leaves it off; then ONE
+    run through the gate. Errors are shown at their socket. → True when the
+    app counts as installed and wired."""
+    import app_installation
+    import plugs
+    if not plugs.known(name):
+        term.fehler(t("plug_unknown", name=name))
+        return False
+    socks = plugs.sockets(name)
+    if not socks:
+        term.sag(t("plug_nothing", name=name), "blass")
+        return True
+    term.sag(t("plug_title", name=name), "fett")
+    if not term.interaktiv:
+        term.sag(t("plug_not_asked", name=name), "warn")
+    choices = {}
+    for s in socks:
+        if s["min"] >= 1:
+            term.sag(t("plug_required", socket=s["title"]), "blass")
+        c = _ask_socket(term, s)
+        if c is not KEEP:
+            choices[s["need"]] = c
+    r = app_installation.plug(name, choices)
+    for e in r["errors"]:
+        term.sag(t("plug_error", socket=e["need"], text=e["text"]) if e.get("need")
+                 else t("wiring_refused", text=e["text"]), "warn")
+    if r["rolled_back"]:
+        term.sag(t("wiring_rolled_back", text="; ".join(r["problems"])), "warn")
+    for line in r["diff"]:
+        term.sag("  " + line, "blass")
+    if r["withdrawn"]:
+        term.sag(t("plug_withdrawn", name=name, liste=", ".join(r["unmet"])), "warn")
+        return False
+    if r["unmet"]:
+        term.sag(t("plug_unmet", name=name, liste=", ".join(r["unmet"])), "warn")
+        return False
+    return bool(r["ok"])
+
+
+def _apply_agent(term):
+    """The apply agent on the keeper (building kit follow-up 1,
+    generations.keep): this node's own wires back to its current generation,
+    instance wires that arrived through sync adopted. Then, logged in, the
+    node's own wires into its description when they changed (follow-up 4).
+    Quiet unless something went wrong; never stops the sync."""
+    import generations
+    try:
+        r = generations.keep(root=WURZEL)
+    except Exception as e:         # noqa: BLE001 — a side matter of the sync
+        term.sag(t("keep_error", text=e), "warn")
+        return
+    if r["rolled_back"]:
+        term.sag(t("wiring_rolled_back", text="; ".join(r["problems"])), "warn")
+    elif r["problems"]:
+        term.sag(t("keep_problems", text="; ".join(r["problems"])), "warn")
+    describe_wires()
+
+
+def describe_wires(force=False):
+    """Put this node's own wires into its description in the cloud when they
+    changed since the last time (or `force`). Only this node writes its
+    description; offline or logged out → next time. → True when sent."""
+    import generations
+    if abgleich.mitte_art() != "http" or not konto.angemeldet() or cloud_notices.removed():
+        return False
+    store = generations.Store()
+    section, h = generations.description_due(store=store)
+    if section is None and not force:
+        return False
+    try:
+        geraet_melden()
+    except (konto.KontoFehler, OSError):
+        return False
+    store.mark_described(dateien.knoten(), h)
+    return True
+
+
 def sync(term, args=()):
     """`zentrale sync [--automatic]`. --automatic ist der Timer
     (zentrale_cli/timer.py): nur mit Cloud bzw. Weg „mitte", still, wenn
@@ -281,6 +406,7 @@ def sync(term, args=()):
         return 2
     if automatisch:
         _self_heal(term)
+        _apply_agent(term)
     if abgleich.mitte_art() == "http" and not konto.angemeldet():
         if automatisch:
             return 0
@@ -626,11 +752,41 @@ def _show_fill_pending(term):
         term.sag(t("ad_cal_open"), "warn")
 
 
+def _calendar_through_gate(term, quelle, alive):
+    """Re-plug kalender-haupt's source wire through the Run gate. → the
+    writer's answer (kalender_quelle_setzen's form), or None when the gate
+    refused or a health check rolled the change back (said here)."""
+    import generations
+    import kalender_einstellung as ke
+    import wires
+    results = []
+    wire = wires.calendar_wire(ke.HAUPT, quelle)
+    r = generations.run(generations.with_wires(wires.sketch(), [wire]), root=WURZEL,
+                        writer=wires.calendar_writer(alive.report, results))
+    for e in r["errors"]:
+        term.sag(t("wiring_refused", text=e["text"]), "warn")
+    if r["errors"]:
+        return None
+    if results:
+        first = results[0]
+        if r["rolled_back"] and wires.calendar_problem(first) is None:
+            term.sag(t("wiring_rolled_back", text="; ".join(r["problems"])), "warn")
+            return None
+        return first
+    if r["rolled_back"]:
+        term.sag(t("wiring_rolled_back", text="; ".join(r["problems"])), "warn")
+        return None
+    return {"ergebnis": "gleich", "von": ke.quelle(), "beiseite": None, "fehler": None}
+
+
 def adapter_kalender(term, rest=()):
     """`zentrale adapter calendar [google|zencloud|lokal]`: die Quelle der
-    Kalender-App kalender-haupt zeigen bzw. umstöpseln
-    (adapter_ablauf.kalender_quelle_setzen). Ändert nur den Wert, löscht
-    nichts. Ohne Wort: nur zeigen."""
+    Kalender-App kalender-haupt zeigen bzw. umstöpseln. Ändert nur den Wert,
+    löscht nichts. Ohne Wort: nur zeigen. A change goes through the one gate
+    (building kit follow-up 2): the calendar-source wire → generations.run,
+    whose apply agent calls the one writer (adapter_ablauf.kalender_quelle_setzen).
+    The same source again only finishes an unfinished first fill
+    (adapter_ablauf.calendar_fill_continue) — no setting changes."""
     import kalender_einstellung as ke
     if not rest:
         q = ke.quelle()
@@ -643,9 +799,14 @@ def adapter_kalender(term, rest=()):
         return 2
     alive = SignOfLife(term)
     try:
-        r = adapter_ablauf.kalender_quelle_setzen(ke.HAUPT, rest[0], WURZEL, report=alive.report)
+        if ke.quelle() == rest[0] and ke.eingestellt():
+            r = adapter_ablauf.calendar_fill_continue(ke.HAUPT, WURZEL, report=alive.report)
+        else:
+            r = _calendar_through_gate(term, rest[0], alive)
     finally:
         alive.stop()
+    if r is None:
+        return 1
     e = r["ergebnis"]
     if e == "interrupted":
         term.sag(t("ad_cal_interrupted"), "warn")
@@ -766,7 +927,11 @@ def timers(term, args=()):
 
 def geraet_melden(sorte="vollknoten") -> dict:
     """Die eigene Beschreibung in die Cloud (PUT /v1/knoten/<name>)."""
+    import wires
     b = knoten.beschreibung(sorte, wurzel=WURZEL)
+    # Its own node-scoped wires (sync choices, hardware plugs), read-only for
+    # every other node and Schematix (building kit follow-up 4).
+    b["wires"] = wires.node_section()
     # Der Server nimmt nur den Namen, mit dem diese Sitzung angemeldet ist.
     b["name"] = (konto.lesen() or {}).get("knoten") or b["name"]
     try:

@@ -498,6 +498,11 @@ paths:
                         `insecure: {since, link, reason}` when the device's `programm` is a
                         release marked insecure. A removed device stays as a tombstone with
                         `removed` (date-time) and `removed_by` (device name).
+                        Since building kit step 11 a device also puts its own node-scoped
+                        wires in: `wires: {format: "zentrale-node-wires/1", wires: [wire …]}`
+                        (its sync choices, its hardware plugs; contracts/ports/1 $defs/wire).
+                        Stored as sent like every field — only that device writes it, every
+                        other device and Schematix only read it (core/wires.py).
         "401": { $ref: "#/components/responses/Fehler" }
   /v1/knoten/{name}:
     put:

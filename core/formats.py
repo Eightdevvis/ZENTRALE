@@ -43,6 +43,8 @@ FORMATS = {
     "calendar-side-file": (1, "calendar extras"),           # data/kalender_neben.json
     "calendar-colours": (1, "calendar colours"),            # data/calendar_colours.json
     "account-ownership": (1, "the apps your account owns"),  # GET/PUT /v1/besitz (account_ownership)
+    "plug-wires": (1, "the plugs of an app"),               # data/adapter/plugs/*.json (core/plug_store.py)
+    "node-wires": (1, "another device's wiring"),          # `wires` in a node description (core/wires.py)
 }
 
 

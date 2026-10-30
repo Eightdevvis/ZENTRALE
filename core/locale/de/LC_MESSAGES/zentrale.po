@@ -582,15 +582,19 @@ msgstr "(vorher: {old})"
 msgid "{wire} did not take effect"
 msgstr "{wire} hat nicht gewirkt"
 
+msgctxt "wire state"
 msgid "live"
 msgstr "an"
 
+msgctxt "wire state"
 msgid "off"
 msgstr "aus"
 
+msgctxt "wire state"
 msgid "planned"
 msgstr "geplant"
 
+msgctxt "wire state"
 msgid "broken"
 msgstr "kaputt"
 

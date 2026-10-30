@@ -20,6 +20,12 @@
 # Holds (step 12): h on an installed extracted app holds it at its version
 # (POST /api/apps/hold) — the automatic update skips it; h again releases it.
 #
+# The plug dialog (building kit step 11, core/plugs.py): after installing,
+# the sockets the app needs (GET /api/apps/<name>/plugs) — ↑↓ socket, ←→
+# provider or "leave it off", enter plugs in (POST …/plugs: one run through
+# the gate), esc leaves everything off. A required socket left off: the hub
+# withdraws the install and says why. The rules live in the core only.
+#
 # Geöffnet wird sie von außen über `oeffnen()` (der Rad-Platz `shop` kommt
 # mit der Werkstatt, 2026-10-10) — hier steht kein Rad-Wissen.
 
@@ -33,6 +39,8 @@ import urllib.parse
 from .basis import api_call
 from .tasten import Tasten
 from .translate import _
+
+PLUGS = "/api/apps/{name}/plugs"         # the plug dialog (openapi.yaml)
 
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
@@ -100,6 +108,7 @@ class Shop:
             "msg": "",
             "laedt": False,             # eine App wird gerade heruntergeladen
             "wahl": None,               # Ansichten-Wahl vor dem Installieren
+            "plug": None,               # the plug dialog after installing (step 11)
         }
         # Nach dem Installieren (run_ui: das App-Rad neu holen).
         self.nach_installieren = None
@@ -215,6 +224,65 @@ class Shop:
         S.update(wahl=None, geholt=w["adresse"],
                  msg="installiert ✓ — steht im app-rad" if r.get("neu", True)
                  else "ansichten geändert ✓")
+        if r.get("name") and self.plug_oeffnen(r["name"], r.get("titel") or w["titel"]):
+            return                       # the wheel is told once the dialog is through
+        if self.nach_installieren:
+            self.nach_installieren()
+
+    # ── Plug dialog (building kit step 11) ────────────────────────────
+    def plug_oeffnen(self, name, titel):
+        """→ True when the app has sockets to ask about (the dialog is open)."""
+        try:
+            socks = (api_call(PLUGS.replace("{name}", urllib.parse.quote(name))) or {}).get("sockets") or []
+        except Exception as e:
+            self.SHOP["msg"] = _("plug dialog not reachable: {text}").format(text=self._fehlertext(e))
+            return False
+        if not socks:
+            return False
+        pick = {}
+        for s in socks:
+            ports = [p["port"] for p in s.get("providers") or []]
+            old = (s.get("wire") or {})
+            live = old.get("from") if old.get("state") == "live" else None
+            pick[s["need"]] = ports.index(live) if live in ports else (0 if ports else len(ports))
+        self.SHOP["plug"] = {"name": name, "titel": titel, "sockets": socks, "sel": 0, "pick": pick}
+        return True
+
+    def _plug_choices(self, all_off=False):
+        p = self.SHOP["plug"]
+        out = {}
+        for s in p["sockets"]:
+            ports = [x["port"] for x in s.get("providers") or []]
+            if not ports and not s.get("wire"):
+                continue                 # nothing to plug and nothing plugged: not asked
+            i = p["pick"][s["need"]]
+            out[s["need"]] = None if all_off or i >= len(ports) else ports[i]
+        return out
+
+    def plug_bestaetigen(self, all_off=False):
+        S, p = self.SHOP, self.SHOP["plug"]
+        if not p:
+            return
+        try:
+            r = api_call(PLUGS.replace("{name}", urllib.parse.quote(p["name"])), "POST",
+                         {"choices": self._plug_choices(all_off)}, timeout=120) or {}
+        except urllib.error.HTTPError as e:
+            try:
+                r = json.loads(e.read().decode("utf-8"))
+            except Exception:
+                r = {"error": "fehler %s" % e.code}
+        except Exception as e:
+            S["msg"] = _("not plugged in: {text}").format(text=self._fehlertext(e))
+            return
+        S["plug"] = None
+        if r.get("withdrawn"):
+            S["msg"] = _("{app} is not installed: {sockets} must be plugged in").format(
+                app=p["titel"], sockets=", ".join(r.get("unmet") or []))
+        elif r.get("errors") or r.get("error"):
+            first = (r.get("errors") or [{}])[0]
+            S["msg"] = _("not plugged in: {text}").format(text=first.get("text") or r.get("error"))
+        else:
+            S["msg"] = _("plugged in ✓")
         if self.nach_installieren:
             self.nach_installieren()
 
@@ -307,6 +375,8 @@ class Shop:
         "apps:ohne_thema": _KAT + _APP + _ZU,
         "laedt": _ZU,                               # eine App kommt gerade
         "wahl": _WAHL,                              # Ansichten vor dem Installieren
+        "plug": [("↑↓", "plug_waehlen", "socket"), ("←→", "plug_wechseln", "provider"),
+                 ("enter", "plug_ok", "plug in"), ("esc", "plug_aus", "leave off")],
         "leer": _KAT + _ZU,
         "leer:thema": _KAT + _THEMA + _ZU,          # nichts zu diesem Thema
         "fehler": _ZU,
@@ -314,6 +384,8 @@ class Shop:
 
     def ansicht(self):
         S = self.SHOP
+        if S["plug"]:
+            return "plug"
         if not S["kategorien"]:
             return "fehler"
         if S["wahl"]:
@@ -389,6 +461,25 @@ class Shop:
     def aktion_wahl_zu(self, _taste):
         self.SHOP.update(wahl=None, msg="")
 
+    def aktion_plug_waehlen(self, taste):
+        p = self.SHOP["plug"]
+        if p and p["sockets"]:
+            p["sel"] = (p["sel"] + (-1 if taste == "up" else 1)) % len(p["sockets"])
+
+    def aktion_plug_wechseln(self, taste):
+        """Through the providers of the socket and "leave it off" (the last)."""
+        p = self.SHOP["plug"]
+        if p and p["sockets"]:
+            s = p["sockets"][p["sel"]]
+            n = len(s.get("providers") or []) + 1
+            p["pick"][s["need"]] = (p["pick"][s["need"]] + (-1 if taste == "left" else 1)) % n
+
+    def aktion_plug_ok(self, _taste):
+        self.plug_bestaetigen()
+
+    def aktion_plug_aus(self, _taste):
+        self.plug_bestaetigen(all_off=True)
+
     # ── Zeichnen ──────────────────────────────────────────────────────
     def titel(self):
         return "schaufenster"
@@ -405,6 +496,9 @@ class Shop:
         z.addclip(top + 2, x0 + 7, thema, innen - 7, C["acc"] if S["thema"] else C["dim"])
         z.addclip(top + 3, x0, "─" * innen, innen, C["faint"])
         oben, unten = top + 4, top + h - 2           # unten = Rückmeldung
+        if S["plug"]:
+            self._draw_plug(oben, x0, unten - oben, innen)
+            return
         if S["wahl"]:
             self._draw_wahl(oben, x0, unten - oben, innen)
             if S["msg"]:
@@ -439,6 +533,27 @@ class Shop:
                           C["bright"] | curses.A_REVERSE)
             else:
                 z.addclip(y0 + 2 + i, x, zeile, breite, C["acc"] if a["id"] in w["an"] else C["dim"])
+
+    def _draw_plug(self, y0, x, hoehe, breite):
+        """The plug dialog: one line per socket, its provider (or off)."""
+        p, C, z = self.SHOP["plug"], self.z.C, self.z
+        z.addclip(y0, x, _("{app} — plug in what it needs").format(app=p["titel"]), breite,
+                  C["bright"] | curses.A_BOLD)
+        for i, s in enumerate(p["sockets"][:max(0, hoehe - 3)]):
+            provs = s.get("providers") or []
+            j = p["pick"][s["need"]]
+            if not provs:
+                choice = _("nothing here offers {type}").format(type=s["type"])
+            else:
+                choice = provs[j]["title"] if j < len(provs) else _("leave it off")
+            mark = " *" if s.get("min", 0) >= 1 else ""
+            zeile = "%s%s  ‹ %s ›" % (s["title"], mark, choice)
+            attr = C["bright"] | curses.A_REVERSE if i == p["sel"] else (
+                C["acc"] if provs and j < len(provs) else C["dim"])
+            z.addclip(y0 + 2 + i, x, zeile, breite, attr)
+        if any(s.get("min", 0) >= 1 for s in p["sockets"]) and hoehe > len(p["sockets"]) + 3:
+            z.addclip(y0 + 3 + len(p["sockets"]), x, _("* required: left off, the app is not installed"),
+                      breite, C["faint"])
 
     def _draw_leiste(self, y, x, breite):
         """Kategorien nebeneinander; die gewählte hell, leere blass."""

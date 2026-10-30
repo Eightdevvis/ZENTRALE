@@ -11,13 +11,20 @@
 #   calendar-source calendar instance ← google / cloud / local:  `quelle` in
 #                   data/adapter/anschluesse/kalender-<id>.json
 #                   (core/kalender_einstellung.py); no file = google (as before)
+#   every other     a plug from the plug dialog (step 11: model, files, read:…,
+#                   mic …): core/plug_store.py — the consumer instance's synced
+#                   file (instance scope) or the node's own file (node scope)
 #
 #   sketch()        → {"format": "zentrale-sketch/1", pieces, wires} of this node
 #   write(wires)    write the owners where `wires` differ from the projection;
 #                   equal wires write nothing (round trip: settings byte-identical)
+#   node_section()  this node's own node-scoped wires for its description in
+#                   the cloud (follow-up 4: other nodes and Schematix read them
+#                   with wires_of_description)
 #
 # Every write passes the gate first (core/generations.run); write() is the
-# apply agent's hand, not a door.
+# apply agent's hand, not a door. Nothing else writes these owners
+# (guard: tests/test_plug_dialog.py).
 #
 # Foundation (layer 1).
 
@@ -28,10 +35,13 @@ import app_ports
 import apps
 import dateien
 import eingebaute_apps
+import formats
 import kalender_einstellung as ke
+import plug_store
 import port_types
 
 SKETCH = "zentrale-sketch/1"
+NODE_WIRES_FORMAT = "zentrale-node-wires/1"          # the `wires` field of a node description
 CLOUD = "zentrale://cloud/"
 SYNC_PORT = CLOUD + "port/sync"
 CALENDAR_APP = "kalender"
@@ -179,14 +189,69 @@ def calendar_wires(name=None) -> list:
     return [calendar_wire(iid, ke.quelle(iid), name) for iid in _calendar_ids()]
 
 
-def all_wires(name=None) -> list:
-    return sync_wires(name) + calendar_wires(name)
+OWN_TYPES = ("sync", "calendar-source")      # wires with an older home than plug_store
+
+
+def is_plug(w) -> bool:
+    return w.get("type") not in OWN_TYPES
+
+
+def scope_of(w):
+    return (port_types.entry(w.get("type")) or {}).get("scope")
+
+
+def plug_wires(name=None, refs=None) -> list:
+    """The plugs of plug_store that land on this node: instance plugs whose
+    consumer and provider are pieces here (a synced file may name an app
+    installed only elsewhere — it stays in the file, untouched), and the
+    node's own plugs."""
+    name = name or node_name()
+    if refs is None:
+        refs = {p["ref"] for p in pieces(name, hardware=False)}
+    out = [w for w in plug_store.instance_wires() if scope_of(w) == "instance" and is_plug(w)]
+    out += [w for w in plug_store.node_wires(name)
+            if scope_of(w) == "node" and is_plug(w) and w.get("owner") == node_id(name)]
+    return [w for w in out
+            if split_port(w.get("from"))[0] in refs and split_port(w.get("to"))[0] in refs]
+
+
+def all_wires(name=None, refs=None) -> list:
+    return sync_wires(name) + calendar_wires(name) + plug_wires(name, refs)
 
 
 def sketch(name=None, hardware=True) -> dict:
     """The projection of this node: every piece with its ports and every wire
     that has a stored truth today."""
-    return {"format": SKETCH, "pieces": pieces(name, hardware), "wires": all_wires(name)}
+    ps = pieces(name, hardware)
+    return {"format": SKETCH, "pieces": ps, "wires": all_wires(name, {p["ref"] for p in ps})}
+
+
+# ── The node's own wires in its description (follow-up 4) ─────────────────
+
+def node_section(name=None) -> dict:
+    """This node's own node-scoped wires (its sync choices, its hardware
+    plugs) for the node description in the cloud. Only this node writes its
+    description; every other node and Schematix only read it."""
+    name = name or node_name()
+    mine = [w for w in all_wires(name) if scope_of(w) == "node" and w.get("owner") == node_id(name)]
+    return {"format": NODE_WIRES_FORMAT, "wires": sorted(mine, key=lambda w: w["id"])}
+
+
+def wires_of_description(d: dict) -> list:
+    """The wires another node published in its description. Read rule of
+    step 5: an unknown major or a malformed field gives none (nothing is
+    guessed); only that node's own node-scoped wires that pass the item
+    check are taken."""
+    sec = d.get("wires") if isinstance(d, dict) else None
+    if not isinstance(sec, dict) or not str(sec.get("format", "")).startswith("zentrale-node-wires/"):
+        return []
+    try:
+        formats.check(sec, "node-wires")
+    except formats.NewerFormat:
+        return []
+    owner = node_id(str(d.get("name") or ""))
+    return [w for w in sec.get("wires") or [] if isinstance(w, dict) and w.get("owner") == owner
+            and port_types.check(w, "wire") == [] and scope_of(w) == "node"]
 
 
 # ── Writing back into the owners ──────────────────────────────────────────
@@ -213,19 +278,50 @@ def _calendar_write(iid, quelle, root):
     takes over the cloud calendar). → None when done, else the reason."""
     import adapter_ablauf
     r = adapter_ablauf.kalender_quelle_setzen(iid, quelle, root)
-    if r.get("ergebnis") in ("gleich", "gesetzt", "fuellt", "uebernimmt", "continued"):
+    return calendar_problem(r)
+
+
+# "interrupted" keeps the new value on purpose (adapter_ablauf: the next sync
+# completes it; going back would let the Google timer run on a half-switched
+# device), so it is no problem for the health check.
+CALENDAR_DONE = ("gleich", "gesetzt", "fuellt", "uebernimmt", "continued", "interrupted")
+
+
+def calendar_problem(r):
+    """A kalender_quelle_setzen answer → None (done) or the reason."""
+    if r.get("ergebnis") in CALENDAR_DONE:
         return None
     return r.get("fehler") or r.get("ergebnis")
 
 
-def write(desired, name=None, root=None, calendar_writer=None) -> list:
-    """Make the owners say what `desired` says, for the wires this node owns.
-    Only differences are written; → [(id, problem | None)] of what was written."""
+def calendar_writer(report=None, results=None):
+    """A calendar writer for generations.run that shows progress (`report`,
+    the CLI's sign of life) and hands back kalender_quelle_setzen's whole
+    answer in `results`, so the CLI can say what happened in its own words."""
+    def write_one(iid, quelle, root):
+        import adapter_ablauf
+        r = adapter_ablauf.kalender_quelle_setzen(iid, quelle, root, report=report)
+        if results is not None:
+            results.append(r)
+        return calendar_problem(r)
+    return write_one
+
+
+def node_owned(w, name=None) -> bool:
+    """A wire this node owns by itself (scope node): what the keeper enforces."""
+    return scope_of(w) == "node" and w.get("owner") == node_id(name)
+
+
+def write(desired, name=None, root=None, calendar_writer=None, only=None) -> list:
+    """Make the owners say what `desired` says, for the wires this node owns
+    (and, with `only`, just those it selects). Only differences are written;
+    → [(id, problem | None)] of what was written."""
     name = name or node_name()
     root = root or os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    mine = [w for w in desired if w.get("state") != "planned" and _writable(w, name)]
-    current = [w for w in all_wires(name) if _writable(w, name)]
-    done, sync_changed = [], False
+    pick = (lambda w: _writable(w, name) and (only is None or only(w)))
+    mine = [w for w in desired if w.get("state") != "planned" and pick(w)]
+    current = [w for w in all_wires(name) if pick(w)]
+    done, sync_changed, plugs = [], False, {}
     for wid, old, new in changes(mine, current):
         w = new or old
         if w["type"] == "sync":
@@ -239,9 +335,35 @@ def write(desired, name=None, root=None, calendar_writer=None) -> list:
                 raise WireError(f"{wid}: unknown calendar source {new['from']}")
             iid = split_port(new["to"])[0].rstrip("/").rsplit("/", 1)[1]
             done.append((wid, (calendar_writer or _calendar_write)(iid, q, root)))
+        else:
+            plugs.setdefault(_plug_file(w, name), {})[wid] = new
+    for path, changed in plugs.items():
+        problem = _write_plugs(path, changed)
+        done += [(wid, problem) for wid in changed]
     if sync_changed:
         abgleich_apps.replace(_sync_choice([w for w in mine if w["type"] == "sync"]))
     return done
+
+
+def _plug_file(w, name):
+    scope = scope_of(w)
+    if scope == "instance":
+        return plug_store.instance_file(_app_of(w))
+    if scope == "node" and w.get("owner") == node_id(name):
+        return plug_store.node_file(name)
+    raise WireError(f"{w['id']}: this node cannot store a {w['type']} wire")
+
+
+def _write_plugs(path, changed):
+    """Replace or remove (new None) the changed wires in one plug file; the
+    rest of the file (other apps' wires, fields this version does not know)
+    stays as it is. → None or the problem (a newer format: read-only)."""
+    keep = [w for w in plug_store.read(path) if w["id"] not in changed]
+    try:
+        plug_store.write(path, keep + [w for w in changed.values() if w is not None])
+    except formats.NewerFormat as e:
+        return str(e)
+    return None
 
 
 def _app_of(w) -> str:
@@ -267,7 +389,12 @@ def _sync_choice(wires) -> dict:
 
 
 def _writable(w, name) -> bool:
-    """Wires whose owner store this node writes: its own sync wires and the
-    (synced) calendar instance settings."""
-    return (w.get("type") == "sync" and w.get("owner") == node_id(name)) or \
-        w.get("type") == "calendar-source"
+    """Wires whose owner store this node writes: its own node-scoped wires
+    (sync, hardware plugs), the (synced) calendar instance settings and the
+    (synced) instance plugs."""
+    if w.get("type") == "calendar-source":
+        return True
+    scope = scope_of(w)
+    if scope == "node":
+        return w.get("owner") == node_id(name)
+    return scope == "instance" and is_plug(w)

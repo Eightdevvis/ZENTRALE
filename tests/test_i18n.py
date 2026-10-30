@@ -13,15 +13,22 @@ MO = os.path.join(i18n.LOCALE_DIR, "de", "LC_MESSAGES", "zentrale.mo")
 
 
 def _po_entries():
-    """msgid → msgstr from the .po (also multi-line entries and \\n escapes)."""
+    """msgid → msgstr from the .po (also multi-line entries and \\n escapes).
+    An entry with a `msgctxt` is keyed (context, msgid)."""
     import ast
-    out, key, cur, field = {}, None, None, None
+    out, key, cur, field, ctxt, next_ctxt = {}, None, None, None, None, None
+
+    def done():
+        if key:
+            out[(ctxt, key) if ctxt else key] = cur
     for line in open(PO, encoding="utf-8").read().splitlines() + [""]:
         line = line.strip()
-        if line.startswith("msgid "):
-            if key:
-                out[key] = cur
+        if line.startswith("msgctxt "):
+            next_ctxt = ast.literal_eval(line[8:])
+        elif line.startswith("msgid "):
+            done()
             key, cur, field = ast.literal_eval(line[6:]), None, "id"
+            ctxt, next_ctxt = next_ctxt, None
         elif line.startswith("msgstr "):
             cur, field = ast.literal_eval(line[7:]), "str"
         elif line.startswith('"'):
@@ -29,8 +36,7 @@ def _po_entries():
                 key += ast.literal_eval(line)
             else:
                 cur += ast.literal_eval(line)
-    if key:
-        out[key] = cur
+    done()
     return out
 
 
@@ -40,7 +46,17 @@ def test_compiled_table_matches_po():
     po = _po_entries()
     assert po
     for msgid, msgstr in po.items():
-        assert mo.gettext(msgid) == msgstr, f"zentrale.mo is stale — run msgfmt ({msgid!r})"
+        got = mo.pgettext(*msgid) if isinstance(msgid, tuple) else mo.gettext(msgid)
+        assert got == msgstr, f"zentrale.mo is stale — run msgfmt ({msgid!r})"
+
+
+def test_wire_states_do_not_translate_the_same_word_elsewhere(monkeypatch):
+    """"off" as a wire state is not "off" as a setting (`zentrale status`
+    "Auto-update off" became "aus" when step 9b gave the bare word a German
+    text — tests/test_dev_mode.py::test_wizard_step_n_picks_up_there)."""
+    monkeypatch.setenv("ZENTRALE_LANG", "de")
+    assert i18n.pgettext("wire state", "off") == "aus"
+    assert i18n._("off") == "off"
 
 
 def test_every_reason_has_german_text_with_same_placeholders():

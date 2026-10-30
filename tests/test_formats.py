@@ -28,6 +28,8 @@ import kalender_einstellung as ke
 import kalender_ics
 import kalender_sicherung as sich
 import konto
+import plug_store
+import wires
 from test_abgleich import LISTE, Welt  # noqa: F401  (fixture building blocks)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +44,8 @@ MODULES = {
     "kalender_ics": ("calendar-side-file",),
     "calendar_colours": ("calendar-colours",),
     "account_ownership": ("account-ownership",),
+    "plug_store": ("plug-wires",),
+    "wires": ("node-wires",),
 }
 EXEMPT = {
     "formats": "the registry itself",
@@ -475,3 +479,63 @@ def test_preserve_calendar_colours(tmp_path):
     # Without extra fields the bytes are what they always were.
     assert cc.table_text({"a": 1}) == json.dumps({"format": cc.FORMAT, "slots": {"a": 1}},
                                                  indent=1, ensure_ascii=False) + "\n"
+
+
+# ── plug-wires: data/adapter/plugs/<app>.json (core/plug_store.py) ──────
+
+def _plug(state="live", **more):
+    return dict({"id": "plug/assistent/model", "from": "zentrale://adapter/port/model",
+                 "to": "zentrale://assistent/port/model", "type": "model",
+                 "owner": "app:assistent", "state": state}, **more)
+
+
+def _plug_file(doc):
+    p = plug_store.instance_file("assistent")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    return p
+
+
+def test_newer_plug_wires():
+    p = _plug_file({"format": "zentrale-plugs/2", "wires": [_plug()]})
+    roh = open(p, "rb").read()
+    assert plug_store.instance_wires() == []            # never interpreted
+    assert _noted("plug-wires")
+    assert wires._write_plugs(p, {"plug/assistent/model": _plug("off")})   # a problem, not written
+    assert open(p, "rb").read() == roh
+
+
+def test_preserve_plug_wires():
+    other = _plug(id="plug/assistent/files", type="files", seen="x")
+    p = _plug_file({"format": plug_store.PLUGS_FORMAT, "wires": [other], "future": {"x": 1}})
+    assert wires._write_plugs(p, {"plug/assistent/model": _plug()}) is None
+    d = json.loads(open(p, encoding="utf-8").read())
+    assert d["future"] == {"x": 1}
+    assert [w["id"] for w in d["wires"]] == ["plug/assistent/files", "plug/assistent/model"]
+    assert d["wires"][0]["seen"] == "x"                 # an untouched wire keeps its fields
+    assert not _noted("plug-wires")
+
+
+# ── node-wires: `wires` in a node description (core/wires.py) ─────────
+
+def _sync_wire(**more):
+    return dict({"id": "sync/minipc/fokus", "from": "zentrale://cloud/port/sync",
+                 "to": "zentrale://fokus/port/data", "type": "sync", "owner": "node:minipc",
+                 "state": "off"}, **more)
+
+
+def test_newer_node_wires():
+    d = {"name": "minipc", "wires": {"format": "zentrale-node-wires/2", "wires": [_sync_wire()]}}
+    assert wires.wires_of_description(d) == []          # read-only: nothing guessed
+    assert _noted("node-wires")
+
+
+def test_preserve_node_wires():
+    """The section is written whole by its own node only; a reader keeps the
+    fields a newer node put on a wire (Schematix shows what it gets)."""
+    d = {"name": "minipc", "wires": {"format": wires.NODE_WIRES_FORMAT, "future": 1,
+                                     "wires": [_sync_wire(seen="2026-10-30T09:15:00Z", future={"a": 1})]}}
+    got = wires.wires_of_description(d)
+    assert got[0]["future"] == {"a": 1} and got[0]["seen"]
+    assert not _noted("node-wires")

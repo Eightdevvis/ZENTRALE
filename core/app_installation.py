@@ -312,3 +312,35 @@ def installed_addresses() -> list:
     raus = [builtin.address(n) for n in builtin.installed_names()]
     raus += [e["quelle"] for e in reg.lesen() if isinstance(e.get("quelle"), str)]
     return sorted(set(raus))
+
+
+# ── Plug dialog (building kit step 11, core/plugs.py) ─────────────────
+
+def plug(name, choices) -> dict:
+    """Plug in what the person chose for an installed app ({need id:
+    provider port | None}) through the one gate (core/plugs.confirm). A
+    required socket (min ≥ 1) still without a live wire afterwards means the
+    install does not count: a store app is withdrawn from this node's register
+    (its folder stays — installing again only plugs). Without that, the
+    node's whole wiring would no longer compile. → plugs.confirm's answer
+    plus `withdrawn`."""
+    import plugs
+    if not plugs.known(name):
+        raise InstallFehler("„%s\" is not installed here" % name, 404)
+    r = plugs.confirm(name, choices if isinstance(choices, dict) else {})
+    r["withdrawn"] = False
+    if r["unmet"] and eintrag(name) is not None:
+        withdraw(name)
+        r["withdrawn"] = True
+    return r
+
+
+def withdraw(name) -> bool:
+    """Take an app out of this node's register (the folder stays). → True
+    when it was there."""
+    with _LOCK:
+        rest = [e for e in reg.lesen() if e["name"] != name]
+        if len(rest) == len(reg.lesen()):
+            return False
+        reg.schreiben(rest)
+    return True

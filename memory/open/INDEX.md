@@ -12,7 +12,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [small_fixes.md](small_fixes.md) | Stale docstrings, comments, a fallback text, an index section, the word „Takt" | partly |
 | [calendar_frames.md](calendar_frames.md) | Pixel-art frames, selection and "running now" markers for calendar blocks: drafted, not built | yes (pick styles) |
 | [browser_ui_rebuild.md](browser_ui_rebuild.md) | Old dashboard back to the archive, browser UI rebuilt in today's TUI style: asked 13.10., not started | yes (pick approach) |
-| [store_app_lifecycle.md](store_app_lifecycle.md) | Store apps: no uninstall, update or rights dialog yet | no |
+| [store_app_lifecycle.md](store_app_lifecycle.md) | Store apps: no uninstall or update yet; old `rechte` words not asked | no |
 | [store_tutor_map_migration.md](store_tutor_map_migration.md) | Tutor and map still hard-coded, not installed through the store | no |
 | [budgeter_followups.md](budgeter_followups.md) | Budget app: German code, no import, small gaps, look | partly (look) |
 | [printer_adapter.md](printer_adapter.md) | Printer via pluggable adapters (core as broker): blueprint + IPP adapter not started; printer not on a shared network yet | yes (network, go) |
@@ -74,5 +74,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [building_kit_decisions.md](building_kit_decisions.md) | Building kit: Schematix style pending (needed before build step 13) | yes (style) |
 | [node_lifecycle_followups.md](node_lifecycle_followups.md) | Building kit steps 7/8 leftovers: server deploy (migration 0004), phone texts/header, router keys | yes (deploy) |
 | [key_rotation_old_data.md](key_rotation_old_data.md) | After a key change, old stands/blobs/history stay readable with the old key (lost device) | yes (pick direction) |
-| [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): apply agent not on the timer, calendar CLI around the gate, compiler not in Dart, only own node projected | no |
-| [dev_mode_wizard_resume_red.md](dev_mode_wizard_resume_red.md) | Dev-mode test: resumed wizard loses auto-update "off" since steps 9/9b | no |
+| [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): the compiler's graph rules are not in Dart yet | no |

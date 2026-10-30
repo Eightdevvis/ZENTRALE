@@ -31,7 +31,7 @@ def _app(ordner, name, daten_toml):
 
 
 # Der Adapter ist Pflicht (memory/hub/adapter.md); ohne Konto ohne Zugangsdaten.
-NUR_ADAPTER = ["data/adapter/anschluesse/*.json", "data/adapter/bruecke/**"]
+NUR_ADAPTER = ["data/adapter/anschluesse/*.json", "data/adapter/plugs/*.json", "data/adapter/bruecke/**"]
 
 
 # ── Die Tabelle ────────────────────────────────────────────────────────

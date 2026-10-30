@@ -16,6 +16,11 @@
 #   reconcile(...)      the apply agent: make the owners say what the node's
 #                       current generation says (core/wires.write), check,
 #                       roll back to the previous generation when unhealthy
+#   keep(...)           the apply agent on the keeper (`zentrale sync
+#                       --automatic`, follow-up 1): reconcile the node's own
+#                       wires, adopt instance wires that arrived through sync
+#   description_due()   the node's own wires for its description in the cloud
+#                       when they changed since the last time (follow-up 4)
 #
 # A node without the apply agent (node description without `apply_agent`)
 # is unmanaged: read-only on the map, never targeted (sketch_compiler).
@@ -26,6 +31,7 @@
 # Foundation (layer 1).
 
 import datetime
+import hashlib
 import json
 import os
 
@@ -33,7 +39,7 @@ import ai_config
 import dateien
 import sketch_compiler
 import wires
-from i18n import _
+from i18n import _, pgettext
 
 DEFAULT_DIR = "~/.local/state/zentrale/generations"
 KEEP = 10
@@ -111,6 +117,19 @@ class Store:
         dateien.json_schreiben(os.path.join(d, "history.json"), hist[-self.keep:])
         self._prune()
 
+    def described(self, node):
+        """The hash of the wires this node last put into its description in
+        the cloud (follow-up 4), or None."""
+        try:
+            with open(os.path.join(self._node(node), "described"), encoding="utf-8") as f:
+                return f.read().strip() or None
+        except OSError:
+            return None
+
+    def mark_described(self, node, h):
+        os.makedirs(self._node(node), exist_ok=True)
+        dateien.atomar_schreiben(os.path.join(self._node(node), "described"), h)
+
     def previous(self, node):
         """The generation before the current one (for a roll-back)."""
         cur = self.current_hash(node)
@@ -149,7 +168,7 @@ def _line(w, titles, state=True):
     text = _("{to} → {frm} on {owner}").format(to=_side(w["to"], titles), frm=_side(w["from"], titles),
                                               owner=where)
     if state and w["state"] != "live":
-        text += " (" + _(w["state"]) + ")"
+        text += " (" + pgettext("wire state", w["state"]) + ")"
     return text
 
 
@@ -167,7 +186,7 @@ def diff(old, new) -> list:
         elif b is None:
             out.append("- " + _line(a, titles))
         elif all(a.get(k) == b.get(k) for k in ("from", "to", "type", "owner")):
-            out.append("~ " + _line(b, titles, state=False) + f": {_(a['state'])} → {_(b['state'])}")
+            out.append("~ " + _line(b, titles, state=False) + f": {pgettext('wire state', a['state'])} → {pgettext('wire state', b['state'])}")
         else:
             out.append("~ " + _line(b, titles) + " " + _("(was: {old})").format(old=_side(a["from"], titles)))
     return out
@@ -179,26 +198,29 @@ def _applies_here(w, node):
     return w.get("state") != "planned" and wires._writable(w, node)
 
 
-def default_health(gen, node, problems) -> list:
+def default_health(gen, node, problems, only=None) -> list:
     """Healthy = every writer succeeded and the owners now say what the
-    generation says. → list of problems (empty = healthy)."""
+    generation says (for the wires `only` selects). → list of problems
+    (empty = healthy)."""
+    pick = (lambda w: _applies_here(w, node) and (only is None or only(w)))
     out = [f"{wid}: {p}" for wid, p in problems if p]
-    want = [w for w in gen["wires"] if _applies_here(w, node)]
-    have = [w for w in wires.all_wires(node) if _applies_here(w, node)]
+    want = [w for w in gen["wires"] if pick(w)]
+    have = [w for w in wires.all_wires(node) if pick(w)]
     out += [_("{wire} did not take effect").format(wire=wid) for wid, _a, _b in wires.changes(want, have)]
     return out
 
 
-def reconcile(store, node=None, health=None, writer=None, root=None) -> dict:
-    """Bring the owners to the node's current generation. Unhealthy →
-    switch back to the previous generation and apply that (once).
+def reconcile(store, node=None, health=None, writer=None, root=None, only=None) -> dict:
+    """Bring the owners to the node's current generation (with `only`: just
+    the wires it selects). Unhealthy → switch back to the previous generation
+    and apply that (once).
     → {"applied": hash|None, "problems": [...], "rolled_back": bool}."""
     node = node or wires.node_name()
-    health = health or default_health
+    health = health or (lambda g, n, d: default_health(g, n, d, only))
     gen = store.current(node)
     if gen is None:
         return {"applied": None, "problems": [], "rolled_back": False}
-    done = wires.write([w for w in gen["wires"] if _applies_here(w, node)], node, root, writer)
+    done = wires.write([w for w in gen["wires"] if _applies_here(w, node)], node, root, writer, only)
     problems = health(gen, node, done)
     if not problems:
         return {"applied": gen["hash"], "problems": [], "rolled_back": False}
@@ -206,8 +228,55 @@ def reconcile(store, node=None, health=None, writer=None, root=None) -> dict:
     if prev is None:
         return {"applied": gen["hash"], "problems": problems, "rolled_back": False}
     store.switch(node, prev["hash"], note="rolled back: " + "; ".join(problems)[:300])
-    wires.write([w for w in prev["wires"] if _applies_here(w, node)], node, root, writer)
+    wires.write([w for w in prev["wires"] if _applies_here(w, node)], node, root, writer, only)
     return {"applied": prev["hash"], "problems": problems, "rolled_back": True}
+
+
+def keep(store=None, node=None, health=None, root=None) -> dict:
+    """The apply agent on the keeper (follow-up 1; `zentrale sync --automatic`
+    runs it every five minutes). Idempotent: nothing is written when the
+    owners already say what the current generation says.
+
+      1. Reconcile only what this node owns by itself (node-scoped wires:
+         its sync choices, its hardware plugs) toward its current generation;
+         a failed health check rolls back. Instance wires (calendar source,
+         instance plugs) sync between nodes — another node may have rewired
+         them through its own gate, so they are never pushed back here.
+      2. Adopt: when the projection now differs from the current generation
+         (an instance wire arrived through sync), the projection is compiled
+         and becomes the current generation. A projection that does not
+         compile stays a problem, nothing is switched.
+
+    No generation yet (nothing ever passed the gate here) → nothing happens.
+    → {"applied", "problems", "rolled_back", "adopted": hash|None}."""
+    node = node or wires.node_name()
+    store = store or Store()
+    out = {"applied": None, "problems": [], "rolled_back": False, "adopted": None}
+    if store.current(node) is None:
+        return out
+    import abgleich_apps
+    # A device that never chose (None = every app syncs) has nothing to
+    # enforce for sync: a generation with a sync choice would have stored one.
+    # Its new apps stay "everything" instead of turning into "not decided".
+    never_chose = abgleich_apps.entscheidungen() is None
+    out.update(reconcile(store, node, health, root=root,
+                         only=lambda w: wires.node_owned(w, node)
+                         and not (never_chose and w["type"] == "sync")))
+    if out["rolled_back"]:
+        return out
+    gen = store.current(node)
+    now = wires.sketch(node)
+    pick = (lambda w: _applies_here(w, node))
+    if not wires.changes([w for w in now["wires"] if pick(w)], [w for w in gen["wires"] if pick(w)]):
+        return out
+    adopted, errors = sketch_compiler.compile_sketch(now, current={w["id"]: w for w in now["wires"]})
+    if errors:
+        out["problems"] = out["problems"] + [e["text"] for e in errors]
+        return out
+    store.save(adopted)
+    store.switch(node, adopted["hash"], note="adopted what arrived through sync")
+    out["adopted"] = adopted["hash"]
+    return out
 
 
 # ── Run: the one way for every change ────────────────────────────────────
@@ -231,7 +300,10 @@ def run(sketch, node=None, store=None, apply=True, health=None, writer=None, roo
         return RunResult(ok=False, errors=errors, diff=[], generation=None, previous=None,
                          rolled_back=False, problems=[])
     before, _errs = sketch_compiler.compile_sketch(now, current=current)
-    lines = diff(before, gen)
+    # What is in effect may not compile (an app just installed whose required
+    # socket the plug dialog is about to fill): the diff then reads the raw
+    # projection, and there is no roll-back target.
+    lines = diff(before or now, gen)
     result = RunResult(ok=True, errors=[], diff=lines, generation=gen["hash"],
                        previous=before["hash"] if before else None, rolled_back=False, problems=[])
     if not apply or not lines:
@@ -245,6 +317,17 @@ def run(sketch, node=None, store=None, apply=True, health=None, writer=None, roo
     r = reconcile(store, node, health, writer, root)
     result.update(rolled_back=r["rolled_back"], problems=r["problems"], ok=not r["rolled_back"])
     return result
+
+
+def description_due(node=None, store=None):
+    """→ (section, hash) when this node's own wires (wires.node_section)
+    changed since they last went into its description, else (None, hash).
+    The caller publishes the description, then store.mark_described."""
+    node = node or wires.node_name()
+    store = store or Store()
+    section = wires.node_section(node)
+    h = "sha256:" + hashlib.sha256(sketch_compiler.canonical(section)).hexdigest()
+    return (None if store.described(node) == h else section), h
 
 
 def with_wires(sketch, changed=(), removed=()) -> dict:

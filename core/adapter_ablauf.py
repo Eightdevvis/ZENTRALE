@@ -85,6 +85,31 @@ def mitte_hat_kalender(ordner="data/kalender"):
     return r if r is True or r is False else None
 
 
+def calendar_fill_continue(iid, wurzel, report=None) -> dict:
+    """The source stays as it is; only an unfinished first fill of a
+    zencloud calendar is synced again (see kalender_quelle_setzen, "Since
+    2026-10-29"). Writes no setting, so it needs no pass through the Run gate
+    (`zentrale adapter calendar` calls it when the source does not change).
+    → the same answer as kalender_quelle_setzen: gleich | ohne_mitte |
+    interrupted | incomplete | continued."""
+    ke = kalender_einstellung
+    raus = {"ergebnis": "gleich", "von": ke.quelle(iid, wurzel), "beiseite": None, "fehler": None}
+    if raus["von"] != "zencloud" or not calendar_fill_pending(iid, wurzel):
+        return raus
+    if nur_lokal():
+        return dict(raus, ergebnis="ohne_mitte")
+    before = _set_aside_dirs()
+    fehler = _sync_reported(wurzel, ke.ordner(iid, wurzel), report)
+    new = sorted(set(_set_aside_dirs()) - set(before))
+    raus["beiseite"] = new[-1] if new else None
+    if fehler is INTERRUPTED:
+        return dict(raus, ergebnis="interrupted")
+    if fehler or calendar_fill_pending(iid, wurzel):
+        return dict(raus, ergebnis="incomplete",
+                    fehler=fehler or "the sync did not take the calendar along")
+    return dict(raus, ergebnis="continued")
+
+
 def kalender_quelle_setzen(iid, quelle, wurzel, report=None) -> dict:
     """Die Quelle der Kalender-App `iid` umstöpseln (Sasha 28.10.2026: ein
     Wert, eine Stelle). Setzt nur den Wert in der Einstellung (die überall
@@ -136,20 +161,7 @@ def kalender_quelle_setzen(iid, quelle, wurzel, report=None) -> dict:
     vorher = ke.roh_lesen(iid, wurzel)
     ordner = ke.ordner(iid, wurzel)
     if alt == quelle and vorher is not None:
-        if quelle != "zencloud" or not calendar_fill_pending(iid, wurzel):
-            return raus
-        if nur_lokal():
-            return dict(raus, ergebnis="ohne_mitte")
-        before = _set_aside_dirs()
-        fehler = _sync_reported(wurzel, ordner, report)
-        new = sorted(set(_set_aside_dirs()) - set(before))
-        raus["beiseite"] = new[-1] if new else None
-        if fehler is INTERRUPTED:
-            return dict(raus, ergebnis="interrupted")
-        if fehler or calendar_fill_pending(iid, wurzel):
-            return dict(raus, ergebnis="incomplete",
-                        fehler=fehler or "the sync did not take the calendar along")
-        return dict(raus, ergebnis="continued")
+        return calendar_fill_continue(iid, wurzel, report)
     if quelle != "zencloud":
         ke.schreiben(iid, quelle, wurzel)
         if iid == ke.HAUPT:

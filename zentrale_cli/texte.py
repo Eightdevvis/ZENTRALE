@@ -41,7 +41,9 @@ EN = {
     "cmd_adapter_setup": ("adapter setup", "bring in what this device already has connected"),
     "cmd_adapter_run": ("adapter run", "run the calendar bridge once (what the timer does)"),
     "cmd_adapter_calendar": ("adapter calendar [google|zencloud|lokal]", "show or switch where the calendar comes from"),
-    "cmd_timers": ("timers", "the background timers: sync and calendar bridge"),
+    "cmd_apps_install": ("apps install <name>", "install an app from the store and plug in what it needs"),
+    "cmd_apps_plug": ("apps plug <name>", "choose again what an app is plugged into (model, files …)"),
+    "cmd_timers": ("timers","the background timers: sync and calendar bridge"),
     "cmd_timers_install": ("timers install", "install or repair the timers and start them"),
     "cmd_timers_remove": ("timers remove", "stop the timers and remove them"),
     "cmd_cloud_usage": ("cloud usage", "how close the cloud is to its free limits (operator only)"),
@@ -225,6 +227,22 @@ EN = {
     # The one gate for wiring changes (building kit step 9b, core/generations.py).
     "wiring_refused": "Not changed — {text}",
     "wiring_rolled_back": "Changed back — the change did not take effect: {text}",
+    "keep_error": "Wiring check skipped: {text}",
+    "keep_problems": "Wiring does not match what was chosen: {text}",
+    # The plug dialog at install (building kit step 11, core/plugs.py).
+    "apps_usage": "Use 'zentrale apps install <name>' or 'zentrale apps plug <name>'.",
+    "apps_installed": "{name} is installed.",
+    "plug_title": "What {name} needs — pick where each one comes from:",
+    "plug_required": "{socket} is required: without it the app is not installed.",
+    "plug_ask": "{socket} ({type}) — plug in:",
+    "plug_leave_off": "leave it off",
+    "plug_no_provider": "Nothing on this device offers {type} yet.",
+    "plug_not_asked": "No terminal to ask in — everything stays off. Run 'zentrale apps plug {name}' in a terminal.",
+    "plug_error": "{socket}: {text}",
+    "plug_withdrawn": "{name} is not installed: {liste} must be plugged in. Its folder stays; 'zentrale apps install' again only asks this.",
+    "plug_unmet": "{name} still needs {liste}.",
+    "plug_unknown": "There is no app '{name}' on this device.",
+    "plug_nothing": "{name} needs nothing to be plugged in.",
     "new_apps_hint": "Not synced yet, waiting for your decision: {liste}. Run 'zentrale sync' in a terminal.",
 
     # ── Abgleich ────────────────────────────────────────────────────

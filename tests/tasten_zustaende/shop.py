@@ -30,6 +30,15 @@ ZUSTAENDE = {
     "apps:ohne_thema": lambda u: (apps(u), u.SHOP.update(themen=[])),
     "laedt": lambda u: (apps(u), u.SHOP.update(laedt=True)),
     "wahl": lambda u: (apps(u), u.shop.app_laden()),
+    # The plug dialog after installing (building kit step 11).
+    "plug": lambda u: (apps(u), u.SHOP.update(plug={
+        "name": "sparbuch", "titel": "Sparbuch", "sel": 0, "pick": {"model": 0, "files": 0},
+        "sockets": [{"need": "model", "type": "model", "min": 0, "title": "Sparbuch model",
+                     "providers": [{"port": "zentrale://adapter/port/model", "piece": "app:adapter",
+                                    "title": "Adapter model"}], "wire": None},
+                    {"need": "files", "type": "files", "min": 0, "title": "Sparbuch files",
+                     "providers": [{"port": "zentrale://ablage/port/files", "piece": "app:ablage",
+                                    "title": "Ablage files"}], "wire": None}]})),
     "fehler": lambda u: (regal(u), u.SHOP.update(kategorien=[], stuecke=[], themen=[],
                                                  msg="backend nicht erreichbar")),
 }

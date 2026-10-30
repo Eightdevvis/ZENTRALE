@@ -51,7 +51,8 @@ EINGEBAUT = {
     # nie gefragt und nie abgewählt) — sonst hätte ein neues Gerät weder KI
     # noch Kalender. Die Zugangsdaten gleichen nur angemeldet ab (abgleich_apps).
     "adapter": {"titel": "Adapter", "pflicht": True,
-                "daten": {"muster": ["data/adapter/anschluesse/*.json", "data/adapter/bruecke/**",
+                "daten": {"muster": ["data/adapter/anschluesse/*.json", "data/adapter/plugs/*.json",
+                                     "data/adapter/bruecke/**",
                                      "data/adapter/geheim.enc"],
                           "abgleichen": True}},
     # The cloud folder (core/cloud_folder.py, memory/hub/cloud_folder.md,

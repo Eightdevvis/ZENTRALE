@@ -24,6 +24,7 @@ BEFEHLE = {
     ("adapter", "setup"): befehle.adapter_setup,
     ("adapter", "run"): befehle.adapter_lauf,
     ("adapter", "calendar"): befehle.adapter_kalender,
+    ("apps",): befehle.apps,
     ("timers",): befehle.timers,
     ("cloud", "usage"): befehle.cloud_usage,
     ("update",): aktualisieren.command,
@@ -33,7 +34,7 @@ BEFEHLE = {
 }
 
 # Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
-MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, befehle.devices_remove,
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.apps, befehle.adapter_kalender, befehle.devices_remove,
                   dev.dev, aktualisieren.command, befehle.version}
 
 

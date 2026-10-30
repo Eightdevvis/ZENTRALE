@@ -35,3 +35,10 @@ def _table(lang):
 def _(msgid: str) -> str:
     """Translate `msgid` into the current UI language."""
     return _table(language()).gettext(msgid)
+
+
+def pgettext(context: str, msgid: str) -> str:
+    """Translate `msgid` within `context` (gettext `msgctxt`): for short words
+    that mean different things in different places — "off" as a wire state
+    is not "off" as a setting (zentrale_cli: "Auto-update off")."""
+    return _table(language()).pgettext(context, msgid)

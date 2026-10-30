@@ -1,4 +1,4 @@
-# Store apps: uninstall, update, rights dialog
+# Store apps: uninstall, update, old rights words
 
 **Stand 2026-10-29:** Open, does not wait for Sasha. Found while building
 store installs (commits `20717be`, `e3b243f`, 25.10.2026).
@@ -17,8 +17,10 @@ open. Installed state lives per machine in `data/hub/`. Docs:
 - **Update:** since building kit step 12 `zentrale update --automatic`
   fast-forwards installed apps unless held (`core/app_update.py`); there is
   no manual "update this app now" in the store and no choice of version.
-- **Rights dialog:** the `rechte` listed in `app.toml` are not shown or
-  confirmed before install.
+- **Old rights words:** the plug dialog (building kit step 11,
+  [../hub/port_types.md](../hub/port_types.md)) asks every `needs` socket at
+  install; old `rechte` words are still granted without asking until the
+  renaming wave turns them into `needs`.
 - **Same machine only:** opening a view assumes TUI and backend run on the
   same computer.
 - **Icons:** app-supplied PNG icons (up to 32×32) unfold in the wheel but are

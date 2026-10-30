@@ -900,6 +900,79 @@ paths:
         "404": {$ref: "#/components/responses/InstallFehler"}
         "409": {$ref: "#/components/responses/InstallFehler"}
 
+  /api/apps/{name}/plugs:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
+    get:
+      tags: [apps]
+      operationId: appPlugs
+      summary: The plug dialog — the sockets an app needs and the providers on this node
+      description: >
+        Building kit step 11 (core/plugs.py). Old rights words (legacy) are
+        not asked; the `data` → `sync` socket is asked by the new-app question
+        of the sync choice.
+      responses:
+        "200":
+          description: The sockets to ask
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, sockets]
+                properties:
+                  name: {type: string}
+                  sockets:
+                    type: array
+                    items:
+                      type: object
+                      required: [need, type, range, min, max, scope, title, providers, wire]
+                      properties:
+                        need: {type: string, description: the socket id}
+                        type: {type: string, examples: [model]}
+                        range: {type: string, examples: ["^1"]}
+                        min: {type: integer, description: "≥ 1 = required: the install only counts when it is plugged in"}
+                        max: {type: [integer, string]}
+                        scope: {enum: [node, instance, link]}
+                        title: {type: string}
+                        providers:
+                          type: array
+                          items:
+                            type: object
+                            required: [port, piece, title]
+                            properties:
+                              port: {type: string, examples: ["zentrale://adapter/port/model"]}
+                              piece: {type: string, examples: ["app:adapter"]}
+                              title: {type: string}
+                        wire: {oneOf: [{$ref: "#/components/schemas/Wire"}, {type: "null"}]}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+    post:
+      tags: [apps]
+      operationId: appPlugsConfirm
+      summary: Plug in what the person chose — one run through the gate
+      description: >
+        `choices` maps a socket to a provider port, or null = refused (the
+        wire stays `off`). Sockets not named keep what they have. A required
+        socket (min ≥ 1) still unplugged afterwards withdraws a store app from
+        this node's register (`withdrawn`, its folder stays). Errors carry
+        `need`, the socket they are pinned to.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [choices]
+              properties:
+                choices:
+                  type: object
+                  additionalProperties: {type: [string, "null"]}
+                  examples: [{model: "zentrale://adapter/port/model"}]
+      responses:
+        "200": {$ref: "#/components/responses/PlugResult"}
+        "400": {$ref: "#/components/responses/InstallFehler"}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+        "409": {$ref: "#/components/responses/PlugResult"}
+
   /api/apps/{name}/start:
     parameters:
       - {name: name, in: path, required: true, schema: {type: string, pattern: "^[a-z0-9][a-z0-9_-]*$"}}
@@ -1227,6 +1300,26 @@ components:
               generation: {type: [string, "null"]}
               rolled_back: {type: boolean}
               problems: {type: array, items: {type: string}}
+    PlugResult:
+      description: >
+        The result of the plug dialog (core/plugs.confirm): a Run result plus
+        the required sockets still unplugged and whether the install was
+        withdrawn because of them.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok, errors, unmet, withdrawn]
+            properties:
+              ok: {type: boolean}
+              diff: {type: array, items: {type: string}}
+              errors: {type: array, items: {$ref: "#/components/schemas/CompileError"}}
+              generation: {type: [string, "null"]}
+              previous: {type: [string, "null"]}
+              rolled_back: {type: boolean}
+              problems: {type: array, items: {type: string}}
+              unmet: {type: array, items: {type: string}, description: required sockets without a live wire}
+              withdrawn: {type: boolean}
 
   schemas:
     Wire:
@@ -1258,6 +1351,7 @@ components:
         piece: {type: string}
         wire: {type: string}
         port: {type: string}
+        need: {type: string, description: "plug dialog: the socket of the app the error is pinned to"}
     App:
       type: object
       required: [name, titel, version, art, adresse, laeuft, gestartet_vom_hub, autostart,
