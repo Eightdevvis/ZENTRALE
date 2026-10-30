@@ -104,6 +104,17 @@ Einzelposten: `test_fraunces_nur_fuer_die_ueberschrift` 10,9 s → unter
    ([dev_mode.md](dev_mode.md)) — what Sasha clicks through is what CI checks.
    A new behaviour goes into the shared fake.
 
+10. **New versioned file formats** (since 2026-10-30): a core module with a
+   `…FORMAT… =` constant needs its entry in `core/formats.py` and a
+   `test_newer_<key>` + `test_preserve_<key>` in `tests/test_formats.py` (the
+   guard there fails otherwise). Vectors go to `contracts/<name>/<major>/`,
+   never copied into `mobile/` (contracts/README.md).
+11. **The old-release test** (`tests/test_alte_fassung.py`, about 35 s for
+   five releases) installs every published release next to HEAD with the
+   devkit; the tarballs are rebuilt from git once into `dist/releases/`
+   (`scripts/release_archive.py`). A new release gets its line in
+   `RELEASES` there; publishing (`paket_hochladen.mjs`) runs the test first.
+
 Regeln 1 und 2 prüft `tests/test_testarchitektur.py` statisch (AST); der
 Wächter wird rot, sobald eine Funktions-Fixture `mktemp` ruft oder eine
 conftest-Autouse-Fixture `tmp_path`/`tmp_path_factory` nimmt.

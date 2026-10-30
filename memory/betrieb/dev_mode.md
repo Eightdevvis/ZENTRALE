@@ -19,7 +19,7 @@ own fake systemd, the dev root's fake cloud, its own device name
 | cloud | `devkit/fake_cloud.py` (was `tests/_falsche_cloud.py`), state in a JSON file so all profiles and commands share it | yes, same class |
 | systemd | `devkit/fake_systemd.py`: a `systemctl` that keeps enabled/active state, refuses units without a file, logs every call, never runs anything; beside it a `loginctl` for lingering (on/off, or a polkit that refuses: `set_linger(allowed=False)`) | yes, `tests/test_timer.py`, `tests/test_setup_wizard.py` |
 | venv | linked from the venv `zentrale dev` runs in (`ZENTRALE_REUSE_VENV`), not built | yes |
-| release tarballs | built from the checkout by `scripts/paket_bauen.py` (same positive list; new uncommitted files included), or dropped into `releases/` by hand | yes |
+| release tarballs | built from the checkout by `scripts/paket_bauen.py` (same positive list; new uncommitted files included), earlier releases from the release archive, or dropped into `releases/` by hand | yes |
 
 So a profile is made in about 2–5 s and reset in about 1–3 s.
 
@@ -64,9 +64,11 @@ in `STEPS`. New state = one line in `STATES`; new journey stage = one function.
 | wizard | install → wizard: `new --step n` answers the first n wizard steps and stops (0 = before the first question); the next `zentrale setup` in the profile picks up at step n (built 2026-10-30) |
 
 "On an old release N" is orthogonal: every state takes a start release.
-Release N built from today's checkout has today's code; true old code comes
-with build step 6 (archive of every released tarball → drop it into
-`releases/`).
+An earlier published release comes with its true old code from the release
+archive (`scripts/release_archive.py`, rebuilt from its commit once into
+`dist/releases/`, since build step 6); the checkout's own `deploy/RELEASE` and
+any other name are built from today's checkout. `tests/test_alte_fassung.py`
+uses exactly this: release N and "head" as two devices of one account.
 
 ## Never the real installation
 

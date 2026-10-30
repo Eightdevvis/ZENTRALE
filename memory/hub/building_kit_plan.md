@@ -172,9 +172,9 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
 3. **Unknown major → read-only, never misread.** A reader that sees a major
    it does not know does not write that file/port and says so once
    (`zentrale status`: "calendar data is newer than this version — read
-   only"). Finding: `core/abgleich.py` writes `"format": 1` but does not
-   check it when reading — a format 2 would be misread. Same check for every
-   `format` field.
+   only"). Built in step 5 (`a6f37db`): `core/formats.py` for every
+   `format` field — `inhalt.enc`, envelopes, `konto.json`, adapter, calendar
+   setting, side file, colours; `tests/test_formats.py` per format.
 4. **A new major runs in parallel.** Cloud: `/v2` next to `/v1`, both
    served. App data: the new app version writes the new form *and* keeps the
    old form updated (down-projection) for the whole support window; an old
@@ -213,9 +213,9 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
 
 | Test | What it proves | Where |
 |---|---|---|
-| **Contract vectors** — one folder per contract and major: request → response, file → parsed, merge in → merge out | every implementation (Python core, Dart phone, TS server) agrees byte for byte | `contracts/<name>/<major>/` (new; existing vector files move or are linked) |
+| **Contract vectors** — one folder per contract and major: request → response, file → parsed, merge in → merge out | every implementation (Python core, Dart phone, TS server) agrees byte for byte | `contracts/<name>/<major>/` (built `b64f3e4`: vector files moved there; translator chain `core/translators.py`) |
 | **Preserve test** — each reader loads a file with extra unknown fields, writes it, fields are still there | rule 2 | generated per JSON schema |
-| **Old-release test** — CI keeps every released tarball; two fake devices, one on release N−k, one on HEAD, sync against the fake cloud and against the local worker, both converge, nothing lost | rule 1–4 end to end | `tests/test_alte_fassung.py` (new), release tarballs from `dist/` archive |
+| **Old-release test** — CI keeps every released tarball; two fake devices, one on release N−k, one on HEAD, sync against the fake cloud and against the local worker, both converge, nothing lost | rule 1–4 end to end | `tests/test_alte_fassung.py` (built `b64f3e4`: releases 37–41 vs HEAD, fake cloud; local worker not yet), tarballs rebuilt from git into `dist/releases/` (`scripts/release_archive.py`) |
 | **Server keeps old majors** — the vitest suite runs every supported major's vectors | the cloud never drops a version early | `server/test/` |
 
 A release is not published if the old-release test is red for any
@@ -545,10 +545,10 @@ apply agent with the generation pointer. That is all. No new language.
 |---|---|---|
 | install | `install.sh`, sha256, venv, link, PATH hint, keeper timers, wizard + linger (`527afc3`) | — |
 | account/cloud | Zero-Knowledge account, `HttpMitte`, node description, `devices` | owned apps (`/v1/besitz` unused), cloud as store item |
-| sync | per-app choice, cloud wins, held-back files | format check on read, preserve test |
+| sync | per-app choice, cloud wins, held-back files | — (format read rule + preserve test: `a6f37db`) |
 | timers | `zentrale timers` (sync, calendar, update), installer call, re-run on every update, self-heal (`527afc3`) | — |
 | update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
-| versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | contract folder, old-release test, policy (insecure warning: built `d1dc8fd`) |
+| versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | policy (insecure warning: `d1dc8fd`; contract folder, old-release test: `b64f3e4`) |
 | packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list | port schema, `needs`/`offers`, `/hub/wires`, plug dialog |
 | lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`d1dc8fd`) | Schematix display |
@@ -566,8 +566,8 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 2 | **Built `527afc3`.** **Update timer + setting + setup wizard**: `zentrale-update` unit, `update --automatic`, `auto_update` asked in the wizard (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
 | 3 | **Built `527afc3`.** **Linger question** in installer and `setup`, `status` line when off | with linger on, a test session-less run fires the sync unit; off → `status` says "only while logged in" |
 | 4 | **Mini-PC by hand once** ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)): update to the release with steps 1–3 | after a reboot without login, `zentrale devices` on the laptop shows the mini seen < 10 min ago |
-| 5 | **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
-| 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
+| 5 | **Built `a6f37db`.** **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
+| 6 | **Built `b64f3e4`.** **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
 | 7 | **Built `d1dc8fd`.** **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
 | 8 | **Built `d1dc8fd`.** **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
 | 9 | **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /hub/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
@@ -597,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema.
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`).

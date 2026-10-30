@@ -183,6 +183,17 @@ d/<name>.enc                jede Datei einzeln verschlüsselt (schreiben nur die
 knoten/<knoten>/<name>.enc  Eingang eines fremden Knotens, z. B. des Handys
 ```
 
+**Format and the read rule (since 2026-10-30, building kit step 5).**
+`inhalt.enc` and every envelope carry `"format": 1`. A device that finds a
+major it does not know never interprets or writes it (`core/formats.py`):
+a newer `inhalt.enc` → the sync stops with "cloud data is newer than this
+version — read only" (nothing read, nothing sent; the account key change
+refuses too); a newer envelope is skipped with a note. `zentrale status`
+lists every such note until an update reads the format again. Fields a newer
+version added — at the top of `inhalt.enc` and per file — are written back
+unchanged. Vectors: `contracts/cloud-sync/1/` (contracts/README.md); every
+published release must keep syncing with HEAD (`tests/test_alte_fassung.py`).
+
 **Warum Fernet, auch mit Blick aufs Handy (Dart):** Fernet ist ein
 offengelegtes, kleines Format (AES-128-CBC + HMAC-SHA256, unten Byte für Byte).
 In Dart gibt es es fertig (`package:encrypt`, Klasse `Fernet`), und notfalls
