@@ -180,25 +180,32 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
    old form updated (down-projection) for the whole support window; an old
    node keeps reading and writing the old form, the new one merges it in.
    Majors are expensive by design — the rule says "avoid them".
-5. **Versions do not sync between nodes.** Which version of the platform or
-   of an app runs is part of the node frame. Data and settings sync; code
-   versions don't. (This answers question 6 of [app_motor_plan.md](app_motor_plan.md)
-   with **no** and replaces its "update on one node pulls all others".)
+5. **Versions do not sync between nodes — by default.** Which version of the
+   platform or of an app runs is part of the node frame. Data and settings
+   sync; code versions don't. Sasha 30.10.: *settable*, in Schematix: a
+   "same version" wire between nodes (or a group) makes them follow each
+   other. (Answers question 6 of [app_motor_plan.md](app_motor_plan.md).)
 6. **Packages depend on contracts, never on other packages.** The tutor
    needs `model ^1` and `data ^1`, not "adapter 0.7". That keeps the
    compatibility question linear: contract × reader, not package × package.
 
-### 2.3 Support window (proposal)
+### 2.3 Support window: forever (Sasha 30.10.)
 
-- **Every platform release of the last 12 months keeps syncing** with the
-  cloud and with current nodes. Old majors of a contract stay served for at
-  least 12 months after their successor ships.
-- When a major is going to end, the cloud announces it with the standard
-  HTTP headers `Deprecation` (RFC 9745) and `Sunset` (RFC 8594). The old
-  client shows "this version stops syncing on <date>" in `status` and TUI —
-  no client knows the date in advance, the server tells it.
-- After the sunset the old node keeps working locally; only sync stops.
-  Nothing is deleted anywhere.
+**Every released version keeps syncing forever.** How that stays possible:
+
+- **No major is ever switched off.** A new major ships with one
+  **translator** to the previous major (up and down, a pure function with
+  its own vectors). Old majors are served through the chain v1↔v2↔v3, so
+  each new major adds one translator, never a rewrite of old ones.
+- **Majors stay rare** (rule 4): the chain only grows when a contract
+  really cannot grow additively.
+- **The old-release test covers every release ever published**, not a
+  window (section 2.4). A release that breaks any old one is not published.
+- **The one exception is security, and even it does not force:** if an
+  old version's crypto is found broken, the cloud keeps serving it but
+  marks the node "insecure" (Schematix, `status`, `devices`); the owner
+  decides whether to update or remove it. The headers `Deprecation`
+  (RFC 9745) carry that warning; `Sunset` is never sent.
 - An old node lacks new features, nothing else: a port type it does not
   know shows as `broken` on its side with "needs a newer ZENTRALE".
 
@@ -208,11 +215,11 @@ Schema 2020-12) and shipped with **test vectors**. Today's contracts:
 |---|---|---|
 | **Contract vectors** — one folder per contract and major: request → response, file → parsed, merge in → merge out | every implementation (Python core, Dart phone, TS server) agrees byte for byte | `contracts/<name>/<major>/` (new; existing vector files move or are linked) |
 | **Preserve test** — each reader loads a file with extra unknown fields, writes it, fields are still there | rule 2 | generated per JSON schema |
-| **Old-release test** — CI keeps the released tarballs of the support window; two fake devices, one on release N−k, one on HEAD, sync against the fake cloud and against the local worker, both converge, nothing lost | rule 1–4 end to end | `tests/test_alte_fassung.py` (new), release tarballs from `dist/` archive |
+| **Old-release test** — CI keeps every released tarball; two fake devices, one on release N−k, one on HEAD, sync against the fake cloud and against the local worker, both converge, nothing lost | rule 1–4 end to end | `tests/test_alte_fassung.py` (new), release tarballs from `dist/` archive |
 | **Server keeps old majors** — the vitest suite runs every supported major's vectors | the cloud never drops a version early | `server/test/` |
 
 A release is not published if the old-release test is red for any
-release inside the window.
+earlier release.
 
 ## 3. Packaging — tiny core, everything else packages
 
@@ -260,11 +267,8 @@ So:
    holdable. `eingebaute_apps.py` shrinks.
 3. **"Pick parts" UI** only when at least three apps are separate.
 4. **Not built:** dependency solver, version ranges between packages,
-   partial core updates. Rule 6 makes them unnecessary.
-
-Verdict: the idea is right and cheap *if* dependencies stay on contracts;
-it gets expensive only with package-to-package dependencies, which the plan
-forbids.
+   partial core updates. Rule 6 makes them unnecessary — that is what keeps
+   the split cheap.
 
 ## 4. The cloud is a store app, preinstalled at signup
 
@@ -291,8 +295,8 @@ what ZENTRALE does, what exists.
 
 | # | Step | Person does | ZENTRALE does | Today |
 |---|---|---|---|---|
-| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, asks once "keep syncing when logged out?" (linger) | all but the keeper and linger |
-| 2 | **Account** | `zentrale setup`: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes, except "cloud as store app" |
+| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | all but the keeper and the wizard |
+| 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes, except "cloud as store app" |
 | 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder offer missing) |
 | 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; plug/rights dialog no; owned-app offer no |
 | 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | manual `zentrale update` only |
@@ -324,10 +328,29 @@ what ZENTRALE does, what exists.
   sync; `zentrale devices` (and the map) shows "mini — last seen 6 days
   ago" in a warning colour after 1 day.
 
+### 5.4 Dev installer mode (Sasha 30.10.)
+
+Run through every mode of the journey without reinstalling. `zentrale dev`
+creates **profiles**: each one an isolated ZENTRALE home (own data and
+config folder, own fake systemd, fake cloud or a test account), made and
+reset in seconds. A profile can start at any state: fresh, wizard step *n*,
+logged in, on an old release *N*, offline, removed. `dev update N→M` plays
+an update with local tarballs, self-test and keeper included. Built on the
+same fakes as the tests (fake cloud, fake systemctl), so what Sasha clicks
+through is what CI checks. Never touches the real installation.
+
+**Setup wizard** (Sasha 30.10.): every first-run question in one guided
+dialog, step by step, back allowed, defaults pre-selected: account (create /
+log in / local) → cloud folder → **auto-update** → keep syncing when logged
+out (linger) → what is this device for (stationing, apps). Same steps in
+TUI and phone, strings through the translation table, re-openable later
+from the settings. It replaces today's loose `setup` questions.
+
 ### 5.3 Platform updates by setting
 
-- Setting `auto_update` (node frame), default **on**. Shown in `zentrale
-  status`, switchable with `zentrale update auto on|off` and in the TUI.
+- Setting `auto_update` (node frame), first asked in the wizard (default
+  **on**). Shown in `zentrale status`, switchable later with
+  `zentrale update auto on|off`, in the TUI and in Schematix.
 - `--automatic`: fetch `/v1/paket`, nothing new → exit quietly. New →
   download beside, sha256 (later Ed25519 signature,
   [../open/phone_self_update_hardening.md](../open/phone_self_update_hardening.md)),
@@ -349,9 +372,11 @@ ebene, sachen markieren als not yet, falls man es nur plant, verschiedene
 ebenen, tailscale, lan, kabel, bluetooth, verbindungen, strom."*
 
 Not the geographic map app `zentrale-karte` ([../maps/INDEX.md](../maps/INDEX.md)).
-This is an **app** (`wiring`, UI name to be chosen) built on the Desk
-building block ([desk_view.md](desk_view.md)) — Sasha 29.10.: the network
-map is an app, not needed everywhere.
+This is the app **Schematix** (code `schematix`; one plan in it is a
+**scheme**), built on the Desk building block ([desk_view.md](desk_view.md))
+— Sasha 29.10.: the network map is an app, not needed everywhere. It gets
+its own look; Sasha sends the style (pending), see
+[bausteine_farbe_stil.md](bausteine_farbe_stil.md) for the colour roles.
 
 ### 6.1 The key rule: the drawing IS the wiring
 
@@ -379,11 +404,17 @@ map is an app, not needed everywhere.
 | software: services | `model`, `calendar-source`, `read:*`, `event:*`, `tile:*` | app instance settings, adapter |
 | hardware ports | `mic`, `speaker`, `display`, `gpio`, `print`, `scan` | node description (detected), adapters |
 | network | `lan`, `wifi`, `wireguard`, `tailscale`, `bluetooth`, `usb` | node description `netz` (observed), map app (documented) |
-| physical | `cable`, `power` (power bank, charger) | map app (documented) |
+| hardware (things) | router, switch, cable, power bank, charger — **own pieces** on this layer (Sasha 30.10.), not notes on a node | map app (documented) |
 
 Layers toggle on and off (one key per layer); each layer has a colour
 role. Each wire shows what runs over it right now where known: "sync ✓
-10:15", "bridge: laptop", "offline 6 d".
+10:15", "bridge: laptop", "offline 6 d". Tailscale is live today (mini ↔
+tablet), WireGuard from heimnetz.md is planned.
+
+**Versions panel:** every node piece folds open to show its ZENTRALE
+version, each app version, which contract majors it speaks, what it
+cannot do yet ("no wiring map: needs ≥ 44") and its `auto_update` and
+"same version" settings — switchable right there.
 
 ### 6.3 States: live, documented, planned ("not yet")
 
@@ -424,14 +455,8 @@ Risk: some editors drop unknown keys when they save. A load → save
 round-trip test (Obsidian included) decides; fallback is a sidecar file
 keyed by node id next to the canvas.
 
-- **Groups** (`type: "group"`) are places: home, desk, bag, a room. Rooms
-  are exactly what stage 2 of the leitbild needs.
-- **Edges** carry the layer; `color` is the JSON Canvas preset as a fallback
-  for Obsidian, ZENTRALE draws by colour role.
-- **Why JSON Canvas and not a graph format** (GraphML, DOT): it is already
-  the Desk format, it keeps positions, Obsidian reads it, and the meaning
-  lives in the referenced objects anyway. A graph export (DOT) can be
-  generated later for viewing; it is not the store.
+- **Groups** (`type: "group"`) are places: home, desk, bag, a room (stage 2 of the leitbild).
+- **Edges** carry the layer; `color` is only the Obsidian fallback, ZENTRALE draws by colour role.
 
 ### 6.5 Pieces in the `+` picker
 
@@ -536,22 +561,23 @@ Each step ships on its own; earlier steps never wait for later ones.
 
 | # | Step | Acceptance test |
 |---|---|---|
+| 0 | **Dev installer mode** (section 5.4): profiles, start states, `dev update N→M` | a fresh profile runs the wizard to the end and is reset in < 10 s; the real installation is untouched |
 | 1 | **Keeper in the installer**: `install.sh` calls `zentrale timers install`; `update` re-runs it | test with fake systemctl: fresh install → both units rendered and enabled before login; update from a release without a unit → unit appears |
-| 2 | **Update timer + setting**: `zentrale-update` unit, `update --automatic`, `auto_update` (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
+| 2 | **Update timer + setting + setup wizard**: `zentrale-update` unit, `update --automatic`, `auto_update` asked in the wizard (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
 | 3 | **Linger question** in installer and `setup`, `status` line when off | with linger on, a test session-less run fires the sync unit; off → `status` says "only while logged in" |
 | 4 | **Mini-PC by hand once** ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)): update to the release with steps 1–3 | after a reboot without login, `zentrale devices` on the laptop shows the mini seen < 10 min ago |
 | 5 | **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
-| 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of released tarballs, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
-| 7 | **Sunset headers** in the server and their display in the client | server test sets `Sunset` on a test route → `zentrale status` shows the date |
+| 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
+| 7 | **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
 | 8 | **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/` | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
 | 9 | **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /hub/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
 | 9b | **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
 | 10 | **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
 | 11 | **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
 | 12 | **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
-| 13 | **Wiring map v1, read-only**: app `wiring`, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
-| 14 | **Wiring map v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
-| 15 | **Wiring map v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
+| 13 | **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
+| 14 | **Schematix v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
+| 15 | **Schematix v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
 
 **Final acceptance — fresh reinstall on the Mini-PC, no manual work:**
 remove the installation on the mini (cloud data untouched), run the
@@ -562,13 +588,12 @@ laptop is on the mini within 10 minutes; a newly published release is
 running on the mini within 25 hours. Steps 1–4 are enough for this; the
 rest builds on a node that stays alive.
 
-## 9. Open questions for Sasha
-
-In [../open/building_kit_decisions.md](../open/building_kit_decisions.md),
-each answerable in one line.
-
 ## History
 
 - **2026-10-30** — written after the Mini-PC check (installed, synced once,
   then silent) and Sasha's points on consumer view, auto-update setting, no
   forced updates, decomposed updates, plug model and wiring map.
+- **2026-10-30** — Sasha's answers: support forever (translator chain),
+  setup wizard, dev installer mode, version sync settable in Schematix with
+  a versions panel, name Schematix / schemes, things as own hardware pieces,
+  Tailscale live; refused wires instead of greyed sockets.

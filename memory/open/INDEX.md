@@ -71,4 +71,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tablet_integration.md](tablet_integration.md) | Galaxy Tab S7 FE: scrcpy / second screen / KDE Connect / ZENTRALE node — goal open | yes (pick goal) |
 | [package_data_dir.md](package_data_dir.md) | .deb/PKGBUILD copy the program per user because the core keeps data next to the code | no |
 | [pi_back_online.md](pi_back_online.md) | Pi offline; autopull will jump to release 41 — check kiosk, outpost package, sensor bridge | yes (Pi online) |
-| [building_kit_decisions.md](building_kit_decisions.md) | Building kit blueprint: support window, auto-update and linger defaults, app name, key rotation, Tailscale | yes (10 one-line answers) |
+| [building_kit_decisions.md](building_kit_decisions.md) | Building kit: Schematix style pending; key rotation on device removal (proposal: only for lost/stolen) | yes (style, one answer) |
