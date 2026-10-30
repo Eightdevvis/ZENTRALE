@@ -2,7 +2,7 @@
 
 **Stand 2026-10-29:** Open, does not wait for Sasha. Calendar source switched to `zencloud` on the laptop on 29.10.2026 (`kalender-haupt.json`, commits `5f358a7`, `f3a5826`, `ea67dab`).
 
-1. **Switching back to google can delete up to 5 Google events.** Google then sees the local folder; the deletion lock (`scripts/kalender_sync.py`) only fires from 6 missing events. Needed before anyone switches back: a stricter check on the first Google run after a source switch.
+1. **Switching back to google can delete up to 5 Google events.** Google then sees the local folder; the deletion lock (`scripts/kalender_sync.py`) only fires from 6 missing events. Needed before anyone switches back: a stricter check on the first Google run after a source switch. (The *automatic* fallback is closed since 2026-10-30: an old device that skips a newer `kalender-haupt` gets source `paused`, never `google` — `kalender_einstellung.PAUSED`, test `test_newer_calendar_setting_never_switches_google_on`. A deliberate switch back still needs the check.)
 2. **No real progress (n of N) while filling the cloud.** The CLI only prints "still running". Hook needed: `abgleich.abgleichen(..., progress=None)` → `HttpMitte._hochladen` calls `progress(done, total)` after each blob PUT.
 3. **Device without `apps_dabei.json`** that returns exactly on its first sync after the update syncs three-way once instead of "Mitte wins".
 4. **Two devices switching to zencloud at the same moment** both fill the cloud.

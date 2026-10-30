@@ -41,6 +41,11 @@ QUELLEN = ("google", "zencloud", "lokal")
 HAUPT = "kalender-haupt"
 HAUPT_ORDNER = "data/kalender"
 VORGABE = "google"          # ohne Datei: wie bisher
+# A setting from a NEWER major is skipped (read-only). Its source is then
+# unknown here — never fall back to google: switching Google back on can
+# delete Google events (memory/open/calendar_cloud_sync_gaps.md). Not in
+# QUELLEN, so nobody can set it; it only comes out of quelle().
+PAUSED = "paused"
 
 # Altlast aus 1f32e6a (28.10.2026): der Anschluss `kalender-mitte` war der
 # Schalter „ohne Google". Er gilt als kalender-haupt mit quelle=zencloud, bis
@@ -143,10 +148,18 @@ def eingestellt(iid=HAUPT, wurzel=None) -> bool:
     return instanz(iid, wurzel) is not None
 
 
+def held_newer(iid=HAUPT, wurzel=None) -> bool:
+    """Is this instance's file a setting from a newer major (skipped here)?"""
+    return ist_neuer(_roh(_pfad(iid, wurzel)))
+
+
 def quelle(iid=HAUPT, wurzel=None) -> str:
-    """Die Quelle der Instanz; ohne Datei VORGABE (google, wie bisher)."""
+    """Die Quelle der Instanz; ohne Datei VORGABE (google, wie bisher).
+    A newer setting → PAUSED: the calendar is read-only here, no source runs."""
     e = instanz(iid, wurzel)
-    return e["quelle"] if e else VORGABE
+    if e:
+        return e["quelle"]
+    return PAUSED if held_newer(iid, wurzel) else VORGABE
 
 
 def ordner(iid=HAUPT, wurzel=None) -> str:

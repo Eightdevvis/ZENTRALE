@@ -328,6 +328,17 @@ def test_newer_calendar_app_setting():
     assert open(p, "rb").read() == roh
 
 
+def test_newer_calendar_setting_never_switches_google_on():
+    """An old device skipping a newer kalender-haupt must not fall back to the
+    default source google: a Google run against the local folder can delete
+    Google events (memory/open/calendar_cloud_sync_gaps.md item 1)."""
+    e = ke.neu(ke.HAUPT, "zencloud")
+    _anschluss(dict(e, format="zentrale-kalender-app/2"))
+    assert ke.quelle() == ke.PAUSED and ke.PAUSED not in ke.QUELLEN
+    assert not adapter.kalender_google_an() and not adapter.kalender_mit_vertrag()
+    assert ke.mit_quelle("google") == []
+
+
 def test_preserve_calendar_app_setting():
     e = ke.neu(ke.HAUPT, "zencloud")
     e["geaendert"] = {"am": "x", "auf": "y", "von": "google", "future": 1}
