@@ -148,6 +148,9 @@ def antwort(pfad, methode):
     """Das gefälschte Backend: erfundene Daten je Pfad (Chat, Gespräche,
     Gedächtnis, Ablage, Projekte wie im Bildschirm-Werkzeug tests/tui_schirm)."""
     p = pfad.split("?")[0]
+    if p.startswith("/api/schematix") or p == "/api/pieces":   # Schematix (2026-10-30)
+        import _schematix_fake
+        return _schematix_fake.answer(pfad, methode)
     if methode == "GET":
         d = SCHIRM._synth(pfad)
         if d is not None and not p.startswith("/api/graphs/reminders"):
@@ -304,6 +307,7 @@ def welt(monkeypatch, tmp_path):
         u.app_wahl = A.app_oeffnen.AppOeffnen(z, u.bz); u.APPWAHL = u.app_wahl.W   # 2026-10-25
         u.eigene = A.eigene_apps.EigeneApps(z, u.router, u.desk, u.app_wahl)     # Werkstatt (2026-10-10)
         u.werkstatt = A.werkstatt.Werkstatt(z, u.eigene, u.desk, u.router); u.WERK = u.werkstatt.W
+        u.schematix = A.schematix.Schematix(z); u.SCHEMATIX = u.schematix.S   # 2026-10-30
         u.startseite = A.startseite.Startseite(z, zt.RAD, zt.META, zt.TRAD, u.technik, zt.ERAD)
         u.dashboard = A.dashboard.Dashboard(z, u.graphen, u.fokus)
         u.erinnerung = A.erinnerung.Erinnerung(z, u.graphen)
@@ -325,7 +329,7 @@ def zeichnen(u):
 def fingerabdruck(u):
     teile = []
     for name in ("AI", "G", "L", "M", "K", "MAIL", "NOTE", "PIANO", "TECH", "DESK",
-                 "SHOP", "WERK", "APPWAHL"):
+                 "SHOP", "WERK", "APPWAHL", "SCHEMATIX"):
         teile.append(repr(getattr(u, name)))
     teile.append(repr((zt.RAD, zt.META, zt.TRAD, zt.ERAD)))
     teile.append(repr(vars(u.bz)))

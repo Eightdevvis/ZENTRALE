@@ -71,7 +71,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tablet_integration.md](tablet_integration.md) | Galaxy Tab S7 FE: scrcpy / second screen / KDE Connect / ZENTRALE node — goal open | yes (pick goal) |
 | [package_data_dir.md](package_data_dir.md) | .deb/PKGBUILD copy the program per user because the core keeps data next to the code | no |
 | [pi_back_online.md](pi_back_online.md) | Pi offline; autopull will jump to release 41 — check kiosk, outpost package, sensor bridge | yes (Pi online) |
-| [building_kit_decisions.md](building_kit_decisions.md) | Building kit: Schematix style pending (needed before build step 13) | yes (style) |
 | [node_lifecycle_followups.md](node_lifecycle_followups.md) | Building kit steps 7/8 leftovers: server deploy (migration 0004), phone texts/header, router keys | yes (deploy) |
 | [key_rotation_old_data.md](key_rotation_old_data.md) | After a key change, old stands/blobs/history stay readable with the old key (lost device) | yes (pick direction) |
 | [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): the compiler's graph rules are not in Dart yet | no |
+| [schematix_followups.md](schematix_followups.md) | Schematix (building kit 13–15) leftovers: phone/web front, wheel symbol, English app titles | partly (symbol) |

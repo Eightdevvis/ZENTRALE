@@ -137,6 +137,12 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   einmal abbiegen auf halber Strecke, Box-Zeichen, Kreuzungen ergeben sich
   von selbst, Spitze ▸◂▴▾ am Ziel, unter den Kästen. Ein gelöschter Kasten
   nimmt seine Schnüre mit (Baustein und Backend).
+- **Zweite App auf dem Baustein: Schematix** (2026-10-30, [schematix.md](schematix.md)):
+  dafür kann eine Art je Element Rahmen und Rolle geben (`rand_von`,
+  `rolle_von`), eine Schnur `stil` (`pcb` gerundet mit Lötpunkten,
+  `planned` gestrichelt, `off` gepunktet), `rolle` und `rolle_ende`, und die
+  Ansicht kann mit `passt(quelle, ziel)` ein Verbinden ablehnen (rotes ✕ am
+  Ziel, Ergebnis `abgelehnt`). Der Desk nutzt nichts davon; ohne bleibt alles, wie es war.
 - **App** `tui/ansichten/desk.py`: Auswahl, laden/speichern über HTTP,
   Modal, Tastentabelle. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
   und Bearbeiten den ganzen Desk (ohne Puffer-Felder „_…").

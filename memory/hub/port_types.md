@@ -188,7 +188,7 @@ decided" when it first chooses, as `setzen` always did.
 
 ## What later steps build on
 
-- **Steps 13–15 (Schematix):** `GET /api/wires` is the read-only map data
+- **Steps 13–15 (Schematix, built — [schematix.md](schematix.md)):** `GET /api/wires` is the read-only map data
   (pieces with ports, wires with layer via the registry); other nodes join
   as `wires.piece_of_description(<GET /v1/knoten entry>)` (managed or not),
   their own wires as `wires.wires_of_description(<entry>)`;

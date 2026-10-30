@@ -113,12 +113,14 @@ def test_alte_wahl_alles_wird_zu_allen_apps_und_gleicht_dasselbe_ab(einst):
                  abgleich_mitte_art="http")
     e = abgleich_apps.entscheidungen()
     # Apps that came after the old areas (cloud_folder, 2026-10-29) are not
-    # part of the old choice: they ask once, like any new app with data.
-    later = {"cloud_folder"}
+    # part of the old choice: they ask once, like any new app with data
+    # (schematix, 2026-10-30, too).
+    later = {"cloud_folder", "schematix"}
     assert e == {n: True for n, a in abgleich_apps.tabelle().items()
                  if not a["pflicht"] and n not in later}
     assert sorted(abgleich_apps.muster()) == sorted(
-        m for m in abgleich_apps.jetzt_erlaubt(auswahl.ABGLEICH) if m != "data/cloud/**")
+        m for m in abgleich_apps.jetzt_erlaubt(auswahl.ABGLEICH)
+        if m not in ("data/cloud/**", "data/schematix/**"))
     assert abgleich_apps.offen("/gibt/es/nicht", lambda: set()) == []
 
 

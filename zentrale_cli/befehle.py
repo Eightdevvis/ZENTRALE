@@ -385,7 +385,8 @@ def describe_wires(force=False):
     if abgleich.mitte_art() != "http" or not konto.angemeldet() or cloud_notices.removed():
         return False
     store = generations.Store()
-    section, h = generations.description_due(store=store)
+    import schematix_versions
+    section, h = generations.description_due(store=store, extra=schematix_versions.own(WURZEL))
     if section is None and not force:
         return False
     try:
@@ -932,6 +933,9 @@ def geraet_melden(sorte="vollknoten") -> dict:
     # Its own node-scoped wires (sync choices, hardware plugs), read-only for
     # every other node and Schematix (building kit follow-up 4).
     b["wires"] = wires.node_section()
+    # What it runs and speaks, for Schematix's versions panel (step 13).
+    import schematix_versions
+    b["versions"] = schematix_versions.own(WURZEL)
     # Der Server nimmt nur den Namen, mit dem diese Sitzung angemeldet ist.
     b["name"] = (konto.lesen() or {}).get("knoten") or b["name"]
     try:

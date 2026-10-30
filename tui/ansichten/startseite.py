@@ -65,7 +65,7 @@ def rad_apps():
 # Das Erschaffen-Rad (2026-10-10, Sasha): das dritte Sonnensystem, rechts
 # neben dem Technik-Rad. Hier wird gebaut statt benutzt — Werkstatt (der
 # Schmied baut Apps aus Vorlagen) und Shop. Später: Agent-Macher.
-ERSCHAFFEN_APPS = ["werkstatt", "shop"]
+ERSCHAFFEN_APPS = ["werkstatt", "shop", "schematix"]   # schematix: the wiring map (2026-10-30)
 
 
 # ── Die Galaxie (Startseite seit 03.10.2026) ─────────────────────────────────

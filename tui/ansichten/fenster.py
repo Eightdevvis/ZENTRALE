@@ -18,7 +18,7 @@ PROGRAMME = [
     ("G", "graphen"), ("L", "fokus"), ("M", "karte"), ("K", "kalender"),
     ("MAIL", "post"), ("NOTE", "notizen"), ("TECH", "technik"),
     ("PIANO", "klavier"), ("AI", "chat"), ("DESK", "desk"),
-    ("SHOP", "shop"), ("WERK", "werkstatt"), ("APPWAHL", "app_wahl"),
+    ("SHOP", "shop"), ("WERK", "werkstatt"), ("APPWAHL", "app_wahl"), ("SCHEMATIX", "schematix"),
 ]
 STARTSEITE = "startseite"            # niemand aktiv: das Rad
 # Wie ein Programm in Überschriften heißt ('/'-Fenster, /help), wo der Name

@@ -40,6 +40,10 @@ EINGEBAUT = {
                "daten": {"muster": ["data/ablage/**"], "abgleichen": True}},
     "desk": {"titel": "Desk",
              "daten": {"muster": ["data/desk/**"], "abgleichen": True}},
+    # Schematix (memory/hub/schematix.md, building kit steps 13-15): the
+    # wiring map. Its schemes, things and palette sync like any app's data.
+    "schematix": {"titel": "Schematix",
+                  "daten": {"muster": ["data/schematix/**"], "abgleichen": True}},
     "werkstatt": {"titel": "Werkstatt",
                   "daten": {"muster": ["data/apps/**", "data/shop/**"], "abgleichen": True}},
     "mail": {"titel": "Mail",
@@ -98,6 +102,7 @@ PORTS = {
     "ablage": {"needs": [_DATA_SYNC], "offers": [{"id": "files", "type": "files"}]},
     "desk": {"needs": [_DATA_SYNC]},
     "werkstatt": {"needs": [_DATA_SYNC]},
+    "schematix": {"needs": [_DATA_SYNC]},
     "mail": {"needs": [_DATA_SYNC]},
     "klavier": {"needs": [_DATA_SYNC]},
     "adapter": {"needs": [dict(_DATA_SYNC, occurrences=[1, 1])],

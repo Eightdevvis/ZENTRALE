@@ -29,6 +29,8 @@ import kalender_ics
 import kalender_sicherung as sich
 import konto
 import plug_store
+import schematix_store
+import schematix_versions
 import wires
 from test_abgleich import LISTE, Welt  # noqa: F401  (fixture building blocks)
 
@@ -46,6 +48,8 @@ MODULES = {
     "account_ownership": ("account-ownership",),
     "plug_store": ("plug-wires",),
     "wires": ("node-wires",),
+    "schematix_versions": ("node-versions",),
+    "schematix_store": ("schematix-palette",),
 }
 EXEMPT = {
     "formats": "the registry itself",
@@ -539,3 +543,47 @@ def test_preserve_node_wires():
     got = wires.wires_of_description(d)
     assert got[0]["future"] == {"a": 1} and got[0]["seen"]
     assert not _noted("node-wires")
+
+
+# ── node-versions: `versions` in a node description (Schematix, step 13) ──
+
+def test_newer_node_versions():
+    d = {"name": "minipc", "versions": {"format": "zentrale-node-versions/2", "zentrale": "99"}}
+    assert schematix_versions.of_description(d) is None       # read-only: nothing guessed
+    assert _noted("node-versions")
+
+
+def test_preserve_node_versions():
+    """Written whole by its own node only; a reader keeps what a newer node added."""
+    d = {"name": "minipc", "versions": {"format": schematix_versions.VERSIONS_FORMAT, "zentrale": "44",
+                                        "future": {"a": 1}}}
+    assert schematix_versions.of_description(d)["future"] == {"a": 1}
+    assert not _noted("node-versions")
+
+
+# ── schematix-palette: data/schematix/palette.json (core/schematix_store.py) ──
+
+def _palette_file(d):
+    path = os.path.join(schematix_store.folder(), "palette.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(d, f)
+    return path
+
+
+def test_newer_schematix_palette():
+    p = _palette_file({"format": "zentrale-schematix-palette/2", "roles": {"ink": "#000000"}})
+    before = open(p, "rb").read()
+    assert schematix_store.palette()["ink"] == schematix_store.default_palette()["ink"]
+    with pytest.raises(formats.NewerFormat):
+        schematix_store.set_role("ink", "#111111")
+    assert open(p, "rb").read() == before and _noted("schematix-palette")
+
+
+def test_preserve_schematix_palette():
+    p = _palette_file({"format": schematix_store.PALETTE_FORMAT, "roles": {"ink": "#123456"},
+                       "future": [1]})
+    schematix_store.set_role("dim", "#654321")
+    d = json.load(open(p, encoding="utf-8"))
+    assert d["future"] == [1] and d["roles"] == {"ink": "#123456", "dim": "#654321"}
+    assert not _noted("schematix-palette")

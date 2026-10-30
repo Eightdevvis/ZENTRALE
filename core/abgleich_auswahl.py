@@ -48,6 +48,10 @@ SICHERN = [
     # Desk View (core/desk.py, 2026-10-09, Sasha: „immer mitsyncen"):
     # .canvas-Dateien, JSON — zusammengeführt nach id wie jede JSON-Datei.
     "data/desk/**",
+    # Schematix (core/schematix_store.py, building kit steps 13-15): schemes
+    # (.canvas, merged by id like the Desk), things (one JSON per device),
+    # the palette — synced like every app's data.
+    "data/schematix/**",
     # Schaufenster (core/shop.py, 2026-10-10): was geholt ist, eine
     # JSON-LD-Datei pro Rechner (besitz-<rechner>.jsonld) — nie zusammengeführt.
     "data/shop/**",

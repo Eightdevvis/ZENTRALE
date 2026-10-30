@@ -319,14 +319,16 @@ def run(sketch, node=None, store=None, apply=True, health=None, writer=None, roo
     return result
 
 
-def description_due(node=None, store=None):
-    """→ (section, hash) when this node's own wires (wires.node_section)
-    changed since they last went into its description, else (None, hash).
+def description_due(node=None, store=None, extra=None):
+    """→ (section, hash) when this node's own wires (wires.node_section) —
+    and `extra`, what the caller publishes with them (its versions, step 13)
+    — changed since they last went into its description, else (None, hash).
     The caller publishes the description, then store.mark_described."""
     node = node or wires.node_name()
     store = store or Store()
     section = wires.node_section(node)
-    h = "sha256:" + hashlib.sha256(sketch_compiler.canonical(section)).hexdigest()
+    body = section if extra is None else {"wires": section, "extra": extra}
+    h = "sha256:" + hashlib.sha256(sketch_compiler.canonical(body)).hexdigest()
     return (None if store.described(node) == h else section), h
 
 

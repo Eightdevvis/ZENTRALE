@@ -101,6 +101,7 @@ os.environ.setdefault("ZENTRALE_KLASSIFIKATOR_BEISPIELE_DIR",
 # Desk View (core/desk.py, 2026-10-09): im Betrieb data/desk/. Dazu unten
 # pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_DESK_ORDNER", os.path.join(_DATEN_TMP, "desk"))
+os.environ.setdefault("ZENTRALE_SCHEMATIX_ORDNER", os.path.join(_DATEN_TMP, "schematix"))
 # Schaufenster (core/shop.py, 2026-10-10): im Betrieb data/shop/ mit dem,
 # was Sasha geholt hat. Dazu unten pro Test ein eigener Ordner.
 os.environ.setdefault("ZENTRALE_SHOP_ORDNER", os.path.join(_DATEN_TMP, "shop"))
@@ -376,6 +377,8 @@ def _beispiele_frisch(_test_ordner, monkeypatch):
 def _desk_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_DESK_ORDNER", str(_frisch(_test_ordner, "desk")))
     monkeypatch.setenv("ZENTRALE_APPS_ORDNER", str(_frisch(_test_ordner, "apps")))
+    # Schematix (core/schematix_store.py, 2026-10-30): schemes, things, palette.
+    monkeypatch.setenv("ZENTRALE_SCHEMATIX_ORDNER", str(_frisch(_test_ordner, "schematix")))
     yield
 
 

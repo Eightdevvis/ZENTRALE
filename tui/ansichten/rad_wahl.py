@@ -56,6 +56,8 @@ OEFFNEN = {
     # Erschaffen-Rad
     "werkstatt": lambda u: u.werkstatt.oeffnen(),
     "shop": _shop,
+    # Schematix, the wiring map (2026-10-30, memory/hub/schematix.md)
+    "schematix": lambda u: u.schematix.oeffnen(),
 }
 
 

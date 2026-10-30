@@ -45,6 +45,8 @@ FORMATS = {
     "account-ownership": (1, "the apps your account owns"),  # GET/PUT /v1/besitz (account_ownership)
     "plug-wires": (1, "the plugs of an app"),               # data/adapter/plugs/*.json (core/plug_store.py)
     "node-wires": (1, "another device's wiring"),          # `wires` in a node description (core/wires.py)
+    "node-versions": (1, "another device's versions"),     # `versions` in a node description (core/schematix_versions.py)
+    "schematix-palette": (1, "the colours of Schematix"),   # data/schematix/palette.json (core/schematix_store.py)
 }
 
 

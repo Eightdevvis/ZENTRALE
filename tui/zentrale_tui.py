@@ -972,6 +972,9 @@ def bild_zeichnen(u):
         u.desk.draw_desk(top, mx, body_h, midw)
     elif getattr(u, "SHOP", None) and u.SHOP["active"]:   # Schaufenster (2026-10-10)
         u.shop.draw_shop(top, mx, body_h, midw)          # mit eigenem Kasten
+    elif getattr(u, "SCHEMATIX", None) and u.SCHEMATIX["active"]:   # wiring map (2026-10-30)
+        draw_box(top, mx, body_h, midw, u.schematix.titel())
+        u.schematix.draw(top, mx, body_h, midw)
     elif u.WERK["active"]:
         draw_box(top, mx, body_h, midw, u.werkstatt.titel())
         u.werkstatt.draw(top, mx, body_h, midw)
@@ -1160,6 +1163,7 @@ def run_ui(stdscr, store):
     shop.nach_installieren = eigene.laden       # neu installiert → gleich ins Rad
     eigene.laden()
     werkstatt = ansichten.werkstatt.Werkstatt(z, eigene, desk, router)
+    schematix = ansichten.schematix.Schematix(z)    # the wiring map (2026-10-30)
     technik = ansichten.technik.Technik(z)
     TECH = technik.TECH
     startseite = ansichten.startseite.Startseite(z, RAD, META, TRAD, technik, ERAD)
@@ -1217,7 +1221,7 @@ def run_ui(stdscr, store):
         startseite=startseite, stdscr=stdscr, store=store, technik=technik, z=z,
         DESK=DESK, desk=desk, router=router, SHOP=SHOP, shop=shop,
         WERK=werkstatt.W, werkstatt=werkstatt, eigene=eigene,
-        APPWAHL=APPWAHL, app_wahl=app_wahl,
+        APPWAHL=APPWAHL, app_wahl=app_wahl, SCHEMATIX=schematix.S, schematix=schematix,
         zuklappen=lambda: fenster_zuklappen())
     # Jedes Programm beim Horcher anmelden: er fragt einmal nach den Tasten
     # je Ansicht, die Leiste schlägt danach nur noch nach (2026-10-11).
@@ -1263,7 +1267,7 @@ def run_ui(stdscr, store):
                 or TRAD["pos"] != TRAD["sel"] or META["gpos"] != META["gsel"]
                 or ERAD["pos"] != ERAD["sel"] or ERAD["schnell"]
                 or RAD.get("wurf") or TRAD.get("wurf") or ERAD.get("wurf")
-                or desk.bewegt_sich())       # Desk-Ausschnitt gleitet (2026-10-10)
+                or desk.bewegt_sich() or schematix.bewegt_sich())   # Ausschnitt gleitet
         # Denk-Adern (2026-10-07): ihr Bild ändert sich höchstens 10× pro
         # Sekunde (denkadern.BILDER_JE_S) — solange nur sie sich bewegen,
         # reichen 100 ms statt 33 (gemessen: etwa ein Drittel der CPU).

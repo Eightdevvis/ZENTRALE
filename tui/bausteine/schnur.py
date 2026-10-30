@@ -100,7 +100,25 @@ def richtungen(punkte, netz=None):
     return netz, ende
 
 
-def zeichen(richtungs_menge):
+# Wire styles (2026-10-30, Schematix — memory/hub/schematix_style.md): any
+# app may give a connection `stil`. "pcb": rounded corners like a circuit
+# board trace, a solder dot at both ends instead of the arrow; "planned":
+# dashed; "off": dotted. Without `stil` everything stays as above.
+_RUND = {frozenset("rd"): "╭", frozenset("ld"): "╮", frozenset("ru"): "╰", frozenset("lu"): "╯"}
+_STIL = {
+    "pcb": _RUND,
+    "planned": {**_RUND, frozenset("lr"): "╌", frozenset("ud"): "╎", frozenset("l"): "╌",
+                              frozenset("r"): "╌", frozenset("u"): "╎", frozenset("d"): "╎"},
+    "off": {**_RUND, frozenset("lr"): "┄", frozenset("ud"): "┊", frozenset("l"): "┄",
+                          frozenset("r"): "┄", frozenset("u"): "┊", frozenset("d"): "┊"},
+}
+LOETPUNKT = "●"                     # solder dot at the ends of a styled wire
+
+
+def zeichen(richtungs_menge, stil=None):
+    eigen = _STIL.get(stil, {}).get(frozenset(richtungs_menge))
+    if eigen:
+        return eigen
     return _ZEICHEN.get(frozenset(richtungs_menge), "┼" if richtungs_menge else " ")
 
 

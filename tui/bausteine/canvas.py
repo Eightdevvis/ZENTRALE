@@ -40,6 +40,14 @@
 #   grenzen(element)           -> ((min_w, min_h), (max_w, max_h)) Außenmaß
 #                              mit Rahmen, für `r` (Größe ändern); ohne gilt
 #                              GROESSE_MIN / GROESSE_MAX (2026-10-10)
+#   rand_von(element)          -> six frame characters (┌─┐│└┘ order) and
+#   rolle_von(element)         -> frame role per element (2026-10-30,
+#                              Schematix: states readable without colour)
+#
+# Connections may carry `rolle` (colour role of the line), `stil` ("pcb",
+# "planned", "off": rounded traces with solder dots, schnur.py) and
+# `rolle_ende` (role of the solder dots). The view's `passt(quelle, ziel)`
+# refuses unfitting connections: red ✕ at the cursor, Ergebnis "abgelehnt".
 #
 # Bedienung (Zustände, Sasha 2026-10-09; Belegung: die Tastentabelle
 # TASTEN unten, memory/hub/desk_view.md):
@@ -94,6 +102,8 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 #                 (`oeffnen` der Art, z. B. ein Bild: ("bild_oeffnen", datei)
 #                 → die Ansicht führt es aus); grund = was die Art meldet
 #   "neu_waehlen" + ohne Fabrik: die Ansicht soll die Arten zur Wahl stellen
+#   "abgelehnt"   enter while connecting onto a target `passt` refuses;
+#                 element = the target, grund = the short reason
 Ergebnis = namedtuple("Ergebnis", "art element grund")
 
 PAN_X, PAN_Y = 6, 3                     # so weit schiebt shift+Pfeil den Ausschnitt
@@ -256,6 +266,11 @@ class Canvas:
         # vor_groesse(element) -> bool: die Ansicht darf vor `r` noch etwas
         # holen (Desk: Grenzen einer Kachel beim Hub); False = es geht nicht.
         self.vor_groesse = None
+        # passt(quelle, ziel) -> None | short reason (2026-10-30, Schematix):
+        # the fit check while connecting. A reason draws a red ✕ at the
+        # cursor; enter does not attach and reports Ergebnis("abgelehnt",
+        # ziel, reason) — refused, never greyed out. None = everything fits.
+        self.passt = None
 
     def __repr__(self):                  # Zustand sichtbar machen (Tests vergleichen repr)
         return "Canvas(%r)" % ((self.vx, self.vy, self.fokus, self.modus, self.griff,
@@ -564,6 +579,10 @@ class Canvas:
             self.ziel, self.modus = None, "ruhe"
             return None
         if ev in ("enter", "verbinden"):
+            grund = self.passt(quelle, ziel) if self.passt else None
+            if grund:
+                self.ziel, self.modus = None, "ruhe"
+                return Ergebnis("abgelehnt", ziel, grund)
             schon = self.verbindung_zwischen(quelle["id"], ziel["id"])
             if schon:
                 self.frage = {"was": "loesen", "id": schon["id"],
@@ -692,9 +711,13 @@ class Canvas:
 
     def _schnuere(self, setze, sicht=None):
         sicht = sicht or {}
-        paare = [(v, "schnur") for v in self.verbindungen]
+        paare = [(v, v.get("rolle") or "schnur") for v in self.verbindungen]
+        abgelehnt = None
         if self.modus == "verbinden" and self.ziel:
-            paare.append(({"von": self.fokus, "nach": self.ziel}, "schnur_vor"))
+            vor = {"von": self.fokus, "nach": self.ziel}
+            if self.passt:
+                abgelehnt = self.passt(self.element(self.fokus), self.element(self.ziel))
+            paare.append((vor, "abgelehnt" if abgelehnt else "schnur_vor"))
         for v, rolle in paare:
             a, b = self.element(v.get("von")), self.element(v.get("nach"))
             a, b = sicht.get(v.get("von"), a), sicht.get(v.get("nach"), b)
@@ -702,10 +725,19 @@ class Canvas:
                 continue
             punkte = schnur.weg(a, b)
             netz, ende = schnur.richtungen(punkte)
+            stil = v.get("stil")
             for (x, y), r in netz.items():
-                setze(x, y, schnur.zeichen(r), rolle)
+                setze(x, y, schnur.zeichen(r, stil), rolle)
+            punkt = v.get("rolle_ende") or rolle   # solder dots may have their own role
+            if stil and punkte:                    # solder dots at both ends (pcb)
+                setze(punkte[0][0], punkte[0][1], schnur.LOETPUNKT, punkt)
             if ende:
-                setze(ende[0], ende[1], schnur.spitze(ende[2]), rolle)
+                if rolle == "abgelehnt":           # the red ✕ at the cursor (2026-10-30)
+                    setze(ende[0], ende[1], "✕", rolle)
+                elif stil:
+                    setze(ende[0], ende[1], schnur.LOETPUNKT, punkt)
+                else:
+                    setze(ende[0], ende[1], schnur.spitze(ende[2]), rolle)
             if v.get("label"):
                 m = schnur.halbe(punkte)
                 for i, ch in enumerate(v["label"][:24]):
@@ -723,8 +755,12 @@ class Canvas:
         elif e["id"] == self.fokus:
             rand, rolle = "┏━┓┃┗┛", "fokus"
         else:
-            rand = "┌─┐│└┘"
-            rolle = getattr(self.arten.holen(e.get("art")), "rolle", "rahmen")
+            # An art may give each element its own frame and role (2026-10-30,
+            # Schematix: node ┏━┓, thing ╔═╗, planned ┌╌┐ — readable without
+            # colour); otherwise the plain frame in the art's role.
+            art = self.arten.holen(e.get("art"))
+            rand = art.rand_von(e) if hasattr(art, "rand_von") else "┌─┐│└┘"
+            rolle = art.rolle_von(e) if hasattr(art, "rolle_von") else getattr(art, "rolle", "rahmen")
         # Schnell raus, wenn der Kasten ganz außerhalb liegt.
         if x + w <= ox or x >= ox + self.vw or y + h <= oy or y >= oy + self.vh:
             return

@@ -27,6 +27,8 @@ openapi.yaml
 # them at run time: every sync choice passes the Run gate, step 9b).
 contracts/ports/1/ports.schema.json
 contracts/ports/1/types.json
+# Schematix (building kit steps 13-15): device kinds, default colour roles.
+contracts/schematix/1/
 
 # ── Start und Abgleich ──────────────────────────────────────────────────
 scripts/start_tui.sh

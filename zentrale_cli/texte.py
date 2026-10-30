@@ -143,6 +143,7 @@ EN = {
         "assistent": ("Assistant", "what it knows about you, chats, transcripts, feedback, costs"),
         "ablage": ("Documents", "files the assistant made or you attached"),
         "desk": ("Desk", "your canvases"),
+        "schematix": ("Schematix", "your schemes: the wiring map, things like router and cables"),
         "werkstatt": ("Workshop", "apps you built and got from the shop"),
         "mail": ("Mail rules", "how mail is sorted (never passwords)"),
         "klavier": ("Melodies", "the piano"),

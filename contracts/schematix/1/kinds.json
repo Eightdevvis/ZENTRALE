@@ -1,0 +1,30 @@
+{
+  "format": "zentrale-schematix-kinds/1",
+  "description": "Kinds of things without ZENTRALE that Schematix can place (memory/hub/schematix.md): their NetBox device role and the ports they offer and need (port types of contracts/ports/1/types.json). Node pieces get `node_links` on top of their platform ports so that network and power wires can reach them.",
+  "kinds": {
+    "router": {"title": "Router", "netbox": "router",
+               "needs": ["power", {"id": "wan", "type": "cable"}],
+               "offers": ["lan", "wifi", "wireguard"]},
+    "modem": {"title": "Fibre modem (ONT)", "netbox": "modem",
+              "needs": ["power"], "offers": [{"id": "wan", "type": "cable"}]},
+    "switch": {"title": "Switch", "netbox": "switch",
+               "needs": [{"id": "uplink", "type": "lan"}, "power"], "offers": ["lan"]},
+    "cable": {"title": "Cable", "netbox": "cable",
+              "needs": [{"id": "in", "type": "lan"}], "offers": [{"id": "out", "type": "lan"}]},
+    "power-bank": {"title": "Power bank", "netbox": "power-panel",
+                   "needs": [{"id": "charge", "type": "power"}], "offers": ["power"]},
+    "charger": {"title": "Charger", "netbox": "power-outlet", "needs": [], "offers": ["power"]},
+    "tablet": {"title": "Tablet", "netbox": "tablet",
+               "needs": ["tailscale", "wifi", "power"], "offers": ["tailscale"]},
+    "phone": {"title": "Phone", "netbox": "phone",
+              "needs": ["tailscale", "wifi", "power"], "offers": ["tailscale", "bluetooth"]},
+    "printer": {"title": "Printer", "netbox": "printer",
+                "needs": ["lan", "wifi", "power"], "offers": ["print", "scan"]},
+    "bluetooth-device": {"title": "Bluetooth device", "netbox": "bluetooth",
+                         "needs": ["bluetooth"], "offers": []}
+  },
+  "node_links": {
+    "needs": ["lan", "wifi", "wireguard", "tailscale", "power", "bluetooth"],
+    "offers": ["tailscale"]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "format": "zentrale-schematix-palette/1",
+  "description": "Default colour roles of Schematix (memory/hub/schematix_style.md). Sasha tunes them in the app (key c); his values live in data/schematix/palette.json. Every role except `board` must reach 4.5:1 against `board` (measured, never corrected).",
+  "roles": {
+    "board": "#0a0e0b",
+    "ink": "#a9c49a",
+    "dim": "#7e9a72",
+    "bright": "#e2f0d2",
+    "trace": "#86b86e",
+    "solder": "#d6e07a",
+    "focus": "#e866d8",
+    "planned": "#8aa07f",
+    "error": "#ff6b6b",
+    "layer-data": "#8fd46c",
+    "layer-services": "#5fd4c8",
+    "layer-hardware": "#e2b44c",
+    "layer-network": "#a98af0",
+    "layer-power": "#e866d8",
+    "cloud": "#c4ccd6"
+  }
+}

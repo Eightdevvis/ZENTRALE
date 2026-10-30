@@ -55,6 +55,11 @@ tags:
       Wires of this node (building kit steps 9/9b, memory/hub/port_types.md):
       a projection of the stored truths; every change passes the one gate
       (compile → diff → switch, core/generations.py).
+  - name: schematix
+    description: >
+      Schematix, the wiring map (building kit steps 13–15,
+      memory/hub/schematix.md): the map of the account laid fresh from the
+      truths, the `+` picker, colour roles, schemes, things and Run.
   - name: app-seite
     description: >
       Was eine Prozess-App selbst beantwortet (unter ihrer `adresse`, nur auf
@@ -802,6 +807,79 @@ paths:
         "404": {$ref: "#/components/responses/RunResult"}
         "409": {$ref: "#/components/responses/RunResult"}
 
+  /api/schematix/map:
+    get:
+      tags: [schematix]
+      operationId: schematixMap
+      summary: The map of the account, laid out as a cross-section
+      description: >
+        This node's projection (/api/wires) plus every other node's
+        description in the cloud (GET /v1/knoten): one piece per app on a
+        node, the cloud once, wires with their layer. Offline or logged out →
+        this node only, with a note.
+      responses:
+        "200":
+          description: The map
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SchematixMap"}
+
+  /api/pieces:
+    get:
+      tags: [schematix]
+      operationId: piecesList
+      summary: Everything that can be placed on a scheme (the `+` picker)
+      responses:
+        "200":
+          description: Pieces by group (installed, provider, node, store, device)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pieces]
+                properties:
+                  pieces:
+                    type: array
+                    items:
+                      type: object
+                      required: [group, id, kind, title]
+                      properties:
+                        group: {enum: [installed, provider, node, store, device]}
+                        id: {type: string}
+                        ref: {type: [string, "null"]}
+                        kind: {enum: [node, app, device]}
+                        title: {type: string}
+                        state: {enum: [live, documented, planned]}
+
+  /api/schematix/palette:
+    get:
+      tags: [schematix]
+      operationId: schematixPalette
+      summary: Colour roles with their measured contrast against the board
+      responses:
+        "200": {$ref: "#/components/responses/SchematixPalette"}
+
+  /api/schematix/palette/{role}:
+    parameters:
+      - {name: role, in: path, required: true, schema: {type: string}, description: a colour role (ink, dim, layer-data …)}
+    put:
+      tags: [schematix]
+      operationId: schematixPaletteRole
+      summary: Set one colour role (null = back to the default); measured, never corrected
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value: {type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$"}
+      responses:
+        "200": {$ref: "#/components/responses/SchematixPalette"}
+        "400": {$ref: "#/components/responses/SchematixError"}
+        "404": {$ref: "#/components/responses/SchematixError"}
+        "409": {$ref: "#/components/responses/SchematixError"}
+
   /api/apps/remove:
     post:
       tags: [apps]
@@ -1283,6 +1361,27 @@ components:
             required: [ok]
             properties:
               ok: {const: true}
+    SchematixError:
+      description: A Schematix input or file that does not fit (a newer format → 409)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: {type: string}
+    SchematixPalette:
+      description: Colour roles of Schematix (memory/hub/schematix_style.md)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [roles, measured, defaults, minimum]
+            properties:
+              roles: {type: object, additionalProperties: {type: string}}
+              measured: {type: object, additionalProperties: {type: number}}
+              defaults: {type: object, additionalProperties: {type: string}}
+              minimum: {type: number}
     RunResult:
       description: >
         The result of Run (core/generations.run). Refused (400/404/409) →
@@ -1322,6 +1421,42 @@ components:
               withdrawn: {type: boolean}
 
   schemas:
+    SchematixMap:
+      type: object
+      required: [format, node, pieces, wires, layers, notes]
+      properties:
+        format: {const: zentrale-schematix-map/1}
+        node: {type: string, description: this node}
+        pieces:
+          type: array
+          items:
+            allOf:
+              - {$ref: "#/components/schemas/Piece"}
+              - type: object
+                properties:
+                  band: {enum: [cloud, software, nodes, things]}
+                  node: {type: string, description: the node an app piece is on}
+                  sync: {enum: [synced, "off", open, always], description: "as `zentrale status` on that node says"}
+                  versions: {type: [object, "null"]}
+                  cannot_yet: {type: array, items: {type: string}}
+                  x: {type: integer}
+                  y: {type: integer}
+                  w: {type: integer}
+                  h: {type: integer}
+        wires:
+          type: array
+          items:
+            allOf:
+              - {$ref: "#/components/schemas/Wire"}
+              - type: object
+                required: [from_piece, to_piece]
+                properties:
+                  layer: {enum: [data, services, hardware, network, power, "null"]}
+                  from_piece: {type: string}
+                  to_piece: {type: string}
+        layers: {type: array, items: {type: object}}
+        bands: {type: array, items: {type: object}}
+        notes: {type: array, items: {type: string}}
     Wire:
       type: object
       description: One wire (contracts/ports/1/ports.schema.json $defs/wire is the full schema).
