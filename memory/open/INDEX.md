@@ -75,3 +75,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [node_lifecycle_followups.md](node_lifecycle_followups.md) | Building kit steps 7/8 leftovers: server deploy (migration 0004), phone texts/header, router keys | yes (deploy) |
 | [key_rotation_old_data.md](key_rotation_old_data.md) | After a key change, old stands/blobs/history stay readable with the old key (lost device) | yes (pick direction) |
 | [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): apply agent not on the timer, calendar CLI around the gate, compiler not in Dart, only own node projected | no |
+| [dev_mode_wizard_resume_red.md](dev_mode_wizard_resume_red.md) | Dev-mode test: resumed wizard loses auto-update "off" since steps 9/9b | no |
