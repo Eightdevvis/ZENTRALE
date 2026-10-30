@@ -223,6 +223,10 @@ def rekey(raw: bytes, old_key: bytes, new_key: bytes) -> bytes:
         raise GeheimFehler("The vault (geheim.enc) is damaged.") from None
     if not isinstance(d, dict) or not isinstance(d.get("eintraege"), dict):
         raise GeheimFehler("The vault (geheim.enc) is damaged.")
+    if formats.is_newer(d.get("format"), "adapter-secrets"):
+        # Written by a newer version: never rewritten here (building_kit_plan.md 2.2).
+        formats.note_newer("adapter-secrets", formats.major(d.get("format")))
+        raise GeheimFehler(formats.newer_text("adapter-secrets"))
     old, new = Fernet(old_key), Fernet(new_key)
     for name, e in d["eintraege"].items():
         if not isinstance(e, dict) or e.get("zu") != "konto":

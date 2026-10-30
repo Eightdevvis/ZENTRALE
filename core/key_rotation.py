@@ -36,6 +36,7 @@ import abgleich_schluessel as schluessel
 import adapter_geheim
 import cloud_api
 import dateien
+import formats
 import konto
 import konto_schluessel as ks
 
@@ -77,7 +78,11 @@ def reencrypt(old_key: bytes, new_key: bytes, read, names):
     raw = read(abgleich.INHALT)
     if raw is None:
         raise RotationError("The table of contents is missing in the cloud — nothing was changed.")
-    inhalt = json.loads(old.auf(raw))
+    try:
+        # A newer table of contents is never rewritten (building_kit_plan.md 2.2).
+        inhalt = abgleich._inhalt_parse(old, raw)
+    except abgleich_mitte.MitteFehler as e:
+        raise RotationError(f"{e} Nothing was changed.") from None
     for rel, e in inhalt.get("dateien", {}).items():
         g = read("d/" + e["name"] + ".enc")
         if g is None:
@@ -85,7 +90,10 @@ def reencrypt(old_key: bytes, new_key: bytes, read, names):
         plain = old.auf(g)
         if rel == VAULT:
             before = plain
-            plain = adapter_geheim.rekey(plain, old_key, new_key)
+            try:
+                plain = adapter_geheim.rekey(plain, old_key, new_key)
+            except adapter_geheim.GeheimFehler as e:
+                raise RotationError(f"{e} Nothing was changed.") from None
             vault = (before, plain)
             e["sha"] = _sha(plain)
         delete.append("d/" + e["name"] + ".enc")
@@ -98,7 +106,11 @@ def reencrypt(old_key: bytes, new_key: bytes, read, names):
         delete.append(name)
         try:
             klar = old.auf(read(name) or b"")
-            rel = json.loads(klar)["pfad"]
+            u = json.loads(klar)
+            if isinstance(u, dict) and formats.is_newer(u.get("format"), "cloud-envelope"):
+                # Its hidden name may follow rules this version does not know.
+                raise RotationError(formats.newer_text("cloud-envelope") + " Nothing was changed.")
+            rel = u["pfad"]
             if not isinstance(rel, str):
                 raise TypeError(rel)
         except (schluessel.SchluesselFehler, ValueError, KeyError, TypeError):

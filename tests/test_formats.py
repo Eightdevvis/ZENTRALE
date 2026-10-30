@@ -170,6 +170,25 @@ def test_preserve_cloud_index(welt):
     assert not _noted("cloud-index")
 
 
+def test_newer_cloud_data_stops_a_key_change():
+    """The account key change (core/key_rotation.py) rewrites the whole Mitte:
+    never over a newer table of contents, vault or inbox file."""
+    from cryptography.fernet import Fernet
+    import key_rotation
+    alt_key, neu_key = Fernet.generate_key(), Fernet.generate_key()
+    t = schluessel.Tresor(alt_key)
+    for files, names in (
+            ({abgleich.INHALT: {"format": 2, "dateien": {}}}, []),
+            ({abgleich.INHALT: {"format": 1, "dateien": {}},
+              "knoten/handy/x.enc": {"format": 2, "pfad": "data/lists.json"}}, ["knoten/handy/x.enc"])):
+        blobs = {n: t.zu(json.dumps(d).encode()) for n, d in files.items()}
+        with pytest.raises(key_rotation.RotationError, match="Nothing was changed"):
+            key_rotation.reencrypt(alt_key, neu_key, blobs.get, [abgleich.INHALT, *names])
+    vault = json.dumps({"format": "zentrale-geheim/2", "eintraege": {}}).encode()
+    with pytest.raises(geheim.GeheimFehler):
+        geheim.rekey(vault, alt_key, neu_key)
+
+
 # ── cloud-envelope: knoten/<node>/*.enc ──────────────────────────────
 
 def _umschlag(tresor, fmt):

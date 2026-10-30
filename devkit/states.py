@@ -90,8 +90,14 @@ def wizard_answers(p, steps) -> tuple:
 
 
 def step_login(p, say):
-    """`zentrale setup` through the whole wizard, defaults everywhere."""
-    account, lines = wizard_answers(p, 99)
+    """`zentrale setup` through the whole wizard, defaults everywhere. A
+    release from before the wizard (build step 2) asks only the account and
+    "what to sync" (everything) — the old-release test installs those."""
+    if os.path.exists(os.path.join(p.hub, "hub", "aktuell", "zentrale_cli", "wizard.py")):
+        account, lines = wizard_answers(p, 99)
+    else:
+        account, lines = _account_answers(p)
+        lines.append("1")               # "what to sync" if the account has data: everything
     _check(p.zentrale("setup", answers="\n".join(lines) + "\n"), "dev_login_failed")
     p.update(account=account)
 
