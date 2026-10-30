@@ -17,7 +17,7 @@ own fake systemd, the dev root's fake cloud, its own device name
 | Edge | Fake | Shared with the tests |
 |---|---|---|
 | cloud | `devkit/fake_cloud.py` (was `tests/_falsche_cloud.py`), state in a JSON file so all profiles and commands share it | yes, same class |
-| systemd | `devkit/fake_systemd.py`: a `systemctl` that keeps enabled/active state, refuses units without a file, logs every call, never runs anything | yes, `tests/test_timer.py` |
+| systemd | `devkit/fake_systemd.py`: a `systemctl` that keeps enabled/active state, refuses units without a file, logs every call, never runs anything; beside it a `loginctl` for lingering (on/off, or a polkit that refuses: `set_linger(allowed=False)`) | yes, `tests/test_timer.py`, `tests/test_setup_wizard.py` |
 | venv | linked from the venv `zentrale dev` runs in (`ZENTRALE_REUSE_VENV`), not built | yes |
 | release tarballs | built from the checkout by `scripts/paket_bauen.py` (same positive list; new uncommitted files included), or dropped into `releases/` by hand | yes |
 
@@ -42,7 +42,9 @@ So a profile is made in about 2–5 s and reset in about 1–3 s.
 - **shell** opens a shell inside a profile; there `zentrale` is the profile's
   own. **run** runs the profile's `zentrale` once with the given words.
 - **update** plays `zentrale update` in a profile up to release M (served by
-  the fake cloud from `releases/`), keeper included.
+  the fake cloud from `releases/`), self-test and keeper included. The
+  automatic path: inside the profile `zentrale update --automatic` (what the
+  daily timer runs), `zentrale update auto off` for the hint-only mode.
 - **reset** reinstalls the profile into its start state (its account stays in
   the fake cloud — like reinstalling a real device); **delete** removes it;
   **cloud-reset** empties the fake cloud; **release** lists or builds tarballs.
@@ -56,10 +58,10 @@ in `STEPS`. New state = one line in `STATES`; new journey stage = one function.
 | State | Steps |
 |---|---|
 | fresh | install (install.sh with an invite code, keeper timers, no login) |
-| logged-in | install → login (`zentrale setup` with typed answers: create, or log in when the account exists) |
+| logged-in | install → login (the whole setup wizard: create, or log in when the account exists; every later step takes its default) |
 | offline | … → the cloud address leads nowhere |
 | removed | … → the server ends this device's sessions and drops its description (what build step 8 will do); next sync: "Not logged in" |
-| wizard | install → wizard (params `step`) — listed, refused until build step 2 adds the `wizard` step |
+| wizard | install → wizard: `new --step n` answers the first n wizard steps and stops (0 = before the first question); the next `zentrale setup` in the profile picks up at step n (built 2026-10-30) |
 
 "On an old release N" is orthogonal: every state takes a start release.
 Release N built from today's checkout has today's code; true old code comes

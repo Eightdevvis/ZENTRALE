@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan; build steps 0 and 1 built (`13235f8`).** One blueprint for
+**Stand 2026-10-30: plan; build steps 0–3 built (`13235f8`, `527afc3`).** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -295,11 +295,11 @@ what ZENTRALE does, what exists.
 
 | # | Step | Person does | ZENTRALE does | Today |
 |---|---|---|---|---|
-| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | all but the wizard (keeper: `13235f8`) |
+| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | yes (keeper `13235f8`; wizard when a terminal is attached `527afc3`) |
 | 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes, except "cloud as store app" |
-| 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder offer missing) |
+| 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder: wizard step, `527afc3`) |
 | 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; plug/rights dialog no; owned-app offer no |
-| 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | manual `zentrale update` only |
+| 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | core: timer, setting, self-test (`527afc3`); apps: no |
 | 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes except owned-app offer |
 | 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | no |
 
@@ -307,7 +307,7 @@ what ZENTRALE does, what exists.
 
 | Unit (systemd **user**) | When | Runs | Today |
 |---|---|---|---|
-| `zentrale-update.timer` | daily, random delay up to 1 h | `zentrale update --automatic` | **missing** |
+| `zentrale-update.timer` | daily, random delay up to 1 h | `zentrale update --automatic` | `527afc3` (`RandomizedDelaySec=1h`) |
 | `zentrale-abgleich.timer` | every 5 min | `zentrale sync --automatic` | release 41; installer + every update since `13235f8` |
 | `zentrale-kalender-sync.timer` | every 3 min | `zentrale adapter run` | release 41; installer + every update since `13235f8` |
 | `zentrale-kern.service` (backend) | only for node kinds that serve others (brain, wall display) | the backend | only in Sasha's checkout (`deploy/`) |
@@ -317,13 +317,13 @@ what ZENTRALE does, what exists.
   right after linking. Before login the sync timer simply returns (it
   already does: no session → exit 0).
 - **Every update re-runs `timers install`** (built `13235f8`: the NEW release's, idempotent). So a unit added
-  in a later release reaches every node that updates — the mini's failure
-  can't repeat.
+  in a later release reaches every node that updates. Nodes updated by OLD code heal: the sync
+  timer (new code via `aktuell`) re-runs it once when the release changed (`keeper.json`, `527afc3`).
 - **Linger:** user timers stop at logout and don't start before login.
-  The installer asks once to enable lingering for the own user (needs no
+  The wizard (`527afc3`) asks once to enable lingering for the own user (needs no
   root on systemd distributions where the polkit default allows it for the
   own user; otherwise one sentence how to do it, and `status` says "syncs
-  only while you are logged in"). Never sudo.
+  only while you are logged in"). Never sudo (`loginctl --no-ask-password`).
 - **Health shows up**: the node description gets `zuletzt_gesehen` on every
   sync; `zentrale devices` (and the map) shows "mini — last seen 6 days
   ago" in a warning colour after 1 day.
@@ -344,7 +344,7 @@ dialog, step by step, back allowed, defaults pre-selected: account (create /
 log in / local) → cloud folder → **auto-update** → keep syncing when logged
 out (linger) → what is this device for (stationing, apps). Same steps in
 TUI and phone, strings through the translation table, re-openable later
-from the settings. It replaces today's loose `setup` questions.
+from the settings. **Built** `527afc3` (`zentrale_cli/wizard.py`, CLI; no TUI setup exists yet).
 
 ### 5.3 Platform updates by setting
 
@@ -358,9 +358,9 @@ from the settings. It replaces today's loose `setup` questions.
   imports, reads settings, reaches the cloud), only then switch `aktuell`,
   re-run `timers install`, restart a running backend. Self-test fails →
   stay on the old version, one note. The previous version stays for a
-  manual roll-back (exists today).
-- Off: `status`, TUI and the start banner say "update available: 39 → 43",
-  nothing else happens.
+  manual roll-back (exists today). **Built `527afc3`** (state in `update.json`).
+- Off: `status` and the start line before the TUI say "update available: 39 → 43",
+  nothing else happens (inside the TUI: not yet).
 - apt/pacman: the setting only shows the hint; the package manager updates
   (exists today: `update` refuses there).
 
@@ -543,11 +543,11 @@ apply agent with the generation pointer. That is all. No new language.
 
 | Part | Exists | Missing |
 |---|---|---|
-| install | `install.sh`, sha256, venv, link, PATH hint, keeper timers | linger question |
+| install | `install.sh`, sha256, venv, link, PATH hint, keeper timers, wizard + linger (`527afc3`) | — |
 | account/cloud | Zero-Knowledge account, `HttpMitte`, node description, `devices` | owned apps (`/v1/besitz` unused), cloud as store item |
 | sync | per-app choice, cloud wins, held-back files | format check on read, preserve test |
-| timers | `zentrale timers` (sync, calendar), installer call, re-run on every update | update timer |
-| update | `zentrale update` (beside, switch, roll-back by hand) | `--automatic`, setting, self-test, hint |
+| timers | `zentrale timers` (sync, calendar, update), installer call, re-run on every update, self-heal (`527afc3`) | — |
+| update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
 | versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | contract folder, old-release test, Sunset headers, policy |
 | packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list | port schema, `needs`/`offers`, `/hub/wires`, plug dialog |
@@ -561,10 +561,10 @@ Each step ships on its own; earlier steps never wait for later ones.
 
 | # | Step | Acceptance test |
 |---|---|---|
-| 0 | **Built `13235f8`.** **Dev installer mode** (section 5.4): profiles, start states, `dev update N→M` | a fresh profile runs the wizard to the end (wizard part: with step 2) and is reset in < 10 s; the real installation is untouched |
+| 0 | **Built `13235f8`.** **Dev installer mode** (section 5.4): profiles, start states, `dev update N→M` | a fresh profile runs the wizard to the end (wizard part: `527afc3`) and is reset in < 10 s; the real installation is untouched |
 | 1 | **Built `13235f8`.** **Keeper in the installer**: `install.sh` calls `zentrale timers install`; `update` re-runs it | test with fake systemctl: fresh install → both units rendered and enabled before login; update from a release without a unit → unit appears |
-| 2 | **Update timer + setting + setup wizard**: `zentrale-update` unit, `update --automatic`, `auto_update` asked in the wizard (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
-| 3 | **Linger question** in installer and `setup`, `status` line when off | with linger on, a test session-less run fires the sync unit; off → `status` says "only while logged in" |
+| 2 | **Built `527afc3`.** **Update timer + setting + setup wizard**: `zentrale-update` unit, `update --automatic`, `auto_update` asked in the wizard (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
+| 3 | **Built `527afc3`.** **Linger question** in installer and `setup`, `status` line when off | with linger on, a test session-less run fires the sync unit; off → `status` says "only while logged in" |
 | 4 | **Mini-PC by hand once** ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)): update to the release with steps 1–3 | after a reboot without login, `zentrale devices` on the laptop shows the mini seen < 10 min ago |
 | 5 | **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
 | 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
@@ -597,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`); key rotation decided (option for lost/stolen devices, after step 8).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8).

@@ -41,19 +41,36 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
    then simply exit 0 until the device is set up. If that fails, one warning
    line; the install still finishes.
 5. Ist `~/.local/bin` nicht im PATH, sagt es, wie es für bash, zsh und fish
-   dazukommt. Dann `zentrale welcome`; danach `zentrale setup`.
+   dazukommt. Dann `zentrale welcome`, and — when a terminal is attached
+   (since 2026-10-30, also under `curl … | bash`, it reads /dev/tty) — the
+   setup wizard right away. Otherwise the first `zentrale` starts it.
 
 Developer and test runs only: `ZENTRALE_REUSE_VENV=<venv>` makes install.sh
 (and `zentrale update`) link that venv instead of building one — used by
 `zentrale dev` ([dev_mode.md](dev_mode.md)) and the tests.
 
-**Der Assistent `zentrale setup`** (seit 2026-10-23 je App,
-[../hub/cloud_app.md](../hub/cloud_app.md)): anmelden / Konto anlegen / lokal
-bleiben. Mit Konto zeigt er nur Apps, die auf dem Gerät oder in der Cloud
-schon Daten haben (alle / einzeln / keine); ein frisches Konto sieht „Nothing
-to sync yet — new apps will ask when they have data." Die Cloud wird so oder
-so eingeschaltet; später fragt jede neue App mit Daten einmal selbst. Zum
-Schluss schaltet er die **Timer** ein (nächster Abschnitt).
+**The setup wizard `zentrale setup`** (since 2026-10-30, build steps 2 and 3
+of [../hub/building_kit_plan.md](../hub/building_kit_plan.md), 5.1;
+`zentrale_cli/wizard.py`). One guided dialog, steps as data (`STEPS`), each
+question with its default on Enter and `b` = back:
+
+| # | Step | Asked when | Answer goes to |
+|---|---|---|---|
+| 1 | account: log in / create / stay local | not logged in | `konto.json` |
+| 2 | cloud folder (~/Zentrale/Cloud), default yes | logged in | `abgleich_apps.cloud_folder` |
+| 3 | auto-update, default on | installed by install.sh (channel `script`) | setting `auto_update` |
+| 4 | keep syncing when logged out (linger), default yes | logged in and systemd + loginctl there | `loginctl --no-ask-password enable-linger <own user>`; never sudo; refused → one sentence how |
+| 5 | what is this device for: apps with data (all / pick / none) | logged in | `abgleich_apps` ([cloud_app.md](../hub/cloud_app.md)) |
+
+Then (with an account): cloud on, device registered, one sync, **timers**
+(next section). Every answer is applied right away (idempotent); where an
+unfinished first setup stopped is the setting `setup_wizard_at`, and the
+next `zentrale setup` picks up there. On a set-up device `zentrale setup`
+re-opens the wizard from the start (logged in → no account question). The
+TUI has no setup of its own yet; a second front uses the same `STEPS`.
+`zentrale status` shows `Auto-update` and `Background` (keeps syncing when
+logged out / only while logged in). Tests: `tests/test_setup_wizard.py`,
+`tests/test_dev_mode.py` (real install, wizard to the end, step *n*).
 
 ## Timer (seit 2026-10-24)
 
@@ -66,6 +83,7 @@ systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
 |---|---|---|
 | `zentrale-abgleich` | alle 5 min | `zentrale sync --automatic` (nur mit Weg `mitte`, still, nie eine Frage) |
 | `zentrale-kalender-sync` | alle 3 min | `zentrale adapter run` (= `scripts/kalender_sync.py zentrale`) |
+| `zentrale-update` (since 2026-10-30) | daily, `RandomizedDelaySec=1h` | `zentrale update --automatic` (below, „Updates") |
 
 - **Pfad in der Einheit je Kanal**, überlebt jedes Update: install.sh →
   `~/.local/share/zentrale/hub/aktuell/bin/zentrale`; apt/pacman →
@@ -80,7 +98,13 @@ systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
   `zentrale timers install` repariert (idempotent, schreibt nur Geändertes),
   `zentrale timers remove` schaltet ab und löscht nur eigene Dateien
   (erkannt an der Kopfzeile „Rendered by `zentrale timers install`").
-- Laufen nur, solange Sasha angemeldet ist (User-systemd); kein linger.
+- **Self-heal** (since 2026-10-30): every successful `timers install` writes
+  its release to `~/.local/share/zentrale/keeper.json`; `sync --automatic`
+  (new code via `aktuell`) runs `timers install` once when the release
+  differs — so a node updated by an old release without the keeper still
+  gets new units within 5 minutes. Not in a developer checkout.
+- Without lingering they run only while the user is logged in (User-systemd);
+  the wizard asks for lingering (above), `status` says which.
 - `adapter run` ohne Kalender-Anschluss und ohne eigene
   vdirsyncer-Konfiguration: still nichts. Ohne vdirsyncer bleibt das Gerät
   Verbraucher; `setup`, `status` und `timers` nennen das Paket
@@ -111,8 +135,19 @@ systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
   das KEIN Verweis nach `~/.local/share/zentrale` ist, bricht das Skript ab
   und fasst es nicht an.
 - **Updates:** `zentrale update` holt die neue Fassung daneben, prüft sha256,
-  baut ihr venv und dreht erst dann `hub/aktuell` um. Die alte bleibt bis zum
-  nächsten Update liegen (Rückweg: den Verweis zurückdrehen). Im
+  baut ihr venv, runs its **self-test** (`<new>/bin/zentrale version --check`:
+  imports, reads settings, reaches the cloud) und dreht erst dann `hub/aktuell`
+  um, then the new release's keeper and a restart of a running
+  `zentrale-kern.service`. Self-test fails → stays, the new folder is removed,
+  one note. Die alte bleibt bis zum nächsten Update liegen (Rückweg: den
+  Verweis zurückdrehen).
+- **Automatic (since 2026-10-30):** the `zentrale-update` timer runs
+  `zentrale update --automatic`: nothing new → quiet; new and setting
+  `auto_update` on (default) → as above, a release that failed its self-test
+  is not tried again automatically. Off, or apt/pacman → only remembered:
+  `status` and the line before the TUI say "Update available: X → Y". State:
+  `~/.local/share/zentrale/update.json`. Switch: `zentrale update auto on|off`.
+  Tests: `tests/test_auto_update.py`, `tests/test_dev_mode.py`. Im
   Entwickler-Checkout weigert sich `update` (dort gilt git), bei apt/pacman
   verweist es auf die Paketverwaltung ([verteilung.md](verteilung.md)).
 - **Die Cloud-Adresse** steht an einer Stelle: `VORGABE` in
