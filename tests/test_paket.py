@@ -17,7 +17,7 @@ import pytest
 import dateien
 import konto
 import konto_schluessel as ks
-from _falsche_cloud import FalscheCloud
+from devkit.fake_cloud import FalscheCloud
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Hinten anhängen: scripts/abgleich.py darf core/abgleich.py nicht verdecken.
@@ -121,6 +121,9 @@ def test_update_daneben_installieren_und_umschalten(tmp_path, monkeypatch):
         assert (heim / "data" / "ascii" / "katze.txt").read_text() == "=^.^="
         assert venvs == [str(neu)]
         assert alt.exists()                                  # Rückweg bleibt
+        # The keeper of the new release ran; this one's bin/zentrale is a stub
+        # that cannot run, so the update stands and one line says how to repair.
+        assert "Run 'zentrale timers install' to repair them." in term.aus.getvalue()
         # Nochmal: schon aktuell.
         term = Terminal(aus=io.StringIO())
         assert aktualisieren.update(term, venv=venvs.append, wurzel=str(neu)) == 0

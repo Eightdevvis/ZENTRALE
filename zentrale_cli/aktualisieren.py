@@ -82,8 +82,15 @@ def _groesse(n):
     return f"{n / 1e6:.1f} MB" if n else "?"
 
 
+REUSE_VENV = "ZENTRALE_REUSE_VENV"   # developer/test runs: link this venv (as in install.sh)
+
+
 def venv_bauen(ordner):
     """venv + requirements-basis.txt. Eigene Funktion, damit Tests sie ersetzen."""
+    reuse = os.environ.get(REUSE_VENV)
+    if reuse:
+        os.symlink(reuse, os.path.join(ordner, "venv"))
+        return
     subprocess.run([sys.executable, "-m", "venv", os.path.join(ordner, "venv")], check=True)
     subprocess.run([os.path.join(ordner, "venv", "bin", "pip"), "install", "-q", "-r",
                     os.path.join(ordner, "requirements-basis.txt")], check=True)
@@ -188,4 +195,23 @@ def update(term, venv=venv_bauen, wurzel=WURZEL):
     umschalten(neu)
     aufraeumen({neu, alt_name})
     term.sag(t("upd_ok", neu=neu, alt_ordner=os.path.join(hub, alt_name)), "gut")
+    run_keeper(term, ziel)
     return 0
+
+
+def run_keeper(term, release_dir):
+    """`timers install` of the NEW release (memory/hub/building_kit_plan.md 5.2):
+    only the new code knows the units it brings, so a unit added in a later
+    release reaches every node that updates. Idempotent. A failure never undoes
+    the update — the timers can be repaired by hand; one line says how."""
+    exe = os.path.join(release_dir, "bin", "zentrale")
+    try:
+        r = subprocess.run([exe, "timers", "install"], capture_output=True, text=True, timeout=120)
+        ok, out = r.returncode == 0, (r.stdout + r.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        ok, out = False, str(e)
+    for line in out.splitlines():
+        term.sag(line, "blass")
+    if not ok:
+        term.sag(t("upd_keeper_failed"), "warn")
+    return ok

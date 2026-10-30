@@ -1,4 +1,4 @@
-"""Eine gespielte ZENTRALE-Cloud für Tests: http.server in einem Thread, die
+"""Eine gespielte ZENTRALE-Cloud für Tests und `zentrale dev`: http.server in einem Thread, die
 Routen aus memory/hub/knoten_beitritt.md („Bauplan v1 — Schnittstelle"),
 alles im Speicher. Nie das Netz, nie die echte Cloud.
 
@@ -12,11 +12,21 @@ GET /v1/nutzung nur für `betreiber` (sonst 403 nur_betreiber).
 Konten heißen nach Benutzernamen (anonym, keine Mail): '@' → 400, vergeben →
 409 name_vergeben (der Code bleibt dann frei).
 Stand: Absprache mit dem Server-Teil 2026-10-22, anonym seit 2026-10-23
-(server/openapi.yaml)."""
+(server/openapi.yaml).
+
+Since 2026-10-30 it lives in devkit/ (was tests/_falsche_cloud.py) so the
+developer installer mode (memory/hub/building_kit_plan.md 5.4) plays against
+the very same fake as the tests. With `datei=` its state is a JSON file:
+every request reloads and saves it under a file lock, so several dev commands
+(and a running dev shell) share one cloud and a profile's account survives.
+`paket` may be a callable returning (version, bytes) or None."""
 
 import base64
+import contextlib
+import fcntl
 import hashlib
 import json
+import os
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,8 +48,71 @@ class Zustand:
         self.nutzung = {"zeit": "2026-10-23T09:00:00.000Z", "grenzen_geprueft": "2026-10-23",
                         "grenzen": [], "warnungen": []}
         self.aufrufe = []           # (methode, pfad) — zum Nachsehen in Tests
+        self.datei = None           # JSON file of the state (zentrale dev), else memory only
         self.zaehler = 0
         self.sperre = threading.Lock()
+
+
+# ── Persistence (only with FalscheCloud(datei=...)) ────────────────────
+_PERSISTED = ("codes", "konten", "sitzungen", "blobs", "kopf", "staende", "eltern",
+              "knoten", "betreiber", "nutzung", "zaehler")
+
+
+def _encode(v):
+    if isinstance(v, bytes):
+        return {"__b64__": base64.b64encode(v).decode()}
+    if isinstance(v, set):
+        return {"__set__": sorted(v)}
+    if isinstance(v, dict):
+        return {k: _encode(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_encode(x) for x in v]
+    return v
+
+
+def _decode(v):
+    if isinstance(v, dict):
+        if set(v) == {"__b64__"}:
+            return base64.b64decode(v["__b64__"])
+        if set(v) == {"__set__"}:
+            return set(v["__set__"])
+        return {k: _decode(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_decode(x) for x in v]
+    return v
+
+
+def _load(z, datei):
+    try:
+        with open(datei, encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return
+    for name in _PERSISTED:
+        if name in d:
+            setattr(z, name, _decode(d[name]))
+    z.sitzungen = {k: tuple(v) if isinstance(v, list) else v for k, v in z.sitzungen.items()}
+
+
+def _save(z, datei):
+    tmp = datei + ".neu"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({name: _encode(getattr(z, name)) for name in _PERSISTED}, f)
+    os.replace(tmp, datei)
+
+
+@contextlib.contextmanager
+def state_file(datei):
+    """Edit a persisted fake cloud from outside (zentrale dev): lock, load,
+    yield the Zustand, save. A running FalscheCloud on the same file sees it
+    with its next request."""
+    os.makedirs(os.path.dirname(datei) or ".", exist_ok=True)
+    with open(datei + ".lock", "a") as sperre:
+        fcntl.flock(sperre, fcntl.LOCK_EX)
+        z = Zustand()
+        _load(z, datei)
+        yield z
+        _save(z, datei)
 
 
 def _code(c):
@@ -99,11 +172,25 @@ class _Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         pfad, abfrage = u.path, parse_qs(u.query)
         self.z.aufrufe.append((methode, pfad))
-        with self.z.sperre:
+        with self.z.sperre, self._datei_sperre():
             try:
                 self._route(methode, pfad, abfrage)
             except Exception as e:   # noqa: BLE001 — ein Testserver soll laut sagen, was los ist
                 self._fehler(500, "kaputt", repr(e))
+
+    @contextlib.contextmanager
+    def _datei_sperre(self):
+        datei = self.z.datei
+        if not datei:
+            yield
+            return
+        with open(datei + ".lock", "a") as sperre:
+            fcntl.flock(sperre, fcntl.LOCK_EX)
+            _load(self.z, datei)
+            try:
+                yield
+            finally:
+                _save(self.z, datei)
 
     def do_GET(self):
         self._gehen("GET")
@@ -167,16 +254,17 @@ class _Handler(BaseHTTPRequestHandler):
             z.sitzungen[token] = (_name(d), None)                # nur fürs Passwort
             return self._antwort(200, {"verpackt_notfall": k["verpackt_notfall"], "token": token,
                                        "laeuft_ab": "2099-01-01T00:00:00Z"})
+        paket = z.paket() if callable(z.paket) else z.paket
         if (m, pfad) == ("GET", "/v1/paket"):
-            if not self._code_ok(abfrage) or not z.paket:
+            if not self._code_ok(abfrage) or not paket:
                 return self._fehler(403, "code_ungueltig", "Invite code or login needed.")
-            v, daten = z.paket
+            v, daten = paket
             return self._antwort(200, {"version": v, "sha256": hashlib.sha256(daten).hexdigest(),
                                        "groesse": len(daten)})
         if m == "GET" and pfad.startswith("/v1/paket/"):
-            if not self._code_ok(abfrage) or not z.paket:
+            if not self._code_ok(abfrage) or not paket:
                 return self._fehler(403, "code_ungueltig", "Invite code or login needed.")
-            return self._antwort(200, roh=z.paket[1])
+            return self._antwort(200, roh=paket[1])
 
         sitzung = self._sitzung()
         if sitzung is None:
@@ -256,10 +344,15 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class FalscheCloud:
-    def __init__(self):
+    def __init__(self, datei=None, port=0):
         self.zustand = Zustand()
+        self.zustand.datei = datei
+        if datei:
+            with state_file(datei) as z:
+                for name in _PERSISTED:
+                    setattr(self.zustand, name, getattr(z, name))
         handler = type("H", (_Handler,), {"z": self.zustand})
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", port), handler)
         self.adresse = f"http://127.0.0.1:{self.server.server_address[1]}"
         self.faden = threading.Thread(target=self.server.serve_forever, args=(0.05,), daemon=True)
         self.faden.start()

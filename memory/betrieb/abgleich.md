@@ -131,7 +131,7 @@ Der Abgleich kennt die Mitte nur über vier Handgriffe (`core/abgleich_mitte.py`
   neu. Gemischt Gelesenes scheitert beim Senden am 409 und wird ebenso neu
   geholt.
 - Prüfstein: `tests/test_abgleich_http.py` (zwei gespielte Geräte gegen
-  `tests/_falsche_cloud.py`).
+  `devkit/fake_cloud.py`).
 
 ### Apps je Gerät (seit 2026-10-23, vorher Bereiche)
 

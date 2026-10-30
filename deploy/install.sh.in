@@ -193,11 +193,19 @@ if [[ -d "$ZIEL/mitgeliefert/ascii" && ! -d "$HEIM/data/ascii" ]]; then
 fi
 gut "Unpacked to $ZIEL"
 
-sag "Installing Python packages (this may take a few minutes) …"
-"$PY" -m venv "$ZIEL/venv"
-"$ZIEL/venv/bin/pip" install -q --upgrade pip >/dev/null
-"$ZIEL/venv/bin/pip" install -q -r "$ZIEL/requirements-basis.txt"
-gut "Python packages installed"
+if [[ -n "${ZENTRALE_REUSE_VENV:-}" ]]; then
+  # Developer and test runs only (zentrale dev, tests): link an existing venv
+  # instead of building one — seconds instead of minutes, no network.
+  [[ -x "$ZENTRALE_REUSE_VENV/bin/python" ]] || abbruch "ZENTRALE_REUSE_VENV has no bin/python: $ZENTRALE_REUSE_VENV"
+  ln -sfn "$ZENTRALE_REUSE_VENV" "$ZIEL/venv"
+  gut "Python packages: reusing $ZENTRALE_REUSE_VENV"
+else
+  sag "Installing Python packages (this may take a few minutes) …"
+  "$PY" -m venv "$ZIEL/venv"
+  "$ZIEL/venv/bin/pip" install -q --upgrade pip >/dev/null
+  "$ZIEL/venv/bin/pip" install -q -r "$ZIEL/requirements-basis.txt"
+  gut "Python packages installed"
+fi
 
 # ── Umschalten und verlinken ───────────────────────────────────────────
 ln -sfn "$FASSUNG" "$HEIM/hub/.aktuell-neu"
@@ -205,6 +213,12 @@ mv -T "$HEIM/hub/.aktuell-neu" "$HEIM/hub/aktuell"
 mkdir -p "$BIN_DIR"
 ln -sfn "$HEIM/hub/aktuell/bin/zentrale" "$LINK"
 gut "Command installed: $LINK"
+
+# ── Keeper: the background timers, before any login ────────────────────
+# memory/hub/building_kit_plan.md 5.2: what keeps a node alive comes with the
+# installer, not with a later `setup`. Before login the timers simply exit 0.
+# Idempotent; every `zentrale update` runs it again from the new version.
+"$LINK" timers install || warn "The background timers could not be set up. Try 'zentrale timers install' later."
 
 # ── PATH ───────────────────────────────────────────────────────────────
 case ":$PATH:" in

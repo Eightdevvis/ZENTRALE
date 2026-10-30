@@ -1,13 +1,15 @@
 """Die Timer eines Geräts (zentrale_cli/timer.py): gerendert mit dem Befehl
 `zentrale` des Kanals statt Sashas Checkout-Pfad, idempotent installiert mit
 einem falschen systemctl, ohne systemd ein Satz. Nie das echte systemd
-(conftest: ZENTRALE_SYSTEMCTL=aus, eigener Einheiten-Ordner)."""
+(conftest: ZENTRALE_SYSTEMCTL=aus, eigener Einheiten-Ordner; der falsche
+systemctl ist devkit/fake_systemd.py)."""
 import io
 import os
-import stat
+import pathlib
 
 import pytest
 
+from devkit import fake_systemd
 from zentrale_cli import befehle, haupt, timer
 from zentrale_cli.ausgabe import Terminal
 
@@ -21,32 +23,20 @@ class Spiel(Terminal):
         return self.aus.getvalue()
 
 
-FALSCH = """#!/bin/bash
-echo "$*" >> "{log}"
-case "$2" in
-  is-enabled) echo enabled ;;
-  is-active) [[ "$*" == *zentrale-kern* && -z "$KERN_LAEUFT" ]] && exit 3; echo active ;;
-esac
-exit 0
-"""
-
-
 @pytest.fixture
 def systemd(tmp_path, monkeypatch):
-    log = tmp_path / "systemctl.log"
-    prog = tmp_path / "systemctl"
-    prog.write_text(FALSCH.format(log=log))
-    prog.chmod(prog.stat().st_mode | stat.S_IEXEC)
-    monkeypatch.setenv("ZENTRALE_SYSTEMCTL", str(prog))
-    ordner = tmp_path / "user"
-    monkeypatch.setenv("ZENTRALE_SYSTEMD_USER_DIR", str(ordner))
+    """The shared fake (devkit/fake_systemd.py) — the same one `zentrale dev` uses."""
+    fake = fake_systemd.make(tmp_path / "systemd")
+    for k, v in fake.env().items():
+        monkeypatch.setenv(k, v)
 
     class S:
         pass
     s = S()
-    s.ordner = ordner
-    s.aufrufe = lambda: log.read_text().splitlines() if log.exists() else []
-    s.leeren = lambda: log.unlink() if log.exists() else None
+    s.fake = fake
+    s.ordner = pathlib.Path(fake.units)
+    s.aufrufe = fake.calls
+    s.leeren = fake.clear_log
     return s
 
 
@@ -198,7 +188,7 @@ def test_neue_ki_schluessel_starten_den_kern_neu(systemd, monkeypatch):
     befehle._ki_neu_melden(term, {}, automatisch=True)
     assert "ANTHROPIC_API_KEY" in term.text and "quit and start" not in term.text  # Timer: kein Rat
     assert "--user try-restart" not in " ".join(systemd.aufrufe())     # Kern läuft nicht
-    monkeypatch.setenv("KERN_LAEUFT", "1")
+    systemd.fake.set_active("zentrale-kern.service")
     term = Spiel()
     befehle._ki_neu_melden(term, {}, automatisch=False)
     assert "--user try-restart zentrale-kern.service" in systemd.aufrufe()

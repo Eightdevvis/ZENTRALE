@@ -1,5 +1,5 @@
 // Eine gespielte ZENTRALE-Cloud für die Tests — dieselben Routen und Regeln
-// wie server/src/mitte.ts und tests/_falsche_cloud.py (Compare-and-Swap auf
+// wie server/src/mitte.ts und devkit/fake_cloud.py (Compare-and-Swap auf
 // den Kopf, Inline ≤ 256 KiB, blob_fehlt, 401 ohne Sitzung). Nie das Netz.
 //
 // [rechnerSchreibt] spielt einen Rechner: er legt Dateien verschlüsselt nach

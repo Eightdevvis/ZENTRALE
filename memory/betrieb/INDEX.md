@@ -6,6 +6,7 @@ hier ist „Maschine", nicht „Feature".
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Setup & Installation: venv, Modelle, Abhängigkeiten; neues Gerät per `install.sh` (apt/pacman, EndeavourOS), `zentrale update`, Timer (`zentrale timers`), Paket bauen | [setup.md](setup.md) |
+| **Developer installer mode** `zentrale dev`: profiles (isolated ZENTRALE homes with fake cloud + fake systemd), start states as data, playing updates, the guard that never touches the real installation | [dev_mode.md](dev_mode.md) |
 | **Verteilung:** apt (.deb), pacman (PKGBUILD/AUR), curl-Einzeiler aus EINEM tar.gz; der Schalter `oeffentlich` in `deploy/verteilung.toml`; Kanal-Erkennung in `zentrale update`; was vor dem Veröffentlichen passieren muss | [verteilung.md](verteilung.md) |
 | Starten: welche Prozesse, welche Env-Vars, welche Reihenfolge | [starten.md](starten.md) |
 | **Wachplan:** PC = Gehirn; feste Schlafenszeiten, Pi aus → PC schläft, Wecken per Router/VPN, Hochfahren vor dem Heimkommen; Schlüssel später | [wachplan.md](wachplan.md) |

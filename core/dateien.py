@@ -80,8 +80,10 @@ def json_schreiben(pfad, daten, indent: int = 2, geheim: bool = False) -> None:
 def knoten() -> str:
     """Name dieses Rechners, dateinamen-tauglich (wie scripts/daten_sichern.py:
     socket.gethostname()). Steht in Verlaufs-, Snapshot- und Gesprächs-
-    Dateinamen, damit PC und Laptop nie denselben Namen erzeugen."""
-    return sicherer_name(socket.gethostname() or "knoten")
+    Dateinamen, damit PC und Laptop nie denselben Namen erzeugen.
+    ZENTRALE_NODE_NAME overrides it: each `zentrale dev` profile is its own
+    device on one machine (memory/hub/building_kit_plan.md 5.4)."""
+    return sicherer_name(os.environ.get("ZENTRALE_NODE_NAME") or socket.gethostname() or "knoten")
 
 
 def sicherer_name(text: str) -> str:

@@ -14,7 +14,7 @@ import dateien
 import knoten
 import konto
 import konto_schluessel as ks
-from _falsche_cloud import FalscheCloud
+from devkit.fake_cloud import FalscheCloud
 from zentrale_cli import befehle, haupt
 from zentrale_cli.ausgabe import Terminal
 
@@ -146,16 +146,14 @@ def test_assistent_ohne_systemd_ein_satz_und_fertig(geraet):
 
 
 def test_assistent_schaltet_die_timer_ein(geraet, monkeypatch, tmp_path):
-    log = tmp_path / "systemctl.log"
-    prog = tmp_path / "systemctl"
-    prog.write_text(f'#!/bin/bash\necho "$*" >> "{log}"\nexit 0\n')
-    prog.chmod(0o755)
-    monkeypatch.setenv("ZENTRALE_SYSTEMCTL", str(prog))
-    monkeypatch.setenv("ZENTRALE_SYSTEMD_USER_DIR", str(tmp_path / "user"))
+    from devkit import fake_systemd
+    fake = fake_systemd.make(tmp_path / "systemd")
+    for k, v in fake.env().items():
+        monkeypatch.setenv(k, v)
     term = _frisches_konto_eingerichtet(geraet)
     assert "Timers on" in term.text
-    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in log.read_text()
-    dienst = (tmp_path / "user" / "zentrale-abgleich.service").read_text()
+    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in fake.calls()
+    dienst = open(os.path.join(fake.units, "zentrale-abgleich.service")).read()
     assert f"ExecStart={geraet.wurzel}/bin/zentrale sync --automatic" in dienst
 
 

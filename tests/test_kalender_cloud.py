@@ -1,5 +1,5 @@
 """Der Kalender über die Cloud mit dem Adapter (memory/hub/adapter.md):
-zwei gespielte Geräte gegen eine gespielte Cloud (tests/_falsche_cloud.py)
+zwei gespielte Geräte gegen eine gespielte Cloud (devkit/fake_cloud.py)
 und ein gespieltes „Google" — ein Ordner, mit dem das ECHTE vdirsyncer
 abgleicht (filesystem-Speicher; Google selbst wird nie gefragt).
 
@@ -28,7 +28,7 @@ import kalender
 import kalender_ics
 import konto
 import konto_schluessel as ks
-from _falsche_cloud import FalscheCloud
+from devkit.fake_cloud import FalscheCloud
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PW = "ein-langes-passwort"

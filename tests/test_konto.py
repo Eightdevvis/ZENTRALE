@@ -1,4 +1,4 @@
-"""Das Konto (core/konto.py) gegen eine gespielte Cloud (tests/_falsche_cloud.py):
+"""Das Konto (core/konto.py) gegen eine gespielte Cloud (devkit/fake_cloud.py):
 anlegen, anmelden auf einem zweiten Gerät, falsches Passwort, Notfall,
 Passwort ändern, abmelden. Der Server bekommt nie Passwort oder Schlüssel."""
 import json
@@ -10,7 +10,7 @@ import pytest
 import dateien
 import konto
 import konto_schluessel as ks
-from _falsche_cloud import FalscheCloud
+from devkit.fake_cloud import FalscheCloud
 
 KLEIN = {"name": "argon2id", "t": 1, "m": 19456, "p": 1}   # schnell; das Schema ist dasselbe
 PW = "ein-langes-passwort"

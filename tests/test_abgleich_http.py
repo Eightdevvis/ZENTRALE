@@ -1,5 +1,5 @@
 """Abgleich über die Cloud: HttpMitte (core/abgleich_mitte.py) gegen eine
-gespielte Cloud (tests/_falsche_cloud.py), und ein ganzer Abgleich mit zwei
+gespielte Cloud (devkit/fake_cloud.py), und ein ganzer Abgleich mit zwei
 gespielten Geräten, Schlüssel = konto_schluessel aus konto.json.
 Dazu die Wahl je App und Gerät (core/abgleich_apps.py)."""
 import json
@@ -16,7 +16,7 @@ import cloud_api
 import dateien
 import konto
 import konto_schluessel as ks
-from _falsche_cloud import FalscheCloud
+from devkit.fake_cloud import FalscheCloud
 
 PW = "ein-langes-passwort"
 LISTE = [{"id": "einkauf", "name": "Einkauf", "next_item": 2,

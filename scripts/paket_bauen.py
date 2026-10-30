@@ -112,22 +112,26 @@ def verboten(rel: str) -> bool:
     return any(fnmatch.fnmatch(teile[-1], m) for m in VERBOTEN_NAMEN)
 
 
-def _verfolgt(root):
+def _verfolgt(root, include_untracked=False):
     """Im git-Checkout nur, was eingecheckt ist (git ls-files) — liegengebliebene
-    Probe- und Notizdateien bleiben draußen. Also: erst committen, dann bauen."""
+    Probe- und Notizdateien bleiben draußen. Also: erst committen, dann bauen.
+    include_untracked (only `zentrale dev`, devkit/workspace.py): also new files
+    not committed yet, as long as git does not ignore them — the working tree
+    as the developer sees it."""
     if not os.path.exists(os.path.join(root, ".git")):
         return None
     import subprocess
-    r = subprocess.run(["git", "-C", root, "ls-files", "-z"], capture_output=True)
+    extra = ["--others", "--exclude-standard"] if include_untracked else []
+    r = subprocess.run(["git", "-C", root, "ls-files", "-z", "--cached", *extra], capture_output=True)
     if r.returncode != 0:
         return None
     return {os.path.join(root, p) for p in r.stdout.decode("utf-8", "replace").split("\0") if p}
 
 
-def dateien(root=ROOT, liste=None):
+def dateien(root=ROOT, liste=None, include_untracked=False):
     """→ sortierte [(quelle_abs, ziel_rel)]."""
     raus = {}
-    bekannt = _verfolgt(root)
+    bekannt = _verfolgt(root, include_untracked)
     for quelle, ziel in (liste if liste is not None else liste_lesen()):
         q = os.path.join(root, quelle.rstrip("/"))
         if not os.path.exists(q):
@@ -163,7 +167,8 @@ def fassung_bestimmen(root=ROOT):
     return datetime.date.today().strftime("%Y.%m.%d")
 
 
-def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, verteilung=None):
+def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, verteilung=None,
+          include_untracked=False):
     """→ (pfad des Pakets, {version, sha256, groesse}). `stufe` = gzip-Stufe
     (Tests nehmen 1: dasselbe Paket, nur schneller gepackt)."""
     fassung = fassung or fassung_bestimmen(root)
@@ -184,7 +189,7 @@ def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, vertei
         return info
 
     with tarfile.open(pfad, "w:gz", compresslevel=stufe) as tar:
-        for q, z in dateien(root, liste):
+        for q, z in dateien(root, liste, include_untracked):
             tar.add(q, arcname=f"{oben}/{z}", recursive=False, filter=normal)
         for name, text in zusatz.items():
             v = text.encode("utf-8")

@@ -35,8 +35,17 @@ jeder Kunde) — Bauplan: [../hub/knoten_beitritt.md](../hub/knoten_beitritt.md)
    nach `~/.local/share/zentrale/hub/<fassung>/`, baut dort ein venv mit
    `requirements-basis.txt` (ohne Whisper/TTS/sherpa/Piper/pygame), dreht
    `hub/aktuell` auf die Fassung und verlinkt `~/.local/bin/zentrale`.
-4. Ist `~/.local/bin` nicht im PATH, sagt es, wie es für bash, zsh und fish
+4. **Keeper (since 2026-10-30, build step 1 of
+   [../hub/building_kit_plan.md](../hub/building_kit_plan.md)):** right after
+   linking it runs `zentrale timers install`, before any login — the timers
+   then simply exit 0 until the device is set up. If that fails, one warning
+   line; the install still finishes.
+5. Ist `~/.local/bin` nicht im PATH, sagt es, wie es für bash, zsh und fish
    dazukommt. Dann `zentrale welcome`; danach `zentrale setup`.
+
+Developer and test runs only: `ZENTRALE_REUSE_VENV=<venv>` makes install.sh
+(and `zentrale update`) link that venv instead of building one — used by
+`zentrale dev` ([dev_mode.md](dev_mode.md)) and the tests.
 
 **Der Assistent `zentrale setup`** (seit 2026-10-23 je App,
 [../hub/cloud_app.md](../hub/cloud_app.md)): anmelden / Konto anlegen / lokal
@@ -61,8 +70,12 @@ systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
 - **Pfad in der Einheit je Kanal**, überlebt jedes Update: install.sh →
   `~/.local/share/zentrale/hub/aktuell/bin/zentrale`; apt/pacman →
   `/usr/bin/zentrale` (Starter); Checkout → `<checkout>/bin/zentrale`.
-- `zentrale setup` (mit Cloud) installiert und schaltet ein; ohne
-  systemd --user ein Satz, die Einrichtung geht weiter. Nie sudo.
+- **Installed by the installer** (install.sh, since 2026-10-30), again by
+  `zentrale setup`, and **again after every `zentrale update`** — by the NEW
+  release's `zentrale timers install`, so a unit added in a later release
+  reaches every node that updates. Idempotent; a failure never undoes the
+  update (one line: run `zentrale timers install`). Ohne systemd --user ein
+  Satz, die Einrichtung geht weiter. Nie sudo.
 - `zentrale timers` zeigt Dateien, an/aus, nächster Lauf, letztes Ergebnis;
   `zentrale timers install` repariert (idempotent, schreibt nur Geändertes),
   `zentrale timers remove` schaltet ab und löscht nur eigene Dateien
@@ -77,8 +90,10 @@ systemd-**User**-Timer, gerendert von `zentrale_cli/timer.py` nach
   Verweis nach `deploy/` durch die gerenderte Datei (nie durch den Verweis
   hindurch) und schaltet den Timer neu ein (`reenable`). Wer nichts tut,
   behält die alten — sie laufen weiter wie bisher.
-- Tests: `tests/test_timer.py` (falsches systemctl); conftest setzt
-  `ZENTRALE_SYSTEMCTL=aus`, unter pytest ohne Umlenkung gilt systemd als nicht da.
+- Tests: `tests/test_timer.py` (falsches systemctl: `devkit/fake_systemd.py`,
+  the same one `zentrale dev` uses), `tests/test_dev_mode.py` (real install.sh
+  and update with it); conftest setzt `ZENTRALE_SYSTEMCTL=aus`, unter pytest
+  ohne Umlenkung gilt systemd als nicht da.
 
 **Aufbau auf dem Gerät:**
 

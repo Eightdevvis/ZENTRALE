@@ -3,7 +3,7 @@ Satz zeigen. Ohne Befehl → TUI (beim allerersten Start erst der Assistent)."""
 
 import os
 
-from zentrale_cli import WURZEL, aktualisieren, assistent, befehle
+from zentrale_cli import WURZEL, aktualisieren, assistent, befehle, dev
 from zentrale_cli.ausgabe import Terminal, hilfe
 from zentrale_cli.texte import t
 
@@ -26,11 +26,12 @@ BEFEHLE = {
     ("cloud", "usage"): befehle.cloud_usage,
     ("update",): aktualisieren.update,
     ("version",): befehle.version,
+    ("dev",): dev.dev,
     ("--version",): befehle.version,
 }
 
 # Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
-MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender}
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, dev.dev}
 
 
 def _entwickler_checkout() -> bool:
