@@ -488,7 +488,7 @@ five stages, and stages 2–3 are the hard gate:
 
 | # | Stage | What happens | Where |
 |---|---|---|---|
-| 1 | **Sketch** | the editor offers only sockets whose types fit: a small capability ↔ requirement table per layer, unfitting sockets greyed out (as in Rete or Blender node editors). This is convenience, not the guarantee | every surface (TUI, phone) |
+| 1 | **Sketch** | a wire whose types don't fit **cannot be connected at all** (Sasha 2026-10-30): while dragging it over an unfitting socket the cursor shows a small red ✕; dropping it there does not attach and shows a short error at the socket ("PDF viewer needs `files`, cloud offers `sync`"). Source: a small capability ↔ requirement table per layer. This is convenience, not the guarantee | every surface (TUI, phone) |
 | 2 | **Item check** | each piece and wire against its JSON Schema | Python and Dart, on every node |
 | 3 | **Compile** (the gate) | graph rules no schema language can express: every non-planned requirement fulfilled exactly once; no forbidden cycles; one owner per resource; version ranges satisfied for the node it runs on (from the node description). **Any error → no output**, with the errors pinned to the pieces on the map | Python only, own code (~200–400 lines) |
 | 4 | **Plan / diff** | the result is a self-contained, hashed **generation** file (plain JSON); shown as a diff against the current generation, in the [OpenTofu](https://opentofu.org/docs/)/Terraform plan style: "+ tutor data → cloud sync on minipc, − calendar ← google" | core |
@@ -551,7 +551,7 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 12 | **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
 | 13 | **Wiring map v1, read-only**: app `wiring`, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
 | 14 | **Wiring map v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
-| 15 | **Wiring map v3, rewire by drawing**: greyed-out sockets, Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
+| 15 | **Wiring map v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
 
 **Final acceptance — fresh reinstall on the Mini-PC, no manual work:**
 remove the installation on the mini (cloud data untouched), run the
