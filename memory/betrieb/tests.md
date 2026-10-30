@@ -98,6 +98,11 @@ Einzelposten: `test_fraunces_nur_fuer_die_ueberschrift` 10,9 s → unter
    Zeitabhängiges selbst prüfen (z. B. über Mitternacht) mit gestellter Uhr:
    `uhr.gestellt(...)` + `uhr.vorstellen(...)` (core/uhr.py, Gefahrzone
    [../system/gefahrzonen.md](../system/gefahrzonen.md)).
+9. **Fakes are shared, not rewritten per test** (since 2026-10-30): the fake
+   cloud (`devkit/fake_cloud.py`) and the fake `systemctl`
+   (`devkit/fake_systemd.py`) are the ones `zentrale dev` profiles use
+   ([dev_mode.md](dev_mode.md)) — what Sasha clicks through is what CI checks.
+   A new behaviour goes into the shared fake.
 
 Regeln 1 und 2 prüft `tests/test_testarchitektur.py` statisch (AST); der
 Wächter wird rot, sobald eine Funktions-Fixture `mktemp` ruft oder eine

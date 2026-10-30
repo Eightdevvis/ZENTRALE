@@ -1,6 +1,6 @@
 # Building kit — plugs, contracts, packages, node lifecycle, wiring map (plan)
 
-**Stand 2026-10-30: plan, nothing of the new parts built.** One blueprint for
+**Stand 2026-10-30: plan; build steps 0 and 1 built (`13235f8`).** One blueprint for
 how ZENTRALE is put together from the consumer's side: everything is a
 building block that offers and needs plugs, the core is tiny, updates are
 never forced, and the Desk can show and change the real wiring. It
@@ -295,28 +295,28 @@ what ZENTRALE does, what exists.
 
 | # | Step | Person does | ZENTRALE does | Today |
 |---|---|---|---|---|
-| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | all but the keeper and the wizard |
+| 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | all but the wizard (keeper: `13235f8`) |
 | 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes, except "cloud as store app" |
 | 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder offer missing) |
 | 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; plug/rights dialog no; owned-app offer no |
 | 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | manual `zentrale update` only |
 | 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes except owned-app offer |
-| 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map | no |
+| 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | no |
 
 ### 5.2 What keeps a node alive
 
 | Unit (systemd **user**) | When | Runs | Today |
 |---|---|---|---|
 | `zentrale-update.timer` | daily, random delay up to 1 h | `zentrale update --automatic` | **missing** |
-| `zentrale-abgleich.timer` | every 5 min | `zentrale sync --automatic` | release 41, via `setup` |
-| `zentrale-kalender-sync.timer` | every 3 min | `zentrale adapter run` | release 41, via `setup` |
+| `zentrale-abgleich.timer` | every 5 min | `zentrale sync --automatic` | release 41; installer + every update since `13235f8` |
+| `zentrale-kalender-sync.timer` | every 3 min | `zentrale adapter run` | release 41; installer + every update since `13235f8` |
 | `zentrale-kern.service` (backend) | only for node kinds that serve others (brain, wall display) | the backend | only in Sasha's checkout (`deploy/`) |
 
-- **Installed by the installer, not by setup.** `install.sh` (and the
+- **Installed by the installer, not by setup** (install.sh: built `13235f8`). `install.sh` (and the
   .deb/PKGBUILD post-install for the user) calls `zentrale timers install`
   right after linking. Before login the sync timer simply returns (it
   already does: no session → exit 0).
-- **Every update re-runs `timers install`** (idempotent). So a unit added
+- **Every update re-runs `timers install`** (built `13235f8`: the NEW release's, idempotent). So a unit added
   in a later release reaches every node that updates — the mini's failure
   can't repeat.
 - **Linger:** user timers stop at logout and don't start before login.
@@ -337,7 +337,7 @@ reset in seconds. A profile can start at any state: fresh, wizard step *n*,
 logged in, on an old release *N*, offline, removed. `dev update N→M` plays
 an update with local tarballs, self-test and keeper included. Built on the
 same fakes as the tests (fake cloud, fake systemctl), so what Sasha clicks
-through is what CI checks. Never touches the real installation.
+through is what CI checks. Never touches the real installation. **Built** `13235f8`: [../betrieb/dev_mode.md](../betrieb/dev_mode.md).
 
 **Setup wizard** (Sasha 30.10.): every first-run question in one guided
 dialog, step by step, back allowed, defaults pre-selected: account (create /
@@ -543,15 +543,15 @@ apply agent with the generation pointer. That is all. No new language.
 
 | Part | Exists | Missing |
 |---|---|---|
-| install | `install.sh`, sha256, venv, link, PATH hint | keeper timers in the installer, linger question |
+| install | `install.sh`, sha256, venv, link, PATH hint, keeper timers | linger question |
 | account/cloud | Zero-Knowledge account, `HttpMitte`, node description, `devices` | owned apps (`/v1/besitz` unused), cloud as store item |
 | sync | per-app choice, cloud wins, held-back files | format check on read, preserve test |
-| timers | `zentrale timers` (sync, calendar), release 41 | update timer, re-run on every update, installer call |
+| timers | `zentrale timers` (sync, calendar), installer call, re-run on every update | update timer |
 | update | `zentrale update` (beside, switch, roll-back by hand) | `--automatic`, setting, self-test, hint |
 | versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | contract folder, old-release test, Sunset headers, policy |
 | packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list | port schema, `needs`/`offers`, `/hub/wires`, plug dialog |
-| lifecycle | join by login | `leave`, `devices remove`, session end per node, tombstone; account key rotation |
+| lifecycle | join by login | `leave`, `devices remove`, session end per node, tombstone; key rotation option (lost/stolen, after step 8) |
 | wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions | the app, piece kinds, layers, planned state, things store |
 | run pipeline | JSON Schema use everywhere, atomic `aktuell` switch as a pattern | type registry, compiler, generations, apply agent, socket table |
 
@@ -561,15 +561,15 @@ Each step ships on its own; earlier steps never wait for later ones.
 
 | # | Step | Acceptance test |
 |---|---|---|
-| 0 | **Dev installer mode** (section 5.4): profiles, start states, `dev update N→M` | a fresh profile runs the wizard to the end and is reset in < 10 s; the real installation is untouched |
-| 1 | **Keeper in the installer**: `install.sh` calls `zentrale timers install`; `update` re-runs it | test with fake systemctl: fresh install → both units rendered and enabled before login; update from a release without a unit → unit appears |
+| 0 | **Built `13235f8`.** **Dev installer mode** (section 5.4): profiles, start states, `dev update N→M` | a fresh profile runs the wizard to the end (wizard part: with step 2) and is reset in < 10 s; the real installation is untouched |
+| 1 | **Built `13235f8`.** **Keeper in the installer**: `install.sh` calls `zentrale timers install`; `update` re-runs it | test with fake systemctl: fresh install → both units rendered and enabled before login; update from a release without a unit → unit appears |
 | 2 | **Update timer + setting + setup wizard**: `zentrale-update` unit, `update --automatic`, `auto_update` asked in the wizard (default on), self-test, hint when off | fake cloud with N+1 → switched and self-test ran; broken N+1 → stays on N with one note; setting off → only "update available" in `status` |
 | 3 | **Linger question** in installer and `setup`, `status` line when off | with linger on, a test session-less run fires the sync unit; off → `status` says "only while logged in" |
 | 4 | **Mini-PC by hand once** ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)): update to the release with steps 1–3 | after a reboot without login, `zentrale devices` on the laptop shows the mini seen < 10 min ago |
 | 5 | **Read rule for formats**: unknown major → read-only + note (`inhalt.enc` first, then every `format` field); preserve-unknown-fields test per schema | vector with `"format": 2` → old reader writes nothing and warns; extra fields survive a write |
 | 6 | **Contract folder + old-release test**: `contracts/<name>/<major>/`, archive of every released tarball, `tests/test_alte_fassung.py` | HEAD and release N−1 converge on two fake devices; publishing script refuses when red |
 | 7 | **Insecure-node warning** (`Deprecation` header, never `Sunset`) and its display in client and Schematix | server test marks a release insecure → `status` warns, sync keeps working |
-| 8 | **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/` | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
+| 8 | **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
 | 9 | **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /hub/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
 | 9b | **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
 | 10 | **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
@@ -597,3 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
+- **2026-10-30** — steps 0 and 1 built (`13235f8`); key rotation decided (option for lost/stolen devices, after step 8).
