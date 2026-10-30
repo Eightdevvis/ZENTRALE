@@ -37,6 +37,10 @@ def _options(words, allowed):
     return opts, rest
 
 
+def opts_ok(opts) -> bool:
+    return "step" not in opts or opts["step"].isdigit()
+
+
 def _say_step(term):
     return lambda key, **values: term.sag(t(key, **values), "blass")
 
@@ -82,11 +86,13 @@ def cmd_states(term, kit, ws, words):
 
 def cmd_new(term, kit, ws, words):
     _g, profiles, _s, _w = kit
-    parsed = _options(words, {"state", "release", "account"})
-    if not parsed or len(parsed[1]) != 1:
+    parsed = _options(words, {"state", "release", "account", "step"})
+    if not parsed or len(parsed[1]) != 1 or not opts_ok(parsed[0]):
         return _usage(term)
     opts, (name,) = parsed
-    params = {"account": opts["account"]} if "account" in opts else {}
+    params = {k: opts[k] for k in ("account",) if k in opts}
+    if "step" in opts:
+        params["step"] = int(opts["step"])
     p = profiles.create(ws, name, opts.get("state", "fresh"), opts.get("release"), params,
                         say=_say_step(term))
     term.sag(t("dev_made", name=p.name, state=p.read()["state"], release=p.installed_release()), "gut")

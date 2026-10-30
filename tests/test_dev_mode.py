@@ -16,7 +16,7 @@ from devkit import guard, profiles, states, workspace
 from zentrale_cli import dev, haupt
 from zentrale_cli.ausgabe import Terminal
 
-TIMERS = ["zentrale-abgleich.timer", "zentrale-kalender-sync.timer"]
+TIMERS = ["zentrale-abgleich.timer", "zentrale-kalender-sync.timer", "zentrale-update.timer"]
 CALENDAR_UNIT = '''    "zentrale-kalender-sync": ("ZENTRALE: calendar bridge (Google via vdirsyncer)",
                                "adapter run", "*:0/3", 600),
 '''
@@ -79,7 +79,8 @@ def test_fresh_install_enables_the_timers_before_any_login(ws):
     made = time.monotonic() - start
     assert p.installed_release() == "41"
     assert p.fake.unit_files() == ["zentrale-abgleich.service", "zentrale-abgleich.timer",
-                                   "zentrale-kalender-sync.service", "zentrale-kalender-sync.timer"]
+                                   "zentrale-kalender-sync.service", "zentrale-kalender-sync.timer",
+                                   "zentrale-update.service", "zentrale-update.timer"]
     assert sorted(p.fake.enabled()) == TIMERS and sorted(p.fake.active()) == TIMERS
     assert not os.path.exists(os.path.join(p.home, ".config", "zentrale", "konto.json"))
     dienst = open(os.path.join(p.fake.units, "zentrale-abgleich.service")).read()
@@ -98,7 +99,7 @@ def test_fresh_install_enables_the_timers_before_any_login(ws):
 def test_update_from_a_release_without_a_unit_makes_the_unit_appear(ws):
     p = profiles.create(ws, "old-node", state="logged-in", release="1")
     assert p.installed_release() == "1"
-    assert p.fake.enabled() == ["zentrale-abgleich.timer"]
+    assert p.fake.enabled() == ["zentrale-abgleich.timer", "zentrale-update.timer"]
     assert "zentrale-kalender-sync.timer" not in p.fake.unit_files()
     before, after, r = states.play_update(p, "2")
     assert (before, after, r.returncode) == ("1", "2", 0), r.stdout + r.stderr
@@ -115,16 +116,114 @@ def test_update_from_a_release_without_a_unit_makes_the_unit_appear(ws):
 
 # ── Step 0: states, guard, CLI ────────────────────────────────────────
 
-def test_states_are_data_and_planned_ones_are_refused(ws):
+def test_states_are_data_and_planned_ones_are_refused(ws, monkeypatch):
     for s in states.STATES:
         assert not states.missing(s) or s.planned, s
+    monkeypatch.setattr(states, "STATES", states.STATES + (
+        states.State("later", ("install", "teleport"), planned="build step 99"),))
     with pytest.raises(profiles.DevError) as e:
-        profiles.create(ws, "wizard-one", state="wizard")
-    assert e.value.key == "dev_state_planned" and e.value.values["planned"] == "build step 2"
+        profiles.create(ws, "later-one", state="later")
+    assert e.value.key == "dev_state_planned" and e.value.values["planned"] == "build step 99"
     with pytest.raises(profiles.DevError) as e:
         profiles.create(ws, "nope-one", state="dancing")
     assert e.value.key == "dev_unknown_state"
-    assert not os.path.exists(os.path.join(ws.profiles, "wizard-one"))
+    assert not os.path.exists(os.path.join(ws.profiles, "later-one"))
+
+
+# ── Step 2: setup wizard, automatic update, self-heal ─────────────────
+
+def test_fresh_profile_runs_the_wizard_to_the_end(ws):
+    """Acceptance of step 0, wizard part: fresh → the whole wizard, defaults."""
+    p = profiles.create(ws, "wiz-fresh", state="wizard", release="41")
+    _account, lines = states.wizard_answers(p, 99)
+    with ws.cloud():
+        r = p.zentrale("setup", answers="\n".join(lines) + "\n")
+    assert r.returncode == 0, r.stdout + r.stderr
+    for step in ("Step 1 of 5", "A folder that syncs", "automatically", "nobody is logged in"):
+        assert step in r.stdout
+    assert r.stdout.rstrip().endswith("'zentrale'.")
+    assert sorted(p.fake.enabled()) == TIMERS and p.fake.lingering()
+
+
+def test_wizard_step_n_picks_up_there(ws):
+    p = profiles.create(ws, "wiz-two", state="wizard", release="41", params={"step": 2})
+    with ws.cloud():
+        r = p.zentrale("setup", answers="2\n\n\n")      # auto-update off, rest default
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "Picking up where you left off." in r.stdout and "How do you want" not in r.stdout
+    assert "Step 3 of 5" in r.stdout and "Step 2 of 5" not in r.stdout
+    r = p.zentrale("status")
+    assert "Auto-update" in r.stdout and "off" in r.stdout
+
+
+def test_automatic_update_self_test_broken_release_and_setting_off(ws):
+    built = ws.release_path("41")
+    _repack(built, ws.release_path("42"), "42")
+    _repack(built, ws.release_path("43"), "43",
+            {"zentrale_cli/befehle.py": lambda text: "import no_such_module_zz\n" + text})
+    _repack(built, ws.release_path("44"), "44")
+    p = profiles.create(ws, "auto-node", state="logged-in", release="41")
+    p.fake.set_active("zentrale-kern.service")
+    p.fake.clear_log()
+
+    def automatic(version):
+        ws.serve(version)
+        with ws.cloud():
+            return p.zentrale("update", "--automatic")
+    r = automatic("41")                                       # nothing new → quiet
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    r = automatic("42")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "Self-test of 42" in r.stdout and "Self-test: cloud reachable." in r.stdout
+    assert p.installed_release() == "42"
+    assert "--user try-restart zentrale-kern.service" in p.fake.calls()
+    r = automatic("43")                                       # broken → stays, one note
+    assert r.returncode == 1 and "no_such_module_zz" in r.stdout
+    assert p.installed_release() == "42"
+    assert "Update to 43 failed its self-test; staying on 42" in p.zentrale("status").stdout
+    assert p.zentrale("update", "auto", "off").returncode == 0
+    r = automatic("44")                                       # off → only the hint
+    assert (r.returncode, r.stdout) == (0, "")
+    assert p.installed_release() == "42"
+    assert "Update available: 42 → 44" in p.zentrale("status").stdout
+
+
+def test_old_code_update_heals_through_the_sync_timer(ws):
+    """A node updated by a release without the keeper: the next sync timer run
+    (new code via hub/aktuell) runs `timers install` once."""
+    p = profiles.create(ws, "heal-node", state="logged-in", release="41")
+    for unit in ("zentrale-update.timer", "zentrale-update.service"):
+        p.fake.remove_unit(unit)
+    with open(os.path.join(p.hub, "keeper.json"), "w") as f:
+        f.write('{"release": "40"}')                          # the keeper last ran on 40
+    with ws.cloud():
+        r = p.zentrale("sync", "--automatic")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "zentrale-update.timer" in p.fake.unit_files() and sorted(p.fake.enabled()) == TIMERS
+    p.fake.clear_log()
+    with ws.cloud():
+        p.zentrale("sync", "--automatic")
+    assert "--user daemon-reload" not in p.fake.calls()       # once, not every run
+
+
+# ── Step 3: lingering ─────────────────────────────────────────────────
+
+def test_lingering_session_less_sync_and_status(ws):
+    p = profiles.create(ws, "linger-node", state="logged-in", release="41")
+    assert p.fake.lingering()                                 # the wizard's default
+    assert "keeps syncing when you are logged out" in p.zentrale("status").stdout
+    # The sync unit fires without a login session (no session bus in the env).
+    with open(os.path.join(p.fake.units, "zentrale-abgleich.service")) as f:
+        exec_start = next(line for line in f.read().splitlines() if line.startswith("ExecStart="))
+    cloud_file = os.path.join(p.home, "Zentrale", "Cloud", "note.txt")
+    os.makedirs(os.path.dirname(cloud_file), exist_ok=True)
+    with open(cloud_file, "w") as f:
+        f.write("from the mini\n")
+    with ws.cloud():
+        r = p.run(exec_start[len("ExecStart="):].split())
+    assert r.returncode == 0 and "sent 1" in r.stdout, r.stdout + r.stderr
+    p.fake.set_linger(False)
+    assert "syncs only while you are logged in" in p.zentrale("status").stdout
 
 
 def test_second_device_offline_and_removed(ws):
@@ -168,7 +267,7 @@ def test_cli(ws, monkeypatch):
     rc, out = run()
     assert rc == 0 and "fresh-one" in out and "zentrale dev new" in out
     rc, out = run("states")
-    assert "wizard" in out and "build step 2" in out
+    assert "wizard" in out and "not built yet" not in out
     assert run("bogus")[0] == 2 and run("reset")[0] == 2 and run("update", "x")[0] == 2
     rc, out = run("delete", "no-such")
     assert rc == 1 and "no profile" in out

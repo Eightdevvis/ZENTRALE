@@ -139,7 +139,180 @@ def aufraeumen(behalten):
         shutil.rmtree(p, ignore_errors=True)
 
 
-def update(term, venv=venv_bauen, wurzel=WURZEL):
+def package_info(wurzel=WURZEL):
+    """The newest release the cloud offers → {"version", "sha256", "groesse"},
+    or None when there is no way to ask (private distribution, not logged in).
+    Raises CloudFehler when the cloud cannot be reached or answers nonsense."""
+    oeffentlich = verteilung(wurzel)
+    if oeffentlich["oeffentlich"]:
+        info = cloud_api.Client(basis=_url(oeffentlich["neueste"])).get("")
+    elif konto.angemeldet():
+        info = konto.client().get("/v1/paket")
+    else:
+        return None
+    neu, sha = str(info.get("version", "")), str(info.get("sha256", "")).lower()
+    if not _FASSUNG.match(neu) or len(sha) != 64:
+        raise cloud_api.CloudFehler("The cloud sent an unreadable package description.")
+    return {"version": neu, "sha256": sha, "groesse": info.get("groesse")}
+
+
+def _download(neu, wurzel):
+    oeffentlich = verteilung(wurzel)
+    if oeffentlich["oeffentlich"]:
+        return cloud_api.Client(basis=_url(oeffentlich["paket"], neu)).bytes_holen("")
+    return konto.client().bytes_holen(f"/v1/paket/{neu}.tar.gz")
+
+
+# ── State of the updater (update.json in heim()) ─────────────────────────
+#
+# {"available": {"from": "39", "to": "43"}, "failed": {"version": "43",
+# "reason": "…"}} — what `status`, the start line and the TUI show. Written by
+# `update --automatic` (also when auto-update is off: then that is all it does).
+
+STATE_FILE = "update.json"
+AUTO_SETTING = "auto_update"       # node setting (data/ai_config.json, never synced), default on
+
+
+def state() -> dict:
+    try:
+        with open(os.path.join(heim(), STATE_FILE), encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _state_write(**changes):
+    d = state()
+    for k, v in changes.items():
+        if v is None:
+            d.pop(k, None)
+        else:
+            d[k] = v
+    try:
+        os.makedirs(heim(), exist_ok=True)
+        tmp = os.path.join(heim(), STATE_FILE + ".neu")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(d, f)
+        os.replace(tmp, os.path.join(heim(), STATE_FILE))
+    except OSError:
+        pass
+
+
+def auto_on() -> bool:
+    import ai_config
+    return ai_config.setting(AUTO_SETTING) is not False
+
+
+def set_auto(on: bool):
+    import ai_config
+    ai_config.set_override(AUTO_SETTING, bool(on), persist=True)
+
+
+def hint(wurzel=WURZEL):
+    """One line for status/start, or "": an update waits (auto-update off or a
+    package manager), or the last automatic one failed its self-test."""
+    d = state()
+    alt = knoten.fassung(wurzel)
+    failed = d.get("failed") or {}
+    if failed.get("version") and failed.get("version") != alt:
+        return t("upd_hint_failed", neu=failed["version"], alt=alt)
+    avail = d.get("available") or {}
+    if avail.get("to") and avail.get("to") != alt:
+        k = kanal(wurzel)
+        key = "upd_hint_package" if k in PAKETVERWALTUNGEN else "upd_hint"
+        return t(key, alt=alt, neu=avail["to"])
+    return ""
+
+
+# ── Self-test of a new release (before the switch) ───────────────────────
+
+CHECK_MODULES = ("zentrale_cli.befehle", "zentrale_cli.assistent", "zentrale_cli.wizard",
+                 "zentrale_cli.timer", "abgleich", "abgleich_apps", "ai_config", "konto",
+                 "cloud_api", "knoten")
+
+
+def version_check(term) -> int:
+    """`zentrale version --check`: run by `update` with the NEW release before
+    `aktuell` is switched. Imports, reads the settings, reaches the cloud."""
+    import importlib
+    try:
+        for name in CHECK_MODULES:
+            importlib.import_module(name)
+        term.sag(t("check_imports"))
+        import ai_config
+        ai_config.setting(AUTO_SETTING)
+        konto.lesen()
+        term.sag(t("check_settings"))
+        info = package_info(WURZEL)
+        term.sag(t("check_cloud") if info is not None else t("check_cloud_skipped"))
+    except Exception as e:             # noqa: BLE001 — every failure is a failed self-test
+        term.sag(t("check_failed", text=f"{type(e).__name__}: {e}"), "fehler")
+        return 1
+    return 0
+
+
+def self_test(release_dir) -> tuple:
+    """→ (ok, output) of `<release>/bin/zentrale version --check`."""
+    exe = os.path.join(release_dir, "bin", "zentrale")
+    try:
+        r = subprocess.run([exe, "version", "--check"], capture_output=True, text=True,
+                           timeout=180, stdin=subprocess.DEVNULL)
+        return r.returncode == 0, (r.stdout + r.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)
+
+
+# ── Commands ─────────────────────────────────────────────────────────────
+
+def command(term, args=()):
+    """`zentrale update [--automatic | auto [on|off]]`."""
+    args = list(args)
+    if not args:
+        return update(term)
+    if args == ["--automatic"]:
+        return automatic(term)
+    if args[0] == "auto" and len(args) <= 2:
+        if len(args) == 2:
+            if args[1] not in ("on", "off"):
+                term.fehler(t("upd_usage"))
+                return 2
+            set_auto(args[1] == "on")
+        term.sag(t("upd_auto_on") if auto_on() else t("upd_auto_off"), "gut")
+        return 0
+    term.fehler(t("upd_usage"))
+    return 2
+
+
+def automatic(term, venv=venv_bauen, wurzel=WURZEL, check=self_test):
+    """The update timer: nothing new → quiet. New → with auto-update on:
+    install beside, self-test, switch, keeper, backend restart; off or a
+    package manager: only remember it for the hint. Never a question."""
+    k = kanal(wurzel)
+    if k == "dev":
+        return 0
+    try:
+        info = package_info(wurzel)
+    except (cloud_api.CloudFehler, konto.KontoFehler) as e:
+        term.sag(t("upd_auto_unreachable", text=e), "warn")
+        return 1
+    if info is None:
+        return 0
+    alt = knoten.fassung(wurzel)
+    if info["version"] == alt:
+        _state_write(available=None)
+        return 0
+    _state_write(available={"from": alt, "to": info["version"]})
+    if (state().get("failed") or {}).get("version") not in (None, info["version"]):
+        _state_write(failed=None)          # a newer release replaces the old note
+    if k in PAKETVERWALTUNGEN or not auto_on():
+        return 0
+    if (state().get("failed") or {}).get("version") == info["version"]:
+        return 0                       # one note is enough; a manual `update` tries again
+    return _install(term, info, venv, wurzel, check)
+
+
+def update(term, venv=venv_bauen, wurzel=WURZEL, check=self_test):
     k = kanal(wurzel)
     if k in PAKETVERWALTUNGEN:
         term.sag(t("upd_paket_" + k))
@@ -147,29 +320,26 @@ def update(term, venv=venv_bauen, wurzel=WURZEL):
     if k != "script":
         term.sag(t("upd_dev", wurzel=wurzel))
         return 1
-    oeffentlich = verteilung(wurzel)
-    if not oeffentlich["oeffentlich"] and not konto.angemeldet():
+    if not verteilung(wurzel)["oeffentlich"] and not konto.angemeldet():
         term.sag(t("upd_need_login"))
         return 1
     term.sag(t("upd_check"), "blass")
-    if oeffentlich["oeffentlich"]:
-        info = cloud_api.Client(basis=_url(oeffentlich["neueste"])).get("")
-    else:
-        c = konto.client()
-        info = c.get("/v1/paket")
-    neu, sha, groesse = str(info.get("version", "")), str(info.get("sha256", "")).lower(), info.get("groesse")
-    if not _FASSUNG.match(neu) or len(sha) != 64:
-        raise cloud_api.CloudFehler("The cloud sent an unreadable package description.")
+    info = package_info(wurzel)
     alt = knoten.fassung(wurzel)
-    if neu == alt:
+    if info["version"] == alt:
+        _state_write(available=None)
         term.sag(t("upd_current", fassung=alt), "gut")
         return 0
-    term.sag(t("upd_found", neu=neu, alt=alt, groesse=_groesse(groesse)))
+    return _install(term, info, venv, wurzel, check)
+
+
+def _install(term, info, venv, wurzel, check):
+    """Download beside, sha256, unpack, venv, self-test — only then switch
+    `aktuell`, run the new release's keeper, restart a running backend."""
+    neu, sha, alt = info["version"], info["sha256"], knoten.fassung(wurzel)
+    term.sag(t("upd_found", neu=neu, alt=alt, groesse=_groesse(info.get("groesse"))))
     term.sag(t("upd_download"), "blass")
-    if oeffentlich["oeffentlich"]:
-        daten = cloud_api.Client(basis=_url(oeffentlich["paket"], neu)).bytes_holen("")
-    else:
-        daten = c.bytes_holen(f"/v1/paket/{neu}.tar.gz")
+    daten = _download(neu, wurzel)
     if hashlib.sha256(daten).hexdigest() != sha:
         term.sag(t("upd_bad_sha"), "fehler")
         return 1
@@ -191,11 +361,24 @@ def update(term, venv=venv_bauen, wurzel=WURZEL):
         shutil.copytree(vorlage, daten_ascii)
     term.sag(t("upd_venv"), "blass")
     venv(ziel)
+    term.sag(t("upd_self_test", neu=neu), "blass")
+    ok, out = check(ziel)
+    for line in out.splitlines()[-6:]:
+        term.sag("  " + line, "blass")
+    if not ok:
+        shutil.rmtree(ziel, ignore_errors=True)
+        _state_write(failed={"version": neu, "reason": (out.splitlines() or ["?"])[-1][:300]})
+        term.sag(t("upd_self_test_failed", neu=neu, alt=alt), "fehler")
+        return 1
     alt_name = os.path.basename(os.path.realpath(wurzel))
     umschalten(neu)
     aufraeumen({neu, alt_name})
+    _state_write(available=None, failed=None)
     term.sag(t("upd_ok", neu=neu, alt_ordner=os.path.join(hub, alt_name)), "gut")
     run_keeper(term, ziel)
+    from zentrale_cli import timer
+    if timer.kern_neu_starten():
+        term.sag(t("upd_backend_restarted"), "blass")
     return 0
 
 

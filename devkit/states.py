@@ -4,9 +4,8 @@ A state is a list of step names. A step is one function in STEPS that moves
 a profile one stage along the consumer journey (memory/hub/building_kit_plan.md
 5.1), using the real programs wherever they exist. A new state is one line in
 STATES; a new journey stage is one function in STEPS. A state whose steps are
-not all built yet stays listed and says which build step brings it, e.g. the
-setup wizard (build step 2) — `wizard` with params {"step": n} then only needs
-its STEPS entry.
+not all built yet stays listed and says which build step brings it. The
+setup wizard state takes params {"step": n} (`zentrale dev new --step n`).
 
 "On an old release N" is not a state of its own: every state takes a release
 (`--release N`), the install step installs exactly that tarball.
@@ -30,7 +29,7 @@ STATES = (
     State("logged-in", ("install", "login")),
     State("offline", ("install", "login", "offline")),
     State("removed", ("install", "login", "removed")),
-    State("wizard", ("install", "wizard"), planned="build step 2"),
+    State("wizard", ("install", "wizard")),
 )
 
 
@@ -72,17 +71,43 @@ def step_install(p, say):
     _check(p.run(["bash", script, ws.new_invite_code()]), "dev_install_failed")
 
 
-def step_login(p, say):
-    """`zentrale setup` with typed answers: create the account (or log in when
-    another profile already made it — a second device of the same account)."""
+def _account_answers(p) -> tuple:
+    """The typed answers of the wizard's account step: create the account (or
+    log in when another profile already made it — a second device of it)."""
     ws, d = p.ws, p.read()
     account = d["params"].get("account") or p.name
     if ws.account_exists(account):
-        answers = ["1", account, PASSWORD]
-    else:
-        answers = ["2", ws.new_invite_code(), account, PASSWORD, PASSWORD, "y"]
-    answers.append("1")                 # "what to sync" if the account has data: everything
-    _check(p.zentrale("setup", answers="\n".join(answers) + "\n"), "dev_login_failed")
+        return account, ["1", account, PASSWORD]
+    return account, ["2", ws.new_invite_code(), account, PASSWORD, PASSWORD, "y"]
+
+
+def wizard_answers(p, steps) -> tuple:
+    """Answers for the first `steps` steps of the setup wizard
+    (zentrale_cli/wizard.py STEPS): the account step types, every later step
+    takes its default (Enter). → (account, lines)"""
+    account, lines = _account_answers(p)
+    return account, (lines + [""] * (steps - 1)) if steps > 0 else []
+
+
+def step_login(p, say):
+    """`zentrale setup` through the whole wizard, defaults everywhere."""
+    account, lines = wizard_answers(p, 99)
+    _check(p.zentrale("setup", answers="\n".join(lines) + "\n"), "dev_login_failed")
+    p.update(account=account)
+
+
+def step_wizard(p, say):
+    """The setup wizard stands at step n (params {"step": n}, 0 = before the
+    first question): `zentrale setup` answers the first n steps and stops
+    there, as if the person closed the terminal. The next `zentrale setup`
+    in the profile picks up at step n (the wizard remembers where it was)."""
+    n = int(p.read()["params"].get("step") or 0)
+    if n <= 0:
+        return
+    account, lines = wizard_answers(p, n)
+    r = p.zentrale("setup", answers="\n".join(lines) + "\n")
+    if r.returncode not in (0, 130):          # 130: stopped at step n by the end of input
+        _check(r, "dev_login_failed")
     p.update(account=account)
 
 
@@ -106,7 +131,7 @@ STEPS = {
     "login": step_login,
     "offline": step_offline,
     "removed": step_removed,
-    # "wizard": comes with build step 2 (params {"step": n})
+    "wizard": step_wizard,
 }
 
 

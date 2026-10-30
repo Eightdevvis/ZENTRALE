@@ -51,7 +51,15 @@ def welcome(term):
     return 0
 
 
-def version(term):
+def version(term, args=()):
+    """`zentrale version [--check]` — --check is the self-test `update` runs
+    with a new release before switching to it (zentrale_cli/aktualisieren.py)."""
+    if list(args) == ["--check"]:
+        from zentrale_cli import aktualisieren
+        return aktualisieren.version_check(term)
+    if args:
+        term.fehler(t("unknown_command", cmd="version " + " ".join(args)))
+        return 2
     term.sag(t("version_line", fassung=knoten.fassung(WURZEL), kanal=t("kanal")[kanal(WURZEL)]))
     return 0
 
@@ -228,6 +236,21 @@ def _kontext_schreiben():
         pass
 
 
+def _self_heal(term):
+    """The sync timer runs the newest code (hub/aktuell): if an old release
+    updated without its keeper, run `timers install` once (timer.self_heal).
+    Quiet unless something was written; never stops the sync."""
+    try:
+        r = timer_modul().self_heal(WURZEL)
+    except Exception as e:         # noqa: BLE001 — healing is a side matter
+        term.sag(t("tm_error", text=e), "warn")
+        return
+    if r and r.get("geschrieben"):
+        term.sag(t("tm_healed", liste=", ".join(r["geschrieben"])))
+    elif r and r.get("fehler"):
+        term.sag(t("tm_error", text=r["fehler"]), "warn")
+
+
 def sync(term, args=()):
     """`zentrale sync [--automatic]`. --automatic ist der Timer
     (zentrale_cli/timer.py): nur mit Cloud bzw. Weg „mitte", still, wenn
@@ -236,6 +259,8 @@ def sync(term, args=()):
     if set(args) - {"--automatic"}:
         term.fehler(t("unknown_command", cmd="sync " + " ".join(args)))
         return 2
+    if automatisch:
+        _self_heal(term)
     if abgleich.mitte_art() == "http" and not konto.angemeldet():
         if automatisch:
             return 0
@@ -306,6 +331,30 @@ def held_back_lines(term, held):
         term.sag(t("st_held_folder", n=len(folder)), "warn")
 
 
+def _node_lines():
+    """Auto-update and background (building kit 5.2, 5.3) for `status`."""
+    from zentrale_cli import aktualisieren
+    k = kanal(WURZEL)
+    rows = []
+    if k in aktualisieren.PAKETVERWALTUNGEN:
+        rows.append((t("st_auto_update"), t("st_auto_package")))
+    elif k == "script":
+        rows.append((t("st_auto_update"), t("st_auto_on") if aktualisieren.auto_on() else t("st_auto_off")))
+    on = timer_modul().linger()
+    if on is not None:
+        rows.append((t("st_background"), t("st_linger_on") if on else t("st_linger_off")))
+    return rows
+
+
+def update_hint(term):
+    """One line when an update waits or failed its self-test (status, start)."""
+    from zentrale_cli import aktualisieren
+    line = aktualisieren.hint(WURZEL)
+    if line:
+        term.sag()
+        term.sag(line, "warn")
+
+
 def status(term):
     d = None
     try:
@@ -325,6 +374,7 @@ def status(term):
     ]
     if z["fehler"]:
         zeilen.append((t("st_sync_error"), z["fehler"]))
+    zeilen += _node_lines()
     breite = max(len(k) for k, _v in zeilen) + 2
     for k, v in zeilen:
         term.sag("  " + term.f(k.ljust(breite), "blass") + str(v))
@@ -341,6 +391,7 @@ def status(term):
             term.sag(f"  {h['am'][:16].replace('T', ' ')}  {h['text']}")
         term.sag(t("sync_conflicts_dir", ordner=z["konflikte_ordner"]), "blass")
     held_back_lines(term, z.get("held_back") or [])
+    update_hint(term)
     if adapter.kalender_anschluss() and not timer_modul().vdirsyncer_da():
         term.sag()
         vdirsyncer_hinweis(term)

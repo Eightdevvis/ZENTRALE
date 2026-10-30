@@ -78,6 +78,36 @@ else:
 sys.exit(code)
 '''
 
+# Fake loginctl (build step 3, lingering): state "linger" in the same state
+# file; "linger_allowed": false plays a polkit that refuses the own user.
+LOGINCTL = '''#!{python} -I
+# Fake loginctl, written by devkit/fake_systemd.py. Never touches the real one.
+import json, os, sys
+STATE, LOG = {state!r}, {log!r}
+args = [a for a in sys.argv[1:] if a != "--no-ask-password"]
+with open(LOG, "a", encoding="utf-8") as f:
+    f.write("loginctl " + " ".join(sys.argv[1:]) + "\\n")
+try:
+    with open(STATE, encoding="utf-8") as f:
+        s = json.load(f)
+except (OSError, ValueError):
+    s = {{"enabled": [], "active": []}}
+cmd = args[0] if args else ""
+if cmd == "show-user":
+    print("yes" if s.get("linger") else "no")
+elif cmd in ("enable-linger", "disable-linger"):
+    if cmd == "enable-linger" and s.get("linger_allowed") is False:
+        print("Could not enable linger: Access denied", file=sys.stderr)
+        sys.exit(1)
+    s["linger"] = cmd == "enable-linger"
+    with open(STATE + ".neu", "w", encoding="utf-8") as f:
+        json.dump(s, f)
+    os.replace(STATE + ".neu", STATE)
+else:
+    print(f"fake loginctl: unknown command {{cmd!r}}", file=sys.stderr)
+    sys.exit(1)
+'''
+
 
 class FakeSystemd:
     """Paths and state of one fake systemd (a test's or a dev profile's)."""
@@ -88,10 +118,12 @@ class FakeSystemd:
         self.units = os.path.join(self.folder, "user")
         self.log = os.path.join(self.folder, "systemctl.log")
         self.state = os.path.join(self.folder, "state.json")
+        self.loginctl = os.path.join(self.folder, "loginctl")
 
     def env(self) -> dict:
         """What zentrale_cli/timer.py needs to use this fake."""
-        return {"ZENTRALE_SYSTEMCTL": self.program, "ZENTRALE_SYSTEMD_USER_DIR": self.units}
+        return {"ZENTRALE_SYSTEMCTL": self.program, "ZENTRALE_SYSTEMD_USER_DIR": self.units,
+                "ZENTRALE_LOGINCTL": self.loginctl}
 
     def calls(self) -> list:
         try:
@@ -117,12 +149,37 @@ class FakeSystemd:
     def active(self) -> list:
         return list(self._read()["active"])
 
+    def _write(self, s):
+        with open(self.state, "w", encoding="utf-8") as f:
+            json.dump(s, f)
+
     def set_active(self, unit, on=True):
         """Mark a unit running (e.g. the backend) without the timers."""
         s = self._read()
         s["active"] = [u for u in s["active"] if u != unit] + ([unit] if on else [])
-        with open(self.state, "w", encoding="utf-8") as f:
-            json.dump(s, f)
+        self._write(s)
+
+    def lingering(self) -> bool:
+        return bool(self._read().get("linger"))
+
+    def set_linger(self, on=None, allowed=None):
+        """Lingering on/off, or a polkit that refuses it (allowed=False)."""
+        s = self._read()
+        if on is not None:
+            s["linger"] = on
+        if allowed is not None:
+            s["linger_allowed"] = allowed
+        self._write(s)
+
+    def remove_unit(self, unit):
+        """As if an old release never brought this unit."""
+        s = self._read()
+        s["enabled"] = [u for u in s["enabled"] if u != unit]
+        s["active"] = [u for u in s["active"] if u != unit]
+        self._write(s)
+        path = os.path.join(self.units, unit)
+        if os.path.exists(path):
+            os.remove(path)
 
     def unit_files(self) -> list:
         return sorted(os.listdir(self.units)) if os.path.isdir(self.units) else []
@@ -137,4 +194,8 @@ def make(folder, python=None) -> FakeSystemd:
     with open(fake.program, "w", encoding="utf-8") as f:
         f.write(text)
     os.chmod(fake.program, 0o755)
+    text = LOGINCTL.format(python=python or sys.executable, state=fake.state, log=fake.log)
+    with open(fake.loginctl, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(fake.loginctl, 0o755)
     return fake

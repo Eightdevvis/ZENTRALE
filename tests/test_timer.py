@@ -52,11 +52,14 @@ def test_entwickler_checkout_ruft_den_eigenen_befehl(tmp_path):
     w = _checkout(tmp_path)
     e = timer.einheiten(w)
     assert set(e) == {"zentrale-abgleich.service", "zentrale-abgleich.timer",
-                      "zentrale-kalender-sync.service", "zentrale-kalender-sync.timer"}
+                      "zentrale-kalender-sync.service", "zentrale-kalender-sync.timer",
+                      "zentrale-update.service", "zentrale-update.timer"}
     assert f"ExecStart={w}/bin/zentrale sync --automatic\n" in e["zentrale-abgleich.service"]
     assert f"ExecStart={w}/bin/zentrale adapter run\n" in e["zentrale-kalender-sync.service"]
     assert "OnCalendar=*:0/5" in e["zentrale-abgleich.timer"]
     assert "OnCalendar=*:0/3" in e["zentrale-kalender-sync.timer"]
+    assert f"ExecStart={w}/bin/zentrale update --automatic\n" in e["zentrale-update.service"]
+    assert "OnCalendar=daily\nPersistent=true\nAccuracySec=30s\nRandomizedDelaySec=1h\n" in e["zentrale-update.timer"]
     assert "PATH=%h/.local/bin" in e["zentrale-kalender-sync.service"]     # vdirsyncer per pipx
     assert all("codicus" not in v for v in e.values())
 
@@ -88,10 +91,10 @@ def test_pfad_mit_leerzeichen_in_anfuehrungszeichen(tmp_path):
 def test_installieren_idempotent(tmp_path, systemd):
     w = _checkout(tmp_path)
     r = timer.installieren(w)
-    assert r["da"] and len(r["geschrieben"]) == 4 and not r["ersetzt"] and not r["fehler"]
+    assert r["da"] and len(r["geschrieben"]) == 6 and not r["ersetzt"] and not r["fehler"]
     a = systemd.aufrufe()
     assert "--user daemon-reload" in a
-    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in a
+    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer zentrale-update.timer" in a
     inhalt = (systemd.ordner / "zentrale-abgleich.service").read_text()
     systemd.leeren()
     r = timer.installieren(w)
@@ -125,8 +128,8 @@ def test_entfernen_nur_eigene_dateien(tmp_path, systemd):
     fremd = systemd.ordner / "zentrale-kalender-sync.timer"
     fremd.write_text("[Timer]\n")                                       # von Hand
     r = timer.entfernen()
-    assert "--user disable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in systemd.aufrufe()
-    assert r["liegen"] == ["zentrale-kalender-sync.timer"] and len(r["entfernt"]) == 3
+    assert "--user disable --now zentrale-abgleich.timer zentrale-kalender-sync.timer zentrale-update.timer" in systemd.aufrufe()
+    assert r["liegen"] == ["zentrale-kalender-sync.timer"] and len(r["entfernt"]) == 5
     assert fremd.exists() and not (systemd.ordner / "zentrale-abgleich.timer").exists()
 
 

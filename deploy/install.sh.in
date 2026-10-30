@@ -236,3 +236,11 @@ esac
 
 sag ""
 "$LINK" welcome || true
+
+# ── Setup wizard (building kit 5.1): account, cloud folder, auto-update,
+# keep syncing when logged out, apps. Only with a person at a terminal —
+# `curl … | bash` has the pipe as stdin, so the wizard reads the terminal.
+if [[ -t 1 ]] && { : < /dev/tty; } 2>/dev/null; then
+  sag ""
+  "$LINK" setup < /dev/tty || warn "Setup did not finish. Run 'zentrale setup' to pick up where you left off."
+fi

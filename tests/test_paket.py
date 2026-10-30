@@ -113,7 +113,7 @@ def test_update_daneben_installieren_und_umschalten(tmp_path, monkeypatch):
         c.zustand.paket = ("2", _kleines_paket(tmp_path, "2"))
         venvs = []
         term = Terminal(aus=io.StringIO())
-        assert aktualisieren.update(term, venv=venvs.append, wurzel=str(alt)) == 0, term.aus.getvalue()
+        assert aktualisieren.update(term, venv=venvs.append, wurzel=str(alt), check=lambda d: (True, "")) == 0, term.aus.getvalue()
         neu = heim / "hub" / "2"
         assert os.readlink(heim / "hub" / "aktuell") == "2"
         assert (neu / "VERSION").read_text().strip() == "2"

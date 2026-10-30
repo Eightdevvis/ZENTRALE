@@ -10,6 +10,8 @@ import sys
 
 from zentrale_cli.texte import t
 
+BACK = "\0back"          # Terminal.choose: the person asked to go one step back
+
 _FARBEN = {"fett": "1", "blass": "2", "akzent": "36", "gut": "32", "warn": "33",
            "fehler": "31"}
 
@@ -70,6 +72,29 @@ class Terminal:
             a = self.frage(t("number_choice", n=len(optionen))).strip()
             if a.isdigit() and 1 <= int(a) <= len(optionen):
                 return optionen[int(a) - 1][0]
+
+    def choose(self, question, options, default=None, back=False):
+        """options = [(value, text)] → value, or BACK when `back` is allowed
+        and asked for ('b'). Enter takes `default` (a value, shown as such).
+        Numbers, so it works everywhere (setup wizard, zentrale_cli/wizard.py)."""
+        self.sag(question, "fett")
+        values = [v for v, _text in options]
+        for i, (v, text) in enumerate(options, 1):
+            mark = " " + self.f(t("choice_default"), "blass") if v == default else ""
+            self.sag(f"  {self.f(str(i), 'akzent')}  {text}{mark}")
+        prompt = t("choice_prompt", n=len(options))
+        if default in values:
+            prompt += t("choice_prompt_default", n=values.index(default) + 1)
+        if back:
+            prompt += t("choice_prompt_back")
+        while True:
+            a = self.frage(prompt + ": ").strip().lower()
+            if not a and default in values:
+                return default
+            if back and a == "b":
+                return BACK
+            if a.isdigit() and 1 <= int(a) <= len(options):
+                return values[int(a) - 1]
 
     def ankreuzen(self, titel, eintraege, an):
         """eintraege = [(wert, name, beschreibung)], an = Menge der Werte, die

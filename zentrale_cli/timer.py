@@ -20,6 +20,8 @@ lenken um; unter pytest ohne Umlenkung gilt systemd als nicht da — ein
 Testlauf schaltet nie Sashas echte Timer um.
 """
 
+import getpass
+import json
 import os
 import shutil
 import subprocess
@@ -39,7 +41,14 @@ TIMER = {
     "zentrale-abgleich": ("ZENTRALE: sync with the cloud", "sync --automatic", "*:0/5", 300),
     "zentrale-kalender-sync": ("ZENTRALE: calendar bridge (Google via vdirsyncer)",
                                "adapter run", "*:0/3", 600),
+    # Build step 2 (memory/hub/building_kit_plan.md 5.3): daily, at a random
+    # moment within an hour so not every node asks the cloud at once.
+    "zentrale-update": ("ZENTRALE: install new versions (setting auto_update)",
+                        "update --automatic", "daily", 1800),
 }
+# Extra [Timer] lines per timer (only where the default is not enough).
+TIMER_EXTRA = {"zentrale-update": "RandomizedDelaySec=1h\n"}
+KEEPER_FILE = "keeper.json"      # in heim(): the release whose `timers install` ran last
 
 
 # ── Pfade ──────────────────────────────────────────────────────────────
@@ -68,6 +77,10 @@ def _exe(pfad):
     return f'"{pfad}"' if any(c.isspace() for c in pfad) else pfad
 
 
+def _when(schedule) -> str:
+    return f"every {schedule.split('/')[-1]} min" if schedule.startswith("*:0/") else schedule
+
+
 def einheiten(wurzel=WURZEL) -> dict:
     """Dateiname → Inhalt, für alle Timer und ihre Dienste."""
     exe = _exe(befehl(wurzel))
@@ -85,8 +98,9 @@ def einheiten(wurzel=WURZEL) -> dict:
         # dem Anmelden (deploy/zentrale-kalender-sync.timer, 13.10.2026).
         raus[name + ".timer"] = (
             f"{MARKE} — do not edit; run it again instead.\n"
-            f"[Unit]\nDescription={was} (every {wann.split('/')[-1]} min)\n\n"
-            f"[Timer]\nOnCalendar={wann}\nPersistent=true\nAccuracySec=30s\n\n"
+            f"[Unit]\nDescription={was} ({_when(wann)})\n\n"
+            f"[Timer]\nOnCalendar={wann}\nPersistent=true\nAccuracySec=30s\n"
+            f"{TIMER_EXTRA.get(name, '')}\n"
             "[Install]\nWantedBy=timers.target\n")
     return raus
 
@@ -171,7 +185,115 @@ def installieren(wurzel=WURZEL) -> dict:
     r = systemctl("enable", "--now", *timer)
     if r.returncode != 0:
         raus["fehler"] = (r.stderr or r.stdout or "").strip()[:300]
+    else:
+        _keeper_merken(wurzel)
     return raus
+
+
+# ── Self-heal (build step 2): a node updated by OLD code ────────────────
+#
+# Releases before the keeper (13235f8) update without running the new
+# release's `timers install`, so a unit added later never arrives. But the
+# sync timer runs the NEW code (through hub/aktuell) every 5 minutes: when it
+# sees that the release changed since the last `timers install`, it runs it
+# once. Every successful install records its release in KEEPER_FILE.
+
+def _keeper_pfad() -> str:
+    return os.path.join(heim(), KEEPER_FILE)
+
+
+def _keeper_merken(wurzel):
+    from knoten import fassung
+    if kanal(wurzel) == "dev":
+        return                  # a checkout changes with every commit; nothing to heal
+    try:
+        os.makedirs(heim(), exist_ok=True)
+        tmp = _keeper_pfad() + ".neu"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"release": fassung(wurzel)}, f)
+        os.replace(tmp, _keeper_pfad())
+    except OSError:
+        pass
+
+
+def keeper_release() -> str:
+    try:
+        with open(_keeper_pfad(), encoding="utf-8") as f:
+            return str(json.load(f).get("release") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def self_heal(wurzel=WURZEL):
+    """Called by `sync --automatic`. → None (nothing to do) or the result of
+    installieren() when the release changed since the keeper last ran."""
+    from knoten import fassung
+    if kanal(wurzel) == "dev" or keeper_release() == fassung(wurzel):
+        return None
+    return installieren(wurzel)
+
+
+# ── Lingering (build step 3): keep running without a login ─────────────
+#
+# User timers stop at logout and do not start before login. With lingering
+# the user's systemd runs from boot. `loginctl enable-linger` for the own user
+# needs no root where the polkit default allows it (most systemd
+# distributions); never sudo. Tests: ZENTRALE_LOGINCTL (program or "aus"),
+# under pytest without it loginctl counts as missing — like systemctl.
+
+LINGER_DIR = "/var/lib/systemd/linger"
+
+
+def _loginctl():
+    eigen = os.environ.get("ZENTRALE_LOGINCTL")
+    if eigen is not None:
+        return None if eigen in ("", "aus") else eigen
+    if "pytest" in sys.modules:
+        return None
+    return shutil.which("loginctl")
+
+
+def _user() -> str:
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return str(os.getuid())
+
+
+def linger():
+    """True/False: does this user's systemd run without a login? None =
+    cannot tell (no systemd for the user, no loginctl)."""
+    prog = _loginctl()
+    if not prog or not verfuegbar():
+        return None
+    try:
+        r = subprocess.run([prog, "show-user", _user(), "-p", "Linger", "--value"],
+                           capture_output=True, text=True, timeout=15)
+        if r.returncode == 0 and r.stdout.strip() in ("yes", "no"):
+            return r.stdout.strip() == "yes"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if os.environ.get("ZENTRALE_LOGINCTL"):
+        return None                       # a fake that does not answer: never the real file
+    return os.path.exists(os.path.join(LINGER_DIR, _user()))
+
+
+def enable_linger() -> tuple:
+    """`loginctl enable-linger` for the own user, without sudo.
+    → (on afterwards, error text)"""
+    prog = _loginctl()
+    if not prog:
+        return False, "loginctl not available"
+    try:
+        # --no-ask-password: where polkit wants an admin, fail and say how — no prompt.
+        r = subprocess.run([prog, "--no-ask-password", "enable-linger", _user()],
+                           capture_output=True, text=True,
+                           timeout=30, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout or "").strip()[:300]
+    return bool(linger()), ""
 
 
 def entfernen() -> dict:

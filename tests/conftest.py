@@ -403,6 +403,7 @@ def _adapter_frisch(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _timer_nie_echt(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_SYSTEMCTL", "aus")
+    monkeypatch.setenv("ZENTRALE_LOGINCTL", "aus")       # lingering (build step 3)
     monkeypatch.setenv("ZENTRALE_SYSTEMD_USER_DIR", str(_test_ordner / "systemd-user"))
     yield
 

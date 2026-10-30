@@ -24,14 +24,15 @@ BEFEHLE = {
     ("adapter", "calendar"): befehle.adapter_kalender,
     ("timers",): befehle.timers,
     ("cloud", "usage"): befehle.cloud_usage,
-    ("update",): aktualisieren.update,
+    ("update",): aktualisieren.command,
     ("version",): befehle.version,
     ("dev",): dev.dev,
     ("--version",): befehle.version,
 }
 
 # Diese Befehle nehmen weitere Wörter (Zusätze, Unterbefehle) selbst an.
-MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, dev.dev}
+MIT_ARGUMENTEN = {befehle.sync, befehle.timers, befehle.adapter_kalender, dev.dev,
+                  aktualisieren.command, befehle.version}
 
 
 def _entwickler_checkout() -> bool:
@@ -53,6 +54,7 @@ def main(argv=None, term=None):
                 if rc != 0:
                     return rc
             befehle.nutzung_warnung(term)      # eine Zeile, nur Betreiber; nie blockierend
+            befehle.update_hint(term)          # "update available: X → Y" (auto-update off)
             befehle.neue_apps_beim_start(term)
             return befehle.tui(term)
         schluessel = tuple(argv[:2]) if tuple(argv[:2]) in BEFEHLE else tuple(argv[:1])

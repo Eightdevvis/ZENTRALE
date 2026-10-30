@@ -76,7 +76,7 @@ def geraet(monkeypatch, tmp_path):
     monkeypatch.setenv("ZENTRALE_ABGLEICH_DIR", str(tmp_path / "abgleich"))
     monkeypatch.setattr(ai_config, "_CONFIG_PATH", str(tmp_path / "ai_config.json"))
     monkeypatch.setattr(ai_config, "_config", {})
-    monkeypatch.setattr(ai_config, "_overrides", {})
+    monkeypatch.setattr(ai_config, "_overrides", {"cloud_folder_dir": str(tmp_path / "cloud-folder")})
     wurzel = tmp_path / "hub"
     (wurzel / "data").mkdir(parents=True)
     monkeypatch.setattr(befehle, "WURZEL", str(wurzel))
@@ -98,6 +98,7 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     (geraet.wurzel / "data" / "gedaechtnis" / "a.md").write_text("x")
     term = Spiel("2",                                          # neues Konto
                  "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y",         # Code, Name, Passwort ×2, gesichert
+                 "",                                           # cloud folder: default yes
                  "2",                                          # einzeln wählen
                  "n", "1 3", "")                               # nichts, dann Listen + Assistent
     assert befehle.eingerichtet() is False
@@ -106,7 +107,7 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     assert "EMERGENCY KEY" in term.text
     e = _einstellungen(geraet)
     assert "Lists, Notes, Assistant" in term.text                # nur Apps mit Daten
-    assert e["abgleich_apps"] == {"fokus": True, "notizen": False, "assistent": True}
+    assert e["abgleich_apps"] == {"cloud_folder": True, "fokus": True, "notizen": False, "assistent": True}
     assert e["abgleich_mitte_art"] == "http" and e["abgleich_weg"] == "mitte"
     assert e["einrichtung"]
     assert befehle.eingerichtet()
@@ -117,12 +118,12 @@ def test_assistent_konto_anlegen_auswaehlen_und_wahl_bleibt(geraet):
     ai_config._config.clear()
     ai_config._load()
     import abgleich_apps
-    assert abgleich_apps.entscheidungen() == {"fokus": True, "notizen": False, "assistent": True}
+    assert abgleich_apps.entscheidungen() == {"cloud_folder": True, "fokus": True, "notizen": False, "assistent": True}
 
 
 def _frisches_konto_eingerichtet(geraet):
     from zentrale_cli import assistent
-    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y")
+    term = Spiel("2", "ZB-AAAA-BBBB-CCCC-DDDD", "sasha", PW, PW, "y", "2", "")   # … no cloud folder, linger: default
     assert assistent.setup(term) == 0, term.text
     return term
 
@@ -132,7 +133,7 @@ def test_frisch_nichts_abzugleichen_cloud_trotzdem_an(geraet):
     assert "Nothing to sync yet — new apps will ask when they have data." in term.text
     assert "What should this device sync?" not in term.text
     e = _einstellungen(geraet)
-    assert e["abgleich_apps"] == {}
+    assert e["abgleich_apps"] == {"cloud_folder": False}
     assert e["abgleich_mitte_art"] == "http" and e["abgleich_weg"] == "mitte"
     term = Spiel()
     assert befehle.status(term) == 0
@@ -152,7 +153,7 @@ def test_assistent_schaltet_die_timer_ein(geraet, monkeypatch, tmp_path):
         monkeypatch.setenv(k, v)
     term = _frisches_konto_eingerichtet(geraet)
     assert "Timers on" in term.text
-    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer" in fake.calls()
+    assert "--user enable --now zentrale-abgleich.timer zentrale-kalender-sync.timer zentrale-update.timer" in fake.calls()
     dienst = open(os.path.join(fake.units, "zentrale-abgleich.service")).read()
     assert f"ExecStart={geraet.wurzel}/bin/zentrale sync --automatic" in dienst
 
@@ -166,7 +167,7 @@ def test_neue_app_mit_daten_fragt_einmal_und_die_antwort_bleibt(geraet):
     assert befehle.sync(term) == 0, term.text
     assert "Lists has data — sync it with your account?" in term.text
     assert "Melodies has data" in term.text
-    assert _einstellungen(geraet)["abgleich_apps"] == {"fokus": True, "klavier": False}
+    assert _einstellungen(geraet)["abgleich_apps"] == {"cloud_folder": False, "fokus": True, "klavier": False}
     term = Spiel()
     term.interaktiv = True
     assert befehle.sync(term) == 0 and "has data" not in term.text     # nur einmal
@@ -187,7 +188,7 @@ def test_neue_app_ohne_terminal_eine_zeile_und_nicht_abgeglichen(geraet):
                       "Run 'zentrale sync' in a terminal."]
     import abgleich
     assert abgleich.cloud_pfade() == set()
-    assert _einstellungen(geraet)["abgleich_apps"] == {}
+    assert _einstellungen(geraet)["abgleich_apps"] == {"cloud_folder": False}
 
 
 def test_start_fragt_neue_app_nur_mit_cloud(geraet, monkeypatch):
@@ -199,7 +200,7 @@ def test_start_fragt_neue_app_nur_mit_cloud(geraet, monkeypatch):
     term.interaktiv = True
     assert haupt.main([], term=term) == 0
     assert "Notes has data" in term.text
-    assert _einstellungen(geraet)["abgleich_apps"] == {"notizen": True}
+    assert _einstellungen(geraet)["abgleich_apps"] == {"cloud_folder": False, "notizen": True}
 
 
 def test_assistent_notfallschluessel_nicht_bestaetigt_kein_konto(geraet):

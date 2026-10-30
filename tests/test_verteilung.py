@@ -246,7 +246,7 @@ def test_update_oeffentlich_ohne_konto(tmp_path, monkeypatch):
         monkeypatch.setenv("ZENTRALE_HEIM", str(heim))
         monkeypatch.setattr(aktualisieren.konto, "angemeldet", lambda: False)
         term, venvs = _term(), []
-        assert aktualisieren.update(term, venv=venvs.append, wurzel=str(alt)) == 0, term.aus.getvalue()
+        assert aktualisieren.update(term, venv=venvs.append, wurzel=str(alt), check=lambda d: (True, "")) == 0, term.aus.getvalue()
         assert os.readlink(heim / "hub" / "aktuell") == "2"
         assert venvs == [str(heim / "hub" / "2")]
     finally:
