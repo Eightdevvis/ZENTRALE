@@ -1,10 +1,14 @@
-# Mini-PC: ZENTRALE not set up yet, cloud folder not active
+# Mini-PC: installed but silent, cloud folder not active
 
-**Stand 2026-10-30:** Open. **Waits for Sasha** (login with the account from
-KeePass).
+**Stand 2026-10-30:** Open. **Partly waits for Sasha** (on the mini).
 
-- On the mini, `~/zentrale` only holds `install.sh`; ZENTRALE itself is not
-  installed, so the cloud sync does not run there.
+- **Correction (checked read-only 2026-10-30):** ZENTRALE *is* installed —
+  by the cloud installer on 24.10. into `~/.local/share/zentrale/hub/{38,39}`,
+  `aktuell -> 39`, logged in (`~/.config/zentrale/konto.json`). It synced
+  once (24.10. 10:17) and never again: no timers (they came with release
+  41), no linger, no auto-update. Finishing steps:
+  [minipc_finish_setup.md](minipc_finish_setup.md); the lasting fix:
+  [../hub/building_kit_plan.md](../hub/building_kit_plan.md) (sections 0, 5.2).
 - **Cloud folder** (`~/Zentrale/Cloud`, app `cloud_folder`, merged 29.10. in
   `49a06dd`): activate on the laptop and on the mini with `zentrale sync` and
   answer yes once (old app selections do not include it).

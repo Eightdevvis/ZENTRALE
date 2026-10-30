@@ -1,5 +1,10 @@
 # Knoten beitreten — ein neues Gerät kommt dazu, statt kopiert zu werden
 
+> **Partly superseded (2026-10-30):** the join flow, what a node kind gets,
+> keeping a node alive and leaving are now in
+> [building_kit_plan.md](building_kit_plan.md) (sections 3–5). The node
+> description, invitation and Bauplan v1 below still apply.
+
 **Stand 2026-10-22: Plan, noch nicht gebaut.** Anlass: der Mini-PC ist da
 (im Netzplan schon als Vollknoten eingeplant, [../system/heimnetz.md](../system/heimnetz.md)).
 Sasha: *„wir wollen es nich rüber copy pasten einfach sondern das ganze als

@@ -1,5 +1,11 @@
 # Die Cloud als App — Apps sagen, was sie haben
 
+> **Partly superseded (2026-10-30):** the cloud is no longer a special
+> built-in service but a store app offering the port `sync`; the per-app
+> question becomes a proposed wire `data → sync`
+> ([building_kit_plan.md](building_kit_plan.md), sections 1 and 4). The
+> `[daten]` model and the positive list below stay.
+
 **Stand 2026-10-23: gebaut** (Branch `cloud-app`; was echt ist: „Gebaut“ unten). Sasha beim ersten `zentrale setup`:
 *„das choose what this device syncs is fraglich … wenn ein user das neu
 aufmacht dann sollte ja quasi kaum was kommen … lowk wird die cloud eine

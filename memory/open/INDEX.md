@@ -44,7 +44,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [task_prioritization.md](task_prioritization.md) | KI asks what to do with dumped ideas/duties instead of deciding their status herself; prompt rule forbids ordering | yes (one decision) |
 | [mini_pc_tty_login.md](mini_pc_tty_login.md) | Mini-PC: greeter has no window without a monitor → switch to text-console login (prepared) | yes (2 commands + reboot) |
 | [mini_pc_network.md](mini_pc_network.md) | Mini-PC still on the laptop's hotspot: eduroam (mini + tablet), home Wi-Fi, optional own hotspot | yes (credentials) |
-| [mini_pc_zentrale_setup.md](mini_pc_zentrale_setup.md) | ZENTRALE not installed on the mini; cloud folder to activate; `uds` only copied; repo paths for Claude sessions | yes (login) |
+| [mini_pc_zentrale_setup.md](mini_pc_zentrale_setup.md) | Mini installed (release 39, 24.10.) but synced once; cloud folder to activate; `uds` only copied; repo paths for Claude sessions | partly |
 | [second_screen.md](second_screen.md) | Tablet as second screen works; script only on the mini, no ZENTRALE app button yet | partly (where the script lives) |
 | [laptop_retirement_leftovers.md](laptop_retirement_leftovers.md) | Things only on the laptop: repos without remote, branches, secrets, KeePass, MediaWiki, visible Ablage | yes (per item) |
 | [laptop_suspend_hang.md](laptop_suspend_hang.md) | Laptop does not wake after closing the lid; TLP switched off as a test since 30.10. | yes (use it, then evaluate) |
@@ -71,3 +71,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [tablet_integration.md](tablet_integration.md) | Galaxy Tab S7 FE: scrcpy / second screen / KDE Connect / ZENTRALE node — goal open | yes (pick goal) |
 | [package_data_dir.md](package_data_dir.md) | .deb/PKGBUILD copy the program per user because the core keeps data next to the code | no |
 | [pi_back_online.md](pi_back_online.md) | Pi offline; autopull will jump to release 41 — check kiosk, outpost package, sensor bridge | yes (Pi online) |
+| [building_kit_decisions.md](building_kit_decisions.md) | Building kit blueprint: support window, auto-update and linger defaults, app name, key rotation, Tailscale | yes (10 one-line answers) |
