@@ -25,6 +25,10 @@ of the AI, local over IPP / eSCL, no HP cloud.
   If adapter + AI are installed, the hub asks „download AI printer tool?".
   Don't build the store dialog now, just keep the packages separate.
 
+**Shared frame (2026-10-31):** the screen guide needs the same device-adapter
+frame and will be its first user; the printer comes second
+([../ki/screen_guide_plan.md](../ki/screen_guide_plan.md), "Where each piece lives").
+
 **Next steps:**
 
 1. Rewrite `memory/hub/adapter.md` as blueprint (broker, interfaces,

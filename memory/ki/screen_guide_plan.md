@@ -7,6 +7,28 @@ surface (first: the X11 desktop via AT-SPI plus screenshot). A skill
 learns the Arduino IDE. Built once, it works on any surface that gets an
 adapter (browser, Android, AR later) without touching tool or skill.
 
+## Where each piece lives
+
+| Piece | Place | Has a home today? |
+|---|---|---|
+| Port type `screen` | `contracts/ports/1/types.json` (+ vector in `scripts/port_vectors.py`) | yes |
+| Map format | `contracts/screen-map/1/` (schema + vectors), like `contracts/ports/1/` | yes, by pattern |
+| AI tool `screen` | `core/werkzeug_screen.py` (action schemas, like `core/werkzeug_kalender.py`), group `screen` in `core/werkzeug_gruppen.py` | yes; the target "AI tool = own store package" is not built for any tool yet |
+| Skill `teacher` | shipped in `core/skill_vorlagen/`, installed into `ki/skills/teacher/SKILL.md` | yes |
+| Adapter `screen-x11` | **none yet** | **no** — see below |
+| Image blocks in tool results | `core/cloud.py`, `_tool_result` | yes |
+
+**The adapter has no home.** Adapters today are *connections to outside
+services* (`core/adapter_anschluss.schema.json` allows only
+`kalender-vdirsyncer` and `ki-anbieter`). A local device adapter that offers
+a hardware port type does not fit there, and hardware ports today are only
+detected by the node (`core/knoten.py`). The printer waits for exactly the
+same frame (`memory/open/printer_adapter.md`, step 1: rewrite
+`memory/hub/adapter.md` as blueprint — broker, interfaces, pluggable
+adapters). Decision: build that frame **once**, with `screen-x11` as its
+first user (the printer is blocked on its network anyway), the printer
+second. No screen-only side path.
+
 Sasha, 2026-10-31: *„wenn jemand der alles schon kennt neben mir sitzen würde
 und einfach draufzeigt was ich klicken soll … so wollen wir das tool bauen."*
 And: *„die baustelle hier gleich so aufziehen, dass man die ki überall
@@ -144,8 +166,12 @@ First: the ZENTRALE chat as it is (typing). Later: push-to-talk via the
 `mic` port type and the answer spoken via `speaker` (`audio_system.md`), so
 Sasha does not have to leave the program to ask.
 
+Name `screen` confirmed by Sasha 2026-10-31.
+
 ## Steps
 
+0. **Device-adapter frame** (shared with the printer, see above): blueprint
+   in `memory/hub/adapter.md`, then the generic frame.
 1. **Probe on the real IDE** (no AI, no money): dump the AT-SPI tree of the
    Arduino IDE with and without the accessibility flag; screenshot + local
    OCR of the same window. Decides how much the fallback must do.
@@ -161,8 +187,5 @@ Sasha does not have to leave the program to ask.
 
 ## Open
 
-- Name of the port type: `screen` is short but sits next to `display`;
-  Sasha decides.
-- Privacy of `picture: true`: free like `look`, or through the gate once per
-  conversation?
-- Wayland later: AT-SPI works the same, screenshot and overlay do not (portal).
+- Privacy of `picture: true` (a screenshot of Sasha's screen goes to the
+  cloud model): free like `look`, or through the gate once per conversation?
