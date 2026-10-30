@@ -28,7 +28,19 @@ import subprocess
 import sys
 
 from zentrale_cli import WURZEL
-from zentrale_cli.aktualisieren import heim, kanal
+# Through the module, not `from … import kanal`: this module is imported
+# lazily (befehle.timer_modul), and a by-value import would freeze whatever
+# `kanal` was at that moment — e.g. a test's stand-in, leaking into later tests.
+from zentrale_cli import aktualisieren
+
+
+def kanal(wurzel=WURZEL) -> str:
+    return aktualisieren.kanal(wurzel)
+
+
+def heim() -> str:
+    return aktualisieren.heim()
+
 
 MARKE = "# Rendered by `zentrale timers install`"
 STARTER = "/usr/bin/zentrale"
