@@ -11,9 +11,12 @@ open. Installed state lives per machine in `data/hub/`. Docs:
 
 **What is missing:**
 
-- **Uninstall:** no way to remove an app (wheel entry, views, folder).
-- **Update:** no way to pull a newer version; for now only by hand in the
-  app's folder.
+- **Uninstall:** only built-in store apps (`cloud`, `cloud_folder`) can be
+  removed (`POST /api/apps/remove`, building kit step 10); a downloaded app
+  answers 501 — no way to remove its wheel entry, views, folder.
+- **Update:** since building kit step 12 `zentrale update --automatic`
+  fast-forwards installed apps unless held (`core/app_update.py`); there is
+  no manual "update this app now" in the store and no choice of version.
 - **Rights dialog:** the `rechte` listed in `app.toml` are not shown or
   confirmed before install.
 - **Same machine only:** opening a view assumes TUI and backend run on the

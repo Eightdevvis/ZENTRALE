@@ -341,8 +341,8 @@ like `POST /v1/mitte/stand`}. The server swaps head, wraps and emergency
 proof in one D1 transaction (409 = the Mitte moved → read again, max. 3×)
 and ends every other session; other devices and the phone log in again and
 get the new key. Limits: old encrypted stands and blobs stay on the server
-(readable with the old key, only with a session); `besitz` is not
-re-encrypted (no client uses it yet).
+(readable with the old key, only with a session); `besitz` is re-encrypted
+after the swap (best effort, `account_ownership.rekey`, since step 10).
 
 ### Testvektoren für andere Oberflächen
 
@@ -360,7 +360,10 @@ neue Vektoren, nie still.
 
 - ~~Die echte Cloud-Adresse eintragen~~ (erledigt 23.10.; steht nur noch in
   `core/cloud_api.py` `VORGABE`, install.sh bekommt sie beim Rendern).
-- `GET/PUT /v1/besitz` nutzt der Client noch nicht.
+- ~~`GET/PUT /v1/besitz` nutzt der Client noch nicht.~~ Seit Baukasten-Schritt
+  10 (2026-10-30): `core/account_ownership.py` (verschlüsselte ItemList,
+  Format `zentrale-ownership/1`), beim Konto-Anlegen/Anmelden und bei jeder
+  Installation aus dem Laden.
 - Dateien der Mitte kommen ohne Stand-Angabe („aktueller Stand"); ein
   optionales `?stand=<kennung>` an `GET /v1/mitte/datei/<name>` machte das
   Lesen exakt statt „neu holen, wenn es sich bewegt".

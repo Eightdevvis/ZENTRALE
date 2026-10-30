@@ -4,7 +4,10 @@
 > built-in service but a store app offering the port `sync`; the per-app
 > question becomes a proposed wire `data → sync`
 > ([building_kit_plan.md](building_kit_plan.md), sections 1 and 4). The
-> `[daten]` model and the positive list below stay.
+> `[daten]` model and the positive list below stay. Since step 10 `cloud` and
+> `cloud_folder` are store items (`built_in`); "installed" is the setting
+> below (`abgleich.cloud_an()`, `abgleich_apps`), see
+> `core/builtin_store_apps.py` and [shop.md](shop.md).
 
 **Stand 2026-10-23: gebaut** (Branch `cloud-app`; was echt ist: „Gebaut“ unten). Sasha beim ersten `zentrale setup`:
 *„das choose what this device syncs is fraglich … wenn ein user das neu

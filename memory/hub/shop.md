@@ -149,10 +149,40 @@ TUI und Backend müssen dafür auf demselben Rechner laufen (Adresse
 127.0.0.1, Starter liest den Ordner); unterwegs über einen fremden Hub geht
 das Öffnen noch nicht.
 
-**Offen:** Deinstallieren; Aktualisieren (heute: im Ordner selbst `git
-pull`); Rechte-Dialog vor dem Einrichten (die Apps im Laden haben keine
+**Offen:** Deinstallieren (gebaut nur für eingebaute Apps, s. u.);
+Aktualisieren von Hand (automatisch seit Schritt 12, s. u.); Rechte-Dialog vor dem Einrichten (die Apps im Laden haben keine
 Rechte); Tutor/Karte über denselben Weg statt `BEKANNT`; die Web-Oberfläche
 zeigt weder Laden noch Rad.
+
+## Built-in apps, ownership, holds (building kit steps 10 and 12, 2026-10-30)
+
+- **Cloud and Cloud folder** are catalog items of category apps with
+  `additionalProperty` `built_in: true` and no `downloadUrl`
+  (`app_register.built_in`). Installed = their existing node setting
+  (`core/builtin_store_apps.py`: cloud on = `abgleich.cloud_an()`, cloud
+  folder = the app choice `abgleich_apps`). `POST /api/apps/installieren
+  {adresse}` switches one on (no views; the cloud needs a login → 409),
+  `POST /api/apps/remove {adresse}` off — nothing deleted, ownership stays;
+  a downloaded app answers 501 there. `GET /api/apps/installed` lists the
+  addresses installed on this node and the holds.
+- **Ownership of the account** (`core/account_ownership.py`): the same
+  `ItemList` of `OwnershipInfo` as `besitz-<rechner>.jsonld`, but in the
+  cloud (`GET/PUT /v1/besitz`), Fernet-encrypted with the account key,
+  `format: zentrale-ownership/1`. Marked at signup/login (cloud, cloud folder)
+  and on every store install while logged in. The setup wizard's last step
+  first offers what the account owns and this node lacks: built-in apps are
+  switched on, downloaded ones point to the store. The per-node files stay
+  for "geholt" (icons etc.); unifying both is open.
+- **Holds** (step 12): `h` in the store (Apps) holds an installed downloaded
+  app at its version — node setting `app_holds` {name: {version, commit,
+  since}}, `POST /api/apps/hold`. `zentrale update --automatic` fast-forwards
+  every installed store app after the core (`core/app_update.py`), skipping
+  held ones and checkouts with local changes. Built-in apps are never held
+  (they ship with the core). The package carries `BUNDLE.json` (section 3 of
+  [building_kit_plan.md](building_kit_plan.md)).
+- TUI: Enter on a built-in app switches it on, `x` off, `h` hold/release;
+  the detail says "installed ✓" (and "held at …"). New TUI text is English
+  through `tui/ansichten/translate.py`.
 
 ## Später: bezahlen und Sashas Server
 

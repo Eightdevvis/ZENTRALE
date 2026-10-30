@@ -260,11 +260,10 @@ Separate packages are only worth something once an app has actually left
 the core. Until then, splitting the tarball would add work and no choice.
 So:
 
-1. **Now:** one tarball as today, but with a bundle file inside
-   (`BUNDLE.json`, components and versions). Nothing else changes.
-2. **Per extracted app:** it becomes its own package in the catalog
-   (tutor, map, budget are already their own repos), installable and
-   holdable. `eingebaute_apps.py` shrinks.
+1. **Now (built `e24374f`):** one tarball, with `BUNDLE.json` inside (core +
+   built-in apps at the release, extracted apps without a version).
+2. **Per extracted app:** its own catalog package (tutor, map, budget are own
+   repos), installable and holdable. `eingebaute_apps.py` shrinks.
 3. **"Pick parts" UI** only when at least three apps are separate.
 4. **Not built:** dependency solver, version ranges between packages,
    partial core updates. Rule 6 makes them unnecessary — that is what keeps
@@ -278,8 +277,8 @@ So:
   package for now (built-in), but they are listed, installed and removable
   like any app.
 - **Signup / login installs `cloud`** on that node and marks it owned
-  (`/v1/besitz`, which the client does not use yet). Removing it = the
-  node stays local, nothing deleted in the cloud.
+  (`/v1/besitz`, `core/account_ownership.py`). Removing it = the node stays
+  local, nothing deleted in the cloud. Built `79482b5` ([shop.md](shop.md)).
 - `cloud_folder` is offered right after signup ("a folder that syncs") —
   one question, default yes.
 - Ownership belongs to the account, installation to the node (decided
@@ -296,11 +295,11 @@ what ZENTRALE does, what exists.
 | # | Step | Person does | ZENTRALE does | Today |
 |---|---|---|---|---|
 | 1 | **Install** | runs the installer with the invite code | checks Python, unpacks, venv, links `zentrale`, **installs the keeper timers**, starts the setup wizard | yes (keeper `13235f8`; wizard when a terminal is attached `527afc3`) |
-| 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes, except "cloud as store app" |
+| 2 | **Account** | setup wizard: create or log in (or stay local) | keys on the device, session in `konto.json`, installs the **cloud** app, registers the node (`PUT /v1/knoten`) | yes (cloud as store app: `79482b5`) |
 | 3 | **Cloud** | nothing | first sync: cloud wins, local versions set aside; offers the cloud folder | yes (cloud folder: wizard step, `527afc3`) |
-| 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; plug/rights dialog no; owned-app offer no |
-| 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | core: timer, setting, self-test (`527afc3`); apps: no |
-| 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes except owned-app offer |
+| 4 | **Apps** | picks apps in the store or "what do you plan here?" | install dialog = plug dialog: needed ports, providers proposed (data → sync yes), confirm; app appears in the wheel | install yes; owned-app offer `79482b5`; plug/rights dialog no |
+| 5 | **Updates** | nothing (or turns auto-update off) | core: by setting; apps: follow bundle, holds respected; never forced; old versions keep syncing in the window | core: timer, setting, self-test (`527afc3`); apps: follow repo, holds (`e24374f`) |
+| 6 | **Second device** | same as 1–2 on the new device | node joins, cloud wins, owned apps offered, same app settings everywhere | yes (owned apps offered: `79482b5`) |
 | 7 | **Remove a device** | on the device: `zentrale leave`; from another: `zentrale devices remove <name>` | leave: logout, timers off, local data kept or deleted on request; remove: end that node's sessions, tombstone its description, drop it from the map; for a lost or stolen device the dialog offers "also change the account key" (Sasha 30.10.: only then, never on every removal) | built `d1dc8fd` (key change: `core/key_rotation.py`, `PUT /v1/konto/schluessel`) |
 
 ### 5.2 What keeps a node alive
@@ -545,12 +544,12 @@ compiler with its graph checks, the socket table for the editors, and the apply 
 | Part | Exists | Missing |
 |---|---|---|
 | install | `install.sh`, sha256, venv, link, PATH hint, keeper timers, wizard + linger (`527afc3`) | — |
-| account/cloud | Zero-Knowledge account, `HttpMitte`, node description, `devices` | owned apps (`/v1/besitz` unused), cloud as store item |
+| account/cloud | Zero-Knowledge account, `HttpMitte`, node description, `devices`; cloud + cloud folder as store items, account ownership (`79482b5`) | one ownership truth (shop files vs. `/v1/besitz`) |
 | sync | per-app choice, cloud wins, held-back files | — (format read rule + preserve test: `a6f37db`) |
 | timers | `zentrale timers` (sync, calendar, update), installer call, re-run on every update, self-heal (`527afc3`) | — |
 | update | `zentrale update` (beside, switch, roll-back by hand), `--automatic`, setting, self-test, hint (`527afc3`) | Ed25519 signature; hint inside the TUI |
 | versioning | `/v1`, HKDF `/v1`, `format` fields, several vector files | policy (insecure warning: `d1dc8fd`; contract folder, old-release test: `b64f3e4`) |
-| packaging | one tarball, `deploy/paket.txt` | `BUNDLE.json`, per-app packages as apps leave, holds |
+| packaging | one tarball, `deploy/paket.txt`, `BUNDLE.json`, holds (`e24374f`) | per-app packages as apps leave |
 | plugs | `rechte`, `liefert`, `[daten]`, calendar `quelle`, positive list; port schema, `needs`/`offers`, `/api/wires` (`6a63d16`) | plug dialog |
 | lifecycle | join by login; `leave`, `devices remove`, removed sessions, tombstone, key change for lost/stolen (`d1dc8fd`) | Schematix display |
 | wiring map | Desk (JSON Canvas, strings, tiles, references), node descriptions | the app, piece kinds, layers, planned state, things store |
@@ -573,9 +572,9 @@ Each step ships on its own; earlier steps never wait for later ones.
 | 8 | **Built `d1dc8fd`.** **Leave and remove**: `zentrale leave`, `zentrale devices remove`, server route to end a node's sessions, tombstone in `knoten/`; after it, key rotation as an option in the removal dialog for lost/stolen devices (Sasha 30.10.) | removed node's next sync gets 401 and says "this device was removed"; tombstone visible in `devices` |
 | 9 | **Built `6a63d16`.** **Type registry first** (TOSCA/NetBox terms, JSON Schema 2020-12, SemVer per type), then ports in manifests: `needs`/`offers` read (old keys too), built-in apps declare them; `GET /api/wires` projects `abgleich_apps` + calendar `quelle` | every built-in manifest validates in Python and Dart; projection round-trip: write the projected wires back → settings byte-identical |
 | 9b | **Built `6a63d16`.** **Compiler + generations + apply agent** (section 6.7), first fed only by the CLI sync choice | a set of broken sketches (double owner, unmet requirement, live depends on planned, too-new type on an old node) all fail with no output; a good one switches and a failed health check rolls back |
-| 10 | **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
+| 10 | **Built `79482b5`.** **Cloud and cloud folder as store items**, installed at signup, ownership via `/v1/besitz` | fresh account → store shows both installed; second device offers owned apps |
 | 11 | **Plug dialog** at install (= rights dialog) | installing an app with `needs = ["model"]` lists providers; refusing leaves the app installed but that port `off` |
-| 12 | **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
+| 12 | **Built `e24374f`.** **Bundle file** in the package; store shows per-app hold for extracted apps | built package contains `BUNDLE.json` matching `deploy/RELEASE`; held app is skipped by the automatic update |
 | 13 | **Schematix v1, read-only** (look: Sasha's style): app `schematix`, versions panel, Desk kinds `piece`/`wire`, layers, `/hub/pieces` | map of Sasha's account shows laptop, mini, apps and sync wires exactly as `zentrale status` on each node |
 | 14 | **Schematix v2**: planned and documented pieces, things store, starter desk from heimnetz.md | planned router drawn as "not yet"; joining a node turns its planned piece live; Obsidian opens the file |
 | 15 | **Schematix v3, rewire by drawing**: unfitting wires refused (red ✕ cursor, short error on drop), Run = check → diff → switch | unplug tutor → sync on the map, Run, the diff shows one line; after the switch `zentrale status` on that node shows "stays on this device" |
@@ -598,4 +597,4 @@ rest builds on a node that stays alive.
   setup wizard, dev installer mode, version sync settable in Schematix with
   a versions panel, name Schematix / schemes, things as own hardware pieces,
   Tailscale live; refused wires instead of greyed sockets.
-- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)).
+- **2026-10-30** — steps 0 and 1 built (`13235f8`), steps 2 and 3 (`527afc3`); key rotation decided (option for lost/stolen devices, after step 8); steps 7 and 8 built (`d1dc8fd`), key change on the unchanged key schema; steps 5 and 6 built (`a6f37db`, `b64f3e4`); steps 9 and 9b built (`6a63d16`): type registry, compiler, Run gate ([port_types.md](port_types.md)); steps 10 and 12 (`79482b5`, `e24374f`).
