@@ -31,12 +31,19 @@ import threading
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import formats
 import state
 import kalender_ics_abbildung as abb
 import kalender_rhythmus
 import kalender_sicherung as sich
 
-NEBEN_FORMAT = 1
+NEBEN_FORMAT = 1       # major of the side file (core/formats.py "calendar-side-file")
+
+# The side-file fields this version computes on every save. Every other field
+# (the migration's migriert*/zurueck* markers, anything a newer minor added)
+# goes back unchanged — must-preserve, building_kit_plan.md 2.2 rule 2.
+NEBEN_EIGENE = ("format", "oben", "oben_reihenfolge", "layer", "layer_roh",
+                "pausen_ohne_routine", "nicht_abbildbar", "archiv")
 
 # Interne Schlüssel im Daten-Dict. Beginnen mit "_ics", damit die Fassade sie
 # mit einer einzigen Regel herausfiltern kann.
@@ -169,7 +176,15 @@ class IcsSpeicher:
         if not self.neben.exists():
             return {}
         d = json.loads(self.neben.read_text(encoding="utf-8"))
-        return d if isinstance(d, dict) else {}
+        if not isinstance(d, dict):
+            return {}
+        if formats.is_newer(d.get("format"), "calendar-side-file"):
+            # Shown as far as this version understands it, never written
+            # (_speichern_gesperrt refuses); `zentrale status` says so.
+            formats.note_newer("calendar-side-file", formats.major(d.get("format")))
+        else:
+            formats.clear("calendar-side-file")
+        return d
 
     def _ordner(self) -> list[Path]:
         if not self.vdir.exists():
@@ -493,6 +508,8 @@ class IcsSpeicher:
     def _speichern_gesperrt(self, data, erlaube_massenloeschung):
         alt_data, index, geister = self._lesen_ungecacht_mit_cache()
         alt_neben = self._neben_lesen()
+        if formats.is_newer(alt_neben.get("format"), "calendar-side-file"):
+            raise sich.KalenderGesperrt(formats.newer_text("calendar-side-file"))
         geladen = data.get(GELADEN) if isinstance(data.get(GELADEN), dict) else {}
 
         stuecke, roh, layer_info, layer_roh, archiv, pausen = self._plan(data)
@@ -679,9 +696,9 @@ class IcsSpeicher:
 
     def _neben_bauen(self, alt, data, layer_info, layer_roh, archiv, roh, ohne):
         # Was die Migration hinterlegt (Marker, alte Ebenen-Reihenfolge für den
-        # Rückweg), bleibt bei jedem Speichern stehen.
-        neu = {k: v for k, v in alt.items()
-               if k.startswith("migriert") or k.startswith("zurueck")}
+        # Rückweg) und was eine neuere Fassung ergänzt hat, bleibt bei jedem
+        # Speichern stehen (NEBEN_EIGENE).
+        neu = {k: v for k, v in alt.items() if k not in NEBEN_EIGENE}
         neu["format"] = NEBEN_FORMAT
         neu["oben"] = {k: ohne_interna(v) for k, v in data.items()
                        if not k.startswith(FELD) and k not in ("layers", "pausen")}

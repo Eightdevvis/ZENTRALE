@@ -4,7 +4,6 @@
   "title": "Einstellung der Kalender-App (zentrale-kalender-app/1)",
   "description": "Eine installierte Kalender-App (Instanz) und woher ihre Termine kommen (memory/hub/adapter.md „Die Quelle der Kalender-App“). Gehört der Kalender-App, nicht dem Konto: zwei installierte Kalender = zwei Dateien, jede mit genau einer Quelle und eigenem Ordner. Liegt in data/adapter/anschluesse/<id>.json und gleicht auf JEDES Gerät ab — dieselbe Datei überall, kein Zustand je Gerät. Nie ein Geheimnis.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["format", "id", "quelle", "ordner"],
   "properties": {
     "format": {"const": "zentrale-kalender-app/1"},
@@ -17,7 +16,6 @@
                "description": "Der Ordner der Termine, relativ zum ZENTRALE-Ordner. kalender-haupt: data/kalender."},
     "geaendert": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {"am": {"type": "string"}, "auf": {"type": "string"}, "von": {"type": "string"}},
       "description": "Nur zum Nachlesen, wann und wo zuletzt umgestöpselt wurde (von = alte Quelle). Nichts entscheidet danach."
     }

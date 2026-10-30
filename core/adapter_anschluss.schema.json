@@ -4,7 +4,6 @@
   "title": "Anschluss des Adapters (zentrale-anschluss/1)",
   "description": "Ein fremder Dienst, an ZENTRALE angekabelt (memory/hub/adapter.md). Die Datei gleicht auf alle Geräte ab und enthält NIE ein Geheimnis: Zugangsdaten liegen verschlüsselt in data/adapter/geheim.enc, hier stehen nur Verweise darauf. Welches Gerät die Brücke zu einem Dienst fährt, steht hier nicht — das entscheidet der Mietvertrag (data/adapter/bruecke/<id>.json).",
   "type": "object",
-  "additionalProperties": false,
   "required": ["format", "id", "art", "speist"],
   "properties": {
     "format": {"const": "zentrale-anschluss/1"},
@@ -17,7 +16,6 @@
                "description": "Die App, deren Daten der Anschluss füllt (kalender, assistent …)."},
     "eingerichtet": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {"am": {"type": "string"}, "auf": {"type": "string"}},
       "description": "Wann und auf welchem Gerät angelegt. Nur zum Nachlesen — nichts entscheidet danach."
     },

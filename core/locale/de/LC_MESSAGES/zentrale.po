@@ -476,3 +476,41 @@ msgstr "Der Kontoschlüssel ist gewechselt ({n} Dateien). Auf deinen anderen Ger
 
 msgid "{n} unreadable file(s) in a phone inbox were dropped."
 msgstr "{n} unlesbare Datei(en) in einem Handy-Eingang wurden verworfen."
+
+# Build step 5: the read rule for formats (core/formats.py, zentrale status)
+
+msgid "{what} is newer than this version — read only"
+msgstr "{what}: neuer als diese Fassung — nur lesen"
+
+msgid "cloud data"
+msgstr "Die Daten in der Cloud"
+
+msgid "a file from another device"
+msgstr "Eine Datei von einem anderen Gerät"
+
+msgid "the account file of this device"
+msgstr "Die Kontodatei dieses Geräts"
+
+msgid "connected services' keys"
+msgstr "Die Schlüssel der angeschlossenen Dienste"
+
+msgid "a connected service"
+msgstr "Ein angeschlossener Dienst"
+
+msgid "the calendar setting"
+msgstr "Die Einstellung des Kalenders"
+
+msgid "calendar extras"
+msgstr "Die Kalender-Nebendaten"
+
+msgid "calendar colours"
+msgstr "Die Kalenderfarben"
+
+msgid "Inbox {node}: a file is newer than this version — skipped"
+msgstr "Eingang {node}: eine Datei ist neuer als diese Fassung — übersprungen"
+
+msgid "Read only (written by a newer ZENTRALE)"
+msgstr "Nur lesen (von einer neueren ZENTRALE geschrieben)"
+
+msgid "Update this device ('zentrale update') to read and write it again."
+msgstr "Aktualisiere dieses Gerät ('zentrale update'), dann liest und schreibt es wieder."

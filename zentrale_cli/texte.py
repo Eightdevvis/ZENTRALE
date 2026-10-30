@@ -241,6 +241,8 @@ EN = {
     "st_app_adapter": "always synced — {n} connection(s)",
     "st_way": "Sync way",
     "st_notes": "Notes",
+    "st_formats": "Read only (written by a newer ZENTRALE)",
+    "st_formats_hint": "Update this device ('zentrale update') to read and write it again.",
     "st_held_back": "Not synced (held back, everything else syncs)",
     "st_held_too_large": "  {path} — too large for the cloud ({size} MiB)",
     "st_held_folder": "  {n} files of the cloud folder — the folder is missing or empty on this device",

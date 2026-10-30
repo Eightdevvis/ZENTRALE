@@ -25,9 +25,11 @@ import ai_config
 import cloud_api
 import cloud_notices
 import dateien
+import formats
 import konto_schluessel as ks
 
 VORGABE_DATEI = "~/.config/zentrale/konto.json"
+FORMAT = 2              # major of konto.json (core/formats.py "account-file")
 
 
 class KontoFehler(Exception):
@@ -93,6 +95,13 @@ def lesen():
     except (OSError, ValueError):
         raise KontoFehler(f"The account file {datei()} is damaged. "
                           "Log out and log in again.") from None
+    if isinstance(d, dict):
+        try:
+            # A newer ZENTRALE wrote it (a rollback): never misread, never
+            # overwritten — `zentrale logout` still removes it on purpose.
+            formats.check(d, "account-file")
+        except formats.NewerFormat as e:
+            raise KontoFehler(str(e)) from None
     # Ohne "name" (Format 1 hatte noch "mail"): wie abgemeldet.
     return d if isinstance(d, dict) and d.get("konto_schluessel") and d.get("name") else None
 
@@ -104,12 +113,28 @@ def angemeldet() -> bool:
         return False
 
 
+# The fields this version writes; anything else a newer minor put into the
+# file stays (building_kit_plan.md 2.2 rule 2) — unless the account changed.
+_EIGENE = ("format", "server", "name", "token", "laeuft_ab", "knoten", "konto_schluessel", "mail")
+
+
 def _speichern(server, name, token, laeuft_ab, konto_schluessel: bytes, knoten):
+    try:
+        with open(datei(), encoding="utf-8") as f:
+            alt = json.load(f)
+    except (OSError, ValueError):
+        alt = None          # missing or damaged: logging in again repairs it
+    alt = alt if isinstance(alt, dict) else None
+    if alt and formats.is_newer(alt.get("format"), "account-file"):
+        formats.note_newer("account-file", formats.major(alt.get("format")))
+        raise KontoFehler(formats.newer_text("account-file"))
+    neu = {"format": FORMAT, "server": server, "name": name, "token": token,
+           "laeuft_ab": laeuft_ab, "knoten": knoten,
+           "konto_schluessel": konto_schluessel.decode("ascii")}
+    if alt and alt.get("name") == name and alt.get("server") == server:
+        neu = formats.keep_unknown(alt, neu, owned=_EIGENE)
     cloud_notices.clear_removed()          # logged in (again): the device is back
-    dateien.json_schreiben(datei(), {
-        "format": 2, "server": server, "name": name, "token": token,
-        "laeuft_ab": laeuft_ab, "knoten": knoten,
-        "konto_schluessel": konto_schluessel.decode("ascii")}, geheim=True)
+    dateien.json_schreiben(datei(), neu, geheim=True)
 
 
 def konto_schluessel() -> bytes:

@@ -33,6 +33,7 @@ import shutil
 
 import ai_config
 import dateien
+import formats
 import kalender_einstellung as ke
 
 FORMAT = "zentrale-anschluss/1"
@@ -91,6 +92,7 @@ def alle(wurzel=None) -> dict:
     einer Zeile) — ein kaputter Anschluss darf den Abgleich nicht kippen."""
     d = os.path.join(ordner(wurzel), "anschluesse")
     raus = {}
+    neuer = None
     try:
         namen = sorted(os.listdir(d))
     except OSError:
@@ -104,14 +106,40 @@ def alle(wurzel=None) -> dict:
         except (OSError, ValueError):
             print(f"[adapter] {n} nicht lesbar — übergangen")
             continue
-        if isinstance(a, dict) and (a.get("format") == "zentrale-kalender-app/1"
-                                    or a.get("art") == "kalender-mitte"):
+        if ke.ist_einstellung(a) or (isinstance(a, dict) and a.get("art") == "kalender-mitte"):
             continue        # Einstellung der Kalender-App (kalender_einstellung), kein Anschluss
+        if _neuer(a):
+            # A newer ZENTRALE wrote it: never interpreted, never written.
+            neuer = formats.major(a.get("format"))
+            print(f"[adapter] {n} ist neuer als diese Fassung — nur gelesen")
+            continue
         if not isinstance(a, dict) or a.get("id") != n[:-5] or pruefen(a):
             print(f"[adapter] {n} ungültig — übergangen")
             continue
         raus[a["id"]] = a
+    if neuer is None:
+        formats.clear("adapter-connection")
+    else:
+        formats.note_newer("adapter-connection", neuer)
     return raus
+
+
+# The fields this version knows: a caller may drop one on purpose; any other
+# field in the file stays.
+_BEKANNT = ("format", "id", "art", "titel", "speist", "eingerichtet", "einstellungen")
+
+
+def _neuer(a) -> bool:
+    return isinstance(a, dict) and formats.is_newer(a.get("format"), "adapter-connection")
+
+
+def _datei(aid, wurzel=None):
+    try:
+        with open(_anschluss_pfad(aid, wurzel), encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
 
 
 def lesen(aid, wurzel=None):
@@ -119,7 +147,14 @@ def lesen(aid, wurzel=None):
 
 
 def speichern(a: dict, wurzel=None) -> None:
-    a = dict(a, format=FORMAT)
+    """Write a connection. One a newer ZENTRALE wrote is never overwritten;
+    fields a newer minor added stay (building_kit_plan.md 2.2 rules 2, 3)."""
+    alt = _datei(a.get("id", ""), wurzel) if a.get("id") else None
+    if _neuer(alt):
+        formats.note_newer("adapter-connection", formats.major(alt.get("format")))
+        raise AdapterFehler(formats.newer_text("adapter-connection"))
+    a = formats.keep_unknown(alt if alt and alt.get("format") == FORMAT else None,
+                             dict(a, format=FORMAT), owned=_BEKANNT)
     fehler = pruefen(a)
     if fehler:
         raise AdapterFehler("Invalid connection: " + "; ".join(fehler[:3]))

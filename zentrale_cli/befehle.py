@@ -23,6 +23,7 @@ import cloud_api           # noqa: E402
 import cloud_notices       # noqa: E402
 import cloud_nutzung       # noqa: E402
 import dateien             # noqa: E402
+import formats             # noqa: E402
 import knoten              # noqa: E402
 import konto               # noqa: E402
 
@@ -368,6 +369,19 @@ def update_hint(term):
         term.sag(line, "warn")
 
 
+def format_lines(term):
+    """Formats this version found in a newer major (core/formats.py): one
+    line each — "cloud data is newer than this version — read only"."""
+    notes = formats.notes()
+    if not notes:
+        return
+    term.sag()
+    term.sag(t("st_formats"), "fett")
+    for n in notes:
+        term.sag(f"  {str(n.get('since'))[:16].replace('T', ' ')}  {n['text']}", "warn")
+    term.sag(t("st_formats_hint"), "blass")
+
+
 def status(term):
     d = None
     try:
@@ -406,6 +420,7 @@ def status(term):
     held_back_lines(term, z.get("held_back") or [])
     update_hint(term)
     node_notice_lines(term, logged_in=bool(d))
+    format_lines(term)
     if adapter.kalender_anschluss() and not timer_modul().vdirsyncer_da():
         term.sag()
         vdirsyncer_hinweis(term)

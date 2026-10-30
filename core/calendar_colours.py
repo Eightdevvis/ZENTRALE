@@ -29,7 +29,7 @@
 # A style overrides only the properties it sets (e.g. just the border); the
 # rest still comes from the course slot.
 #
-# Layer 1: stdlib + dateien/datasync/stil only, so the sync merge
+# Layer 1: stdlib + dateien/datasync/stil/formats only, so the sync merge
 # (abgleich_zusammenfuehren) can use the merge rule without an import cycle.
 # Docs: memory/werkzeuge/calendar_colours.md.
 
@@ -41,6 +41,7 @@ from pathlib import Path
 
 import datasync
 import dateien
+import formats
 import stil as style_core
 
 FORMAT = "zentrale-calendar-colours/1"
@@ -283,11 +284,37 @@ def parse_table(raw) -> dict:
     return {k: v for k, v in slots.items() if isinstance(k, str) and k and valid_slot(v)}
 
 
-def table_text(slots: dict) -> str:
+def table_text(slots: dict, extra=None) -> str:
     """{key: slot} → file content; keys sorted so equal tables are equal bytes
-    (the sync compares bytes)."""
-    return json.dumps({"format": FORMAT, "slots": dict(sorted(slots.items()))},
-                      indent=1, ensure_ascii=False) + "\n"
+    (the sync compares bytes). `extra` = top-level fields a newer version
+    added (must-preserve, core/formats.py) — written back unchanged."""
+    doc = formats.keep_unknown(extra, {"format": FORMAT, "slots": dict(sorted(slots.items()))})
+    return json.dumps(dict(sorted(doc.items())), indent=1, ensure_ascii=False) + "\n"
+
+
+def _doc(raw):
+    """File content → the parsed dict, or None (missing, broken, not a dict)."""
+    if raw is None:
+        return None
+    try:
+        d = json.loads(raw) if isinstance(raw, (bytes, str)) else raw
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def _newer(doc) -> bool:
+    if doc is not None and formats.is_newer(doc.get("format"), "calendar-colours"):
+        formats.note_newer("calendar-colours", formats.major(doc.get("format")))
+        return True
+    return False
+
+
+def _extra(doc) -> dict:
+    """Unknown top-level fields of a table in our format (none for the old flat form)."""
+    if doc is None or doc.get("format") != FORMAT:
+        return {}
+    return {k: v for k, v in doc.items() if k not in ("format", "slots")}
 
 
 def read_table(path) -> dict:
@@ -298,9 +325,19 @@ def read_table(path) -> dict:
         return {}
 
 
-def write_table(path, slots: dict) -> None:
-    dateien.atomar_schreiben(path, table_text(slots))
+def write_table(path, slots: dict) -> bool:
+    """Write the table, keeping fields a newer version added. A table in a
+    newer major is never overwritten (read only, one note) → False."""
+    try:
+        with open(path, "rb") as f:
+            doc = _doc(f.read())
+    except OSError:
+        doc = None
+    if _newer(doc):
+        return False
+    dateien.atomar_schreiben(path, table_text(slots, _extra(doc)))
     datasync.notify_change(str(path))
+    return True
 
 
 # ── One-time migration of the TUI's old local table ─────────────────────
@@ -383,6 +420,13 @@ def merge(basis, local, mitte) -> bytes:
     first assigned it first, and the cloud is never overwritten. No note,
     no conflict copy: it is not user text, and every device converges to
     the cloud's table. Deletions are ignored (slots never go away)."""
+    m_doc, l_doc = _doc(mitte), _doc(local)
+    if _newer(m_doc):
+        return mitte                # a newer version wrote the cloud: never misread or overwrite
+    if _newer(l_doc):
+        return local
     slots = parse_table(local) if local is not None else {}
     slots.update(parse_table(mitte) if mitte is not None else {})
-    return table_text(slots).encode("utf-8")
+    extra = _extra(l_doc)
+    extra.update(_extra(m_doc))
+    return table_text(slots, extra).encode("utf-8")

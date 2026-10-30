@@ -45,12 +45,14 @@ import adapter_geheim
 import ai_config
 import cloud_folder
 import dateien
+import formats
 import konto
 from i18n import _
 
 VORGABE_DIR = "~/.local/share/zentrale/abgleich"
 VORGABE_MITTE = "git@github.com:Eightdevvis/data.git"
 INHALT = "inhalt.enc"
+INHALT_FORMAT = 1      # major of inhalt.enc (core/formats.py "cloud-index")
 LIESMICH = "LIESMICH.md"
 EINGANG = "knoten"        # knoten/<name>/<versteckter name>.enc — Eingang fremder Knoten
 WEGE = ("rsync", "mitte")
@@ -144,7 +146,7 @@ def cloud_pfade():
         if stand is None:
             return set()
         roh = lesen(INHALT)
-        return set(json.loads(tresor.auf(roh)).get("dateien", {})) if roh else set()
+        return set(_inhalt_parse(tresor, roh).get("dateien", {})) if roh else set()
     except (schluessel.SchluesselFehler, abgleich_mitte.MitteFehler, konto.KontoFehler,
             OSError, ValueError):
         return None
@@ -160,7 +162,7 @@ def mitte_pfade():
         if stand is None:
             return set()
         roh = lesen(INHALT)
-        return set(json.loads(tresor.auf(roh)).get("dateien", {})) if roh else set()
+        return set(_inhalt_parse(tresor, roh).get("dateien", {})) if roh else set()
     except (schluessel.SchluesselFehler, abgleich_mitte.MitteFehler, konto.KontoFehler,
             OSError, ValueError):
         return None
@@ -267,7 +269,21 @@ def _basis_schreiben(stand, basis):
 # ── Mitte lesen ────────────────────────────────────────────────────────
 
 def _leeres_inhalt():
-    return {"format": 1, "dateien": {}, "geloescht": {}}
+    return {"format": INHALT_FORMAT, "dateien": {}, "geloescht": {}}
+
+
+def _inhalt_parse(tresor, roh) -> dict:
+    """inhalt.enc → dict. A major this version does not know is never
+    interpreted (memory/hub/building_kit_plan.md 2.2 rule 3): MitteFehler
+    "cloud data is newer than this version — read only", one note for
+    `zentrale status` (core/formats.py) — nothing is read, nothing written."""
+    d = json.loads(tresor.auf(roh))
+    if not isinstance(d, dict):
+        raise abgleich_mitte.MitteFehler("In der Mitte ist das Inhaltsverzeichnis kaputt.")
+    try:
+        return formats.check(d, "cloud-index")
+    except formats.NewerFormat as e:
+        raise abgleich_mitte.MitteFehler(str(e)) from None
 
 
 def _mitte_lesen(tresor, stand, lesen, basis, muster=auswahl.ABGLEICH):
@@ -278,7 +294,7 @@ def _mitte_lesen(tresor, stand, lesen, basis, muster=auswahl.ABGLEICH):
     roh = lesen(INHALT)
     if roh is None:
         raise abgleich_mitte.MitteFehler("In der Mitte fehlt das Inhaltsverzeichnis.")
-    inhalt = json.loads(tresor.auf(roh))
+    inhalt = _inhalt_parse(tresor, roh)
     raus = {}
     for rel, e in inhalt.get("dateien", {}).items():
         if not auswahl.passt(rel, muster):
@@ -331,6 +347,14 @@ def _eingang_lesen(tresor, namen, lesen, rechner, bericht, muster=auswahl.ABGLEI
         try:
             klar = tresor.auf(lesen(name) or b"")
             u = json.loads(klar)
+            if not isinstance(u, dict):
+                raise TypeError(u)
+            if formats.is_newer(u.get("format"), "cloud-envelope"):
+                # Written by a newer version: never misread, never confirmed.
+                formats.note_newer("cloud-envelope", formats.major(u.get("format")))
+                bericht.hinweise.append(
+                    _("Inbox {node}: a file is newer than this version — skipped").format(node=knoten))
+                continue
             rel = u["pfad"]
             loeschen = u.get("loeschen") is True
             inhalt = (None if loeschen and u.get("inhalt") is None
@@ -691,8 +715,12 @@ def _neues_inhalt(tresor, inhalt, erg, mitte, rechner, fremd=(), eingang=None):
     `mitte` = was im Inhaltsverzeichnis steht; Dateien fremder Knoten
     (`fremd`) bleiben in deren Eingang und kommen nie hinein. `eingang` = die
     Quittungen für fremde Knoten (None = unverändert übernehmen)."""
-    neu = {"format": 1, "dateien": dict(inhalt.get("dateien", {})),
-           "geloescht": dict(inhalt.get("geloescht", {}))}
+    # Must-preserve (building_kit_plan.md 2.2 rule 2): fields a newer version
+    # added — at the top and per file — go back unchanged.
+    neu = formats.keep_unknown(inhalt, {"format": INHALT_FORMAT,
+                                        "dateien": dict(inhalt.get("dateien", {})),
+                                        "geloescht": dict(inhalt.get("geloescht", {}))},
+                               owned=("eingang",))
     eingang = inhalt.get("eingang") if eingang is None else eingang
     if eingang:
         neu["eingang"] = eingang
@@ -706,7 +734,8 @@ def _neues_inhalt(tresor, inhalt, erg, mitte, rechner, fremd=(), eingang=None):
             neu["geloescht"][rel] = {"sha": _sha(mitte.get(rel)), "von": rechner, "am": _jetzt()}
             loeschen.append("d/" + name + ".enc")
         else:
-            neu["dateien"][rel] = {"name": name, "sha": _sha(r)}
+            alt = neu["dateien"].get(rel)
+            neu["dateien"][rel] = dict(alt if isinstance(alt, dict) else {}, name=name, sha=_sha(r))
             neu["geloescht"].pop(rel, None)
             schreiben["d/" + name + ".enc"] = tresor.zu(r)
     schreiben[INHALT] = tresor.zu(json.dumps(neu, ensure_ascii=False).encode("utf-8"))

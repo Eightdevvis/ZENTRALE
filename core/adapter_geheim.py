@@ -41,6 +41,7 @@ import os
 import adapter
 import ai_config
 import dateien
+import formats
 import konto
 
 FORMAT = "zentrale-geheim/1"
@@ -107,7 +108,17 @@ def _laden(wurzel=None) -> dict:
         raise GeheimFehler(f"{datei(wurzel)} is damaged.") from None
     if not isinstance(d, dict) or not isinstance(d.get("eintraege"), dict):
         raise GeheimFehler(f"{datei(wurzel)} is damaged.")
-    return d
+    try:
+        # A newer major: never read, never written (building_kit_plan.md 2.2).
+        # Unknown fields of a known major stay: d is written back as a whole.
+        return formats.check(d, "adapter-secrets")
+    except formats.NewerFormat as e:
+        raise GeheimFehler(str(e)) from None
+
+
+def _eintrag(alt, art, wert) -> dict:
+    """An entry with its new key and value; fields a newer version added stay."""
+    return dict(alt if isinstance(alt, dict) else {}, zu=art, wert=wert)
 
 
 def _ablegen(d, wurzel=None):
@@ -155,8 +166,8 @@ def setzen(name, wert: str, wurzel=None) -> bool:
     art = ziel_art()
     f = _fernet(art, anlegen=True)
     d = _laden(wurzel)
-    d["eintraege"][name] = {"zu": art,
-                            "wert": f.encrypt(str(wert).encode("utf-8")).decode("ascii")}
+    d["eintraege"][name] = _eintrag(d["eintraege"].get(name), art,
+                                    f.encrypt(str(wert).encode("utf-8")).decode("ascii"))
     _ablegen(d, wurzel)
     return True
 
@@ -192,7 +203,8 @@ def umschluesseln(ziel: str = None, wurzel=None) -> int:
         w = lesen(name, wurzel)
         if w is None:
             continue
-        d["eintraege"][name] = {"zu": ziel, "wert": f.encrypt(w.encode("utf-8")).decode("ascii")}
+        d["eintraege"][name] = _eintrag(d["eintraege"][name], ziel,
+                                        f.encrypt(w.encode("utf-8")).decode("ascii"))
         n += 1
     if n:
         _ablegen(d, wurzel)

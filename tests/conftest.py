@@ -119,6 +119,8 @@ os.environ.setdefault("ZENTRALE_ADAPTER_ORDNER", os.path.join(_DATEN_TMP, "adapt
 os.environ.setdefault("ZENTRALE_ADAPTER_LAUF", os.path.join(_DATEN_TMP, "adapter_lauf"))
 os.environ.setdefault("ZENTRALE_ADAPTER_SCHLUESSEL", os.path.join(_DATEN_TMP, "adapter.schluessel"))
 os.environ.setdefault("ZENTRALE_VDIRSYNCER_CONFIG", os.path.join(_DATEN_TMP, "keine-vdirsyncer-config"))
+# Format notes (core/formats.py): never the real ~/.local/state.
+os.environ.setdefault("ZENTRALE_FORMAT_NOTES", os.path.join(_DATEN_TMP, "format_notes.json"))
 # Abgleich über die Mitte (core/abgleich.py, 2026-10-08): örtlicher Zustand,
 # Schlüssel und Mitte nie die echten. Die Mitte zeigt auf ein Verzeichnis,
 # das es nicht gibt — ein Test, der vergisst, seine eigene Wegwerf-Mitte zu
@@ -414,6 +416,15 @@ def _timer_nie_echt(_test_ordner, monkeypatch):
 @pytest.fixture(autouse=True)
 def _konto_frisch(_test_ordner, monkeypatch):
     monkeypatch.setenv("ZENTRALE_KONTO_DATEI", str(_test_ordner / "konto.json"))
+    yield
+
+
+# 7e1b2. Format notes (core/formats.py, building kit step 5): "… is newer
+# than this version" never lands in the real ~/.local/state, and a note of
+# one test never shows up in the next. Only a path, no folder.
+@pytest.fixture(autouse=True)
+def _format_notes_fresh(_test_ordner, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_FORMAT_NOTES", str(_test_ordner / "format_notes.json"))
     yield
 
 
