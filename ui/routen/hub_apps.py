@@ -10,7 +10,8 @@
 #   POST /api/apps/installieren  mit den gewählten Ansichten einrichten
 #                                (core/app_installation.py, seit 2026-10-25)
 #   POST /api/apps/remove        remove from this node (built-in apps, step 10)
-#   GET  /api/apps/installed     shop addresses installed on this node
+#   GET  /api/apps/installed     shop addresses installed on this node (+ holds)
+#   POST /api/apps/hold          hold an extracted app at its version (step 12)
 #
 # Und die Weiterleitung: gehört der Pfad einer Anfrage laut `routen` im
 # app.toml einer App, reicht der Hub sie unverändert an die App
@@ -98,4 +99,15 @@ def api_app_remove():
 
 @bp.route('/api/apps/installed', methods=['GET'])
 def api_apps_installed():
-    return jsonify({"adressen": app_installation.installed_addresses()})
+    return jsonify({"adressen": app_installation.installed_addresses(),
+                    "held": app_installation.held_addresses()})
+
+
+@bp.route('/api/apps/hold', methods=['POST'])
+def api_app_hold():
+    """Body {"adresse", "hold": true|false}."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(app_installation.hold(body.get("adresse"), body.get("hold") is True))
+    except app_installation.InstallFehler as e:
+        return jsonify({"error": str(e)}), e.code

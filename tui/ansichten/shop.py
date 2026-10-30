@@ -17,6 +17,8 @@
 # catalog with `built_in` — Enter switches them on at once (no download, no
 # views), x switches them off on this node (POST /api/apps/remove; ownership
 # and data stay). "installed ✓" comes from GET /api/apps/installed.
+# Holds (step 12): h on an installed extracted app holds it at its version
+# (POST /api/apps/hold) — the automatic update skips it; h again releases it.
 #
 # Geöffnet wird sie von außen über `oeffnen()` (der Rad-Platz `shop` kommt
 # mit der Werkstatt, 2026-10-10) — hier steht kein Rad-Wissen.
@@ -93,6 +95,7 @@ class Shop:
             "stuecke": [], "sel": 0,
             "besitz": set(),            # Adressen, die geholt sind
             "installed": set(),         # addresses installed on this node (apps)
+            "held": {},                 # address → hold of an extracted app
             "geholt": None,             # eben geholt → „geholt ✓"
             "msg": "",
             "laedt": False,             # eine App wird gerade heruntergeladen
@@ -146,6 +149,7 @@ class Shop:
         except Exception:
             return                      # stays as it was; the catalog works anyway
         self.SHOP["installed"] = set(r.get("adressen") or [])
+        self.SHOP["held"] = dict(r.get("held") or {})
 
     def _besitz_laden(self):
         S = self.SHOP
@@ -248,6 +252,28 @@ class Shop:
         if self.nach_installieren:
             self.nach_installieren()
 
+    def halten(self):
+        """h: hold an installed extracted app at its version, or release it."""
+        S = self.SHOP
+        if not S["stuecke"]:
+            return
+        s = S["stuecke"][S["sel"]]
+        adr = s.get("@id")
+        if built_in(s):
+            S["msg"] = _("built-in apps update with the core")
+            return
+        try:
+            r = api_call("/api/apps/hold", "POST", {"adresse": adr, "hold": adr not in S["held"]}) or {}
+        except Exception as e:
+            S["msg"] = _("not changed: ") + self._fehlertext(e)
+            return
+        if r.get("held"):
+            S["held"][adr] = {"version": r.get("version") or ""}
+            S["msg"] = _("held — automatic updates skip it ✓")
+        else:
+            S["held"].pop(adr, None)
+            S["msg"] = _("released — it follows the updates again ✓")
+
     def holen(self):
         S = self.SHOP
         if not S["stuecke"]:
@@ -269,7 +295,8 @@ class Shop:
     _KAT = [("←→", "kategorie", "category")]
     _THEMA = [("tab", "thema", "theme"), ("shift+tab", "thema")]
     _STUECKE = [("↑↓", "waehlen", "select"), ("enter", "holen", "get")]
-    _APP = [("↑↓", "waehlen", "select"), ("enter", "holen", "install"), ("x", "entfernen", "remove")]
+    _APP = [("↑↓", "waehlen", "select"), ("enter", "holen", "install"), ("x", "entfernen", "remove"),
+            ("h", "halten", "hold")]
     _ZU = [("esc", "zu", "back")]
     _WAHL = [("↑↓", "wahl_waehlen", "select"), ("space", "wahl_umschalten", "toggle"),
              ("enter", "installieren", "install"), ("esc", "wahl_zu", "cancel")]
@@ -337,6 +364,9 @@ class Shop:
 
     def aktion_entfernen(self, _taste):
         self.entfernen()
+
+    def aktion_halten(self, _taste):
+        self.halten()
 
     def aktion_wahl_waehlen(self, taste):
         w = self.SHOP["wahl"]
@@ -472,7 +502,11 @@ class Shop:
             y += 1
         y = min(y + 1, y0 + hoehe - 1)
         if self.ist_app() and s.get("@id") in S["installed"]:
-            z.addclip(y, x, _("installed ✓"), breite, C["acc"] | curses.A_BOLD)
+            text = _("installed ✓")
+            if s.get("@id") in S["held"]:
+                v = S["held"][s.get("@id")].get("version")
+                text += "  " + (_("held at {version}").format(version=v) if v else _("held"))
+            z.addclip(y, x, text, breite, C["acc"] | curses.A_BOLD)
         elif s.get("@id") in S["besitz"]:
             z.addclip(y, x, "geholt ✓", breite, C["acc"] | curses.A_BOLD)
 

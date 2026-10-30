@@ -849,10 +849,56 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [adressen]
+                required: [adressen, held]
                 additionalProperties: false
                 properties:
                   adressen: {type: array, items: {$ref: "#/components/schemas/Adresse"}}
+                  held:
+                    type: object
+                    description: "address → hold of an extracted app (step 12): {version, commit, since}"
+                    additionalProperties:
+                      type: object
+                      properties:
+                        version: {type: string}
+                        commit: {type: string}
+                        since: {type: string}
+
+  /api/apps/hold:
+    post:
+      tags: [apps]
+      operationId: appHold
+      summary: Hold an extracted app at its version on this node (building kit step 12)
+      description: >
+        `zentrale update --automatic` skips a held app until it is released
+        (`hold: false`). Built-in apps update with the core → 400; not
+        installed here → 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adresse, hold]
+              properties:
+                adresse: {$ref: "#/components/schemas/Adresse"}
+                hold: {type: boolean}
+      responses:
+        "200":
+          description: Held or released
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adresse, name, held, version]
+                additionalProperties: false
+                properties:
+                  adresse: {$ref: "#/components/schemas/Adresse"}
+                  name: {type: string}
+                  held: {type: boolean}
+                  version: {type: string, description: the app.toml version it is held at}
+        "400": {$ref: "#/components/responses/InstallFehler"}
+        "404": {$ref: "#/components/responses/InstallFehler"}
+        "409": {$ref: "#/components/responses/InstallFehler"}
 
   /api/apps/{name}/start:
     parameters:

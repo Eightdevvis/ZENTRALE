@@ -420,3 +420,32 @@ def test_ansicht_built_in_app_installs_and_removes(ansicht):
     S["sel"] = _namen(v).index("cloud")
     v.taste(10)
     assert "account" in S["msg"] and "zentrale://shop/apps/cloud" not in S["installed"]
+
+
+def test_ansicht_hold_an_extracted_app(ansicht, tmp_path):
+    """Building kit step 12: h holds an installed extracted app at its
+    version (the automatic update skips it), h again releases it; built-in
+    apps cannot be held."""
+    import app_register
+    import curses
+    ordner = tmp_path / "budgeter"
+    ordner.mkdir()
+    (ordner / "app.toml").write_text('name = "budget"\nversion = "0.4"\nansichten = ["terminal"]\n')
+    app_register.schreiben([{"name": "budget", "quelle": "zentrale://shop/apps/budget",
+                             "ordner": str(ordner), "ansichten": ["terminal"]}])
+    v, S = ansicht, ansicht.SHOP
+    v.oeffnen()
+    while v.kategorie()["id"] != "apps":
+        v.taste(curses.KEY_RIGHT)
+    S["sel"] = _namen(v).index("budget")
+    v.taste(ord("h"))
+    assert app_register.held("budget") and app_register.holds()["budget"]["version"] == "0.4"
+    v.draw_shop(0, 0, 30, 120)
+    assert any("held at 0.4" in v.schirm.zeile(y) for y in range(30))
+    v.oeffnen()                                       # the hold comes back from the hub
+    assert "zentrale://shop/apps/budget" in S["held"]
+    v.taste(ord("h"))
+    assert not app_register.held("budget") and "released" in S["msg"]
+    S["sel"] = _namen(v).index("cloud_folder")
+    v.taste(ord("h"))
+    assert "core" in S["msg"]

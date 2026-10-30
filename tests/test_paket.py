@@ -56,6 +56,40 @@ def test_paket_hat_was_ein_knoten_braucht(echtes_paket):
     assert any(n.startswith("mitgeliefert/ascii/") for n in innen)
 
 
+def _bundle_aus(pfad):
+    with tarfile.open(pfad) as tar:
+        name = next(n for n in tar.getnames() if n.endswith("/BUNDLE.json"))
+        return json.load(tar.extractfile(name))
+
+
+def test_paket_hat_bundle_json(echtes_paket):
+    """Building kit step 12: components and versions as a schema.org ItemList."""
+    pfad, _n, namen, _z = echtes_paket
+    assert "zentrale-9.9.9/BUNDLE.json" in namen
+    b = _bundle_aus(pfad)
+    assert b["@type"] == "ItemList" and b["name"] == "everything@9.9.9" and b["version"] == "9.9.9"
+    teile = {el["item"]["identifier"]: el["item"] for el in b["itemListElement"]}
+    assert b["numberOfItems"] == len(teile)
+    assert teile["core"]["softwareVersion"] == "9.9.9"
+    for eingebaut in ("cloud", "cloud_folder", "fokus", "kalender", "adapter"):
+        assert teile[eingebaut]["softwareVersion"] == "9.9.9", eingebaut
+    for ausgezogen in ("budget", "tutor", "karte"):     # own repositories: no version
+        assert "softwareVersion" not in teile[ausgezogen], ausgezogen
+    assert teile["budget"]["downloadUrl"].endswith("budgeter.git")
+
+
+def test_bundle_passt_zu_deploy_release(tmp_path):
+    """Without --fassung the package, its VERSION and its bundle carry deploy/RELEASE."""
+    with open(os.path.join(ROOT, "deploy", "RELEASE"), encoding="utf-8") as f:
+        release = f.read().strip()
+    pfad, n = paket_bauen.bauen(ziel_ordner=str(tmp_path), stufe=1,
+                                liste=[("deploy/RELEASE", "deploy/RELEASE")])
+    b = _bundle_aus(pfad)
+    assert n["version"] == release and b["version"] == release
+    core = next(el["item"] for el in b["itemListElement"] if el["item"]["identifier"] == "core")
+    assert core["softwareVersion"] == release
+
+
 def test_neueste_json_passt_zum_paket(echtes_paket):
     pfad, neueste, _namen, ziel = echtes_paket
     with open(pfad, "rb") as f:

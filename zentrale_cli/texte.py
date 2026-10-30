@@ -209,6 +209,11 @@ EN = {
     "upd_auto_unreachable": "Could not check for updates: {text}",
     "upd_auto_on": "Auto-update is on: new versions install by themselves once a day.",
     "upd_auto_off": "Auto-update is off: 'zentrale status' says when an update is available.",
+    # Extracted apps (building kit step 12, core/app_update.py).
+    "upd_app_updated": "App {name} updated.",
+    "upd_app_held": "App {name} is held at its version (the store can release it).",
+    "upd_app_skipped": "App {name} not updated: {text}",
+    "upd_app_failed": "App {name} could not be updated: {text}",
     "upd_usage": "Use 'zentrale update', 'zentrale update --automatic' or 'zentrale update auto [on|off]'.",
     "check_imports": "Self-test: program loads.",
     "check_settings": "Self-test: settings readable.",

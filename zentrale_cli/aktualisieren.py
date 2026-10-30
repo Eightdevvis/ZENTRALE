@@ -131,10 +131,16 @@ def umschalten(fassung):
 
 
 def aufraeumen(behalten):
+    """Old releases go. Only folders that ARE releases (a VERSION file, every
+    package has one): apps installed from the store live next to them in
+    hub/ (app_register.app_ordner = the folder the release sits in) and must
+    survive every update."""
     hub = os.path.join(heim(), "hub")
     for name in os.listdir(hub):
         p = os.path.join(hub, name)
         if name in behalten or name.startswith(".") or os.path.islink(p):
+            continue
+        if not os.path.isfile(os.path.join(p, "VERSION")):
             continue
         shutil.rmtree(p, ignore_errors=True)
 
@@ -287,10 +293,36 @@ def command(term, args=()):
 def automatic(term, venv=venv_bauen, wurzel=WURZEL, check=self_test):
     """The update timer: nothing new → quiet. New → with auto-update on:
     install beside, self-test, switch, keeper, backend restart; off or a
-    package manager: only remember it for the hint. Never a question."""
+    package manager: only remember it for the hint. Never a question.
+    Then (auto-update on) the extracted apps from the store follow their
+    repository, held ones are skipped (building kit step 12)."""
     k = kanal(wurzel)
     if k == "dev":
         return 0
+    rc = _automatic_core(term, venv, wurzel, check, k)
+    if auto_on():
+        rc = max(rc, automatic_apps(term))
+    return rc
+
+
+def automatic_apps(term) -> int:
+    """Extracted apps (core/app_update.py): quiet when nothing moved."""
+    import app_update
+    rc = 0
+    for r in app_update.update_installed():
+        if r["result"] == "updated":
+            term.sag(t("upd_app_updated", name=r["name"]), "gut")
+        elif r["result"] == "held":
+            term.sag(t("upd_app_held", name=r["name"]), "blass")
+        elif r["result"] == "skipped":
+            term.sag(t("upd_app_skipped", name=r["name"], text=r["text"]), "blass")
+        elif r["result"] == "failed":
+            term.sag(t("upd_app_failed", name=r["name"], text=r["text"]), "warn")
+            rc = 1
+    return rc
+
+
+def _automatic_core(term, venv, wurzel, check, k):
     try:
         info = package_info(wurzel)
     except (cloud_api.CloudFehler, konto.KontoFehler) as e:

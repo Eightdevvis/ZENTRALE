@@ -32,6 +32,7 @@ from datetime import datetime
 
 import account_ownership
 import app_register as reg
+import app_update
 import apps
 import builtin_store_apps as builtin
 import konto
@@ -276,6 +277,33 @@ def entfernen(adresse) -> dict:
         raise InstallFehler("removing downloaded apps is not built yet", 501)
     r = builtin.remove(reg.app_name(s))
     return {"adresse": s["@id"], "name": r["name"], "installiert": False, "war": r["was"]}
+
+
+def hold(adresse, on) -> dict:
+    """Hold an extracted app at its current version on THIS node (building kit
+    step 12): `zentrale update --automatic` skips it until released.
+    → {adresse, name, held, version}. Built-in apps follow the core → 400."""
+    s = _stueck(adresse)
+    if reg.built_in(s):
+        raise InstallFehler("built-in apps update with the core, they cannot be held", 400)
+    name = reg.app_name(s)
+    e = eintrag(name)
+    if e is None:
+        raise InstallFehler("not installed on this device", 409)
+    version = ""
+    try:
+        version = str(_manifest(e["ordner"]).get("version") or "")
+    except InstallFehler:
+        pass
+    reg.set_hold(name, bool(on), version, app_update.head(e["ordner"]) if on else "")
+    return {"adresse": s["@id"], "name": name, "held": bool(on), "version": version}
+
+
+def held_addresses() -> dict:
+    """{shop address: hold} for the held apps installed on this node."""
+    h = reg.holds()
+    return {e["quelle"]: h[e["name"]] for e in reg.lesen()
+            if e["name"] in h and isinstance(e.get("quelle"), str)}
 
 
 def installed_addresses() -> list:

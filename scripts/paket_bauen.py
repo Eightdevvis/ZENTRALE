@@ -8,6 +8,10 @@ Liest die Positivliste deploy/paket.txt und schreibt
 Fassung: --fassung, sonst deploy/RELEASE, sonst das Datum (JJJJ.MM.TT).
 Ins Paket kommen dazu VERSION und VERTEILUNG.json (woher `zentrale update`
 holt — aus deploy/verteilung.toml, memory/betrieb/verteilung.md).
+BUNDLE.json (building kit step 12, memory/hub/building_kit_plan.md 3.2/3.3):
+the components of this release as a schema.org ItemList — `core` and every
+built-in app at the release's version, the extracted apps (own repositories)
+without a version: they follow their repository unless a node holds them.
 
 Die EINE Stelle, die entscheidet, was ausgeliefert wird: .deb (deb_bauen.py)
 und PKGBUILD (arch_bauen.py) nehmen genau dieses tar.gz.
@@ -16,6 +20,7 @@ Verweigert alles, was nie ins Paket darf (data/, memory/, tests/, venv,
 """
 
 import argparse
+import ast
 import datetime
 import fnmatch
 import hashlib
@@ -167,6 +172,61 @@ def fassung_bestimmen(root=ROOT):
     return datetime.date.today().strftime("%Y.%m.%d")
 
 
+# ── BUNDLE.json (building kit step 12) ─────────────────────────────────
+
+def _literal(pfad, name):
+    """A plain literal assigned at the top of a module (no import: the core
+    modules want their settings)."""
+    try:
+        with open(pfad, encoding="utf-8") as f:
+            baum = ast.parse(f.read())
+    except (OSError, SyntaxError):
+        return None
+    for knoten in baum.body:
+        if isinstance(knoten, ast.Assign) and any(getattr(z, "id", None) == name for z in knoten.targets):
+            return ast.literal_eval(knoten.value)
+    return None
+
+
+def _app(identifier, version=None, **mehr):
+    d = {"@type": "SoftwareApplication", "identifier": identifier}
+    if version is not None:
+        d["softwareVersion"] = version
+    d.update(mehr)
+    return d
+
+
+def bundle(fassung, root=ROOT) -> dict:
+    """The bundle `everything@<fassung>`: core + built-in apps at this
+    version, extracted apps (own repositories) following their repository."""
+    teile = [_app("core", fassung, name="ZENTRALE core")]
+    eingebaut = _literal(os.path.join(root, "core", "eingebaute_apps.py"), "EINGEBAUT") or {}
+    for name in sorted(eingebaut):
+        teile.append(_app(name, fassung, additionalProperty=[
+            {"@type": "PropertyValue", "name": "built_in", "value": True}]))
+    ausgezogen = {}
+    for name, ordner in (_literal(os.path.join(root, "core", "apps.py"), "BEKANNT") or {}).items():
+        ausgezogen[name] = _app(name, additionalProperty=[
+            {"@type": "PropertyValue", "name": "folder", "value": ordner}])
+    try:
+        with open(os.path.join(root, "core", "shop_katalog.jsonld"), encoding="utf-8") as f:
+            katalog = json.load(f)
+    except (OSError, ValueError):
+        katalog = {}
+    for el in katalog.get("itemListElement") or []:
+        it = el.get("item") or {}
+        if it.get("category") == "apps" and it.get("downloadUrl"):
+            name = next((p.get("value") for p in it.get("additionalProperty") or []
+                         if p.get("name") == "app_name"), it.get("identifier"))
+            ausgezogen[name] = _app(name, downloadUrl=it["downloadUrl"], sameAs=it.get("@id"))
+    teile += [ausgezogen[n] for n in sorted(ausgezogen)]
+    return {"@context": "https://schema.org", "@type": "ItemList",
+            "name": f"everything@{fassung}", "version": fassung,
+            "numberOfItems": len(teile),
+            "itemListElement": [{"@type": "ListItem", "position": i + 1, "item": t}
+                                for i, t in enumerate(teile)]}
+
+
 def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, verteilung=None,
           include_untracked=False):
     """→ (pfad des Pakets, {version, sha256, groesse}). `stufe` = gzip-Stufe
@@ -177,6 +237,7 @@ def bauen(fassung=None, root=ROOT, ziel_ordner=None, liste=None, stufe=9, vertei
         "VERSION": fassung + "\n",
         "VERTEILUNG.json": json.dumps({"oeffentlich": cfg["oeffentlich"],
                                        **quell_vorlagen(cfg)}, indent=2) + "\n",
+        "BUNDLE.json": json.dumps(bundle(fassung, root), indent=2, ensure_ascii=False) + "\n",
     }
     ziel_ordner = ziel_ordner or os.path.join(root, "dist")
     os.makedirs(ziel_ordner, exist_ok=True)

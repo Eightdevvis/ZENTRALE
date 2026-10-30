@@ -129,3 +129,39 @@ def quelle_fehler(stueck):
     if not NAME.match(app_name(stueck)):
         return "app_name fehlt oder ist ungültig"
     return None
+
+
+# ── Holds (building kit step 12) ─────────────────────────────────────
+#
+# "Hold at this version" for an extracted app (own repository, installed
+# from the store): `zentrale update --automatic` leaves it as it is. Node
+# setting `app_holds` (data/ai_config.json, never synced — what is installed
+# where is per node): {name: {"version": app.toml version, "commit": sha,
+# "since": iso}}. Built-in apps are never held: they ship with the core,
+# which updates by its own setting (building_kit_plan.md 3.2).
+
+HOLDS = "app_holds"
+
+
+def holds() -> dict:
+    d = ai_config.setting(HOLDS)
+    if not isinstance(d, dict):
+        return {}
+    return {k: v for k, v in d.items() if NAME.match(str(k)) and isinstance(v, dict)}
+
+
+def held(name) -> bool:
+    return name in holds()
+
+
+def set_hold(name, on, version="", commit="") -> dict:
+    """Hold or release one app. → the holds after the change."""
+    from datetime import datetime
+    h = holds()
+    if on:
+        h[name] = {"version": str(version or ""), "commit": str(commit or ""),
+                   "since": datetime.now().astimezone().isoformat(timespec="seconds")}
+    else:
+        h.pop(name, None)
+    ai_config.set_override(HOLDS, h, persist=True)
+    return h

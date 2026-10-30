@@ -129,3 +129,73 @@ def test_update_auto_usage():
     term = Terminal(aus=io.StringIO())
     assert haupt.main(["update", "auto", "maybe"], term=term) == 2
     assert haupt.main(["update", "--sideways"], term=term) == 2
+
+
+# ── Extracted apps follow their repository, holds are respected (step 12) ──
+
+def _g(*args, cwd):
+    import subprocess
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=cwd,
+                   check=True, capture_output=True)
+
+
+def _head(folder):
+    import app_update
+    return app_update.head(str(folder))
+
+
+def _upstream(tmp_path, name):
+    up = tmp_path / "up" / name
+    up.mkdir(parents=True)
+    (up / "app.toml").write_text(f'name = "{name}"\nversion = "1.0"\nansichten = ["terminal"]\n')
+    _g("init", "-q", "-b", "main", cwd=up)
+    _g("add", ".", cwd=up)
+    _g("commit", "-qm", "one", cwd=up)
+    return up
+
+
+def _entry(name, folder):
+    return {"name": name, "quelle": f"zentrale://shop/apps/{name}", "ordner": str(folder),
+            "ansichten": ["terminal"], "am": "2026-10-30T12:00:00+01:00"}
+
+
+def test_held_app_is_skipped_by_the_automatic_update(node, tmp_path):
+    import app_register
+    upstream, entries = {}, []
+    for name in ("budget", "notes2"):
+        upstream[name] = _upstream(tmp_path, name)
+        here = node.home / "hub" / name               # next to the releases, like app_ordner
+        _g("clone", "-q", str(upstream[name]), str(here), cwd=tmp_path)
+        entries.append(_entry(name, here))
+    app_register.schreiben(entries)
+    budget = node.home / "hub" / "budget"
+    app_register.set_hold("budget", True, "1.0", _head(budget))
+    held_at = _head(budget)
+    for up in upstream.values():
+        (up / "app.toml").write_text((up / "app.toml").read_text().replace("1.0", "1.1"))
+        _g("commit", "-qam", "two", cwd=up)
+    rc, out = _auto(node)
+    assert rc == 0, out
+    assert os.readlink(node.home / "hub" / "aktuell") == "2"            # the core moved on
+    assert _head(budget) == held_at                                      # held: untouched
+    assert _head(node.home / "hub" / "notes2") == _head(upstream["notes2"])
+    assert "App budget is held" in out and "App notes2 updated." in out
+    # Cleaning up old releases never touches the apps next to them.
+    assert (budget / "app.toml").exists()
+    # Released: the next run brings it up to date.
+    app_register.set_hold("budget", False)
+    rc, out = _auto(node)
+    assert rc == 0 and "App budget updated." in out
+    assert _head(budget) == _head(upstream["budget"])
+
+
+def test_automatic_app_update_never_overwrites_local_changes(node, tmp_path):
+    import app_register
+    up = _upstream(tmp_path, "budget")
+    here = tmp_path / "apps" / "budget"
+    _g("clone", "-q", str(up), str(here), cwd=tmp_path)
+    app_register.schreiben([_entry("budget", here)])
+    (here / "app.toml").write_text('name = "budget"\n# mine\n')
+    rc, out = _auto(node)
+    assert rc == 0 and "App budget not updated" in out
+    assert "# mine" in (here / "app.toml").read_text()
