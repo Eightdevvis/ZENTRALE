@@ -76,6 +76,6 @@ How this folder works: [README.md](README.md). One line per open item.
 | [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): the compiler's graph rules are not in Dart yet | no |
 | [schematix_extraction.md](schematix_extraction.md) | Schematix built into the core by mistake: move to its own package (preinstalled at signup), after restyle + canvas rework merge | no |
 | [schematix_followups.md](schematix_followups.md) | Schematix (building kit 13–15) leftovers: phone/web front, wheel symbol, English titles, install from the scheme, same version without effect yet | partly (symbol) |
-| [piece_descriptions_decisions.md](piece_descriptions_decisions.md) | Piece descriptions / Schematix inventory: 10 decisions (versions key, edit scope, sync, KI consent, Downloads) | yes |
+| [canvas_navigation_model.md](canvas_navigation_model.md) | Canvas block: wheel pans only down; arrows/wasd should pan the surface, modifier+arrows move the cursor — after the core move | no (after core move) |
 | [node_reach_without_find_pc.md](node_reach_without_find_pc.md) | Reach a node without find-pc: ZENTRALE knows address/wake of its nodes from the node description | no |
 | [pi_review.md](pi_review.md) | Pi: look at what really runs there (key file, kiosk mode) | yes |

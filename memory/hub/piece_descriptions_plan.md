@@ -5,8 +5,23 @@ building kit ([building_kit_plan.md](building_kit_plan.md): pieces, ports,
 wires, Run gate — [port_types.md](port_types.md)) and on Schematix
 ([schematix.md](schematix.md)). Respects the permanent rule "apps live
 outside the core" (CLAUDE.md) and the pending
-[Schematix extraction](../open/schematix_extraction.md). Open decisions:
-[../open/piece_descriptions_decisions.md](../open/piece_descriptions_decisions.md).
+[Schematix extraction](../open/schematix_extraction.md). Sasha's decisions
+(2026-10-31) are recorded in section 12; no open questions left.
+
+> **The core in five sentences**
+>
+> 1. Everything is a piece with plugs: it offers or needs something; wires
+>    connect only matching plugs.
+> 2. The core knows four things: which plug types exist, a datasheet per
+>    piece (name, kind, plugs with versions), which wires are plugged, and
+>    how to check them.
+> 3. Everything else is plugged in: cloud, calendar, describers, KI,
+>    Schematix.
+> 4. Every change runs the same way: check → show what changes → switch,
+>    with a way back.
+> 5. Interfaces only grow: once released, a plug type is never changed so
+>    that old pieces misread it; a fundamental change gets version 2 next
+>    to version 1 with a translator.
 
 Sasha, 2026-10-31: *„neue programme, scheiß egal welche und woher, auslesen
 und somewhat interpreten können … ich lade etwas neu runter. ich will es im
@@ -39,7 +54,7 @@ it; the core only owns the format, the register and the gate.**
  CONSUMERS (read the register, never describe themselves)
  ┌───────────────────┐ ┌───────────┐ ┌─────────────┐ ┌──────────────┐
  │ Schematix          │ │ Store     │ │ Plug dialog │ │ KI assistant │
- │ inventory (i),     │ │ (cards)   │ │ (providers) │ │ (what is X?) │
+ │ inventory (+),     │ │ (cards)   │ │ (providers) │ │ (what is X?) │
  │ edit on the board  │ │           │ │             │ │              │
  └─────────┬─────────┘ └─────┬─────┘ └──────┬──────┘ └──────┬───────┘
            │ GET /api/descriptions?q=…   ·  PUT …/<id>/edits │
@@ -120,7 +135,7 @@ The read rule, field by field:
 | every content field | `{value, from, confidence}`: **where it came from** (`manifest`, `dpkg`, `pacman`, `desktop`, `appstream`, `man`, `mime`, `flatpak`, `snap`, `device-table`, `ki`, `user`) and **how sure** (`high` · `medium` · `low` · `none`) |
 | `needs` / `offers` | port items in exactly the forms of `ports.schema.json`, types only from the registry (`types.json`). A describer may not invent a type |
 | `notes` with `unmapped: true` | something real the program needs or does that no port type covers yet (display, internet). Shown on the card, never wireable. Many identical notes across programs are the signal for a new port family — that stays a registry step (building kit 1.3) |
-| `source.keys` | every key this program is known under, so a dpkg and a Flatpak install of the same program can be linked later (open question) |
+| `source.keys` | every key this program is known under. The same program from two sources (distro package and Flatpak) is **two installed programs** to Linux (separate files and settings) → two descriptions, two entries (Sasha). Identical downloaded files are recognised by checksum (`appimage/<sha256-prefix>`) → one entry |
 | `source.seen_on` | which nodes have it. A description is **account-wide**; a piece is per node (`program:gimp@laptop`), like `app:tutor@minipc` today |
 
 Confidence is per field, not per description: a name from AppStream is
@@ -188,17 +203,24 @@ konfigurieren"*).
 
 ### 5.1 Edits are a layer, never a copy
 
-The register keeps two things per piece kind (dasselbe Objekt, nicht
-kopiert):
+**The edit layer applies on top of *derived* descriptions** (tiers 2–3 and
+"?"). **A self-description is authoritative:** what an app declares about
+itself (tier 1: `app.toml` or `piece.json`) is read-only for ports, can and
+can't — the user could otherwise break his own setup. Only the cosmetic
+fields (name, icon) are editable on a self-described app.
+
+The register keeps two things (dasselbe Objekt, nicht kopiert): one
+derived description per program or device kind, and edits **per piece**:
 
 - the **derived description** (what the describers said), replaced
   whenever it is re-described;
-- the **edits** (what Sasha changed), a separate small record pointing at
-  the description by `id`:
+- the **edits** (what Sasha changed on one piece), a separate small record
+  pointing at the piece and its description by `id`:
 
 ```json
 {"format": "zentrale-piece-edits/1",
  "of": "program:flatpak/org.gimp.GIMP",
+ "piece": "program:flatpak/org.gimp.GIMP@laptop",
  "base_hash": "sha256:4be1…",
  "set":    {"name": "Gimp (photos)", "icon": {"device": "tower"}},
  "ports":  {"add_needs": [{"id": "scans", "type": "scan"}],
@@ -212,23 +234,27 @@ kopiert):
   fields Sasha did not touch. If the base changed under an edit
   (`base_hash` differs), the card shows "the program changed since your
   edit" with the new base value beside his — he keeps his or takes the new.
-- **Per kind vs. per piece:** an edit of the description applies to every
-  piece of that kind on every node and scheme. Name and icon may also be
-  set on one piece only (a key on that canvas node in the scheme); ports
-  never per piece — a port belongs to what the program *is*.
-- **Synced with the account**, end-to-end encrypted like all `data/`
-  (`data/pieces/edits/*.json`; derived descriptions in
-  `data/pieces/descriptions/*.json`, also synced so a second node does not
-  describe again — proposal, open question).
-- **ZENTRALE apps:** name and icon editable; **ports read-only**, because
-  the manifest is what the gate enforces on live wires. Programs, devices,
-  "?" pieces: everything editable.
+- **Per piece, not per kind (Sasha):** an edit applies to that one piece
+  (one program on one node), with all fields including ports. No per-kind
+  edits now. *Future idea, separate special mode:* group identical pieces
+  and edit them together — needs a bigger ZENTRALE setup, not now.
+- **Syncing — no special mechanism (plug principle):** the description
+  register is a piece with a `data` port wired to `sync`, like any app's
+  data. Derived descriptions and edits sync with it
+  (`data/pieces/descriptions/*.json`, `data/pieces/edits/*.json`,
+  end-to-end encrypted like all `data/`), so a second device never
+  describes again or pays the KI again.
+- **Self-described pieces (ZENTRALE apps, apps with `piece.json`):** name
+  and icon editable; **ports, can, can't read-only** — the self-description
+  is authoritative, and the manifest is what the gate enforces on live
+  wires. Programs, devices, "?" pieces: everything editable.
 
 ### 5.2 What happens to wires on an edit
 
 Every edit that changes ports, and every re-describe that changes ports,
 triggers the **gate re-check**: the register compiles every scheme and this
-node's projection that contain a piece of that kind (`sketch_compiler`,
+node's projection that contain that piece (a re-describe: every piece
+using that description) (`sketch_compiler`,
 the rules of [port_types.md](port_types.md)). Rules:
 
 1. A wire that no longer fits becomes **`broken`** with the reason code it
@@ -257,10 +283,10 @@ Examples:
 
 ## 6. KI describer — privacy and cost
 
-**Its own package** (proposal: `piece-describer-ai`, own repo with
-`app.toml`), `needs = ["model"]`, `offers = ["describe"]`. Not
-preinstalled. Without it, or without a live `model` wire, nothing ever
-leaves the device and the "?" fallback stays.
+**Its own package** (`piece-describer-ai`, an internal name; own repo with
+`app.toml`), `needs = ["model"]`, `offers = ["describe"]`. **Comes from the
+store, not preinstalled** (Sasha). Without it, or without a live `model`
+wire, nothing ever leaves the device and the "?" fallback stays.
 
 **What leaves the device — exactly this, nothing else:**
 
@@ -274,9 +300,11 @@ leaves the device and the "?" fallback stays.
 **Never:** file contents, the binary, paths under `$HOME`, user or host
 names, node names, other programs on the machine, Sasha's schemes.
 
-- The card shows that list for this program **before** the first call;
-  the first use per provider asks once ("Send these 7 fields to Mistral?
-  y / n / always"). The choice is a setting of the account.
+- **Consent (Sasha):** installing the KI describer package **is** the
+  consent to send this metadata to the configured KI provider — no extra
+  per-provider question. In the interpret dialog every new piece has a
+  **checkbox "describe with KI: yes / no"**, so single programs can be kept
+  away from the KI. The card still shows exactly what would be sent.
 - With a local model (Ollama on a `model` wire), nothing leaves the
   machine; the card says "local".
 - **Cost:** one call per program, about 1,500 tokens in and 400 out. With a
@@ -296,25 +324,23 @@ answer before the register stores it (PR-01).
 
 ## 7. The inventory modal (Schematix UI)
 
-The inventory is **a view of the register**, nothing more. It replaces the
-`+` picker (`+` stays as a second key for it — open question).
+The inventory is **a view of the register**, nothing more. It replaces
+today's `+` picker and opens with **`+`** (Sasha). `i` stays the versions
+panel.
 
 ### 7.1 Keys
 
 | Key | Where | What |
 |---|---|---|
-| `i` | board | open the inventory (a small modal, pops open and closed) |
+| `+` | board | open the inventory (a small modal, pops open and closed) |
 | letters, digits, space, backspace | inventory | type to search (every printable key goes into the search field) |
 | ↑ ↓ | inventory | move in the results |
 | enter | inventory, on a known entry | take it: the modal closes, the piece is **in your hand** on the board |
-| enter | inventory, on an unknown entry | "describe first" (7.3) |
+| enter | inventory, on an unknown entry | the interpret dialog (7.3) |
 | tab | inventory | open the detail card of the selected entry (is / can / can't, ports, sources) |
 | esc | inventory | clear the search; second esc closes |
 | `e` | board, on a piece | edit that piece: name, icon, ports (section 5) |
-| `n` | board, on a node | the versions panel (moved from `i` — proposal, open question) |
-
-`n` = "node": a plain letter, free in Schematix today, swallowed by no
-terminal, tmux or window manager. Today's `i` (versions) moves there.
+| `i` | board, cursor on a device/node piece | the versions panel (unchanged; opens only there) |
 
 ### 7.2 What the list shows
 
@@ -336,7 +362,8 @@ Sources, fresh on every open (like the `+` picker today): every resolved
 description in the register; installed programs **not yet described**
 (the standard describer's list: package database, `.desktop` files,
 Flatpak/Snap — names only, no describing yet); store apps; nodes; device
-kinds; downloaded executables in `~/Downloads` (proposal, open question).
+kinds; downloads in `~/Downloads` — only executables and AppImages
+(Sasha), identical files collapsed by checksum.
 Empty search = recent first, then by kind. Search matches name, edited
 name, package keys, categories; order: prefix > word > fuzzy, described
 before not described.
@@ -344,10 +371,12 @@ before not described.
 ### 7.3 States
 
 ```
- closed ──i──▶ list ──type──▶ results ──enter (known)──▶ IN HAND ──enter──▶ dropped
+ closed ──+──▶ list ──type──▶ results ──enter (known)──▶ IN HAND ──enter──▶ dropped
                  ▲                │                          │ esc: put back
                  └──── esc ───────┤
-                                  └─enter (unknown)──▶ ASK "describe first?"
+                                  └─enter (unknown)──▶ INTERPRET DIALOG
+                                                       [x] describe with KI
+                                                       (shows what would be sent)
                                                          │ enter          │ esc
                                                          ▼                ▼ results
                                                     DESCRIBING (short wait, spinner,
@@ -358,17 +387,20 @@ before not described.
                                                      ports, "?" and low marks
                                                      enter accept · e edit · esc back
                                                          ▼ accept / save
-                                                       IN HAND ──enter──▶ dropped
+                                                    IN HAND ──enter──▶ dropped
+                                                     (documented / planned)
 ```
 
 - **Known** = the register has a resolved description. Taking it is
   instant.
-- **Unknown** cannot be dropped before it is described — the inventory
-  asks first (Sasha's rule). Describing with tier 1+2 takes well under a
+- **Unknown** cannot be dropped before it is interpreted — the interpret
+  dialog is **mandatory** (Sasha). The KI checkbox is shown only when the
+  KI describer is installed. Describing with tier 1+2 takes well under a
   second; with tier 3 a few seconds.
 - **In hand** is today's grab mode (`enter` on a piece): arrows move, enter
-  drops, esc puts it back. Dropped programs and devices are *documented*
-  on this node (they exist); a store app not installed is *planned*.
+  drops, esc puts it back. After interpreting, the piece is dropped as
+  **documented** when installed on that device, **planned** otherwise —
+  automatically, no question (Sasha).
 - The card can be edited now (`e`) or any time later on the board (`e` on
   the piece).
 
@@ -438,15 +470,25 @@ Core first, Schematix UI only after Schematix has its own package.
 | 6 | **Device table to the core**: `kinds.json` moves from `contracts/schematix/1/` to `contracts/pieces/1/device_kinds.json` (coordinate with the extraction), plus the `unknown` icon block | the ten kinds resolve as `device:*` descriptions with their icons; Schematix reads them through the register route |
 | 7 | **Standard describer** (core default adapter, offers `describe`): package db, `.desktop`, AppStream, manpage, MIME, Flatpak/Snap; mapping table | on a fixture root: GIMP → name, theme icon, `files` need, `high`; a fake binary that writes a marker when run is described and **the marker never appears**; a random ELF → "?" description |
 | — | **Schematix extraction** ([open item](../open/schematix_extraction.md)) — not part of this plan, but steps 8–9 wait for it | Schematix runs as its own package and uses only public routes |
-| 8 | **Inventory modal** in the Schematix package: `i`, type-to-search with icons, known → in hand, unknown → describe → card → drop; versions panel to `n` | PTY test: `i`, type `gim`, enter → piece in hand, enter → documented on the board; an unknown entry shows the describe step first; esc twice closes |
+| 8 | **Inventory modal** in the Schematix package: `+`, type-to-search with icons, known → in hand, unknown → interpret dialog (KI checkbox) → card → drop; `i` stays versions | PTY test: `+`, type `gim`, enter → piece in hand, enter → documented on the board; an unknown entry shows the interpret dialog first; esc twice closes |
 | 9 | **Edit on the board** (`e`): name, icon, ports, confirm line for wires that will break | PTY test: remove a port with a wire on it → confirm line names the wire → wire red, Run refused |
-| 10 | **KI describer package** (own repo, `needs model`, `offers describe`): consent card, local-model path, checker | with a fake model: only fields below `medium` are filled, marked `from: ki`, ports `low`; the sent payload equals the shown list exactly; no `model` wire → no call, "?" stays |
+| 10 | **KI describer package** (store, own repo, `needs model`, `offers describe`): per-piece KI checkbox, local-model path, checker | with a fake model: only fields below `medium` are filled, marked `from: ki`, ports `low`; the sent payload equals the shown list exactly; checkbox off or no `model` wire → no call, "?" stays |
 | 11 | **Other consumers**: store cards and plug dialog show the resolved name/icon/summary; the assistant reads the register | the store shows an edited name; the plug dialog lists a described program as provider only when its ports fit |
 
-## 12. Open questions for Sasha
+## 12. Sasha's decisions (2026-10-31)
 
-In [../open/piece_descriptions_decisions.md](../open/piece_descriptions_decisions.md),
-one line each with a proposal.
+| # | Question | Decision |
+|---|---|---|
+| 1 | Key for the inventory | **`+`**. `i` stays the versions panel (opens only with the cursor on a device/node piece) |
+| 2 | Edits per kind or per piece? | **per piece**, all fields. Grouping identical pieces for a joint edit = future special mode, not now |
+| 3 | Can the user overwrite an app's self-description? | **no** — authoritative and read-only for ports, can, can't; name and icon editable. Edits apply on top of *derived* descriptions |
+| 4 | How do descriptions sync? | no special mechanism: the register is a piece with a `data` port wired to `sync`. Derived descriptions sync, so no second describe or KI cost |
+| 5 | Downloads in the inventory? | yes, only executables and AppImages |
+| 6 | Same program from two sources? | two installed programs → two entries; identical downloaded files (checksum) → one entry |
+| 7 | KI consent | installing the KI describer = consent for the configured provider; per new piece a checkbox "describe with KI: yes / no" in the interpret dialog; the card shows what would be sent |
+| 8 | KI describer preinstalled? | no, from the store |
+| 9 | Drop an unknown program before interpreting? | no, the interpret dialog is mandatory; then dropped automatically as documented (installed on that device) or planned |
+| 10 | KI describer package name | internal detail: `piece-describer-ai` |
 
 ## History
 
@@ -454,3 +496,7 @@ one line each with a proposal.
   program, edit every node, "?" fallback) and the agreed cut: describing is
   a capability with providers; core = format + register + gate re-check;
   Schematix = UI only; KI describer = own package.
+- **2026-10-31** — Sasha's ten decisions recorded (section 12): inventory
+  on `+`, edits per piece, self-descriptions authoritative, sync via the
+  `data`→`sync` wire, per-piece KI checkbox; "the core in five sentences"
+  added. Open item `piece_descriptions_decisions.md` closed.
