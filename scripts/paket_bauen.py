@@ -133,8 +133,10 @@ def _verfolgt(root, include_untracked=False):
     return {os.path.join(root, p) for p in r.stdout.decode("utf-8", "replace").split("\0") if p}
 
 
-def dateien(root=ROOT, liste=None, include_untracked=False):
-    """→ sortierte [(quelle_abs, ziel_rel)]."""
+def dateien(root=ROOT, liste=None, include_untracked=False, guard=None):
+    """→ sortierte [(quelle_abs, ziel_rel)]. `guard` (rel → bool) replaces
+    `verboten` for an app package (scripts/app_paket_bauen.py)."""
+    guard = guard or verboten
     raus = {}
     bekannt = _verfolgt(root, include_untracked)
     for quelle, ziel in (liste if liste is not None else liste_lesen()):
@@ -155,7 +157,7 @@ def dateien(root=ROOT, liste=None, include_untracked=False):
                 continue                 # keine Verweise im Paket (entpacken prüft sie nicht)
             if z.endswith(".pyc"):
                 continue
-            if verboten(z):
+            if guard(z):
                 raise PaketFehler(f"Darf nie ins Paket: {z}")
             raus[z] = qa
     return sorted((q, z) for z, q in raus.items())
