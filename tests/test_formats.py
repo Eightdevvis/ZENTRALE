@@ -22,6 +22,7 @@ import abgleich_mitte
 import abgleich_schluessel as schluessel
 import adapter
 import adapter_geheim as geheim
+import app_register
 import calendar_colours as cc
 import formats
 import kalender_einstellung as ke
@@ -50,6 +51,7 @@ MODULES = {
     "wires": ("node-wires",),
     "schematix_versions": ("node-versions",),
     "schematix_store": ("schematix-palette", "schematix-thing"),
+    "app_register": ("app-register",),
 }
 EXEMPT = {
     "formats": "the registry itself",
@@ -615,3 +617,36 @@ def test_preserve_schematix_thing():
     d = json.load(open(p, encoding="utf-8"))
     assert d["future"] == {"a": 1} and d["title"] == "Flint 2"
     assert not _noted("schematix-thing")
+
+
+# ── app-register: data/hub/apps-<node>.json (core/app_register.py) ────
+
+def _register_file(d):
+    path = app_register.datei()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(d, f)
+    return path
+
+
+_APP = {"name": "budget", "quelle": "zentrale://shop/apps/budget", "ordner": "/x/budgeter",
+        "ansichten": ["browser"]}
+
+
+def test_newer_app_register():
+    p = _register_file({"format": 3, "apps": [_APP]})
+    before = open(p, "rb").read()
+    assert app_register.alle() == []                              # not interpreted
+    with pytest.raises(formats.NewerFormat):
+        app_register.schreiben([_APP])
+    assert open(p, "rb").read() == before and _noted("app-register")
+
+
+def test_preserve_app_register():
+    p = _register_file({"format": app_register.FORMAT, "future": {"a": 1},
+                        "apps": [dict(_APP, later="x", source={"kind": "git", "ref": "", "branch": "main"})]})
+    app_register.schreiben(app_register.alle())
+    d = json.load(open(p, encoding="utf-8"))
+    assert d["future"] == {"a": 1}
+    assert d["apps"][0]["later"] == "x" and d["apps"][0]["source"]["branch"] == "main"
+    assert not _noted("app-register")

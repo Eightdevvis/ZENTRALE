@@ -37,12 +37,14 @@ import urllib.parse
 
 import ai_config
 import dateien
+import formats
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 NAME = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 ORDNER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SCHEMATA = ("https", "ssh", "file")
 FORMAT = 2
+WHAT = "app-register"          # core/formats.py: newer major → read only
 KIND = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 
 
@@ -64,11 +66,22 @@ def datei() -> str:
 
 # ── Lesen / schreiben ────────────────────────────────────────────────
 
-def lesen() -> list:
+def _roh():
     try:
         with open(datei(), encoding="utf-8") as f:
-            d = json.load(f)
+            return json.load(f)
     except (OSError, ValueError):
+        return None
+
+
+def lesen() -> list:
+    """The entries of this node, v2 form. A register in a newer major
+    (written by a newer ZENTRALE) is not interpreted: [] and one note for
+    `zentrale status` (core/formats.py)."""
+    d = _roh()
+    try:
+        formats.check(d, WHAT)
+    except formats.NewerFormat:
         return []
     raus = []
     for e in (d.get("apps") if isinstance(d, dict) else None) or []:
@@ -87,16 +100,21 @@ def normalized(e) -> dict:
     if not (isinstance(src, dict) and KIND.match(str(src.get("kind") or ""))
             and isinstance(src.get("ref", ""), str)):
         src = {"kind": "git", "ref": ""}
-    e["source"] = {"kind": str(src["kind"]), "ref": str(src.get("ref") or "")}
+    e["source"] = {**src, "kind": str(src["kind"]), "ref": str(src.get("ref") or "")}
     e["version"] = e["version"] if isinstance(e.get("version"), str) else ""
     e["data"] = dict(e["data"]) if isinstance(e.get("data"), dict) else {}
     return e
 
 
 def schreiben(eintraege) -> None:
-    dateien.json_schreiben(datei(), {"format": FORMAT,
-                                     "apps": sorted((normalized(e) for e in eintraege),
-                                                    key=lambda e: e["name"])})
+    """Write this node's entries. Fields this version does not know stay
+    (top level and per entry, core/formats.py must-preserve); a register in a
+    newer major raises formats.NewerFormat and nothing is written."""
+    alt = _roh()
+    formats.check(alt, WHAT)
+    neu = {"format": FORMAT,
+           "apps": sorted((normalized(e) for e in eintraege), key=lambda e: e["name"])}
+    dateien.json_schreiben(datei(), formats.keep_unknown(alt, neu))
 
 
 def alle() -> list:

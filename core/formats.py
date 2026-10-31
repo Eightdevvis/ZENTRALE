@@ -48,6 +48,7 @@ FORMATS = {
     "node-versions": (1, "another device's versions"),     # `versions` in a node description (core/schematix_versions.py)
     "schematix-palette": (1, "the colours of Schematix"),   # data/schematix/palette.json (core/schematix_store.py)
     "schematix-thing": (1, "a documented thing"),           # data/schematix/things/*.json (core/schematix_store.py)
+    "app-register": (2, "the apps installed on this device"),  # data/hub/apps-<node>.json (core/app_register.py)
 }
 
 

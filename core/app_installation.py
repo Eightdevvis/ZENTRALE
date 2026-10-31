@@ -54,6 +54,16 @@ class InstallFehler(ValueError):
 alle, namen, eintrag, app_ordner = reg.alle, reg.namen, reg.eintrag, reg.app_ordner
 
 
+def _save(eintraege):
+    """reg.schreiben; a register from a newer ZENTRALE is never overwritten."""
+    import formats
+    try:
+        reg.schreiben(eintraege)
+    except formats.NewerFormat:
+        raise InstallFehler("the app list on this device was written by a newer "
+                            "ZENTRALE — update first", 409)
+
+
 # ── Katalog → Quelle ─────────────────────────────────────────────────
 
 _app_name, _ordner_name = reg.app_name, reg.ordner_name
@@ -245,7 +255,7 @@ def installieren(adresse, ansichten) -> dict:
                      "source": {"kind": "git", "ref": url},
                      "version": str(m.get("version") or ""),
                      "data": (alt or {}).get("data") or {}})
-        reg.schreiben(rest)
+        _save(rest)
     shop.holen(s["@id"])                          # installiert heißt auch: geholt
     mark_owned(s["@id"])
     return {"name": name, "titel": str(m.get("titel") or name), "ansichten": gewaehlt,
@@ -354,5 +364,5 @@ def withdraw(name) -> bool:
         rest = [e for e in reg.lesen() if e["name"] != name]
         if len(rest) == len(reg.lesen()):
             return False
-        reg.schreiben(rest)
+        _save(rest)
     return True
