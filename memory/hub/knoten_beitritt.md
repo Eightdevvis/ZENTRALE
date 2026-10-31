@@ -228,6 +228,8 @@ Sitzung als `Authorization: Bearer <token>`.
 | `GET /install.sh` | öffentlich; das Installationsskript |
 | `GET /v1/paket` | `?code=` oder Bearer → `{version, sha256, groesse}` der neuesten Fassung |
 | `GET /v1/paket/<version>.tar.gz` | `?code=` oder Bearer → das Paket |
+| `GET /v1/apps/<name>` | only Bearer (no invite code) → `{name, versions: [{version, sha256, size}]}`, newest first — our app packages (`711356b`, [app_delivery_plan.md](app_delivery_plan.md) 4b) |
+| `GET /v1/apps/<name>/<version>.tar.gz` | only Bearer → the app package |
 | `POST /v1/konto` | `{name, code, salz, kdf, anmelde_schluessel, verpackt_passwort, verpackt_notfall, notfall_beweis}` → 201 `{name, erstellt}`. Code wird verbraucht (der Download verbraucht ihn nicht). Name vergeben → **409** `name_vergeben`, Code bleibt frei — die einzige Stelle, die verrät, dass es einen Namen gibt (nur wer einen freien Code hat). |
 | `POST /v1/vorab` | `{name}` → `{salz, kdf}`. Unbekannter Name: erfundene, aber für diesen Namen feste Werte (verrät nicht, ob es das Konto gibt). |
 | `POST /v1/sitzung` | `{name, anmelde_schluessel, knoten}` → `{token, laeuft_ab, verpackt_passwort}`. Gedrosselt (5 Fehlversuche/15 min je Name und IP; Zähler nur als HMAC mit Tagesschlüssel, nie Name/IP im Klartext). |

@@ -97,7 +97,10 @@ Prozess-Apps standen fest in `apps.BEKANNT`.
 (ein git-Repo, `https`/`ssh`/`file`) und `additionalProperty` `app_name` (der
 `name` aus seinem app.toml). Fehlt eins, lehnt `shop.pruefen` den ganzen
 Katalog ab (`app_register.quelle_fehler`). Mehr steht nicht im Katalog:
-Titel, Ansichten, Symbol kommen aus dem app.toml der App.
+Titel, Ansichten, Symbol kommen aus dem app.toml der App. Since `b13c9aa` an
+item may instead (or also) list `sources` (`"<kind>:<ref>"`) and a
+`dock_card`; the node picks by `source_order`
+([app_delivery_plan.md](app_delivery_plan.md) 5.1).
 
 **Ablauf** (`core/app_installation.py`, Routen in `ui/routen/hub_apps.py`):
 
@@ -118,8 +121,9 @@ Titel, Ansichten, Symbol kommen aus dem app.toml der App.
   Ordner, in dem ZENTRALE liegt — neben Tutor und Karte.
 - **Register** (`core/app_register.py`) je Rechner: `<installiert_ordner>/apps-<rechner>.json`
   (Standard `data/hub/`, steht NICHT auf der Positivliste: der Code liegt nur
-  hier, ein anderer Rechner wählt selbst). Nur Name, Quelle, Ordner, gewählte
-  Ansichten, Datum.
+  hier, ein anderer Rechner wählt selbst). Name, Quelle (Laden-Adresse),
+  Ordner, gewählte Ansichten, Datum; seit Register v2 (`129a37f`) auch
+  `source {kind, ref}`, `version`, `data` — [app_delivery_plan.md](app_delivery_plan.md) 5.1.
 - Der Hub findet die App danach wie jede andere (`apps.pfad`,
   `apps.installiert`, `GET /api/apps` mit `quelle`, `ansichten_installiert`,
   `icon`); die Werkstatt vergibt ihren Namen nicht mehr.

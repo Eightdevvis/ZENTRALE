@@ -2,7 +2,9 @@
 
 **Stand 2026-10-31 (rewritten the same day after Sasha's answers; his
 answers to Q1–Q4 recorded the same evening, section 6): the frame (section 2)
-and all four forks are decided; build status per step in section 5.** Blueprint for
+and all four forks are decided; build status per step in section 5.
+Built: steps 1 (`129a37f`), 3 (`b13c9aa`), 4a (`2b756bf`), 4b (`711356b`, Worker not
+deployed yet). Step 2 waits for Sasha (section 7).** Blueprint for
 roadmap step 4 of [kern_auszug_inventur.md](kern_auszug_inventur.md)
 section D (decisions: section H there). It must hold before Lists (step 5,
 [list_extraction_plan.md](list_extraction_plan.md)) and Schematix (step 10,
@@ -404,11 +406,11 @@ after 1.
 
 | # | Step | B | Acceptance test |
 |---|---|---|---|
-| 1 | **Register v2**: `source {kind, ref}`, `version`, `data` plugs; old entries read as `git` | B | old register reads unchanged; round trip; old release reads the new file (`tests/test_alte_fassung.py`) |
-| 2 | **Source-adapter frame** in the core (interface 2.1, kind registry, contract vectors `contracts/sources/1/`); today's clone/pull wrapped as the `git` adapter, no behaviour change | B | existing store tests green through the adapter; a conformance suite every adapter must pass (fake adapter) |
-| 3 | **Catalog `sources`** + dock card fields; `downloadUrl` read as `git` | B | old catalog unchanged in `/api/shop`; item with two sources → node picks by setting |
-| 4a | **Package builder** `scripts/app_paket_bauen.py <repo>` (positive list `paket.txt` per repo, refuses `data/`, `.git`, keys) | B | builds tutor/map/budget; same input → same sha256 |
-| 4b | **Hosting** of our packages per Q2 (cloud routes `GET /v1/apps/<name>[/<v>.tar.gz]`, upload script, `server/openapi.yaml`); while private: **login session only** | B | vitest: no session → 401, 404 unknown, sha256 matches |
+| 1 | **Register v2**: `source {kind, ref}`, `version`, `data` plugs; old entries read as `git` | B — **done `129a37f`, `cccc049`** | old register reads unchanged; round trip; old release reads the new file (`tests/test_alte_fassung.py`) |
+| 2 | **Source-adapter frame** in the core (interface 2.1, kind registry, contract vectors `contracts/sources/1/`); today's clone/pull wrapped as the `git` adapter, no behaviour change | B — **waits: question in section 7** | existing store tests green through the adapter; a conformance suite every adapter must pass (fake adapter) |
+| 3 | **Catalog `sources`** + dock card fields; `downloadUrl` read as `git` | B — **done `b13c9aa`** | old catalog unchanged in `/api/shop`; item with two sources → node picks by setting |
+| 4a | **Package builder** `scripts/app_paket_bauen.py <repo>` (positive list `paket.txt` per repo, refuses `data/`, `.git`, keys) | B — **done `2b756bf`** (tested on fixture repos; tutor/map/budget get their `paket.txt` with step 9) | builds tutor/map/budget; same input → same sha256 |
+| 4b | **Hosting** of our packages per Q2 (cloud routes `GET /v1/apps/<name>[/<v>.tar.gz]`, upload script, `server/openapi.yaml`); while private: **login session only** | B — **done `711356b`** (Worker deploy: Sasha) | vitest: no session → 401, 404 unknown, sha256 matches |
 | 4c | **`zentrale-package` adapter**: install beside, sha256, unpack, venv, self-test, `aktuell` link; fetches with the session | B | fake cloud: works without `git` on PATH; without login → nothing installed, one sentence "log in to fetch our packages"; wrong sha256 → nothing installed; no `/hub/gesund` → nothing registered, sentence says why |
 | 5 | **Update, hold, roll-back** through the adapter (2.4), `zentrale apps update|rollback`; store **"Updates" area** (out-of-date list; mode all / selected / manual, Q4) | B | N → N+1; broken N+1 → stays on N with a note; held untouched; roll-back byte-equal; mode "selected" skips the others, "manual" updates nothing |
 | 6 | **Data socket**: providers home / cloud folder / anywhere / legacy "ZENTRALE data"; default-location setting + wizard question; sync follows the location; guard: `ABGLEICH` may only shrink | B (legacy provider only) | an app with data in the cloud folder syncs with no core edit; the guard fails on a new pattern in `ABGLEICH` |
@@ -433,6 +435,45 @@ After the B steps (and 12 on the real PC) Lists may move: its package
 plugs into "ZENTRALE data", Sasha installs it per node with the move
 checklist, then the core release drops `fokus`.
 
+### 5.1 What the built steps do
+
+- **Register v2** (`129a37f`, `core/app_register.py`): each entry carries
+  `source {kind, ref}`, `version`, `data` (plugs, `{}` until step 6); the
+  file says `"format": 2`. Entries without `source` read as
+  `{"kind": "git", "ref": ""}` (ref "" = the checkout's own origin). The
+  fields older code reads (`name`, `ordner`, `ansichten`) stay;
+  `tests/test_alte_fassung.py::test_older_code_reads_the_v2_register` runs
+  the pre-v2 reader (and every archived release that has one) on a v2 file.
+  Read rule (`cccc049`): `app-register` (major 2) is in `formats.FORMATS` — a
+  newer register is not interpreted or overwritten (install → 409), unknown
+  fields stay. Pre-v2 code that rewrites the file drops the v2 fields; they
+  then read as `git` again.
+- **Catalog `sources` + dock card** (`b13c9aa`): an app item may carry
+  `additionalProperty` `sources` = `["<kind>:<ref>", …]` and `dock_card` = an
+  object with app.toml keys (`start`, `adresse`, `ansichten`, `liefert`, …).
+  `downloadUrl` reads as one more `git` source. `app_register.pick_source(item,
+  kinds)` picks by the node setting `source_order` (list, or comma text from
+  `ZENTRALE_SOURCE_ORDER`; default zentrale-package, flatpak, packagekit,
+  git). Installing knows only `git` until step 2 and answers 501 naming the
+  kinds otherwise. `/api/shop` serves the catalog unchanged. Note:
+  `scripts/paket_bauen.bundle()` still lists extracted apps by
+  `downloadUrl` only.
+- **Package builder** (`2b756bf`, `scripts/app_paket_bauen.py <repo>
+  [--target DIR]`): `<repo>/paket.txt` (format of `deploy/paket.txt`), only
+  git-tracked files, `app.toml` must be listed; refuses `data/`, `.git`,
+  venv, `dist`, keys and secrets; writes `<name>-<version>.tar.gz` (top folder
+  `<name>-<version>/`) and `<name>-<version>.json` `{name, version, sha256,
+  size}`. Reproducible (mtime 0, owner 0, gzip header without time).
+- **Hosting** (`711356b`, `server/src/apps.ts`): `GET /v1/apps/{name}` →
+  `{name, versions: [{version, sha256, size}]}` newest first;
+  `GET /v1/apps/{name}/{version}.tar.gz`. Both need a full session (an invite
+  code → 401). R2 `apps/<name>/index.json` + `apps/<name>/<version>.tar.gz`;
+  only versions in the index are served. Upload:
+  `node server/scripts/app_hochladen.mjs --local|--remote <pkg>.tar.gz`
+  (package first, index last; a published version never changes its
+  sha256). **Not deployed** — `npx wrangler deploy` is Sasha's step; the
+  devkit fake cloud gets the same routes with step 4c.
+
 ## 6. Questions for Sasha — answered 2026-10-31
 
 All four forks are answered; the answers are worked into sections 2–5.
@@ -444,7 +485,38 @@ All four forks are answered; the answers are worked into sections 2–5.
 | **Q3 sources that ship** | The **store** (store ≠ core) ships adapters for our packages, git, **PackageKit** and **Flatpak** — "everything needed to operate ZENTRALE is preinstalled". Snap, AppImage, images … are adapters you add. Catalog: AppStream from the repos, Repology as fallback, own look with icons. | 2.1, 2.2, 2.7, steps 13/14/14b/17 |
 | **Q4 updates** | An **"Updates" area in the store**: shows what is out of date; default "ZENTRALE updates everything", or only selected programs, or manual. Root sources through polkit / the system's prompt, never sudo by ZENTRALE. | 2.4, step 5 |
 
+## 7. Open question (2026-10-31, stopped before step 2)
+
+**How does a source adapter dock, and where does its code live?** The plan
+says "frame in the core, each source docks with its own small manifest"
+(2.1) and "the store (≠ core) ships the adapters" (Q3); the device adapters
+(inventory section G, D step 8) are meant to use "the same idea" and are
+not built yet. Step 2 would fix the shape for both.
+
+- **A — one generic adapter frame now, sources its first interface.** The
+  core gets one broker: interfaces by name (`source` now; `print`, `screen`
+  later), adapters dock with a manifest (`adapter.toml`: which interface,
+  which kinds), in-process Python for now. The git and our-package adapters
+  live in a store folder of their own (not `core/`), the store package
+  takes them along when it leaves the core. Brings inventory step 8's frame
+  forward; one way for every adapter.
+- **B — a source-only frame now.** `core/sources.py` with interface +
+  registry; git/package adapters as modules next to the store code. Fast;
+  the device-adapter frame (step 8) is built separately later — two frames
+  for one idea unless merged then.
+- **C — adapters as separate processes** (a command speaking JSON over
+  stdin/stdout, contract vectors for any language). Most open (an adapter
+  in any language, like "protocols with test vectors"), most work; root
+  sources (PackageKit via polkit) fit naturally as their own process.
+
+Recommendation: **A** (in-process now, the manifest leaves room for C
+later): one frame for sources and devices, nothing in `core/` that the store
+must later take back out.
+
 ## Historie
+
+- **2026-10-31 (built)** — steps 1 (`129a37f`), 3 (`b13c9aa`), 4a (`2b756bf`), 4b
+  (`711356b`); stopped before step 2 at the docking question (section 7).
 
 - **2026-10-31 (answers)** — Q1–Q4 answered by Sasha and recorded (section
   6): sync as an adapter after Lists (step 18); our packages with the
