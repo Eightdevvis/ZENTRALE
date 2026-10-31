@@ -103,13 +103,14 @@ Die Feature-Verwaltung des ZENTRALE-Projekts ist die Liste **`zentrale`**
 `core/lists.py`). **Sasha pflegt sie allein.** Dass ich dort mitgeschrieben
 habe, hat ihn nachhaltig verwirrt.
 
-- **Ich schreibe nicht hinein:** nichts anlegen, abhaken, umbenennen, löschen —
-  auch nicht nach Feature-Arbeit. Lesen ist erlaubt (z. B. um offene Punkte
-  zu nennen).
-- **Nach Feature-Arbeit:** im Chat sagen, welcher Tracker-Punkt jetzt erledigt
-  wäre (mit id) — Sasha hakt selbst ab.
-- **Ausnahme:** nur wenn Sasha es in einer Session ausdrücklich erlaubt (wie
-  beim gemeinsamen Aufräumen am 04.10.2026), und nur für diese Session.
+- **Sasha alone.** The tracker has nothing to do with Claude (Sasha,
+  2026-10-31: "der tracker hat schon lange nichts mehr mit dir zu tun und wird
+  nur noch von mir verwaltet").
+- **Don't write:** no adding, ticking, renaming or deleting — also not after
+  feature work.
+- **Don't read:** don't open it, not even to look for open items.
+- **Don't suggest:** never say which item could be ticked now.
+- Open things go to `memory/open/`, not to the tracker.
 - **Alle anderen Listen** (`data/lists.json`) gehören ohnehin Sasha.
 - Technik zum Zwei-Dateien-Modell und zum Sync (`data/*.json` ungetrackt,
   newest-wins, Push-on-write — der rsync-Weg, heute noch Vorgabe):
