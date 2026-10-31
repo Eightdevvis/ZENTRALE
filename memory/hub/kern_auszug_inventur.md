@@ -415,6 +415,12 @@ tool in their package).
    "melden" (logs, but lets everything through, `core/zugang.py:35`).
    Enforce the check (the Pi then needs the key) or only accept the own
    machine?
+   **Done 2026-10-31 (`ee2e519`):** enforced. Default mode is now "an": own
+   machine free, other devices only with the access key; a refused client
+   gets a 401 that says what to do next. Still open: check on the PC that
+   the Pi is not refused (its key file), and `find-pc` (not in the repo)
+   no longer finds the PC via `/api/state`
+   ([../betrieb/zugang.md](../betrieb/zugang.md)).
 3. **Calendar A1** (edit = up to 7 writes, no rollback): fix now as a bug,
    or with the calendar extraction (D step 12)?
 
