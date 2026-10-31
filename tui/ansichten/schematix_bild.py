@@ -167,6 +167,7 @@ def _board(app, y0, x0, bh, bw):
     c = S["canvas"]
     m = S["map"] or {}
     c.vw, c.vh = max(1, bw), max(1, bh)
+    c.ursprung = (y0, x0)                # for the mouse (tui/bausteine/sgr_mouse.py)
     if S.get("zentrieren"):
         _zentrieren(c)
         c.springen()

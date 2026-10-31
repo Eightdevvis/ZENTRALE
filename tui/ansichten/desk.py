@@ -37,13 +37,13 @@ from .basis import api_call
 from .tasten import Tasten
 
 try:
-    from tui.bausteine import canvas as cv
+    from tui.bausteine import canvas as cv, sgr_mouse
     from tui.bausteine import canvas_bild
     from tui.bausteine.canvas_arten import TextModal, standard_arten
     from tui.bausteine.feld_dialog import FeldDialog
     from tui.bausteine.textfeld import TASTEN_ZEILE, Textfeld
 except ImportError:                     # als Skript gestartet: tui/ liegt im Pfad
-    from bausteine import canvas as cv
+    from bausteine import canvas as cv, sgr_mouse
     from bausteine import canvas_bild
     from bausteine.canvas_arten import TextModal, standard_arten
     from bausteine.feld_dialog import FeldDialog
@@ -271,12 +271,26 @@ class Desk:
         auf_flaeche = ansicht.startswith("canvas:")
         if auf_flaeche and D["msg"] and D["canvas"].modus != "frage":
             D["msg"] = ""                    # eine Meldung gilt bis zur nächsten Taste
+        if auf_flaeche:
+            sgr_mouse.pfeile_schlucken(ch, self.z.stdscr)   # no fling from piled-up arrows
         erg = self.TASTEN.verteilen(self, ansicht, ch)
         if auf_flaeche:
             self._canvas_ergebnis(erg)
         elif D["modal"] is not None and ansicht.split(":")[0] in dict(MODALE):
             self._modal_ergebnis(erg)
         return None
+
+    # ── Mouse (tui/bausteine/sgr_mouse.py; the canvas does the moving) ──
+    def maus_will(self):
+        D = self.DESK
+        return bool(D["active"] and D["ebene"] == "canvas" and D["canvas"] is not None
+                    and D["modal"] is None and D["art_wahl"] is None
+                    and D["bild_wahl"] is None and D["name"] is None)
+
+    def maus(self, ereignisse):
+        if not self.maus_will():
+            return
+        self._canvas_ergebnis(self.DESK["canvas"].maus(ereignisse))
 
     # ── wahl: die Desks ──
     def aktion_waehlen(self, taste):
@@ -638,6 +652,7 @@ class Desk:
         c = D["canvas"]
         ch_, cw = max(1, h - 3), max(1, w - 2)
         c.vw, c.vh = cw, ch_
+        c.ursprung = (top + 1, mx + 1)   # for the mouse
         if D["zentrieren"]:
             self._zentrieren(c)
             c.springen()                 # beim Öffnen nicht hingleiten

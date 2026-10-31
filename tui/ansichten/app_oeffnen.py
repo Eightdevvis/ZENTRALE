@@ -24,6 +24,11 @@ from .basis import PROJEKT, api_call, venv_python
 from .chat_morgenblick import im_browser_oeffnen
 from .tasten import Tasten
 
+try:
+    from tui.bausteine import sgr_mouse
+except ImportError:                     # started as a script: tui/ is on the path
+    from bausteine import sgr_mouse
+
 STARTER = os.path.join(PROJEKT, "scripts", "open_app_window.py")
 
 
@@ -88,7 +93,8 @@ class AppOeffnen:
         curses.def_prog_mode()
         curses.endwin()
         try:
-            code = subprocess.call([venv_python(PROJEKT), STARTER, name, "--ansicht", "terminal"])
+            with sgr_mouse.MODUS.ausgesetzt():   # the app gets a terminal without our mouse modes
+                code = subprocess.call([venv_python(PROJEKT), STARTER, name, "--ansicht", "terminal"])
         except OSError as e:
             code = None
             self._melden("„%s\" startet nicht: %s" % (name, e))

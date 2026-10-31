@@ -66,13 +66,29 @@ def test_tasten_der_tabelle():
     assert TAB.nimmt("notiz", "+") == "neu"
     assert TAB.nimmt("notiz", "e") == "bearbeiten"
     assert TAB.nimmt("notiz", "v") == "verbinden"
-    assert TAB.nimmt("notiz", "d") == TAB.nimmt("notiz", "del") == "loeschen"
+    assert TAB.nimmt("notiz", "x") == TAB.nimmt("notiz", "del") == "loeschen"
     assert TAB.nimmt("notiz", "r") == "groesse"
     assert TAB.nimmt("notiz", "o") is None             # ein Zettel öffnet nichts
     assert TAB.nimmt("bild", "o") == "oeffnen" and TAB.nimmt("bild", "f") == "art_taste"
     assert TAB.nimmt("kasten", "e") is None            # fremd: kein Modal
     assert TAB.nimmt("ruhe", "enter") is None          # nichts gewählt: nichts zu greifen
     assert TAB.nimmt("notiz", "q") is None
+    for ansicht in ("ruhe", "notiz", "kasten", "bild"):
+        assert TAB.nimmt(ansicht, "tab") == TAB.nimmt(ansicht, "shift+tab") == "springen"
+
+
+def test_lower_case_wasd_are_the_arrows_in_every_state():
+    """2026-10-31, Sasha: "wasd doesn't react" — only the capitals (pan)
+    were bound. Lower case now does what the arrows do, wherever they act."""
+    for ansicht in ("ruhe", "notiz", "kasten", "bild", "greifen", "verbinden", "groesse"):
+        for k, pfeil in (("w", "up"), ("a", "left"), ("s", "down"), ("d", "right")):
+            assert TAB.nimmt(ansicht, k) == TAB.nimmt(ansicht, pfeil), (ansicht, k)
+            assert TAB.nimmt(ansicht, k.upper()) == "schieben"
+    c, d = leinwand(), leinwand()
+    for _ in range(3):
+        druecke(c, ord("d"))
+        druecke(d, curses.KEY_RIGHT)
+    assert (c.cx, c.cy, c.fokus) == (d.cx, d.cy, d.fokus) and c.cx is not None
 
 
 def test_shift_und_alt_pfeile_schieben_ohne_text():
@@ -90,36 +106,131 @@ def test_shift_und_alt_pfeile_schieben_ohne_text():
     assert c.vy == vy + cv.PAN_Y
 
 
-# ── Fokus ─────────────────────────────────────────────────────────────
+# ── Cursor and Tab (2026-10-31) ───────────────────────────────────────
+# Sasha: arrows only "aimed at the pieces that are there instead of moving
+# smoothly over the surface". A free cursor now; tab jumps between pieces.
 
-def test_erster_pfeil_waehlt_den_kasten_naechst_der_mitte():
-    c = leinwand()
+def test_arrows_move_the_cursor_cell_by_cell_into_empty_space():
+    c = leinwand()                                     # view middle (0, 0) lies in m
     c.taste("rechts")
+    assert (c.cx, c.cy) == (cv.CURSOR_X, 0) and c.fokus == "m"
+    while c.unter(c.cx, c.cy) is not None:
+        c.taste("rechts")
+    assert c.fokus is None and c.cx == 10              # just past m: empty space, no focus
+    while c.fokus is None:
+        c.taste("rechts")
+    assert c.fokus == "r" and c.cx == 30               # step by step onto r
+    c.taste("runter")
+    assert c.cy == cv.CURSOR_Y
+
+
+def test_cursor_on_empty_space_is_drawn_and_on_a_piece_the_frame_shows_it():
+    c = leinwand()
+    c.cursor_setzen(-20, -5)
+    zeilen = c.bild(30, 80)
+    assert any(t == "+" and r == "fokus" for x, t, r in zeilen[-5 - c.vy] if x == -20 - c.vx)
+    c.cursor_setzen(2, 1)
     assert c.fokus == "m"
+    assert not any("+" in t and r == "fokus" for z in c.bild(30, 80) for _x, t, r in z)
 
 
-def test_fokus_springt_raeumlich():
+def test_arrow_goes_on_from_the_focused_piece():
     c = leinwand()
-    c.fokus = "m"
-    for richtung, ziel in (("rechts", "r"), ("links", "m"), ("links", "l"),
-                           ("rechts", "m"), ("hoch", "o"), ("runter", "m"), ("runter", "u")):
-        c.taste(richtung)
-        assert c.fokus == ziel, (richtung, c.fokus)
+    c.fokus = "r"                                      # e.g. after tab or a click
+    c.taste("links")
+    mx, my = schnur.mitte(c.element("r"))
+    assert (c.cx, c.cy) == (mx - cv.CURSOR_X, my)
 
 
-def test_fokus_springt_nicht_ins_leere():
+def test_cursor_stops_at_the_growable_edge_and_comes_back_at_once():
     c = leinwand()
-    c.fokus = "r"
-    c.taste("rechts")
-    assert c.fokus == "r"
+    for _ in range(400):
+        c.taste("rechts")
+    x0, y0, x1, y1 = c.flaeche()
+    assert c.cx == x1 - 1 == 40 + c.vw - 1             # content edge + one view
+    assert c.vx <= c.cx < c.vx + c.vw                  # the view followed
+    c.taste("links")
+    assert c.cx == x1 - 1 - cv.CURSOR_X
+    for _ in range(400):
+        c.taste("hoch")
+    assert c.cy == y0 == -10 - c.vh
 
 
-def test_ausschnitt_folgt_dem_fokus():
+def test_view_follows_the_cursor_near_the_edge():
     c = leinwand([zettel("a", 0, 0), zettel("b", 200, 0)])
     c.fokus = "a"
-    c.taste("rechts")
+    vx = c.vx
+    for _ in range(120):
+        c.taste("rechts")
+        assert c.vx + 4 <= c.cx < c.vx + c.vw - 4
+        if c.fokus == "b":
+            break
+    assert c.vx > vx + 100 and c.fokus == "b"          # walked over to b, the view along
+
+
+def test_held_arrows_accelerate_but_never_fling():
+    class Uhr:
+        t = 100.0
+
+        def __call__(self):
+            Uhr.t += 0.02
+            return Uhr.t
+
+    c = leinwand()
+    c.uhr = Uhr()
+    schritte = []
+    for _ in range(30):
+        x = c.cx
+        c.taste("rechts")
+        if x is not None:
+            schritte.append(c.cx - x)
+    assert max(schritte) > cv.CURSOR_X                 # held: faster
+    assert max(schritte) <= max(cv.PAN_X, c.vw // cv.PAN_VIEW_DIVISOR)
+
+
+def test_after_panning_the_cursor_out_of_view_an_arrow_starts_in_the_middle():
+    c = leinwand()
+    c.cursor_setzen(-30, 0)
+    for _ in range(10):
+        c.taste("pan_rechts")
+    assert not (c.vx <= c.cx < c.vx + c.vw)
+    c.taste("runter")
+    mx, my = c.mitte_des_ausschnitts()
+    assert (c.cx, c.cy) == (mx, my + cv.CURSOR_Y)
+
+
+def test_tab_cycles_the_pieces_in_reading_order():
+    c = leinwand()
+    c.taste("naechster")
+    assert c.fokus == "m"                              # first: nearest the middle
+    folge = []
+    for _ in range(5):
+        c.taste("naechster")
+        folge.append(c.fokus)
+    assert folge == ["r", "u", "o", "l", "m"]          # top→bottom, left→right, wraps
+    c.taste("vorheriger")
+    assert c.fokus == "l"
+    assert c.unter(c.cx, c.cy)["id"] == "l"            # the cursor went along
+    druecke(c, 9)
+    assert c.fokus == "m"
+    druecke(c, curses.KEY_BTAB)
+    assert c.fokus == "l"
+
+
+def test_tab_scrolls_the_far_piece_into_view():
+    c = leinwand([zettel("a", 0, 0), zettel("b", 200, 0)])
+    c.fokus = "a"
+    c.taste("naechster")
     assert c.fokus == "b"
     assert c.vx <= 200 and 210 <= c.vx + c.vw
+
+
+def test_plus_puts_the_new_piece_at_the_cursor():
+    c = leinwand([])
+    c.cursor_setzen(-20, -6)
+    c.taste("neu")
+    e = c.element(c.fokus)
+    assert schnur.mitte(e)[0] in range(-21, -18) and c.modus == "greifen"
 
 
 # ── Greifen, Verschieben, Ablegen, Abbrechen ──────────────────────────
@@ -486,7 +597,7 @@ def test_kachel_art_zeigt_puffer_rueckfall_und_zustaende():
 
 # ── Weich schieben, W A S D, Alt+Pfeile (2026-10-10) ──────────────────
 
-def test_wasd_grossbuchstaben_schieben_kleinbuchstaben_nicht():
+def test_wasd_grossbuchstaben_schieben():
     for ch, r in (("W", "hoch"), ("A", "links"), ("S", "runter"), ("D", "rechts")):
         assert TAB.nimmt("notiz", ch) == "schieben"
         c = leinwand()
@@ -496,8 +607,7 @@ def test_wasd_grossbuchstaben_schieben_kleinbuchstaben_nicht():
         dx, dy = {"hoch": (0, -cv.PAN_Y), "links": (-cv.PAN_X, 0),
                   "runter": (0, cv.PAN_Y), "rechts": (cv.PAN_X, 0)}[r]
         assert (c.vx, c.vy) == (vx + dx, vy + dy)
-    assert TAB.nimmt("notiz", "d") == "loeschen"       # klein bleibt wie es ist
-    assert TAB.nimmt("notiz", "s") is None
+    assert TAB.nimmt("notiz", "d") == "waehlen"        # lower case: the arrows (2026-10-31)
 
 
 def test_wasd_wirkt_in_jedem_zustand_ausser_der_frage():
@@ -564,7 +674,7 @@ def test_folgen_beim_fokus_sprung_gleitet_auch():
     c.weich = True
     c.gleiten()
     c.fokus = "a"
-    c.taste("rechts")
+    c.taste("naechster")                               # tab: jump to the far piece
     assert c.fokus == "b" and c.bewegt_sich()
     c.gleiten()
     assert c.anzeige_lage()[0] < c.vx
@@ -658,8 +768,9 @@ def test_pan_step_holds_only_the_direction_of_travel():
 def test_held_pan_is_bounded_never_lost_and_recovers():
     """2026-10-31, Schematix: held W/A/S/D carried the view 480 columns a
     second past the content into empty space ("flies too fast, then
-    stuck"). Now: a step is at most a quarter view, panning stops where the
-    content's far edge reaches the middle, the way back moves at once."""
+    stuck"). Now: a step is at most a quarter view, the view stays on the
+    growable surface (content + one view on every side), the way back moves
+    at once."""
     c = leinwand()                                              # content x -30..40, y -10..14
     c.uhr = uhr = Uhr()
     for richtung, achse, voll in (("rechts", "vx", c.vw), ("runter", "vy", c.vh),
@@ -670,14 +781,33 @@ def test_held_pan_is_bounded_never_lost_and_recovers():
             assert abs(getattr(c, achse) - vor) <= max(cv.PAN_X, voll // cv.PAN_VIEW_DIVISOR)
             uhr.t += 0.02
         lo_x, hi_x, lo_y, hi_y = c.pan_bounds()
-        assert lo_x <= c.vx <= hi_x and lo_y <= c.vy <= hi_y   # never past the content
+        assert lo_x <= c.vx <= hi_x and lo_y <= c.vy <= hi_y   # never lost in the void
+        assert (c.vx, c.vy) != (-40, -15)                      # but it got there: a view past
+        if richtung == "rechts":
+            assert c.vx == hi_x == 40                          # right edge of the content
+        if richtung == "hoch":
+            assert c.vy == lo_y == -10 - c.vh
         zurueck = {"rechts": "links", "links": "rechts", "runter": "hoch", "hoch": "runter"}[richtung]
         vor = getattr(c, achse)
         uhr.t += 0.02
         c.taste("pan_" + zurueck)                               # recovers at once, base step
         assert abs(getattr(c, achse) - vor) == (cv.PAN_X if achse == "vx" else cv.PAN_Y)
-        assert any(e["x"] < c.vx + c.vw and e["x"] + e["w"] > c.vx            # a piece in view
-                   and e["y"] < c.vy + c.vh and e["y"] + e["h"] > c.vy for e in c.elemente)
+
+
+def test_the_growable_surface_grows_with_what_is_built():
+    """Sasha: "you can extend the surface endlessly if you want" — put a
+    piece at the edge, and the area reaches a view further."""
+    c = leinwand()
+    for _ in range(100):
+        c.taste("pan_rechts")
+    assert c.vx == 40
+    c.cursor_setzen(c.vx + c.vw // 2, 0)
+    c.taste("neu")                                     # a new piece out there …
+    c.taste("enter")                                   # … dropped
+    rechts = max(e["x"] + e["w"] for e in c.elemente)
+    for _ in range(100):
+        c.taste("pan_rechts")
+    assert c.vx == rechts > 40
 
 
 def test_pan_limits_free_while_carrying_and_on_an_empty_canvas():

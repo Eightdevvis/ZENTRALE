@@ -28,16 +28,18 @@ Start page → the **Erschaffen** wheel (beside Werkstatt and Shop) →
 
 | Key | What |
 |---|---|
-| ↑↓←→ | focus jumps to the next piece in that direction |
-| W A S D (also shift/alt+arrows) | move the view — held: faster, but at most a quarter view per step and never off the board (the Desk block's pan limits, [desk_view.md](desk_view.md)) |
+| ↑↓←→ / w a s d | move the cursor over the board; the piece under it is selected (since 2026-10-31 — before, arrows jumped between pieces) |
+| tab / shift+tab | next / previous piece |
+| W A S D (also shift/alt+arrows), mouse wheel, two-finger scroll | move the view — held / swiped: faster, but at most a quarter view per step (per frame for a swipe), at most one view past the board (the Desk block's growable surface, [desk_view.md](desk_view.md)) |
+| mouse | click selects (cursor there), drag carries a piece (release drops it, stored), drag on empty board drags the view |
 | enter | grab the piece, arrows move it, enter drops it (stored in the scheme), esc puts it back |
 | + | add a piece: installed apps, nodes, store apps, kinds of things — placed as **planned**, in the hand |
-| d / del (planned piece) | remove it from the scheme (asks y / n) — live pieces leave only when they leave reality |
+| x / del (planned piece) | remove it from the scheme (asks y / n) — live pieces leave only when they leave reality |
 | m (planned thing) | make it real: it is documented in the things store, same reference, the piece stays |
 | v | draw a wire from the focused piece: arrows move the target, enter connects. A socket that does not fit shows a red ✕ at the cursor; enter there does not attach and says why at the socket ("PDF viewer needs `files`, Cloud offers `sync`") |
 | p | the plugs of the piece: ↑↓ a wire, x unplugs / plugs it (or takes back a change, or removes a planned wire), esc back |
 | r | Run: check → diff. The panel shows "✓ the scheme compiles" and the plan lines, enter switches, esc goes back; refused → the errors, pinned on the pieces (`✕ …`) |
-| s (on another node) | this node keeps the same ZENTRALE version as that one (again: its own updates) |
+| u (on another node) | this node keeps the same ZENTRALE version as that one (again: its own updates) |
 | 1 2 3 4 5 | layer on/off: sync, services, hardware (things too), network, power |
 | i (on a node) | fold the versions panel open/closed |
 | c | colour roles: ↑↓ role, enter colour wheel, x back to default, esc back |

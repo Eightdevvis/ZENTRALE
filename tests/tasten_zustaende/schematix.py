@@ -30,7 +30,7 @@ def _grab(u):
 
 
 def _ask(u):
-    _fokus("device:router")(u); _t(u, "d")
+    _fokus("device:router")(u); _t(u, "x")
 
 
 def _connect(u):

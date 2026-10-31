@@ -10,7 +10,9 @@ umbenennen, wegwerfen; [werkstatt.md](werkstatt.md)). Direkt geöffnet
 (`Desk.direkt(name)`, fehlt er: angelegt) führt Esc dorthin zurück, woher man
 kam, nicht in die Auswahl. Die Auswahl (bis dahin Platz `d`) gibt es im Code
 noch. Auf der Fläche: Zettel liegen darauf,
-Schnüre verbinden sie, W A S D (Großbuchstaben) schieben den Ausschnitt.
+Schnüre verbinden sie, a free cursor (arrows / w a s d) moves over the
+surface, W A S D (Großbuchstaben), the mouse wheel and two-finger scroll
+move the view.
 
 Sasha: *„ich klappe z.B. ‚Elektronik' auf und habe einen infinity canvas vor
 mir … Mit + fügt man ein neues hinzu, das ist dann autoselected, man bewegt
@@ -26,15 +28,17 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | Auswahl | ↑↓ enter | Desk wählen, öffnen; letzte Zeile „+ neuer desk" |
 | | n | neuer Desk (Name unten tippen, enter legt an, esc bricht ab) |
 | | esc | zurück zum Rad |
-| Fläche, Ruhe | ↑↓←→ | Fokus springt zum nächsten Kasten in der Richtung (der erste Druck nimmt den Kasten nahe der Mitte); der Ausschnitt folgt |
+| Fläche, Ruhe | ↑↓←→ / w a s d | move the **cursor** over the surface (2 columns / 1 row, held: faster up to ¼ view); the piece under it is selected, on empty space a `+` shows where it is; the view follows near the edge; it can go a view past the content (growable surface). After panning it out of view, the next arrow starts in the middle of the view (since 2026-10-31) |
+| | tab / shift+tab | next / previous piece (top to bottom, left to right; the first press takes the piece nearest the middle); the cursor and the view go along — what the arrows did before 2026-10-31 |
+| | mouse | click: cursor there, the piece under it selected · drag a piece: carry it, release drops it (stored) · drag empty space: drag the surface · wheel / two fingers (also sideways): move the view |
 | | enter | greifen — immer, jedes Element, auch Bilder und Kacheln (seit 2026-10-10) |
-| | + | Wähler „neu": zettel, bild, liste, graph, kalender (↑↓ enter, esc). Zettel: mitten im Ausschnitt, gleich gegriffen (`+` enter = schneller Zettel). Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …". Kalender: erst der kleine Dialog (unten), dann gegriffen |
+| | + | Wähler „neu": zettel, bild, liste, graph, kalender (↑↓ enter, esc). Zettel: at the cursor (if in view), else mitten im Ausschnitt, gleich gegriffen (`+` enter = schneller Zettel). Bild: Liste der Bilder in `~/Zentrale/Input` + „pfad tippen …". Kalender: erst der kleine Dialog (unten), dann gegriffen |
 | | e | Zettel bearbeiten (Modal mittig); beim Bild der Titel (leer = Dateiname) |
 | | o | öffnen: Bild im Bildbetrachter; Kachel in ihrer App an der richtigen Stelle (Kalender an dem Tag) |
 | | f | Bild: Vorschau mono ↔ farbe (gespeichert) |
 | | v | verbinden: Schnur von hier zu einem Ziel |
 | | r | Größe ändern (Zettel, Bild, Kachel — jedes Element) |
-| | d / Entf | löschen — Rückfrage unten, j ja, n/esc nein |
+| | x / Entf | löschen — Rückfrage unten, j ja, n/esc nein (was d until 2026-10-31; d is now →) |
 | | Bild↑ Bild↓ | im gewählten Kasten blättern (langer Zettel; Kalender-Kachel: alle Tage zugleich, „+N" zeigt Verstecktes) |
 | | esc | zurück zur Auswahl |
 | Wähler „neu" | ↑↓ enter esc | wählen, anlegen, abbrechen |
@@ -42,20 +46,21 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | | ←→ / leertaste | art: mitlaufend ↔ fest |
 | | ziffern, -, ⌫ | tage bzw. Datum JJJJ-MM-TT tippen |
 | | enter | anlegen (über 31 Tage: klare Meldung, bleibt offen); esc bricht ab |
-| Greifen | ↑↓←→ | eine Zelle je Druck |
+| Greifen | ↑↓←→ / w a s d | eine Zelle je Druck |
 | | enter | ablegen (gespeichert) |
 | | esc | zurück an die alte Stelle; ein neuer Zettel verschwindet |
-| Verbinden | ↑↓←→ | Ziel springt durch die Kästen, die Schnur wird vorgezeigt |
+| Verbinden | ↑↓←→ / w a s d | Ziel springt durch die Kästen, die Schnur wird vorgezeigt; a click on a piece makes it the target |
 | | enter / v | verbinden; ist das Paar schon verbunden: Rückfrage „schnur lösen?" |
 | | esc | abbrechen |
-| Größe (r) | ←→ | schmaler / breiter um eine Zelle (oben links bleibt stehen) |
-| | ↑↓ | niedriger / höher um eine Zelle |
+| Größe (r) | ←→ / a d | schmaler / breiter um eine Zelle (oben links bleibt stehen) |
+| | ↑↓ / w s | niedriger / höher um eine Zelle |
 | | enter | behalten (gespeichert, nur wenn anders) |
 | | esc | alte Größe zurück |
 | Modal | tippen, enter | Text, enter = neue Zeile; ←→↑↓ Pos1 Ende ⌫ Entf |
 | | ctrl+s | speichern |
 | | esc | abbrechen, nichts gespeichert |
-| überall außer Modal | **W A S D** (groß) | Ausschnitt schieben (6 Spalten / 3 Zeilen), W hoch, A links, S runter, D rechts; beim Greifen reist der Zettel mit. Gedrückt halten wird schneller (bis 4×, höchstens ¼ Ausschnitt je Schritt, nie vom Inhalt weg). Kleinbuchstaben bleiben, was sie sind (d = löschen) |
+| überall außer Modal | **W A S D** (groß) | Ausschnitt schieben (6 Spalten / 3 Zeilen), W hoch, A links, S runter, D rechts; beim Greifen reist der Zettel mit. Gedrückt halten wird schneller (bis 4×, höchstens ¼ Ausschnitt je Schritt, höchstens einen Ausschnitt über den Inhalt hinaus). Kleinbuchstaben w a s d = die Pfeile |
+| | mouse wheel / two-finger scroll | the same: up/down, sideways with two fingers (or shift + wheel); a swipe moves at most ¼ view per frame |
 | | shift+↑↓←→, alt+↑↓←→ | dasselbe, zusätzlich |
 
 **W A S D** ist seit 2026-10-10 die Hauptbelegung (Sasha: ZENTRALE soll
@@ -96,14 +101,51 @@ dann tickt `zentrale_tui.py` mit 33 ms, sonst ruhig. Gedrückt halten
 ×1,5 bis 4× größer; nach einer Pause wieder der Grundschritt. Der Baustein
 macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
 
-**Pan limits** (2026-10-31, found through Schematix — "flies too fast,
-then stuck"; [../system/gefahrzonen.md](../system/gefahrzonen.md) #4): a
-step is at most a quarter of the view (never below the base step), and
-panning stops where the content's far edge reaches the middle of the view
-(sideways: the pieces in the rows in view), so a piece in view stays in
-view. Only the outward step is held; the other direction moves at once.
-No limit while carrying a piece or on an empty canvas. Holds for every app
-on the block (Desk, Schematix). Tests: `tests/test_canvas_pan_apps.py`.
+**Pan limits — growable surface** (2026-10-31, found through Schematix —
+"flies too fast, then stuck"; [../system/gefahrzonen.md](../system/gefahrzonen.md)
+#4): a step is at most a quarter of the view (never below the base step).
+The reachable area is the content's bounding box plus one full view on
+every side (`Canvas.flaeche`): you can always go a view past the edge into
+empty space to put something new there, the area grows as you build, and
+you can never get lost far out (Sasha: „desk soll eigentlich endlos
+bleiben … dass man die fläche halt unendlich ausbauen kann"). Only the
+outward step is held; the other direction moves at once. No limit while
+carrying a piece (it pushes the edge out) or on an empty canvas. Holds for
+every app on the block (Desk, Schematix) and for the cursor. Tests:
+`tests/test_canvas_pan_apps.py`, `tests/test_desk_canvas.py`.
+
+**Cursor instead of focus jumps** (2026-10-31, Sasha: „mit pfeiltasten
+geht es aber darüber werden nur die bausteine die da sind anvisiert statt
+smooth über die fläche navigiert" — and "wasd doesn't react": only the
+capitals were bound). Arrows and lower-case w a s d move a free cursor
+(`Canvas.cx/cy`, `_cursor_gehen`); the piece under it is the focus (so
+enter, e, r, v, x … act on it as before); tab / shift+tab jump between
+pieces. Delete moved from d to x (and Entf), Schematix "same version" from
+s to u, to free w a s d. The cursor is drawn as `+` only on empty space
+(on a piece its focus frame shows it), only at rest.
+
+**Mouse and touchpad** (2026-10-31, Sasha: „ich war davon ausgegangen dass
+man mit dem touchpad zwei finger drauf rumnavigieren kann"):
+`tui/bausteine/sgr_mouse.py` asks the terminal for 1000+1002+1006 (SGR)
+while a canvas has the focus (`maus_will` of Desk/Schematix, switched in
+the main loop: `zentrale_tui.canvas_maus_pflegen`) and reads the reports
+from the key stream itself (`maus_lesen`) — ncurses 6.4's own mouse drops
+the sideways wheel (66/67) and never reports a drag. A swipe's burst is
+summed into one wheel event per frame, the canvas pans at most one capped
+step for it (`Canvas.rad`); click / drag go to `Canvas.zeiger`. Off again
+when the canvas loses the focus, in a `finally` around the curses session
+(quit, crash, reload), while an app runs in the same terminal
+(`app_oeffnen`, `Modus.ausgesetzt`) and atexit. `ZENTRALE_TUI_MAUS=aus`
+switches it off like the chat mouse. Shift + drag still selects text in
+xfce4-terminal and tmux. Without mouse reporting the wheel comes as a pile
+of arrows; the same arrow already waiting is swallowed
+(`pfeile_schlucken`), so it moves the cursor one step per frame.
+**tmux** (measured with tmux 3.4 on a private server): an app that asks
+for mouse reporting gets wheel (64/65), sideways (66/67), click and drag
+— with `mouse on` (Sasha's `~/.tmux.conf`) and even with `mouse off`.
+Quirk: tmux 3.4 drops a 67 (right) that directly follows a 66 (left), so a
+left↔right reversal loses one notch. Tests: `tests/test_canvas_mouse.py`,
+`tests/test_canvas_pan_apps.py`.
 
 **Größe ändern** (2026-10-10, Sasha: die Größe muss man nachträglich
 ändern können — Kachel, Zettel, Bild): `r` auf dem gewählten Kasten. Der

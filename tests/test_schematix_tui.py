@@ -336,7 +336,7 @@ def test_a_live_piece_already_there_is_not_placed_twice(offen):
     assert u.SCHEMATIX["canvas"].fokus == "node:minipc" and "already" in u.SCHEMATIX["msg"]
 
 
-def test_d_removes_a_planned_piece_after_asking(offen, monkeypatch):
+def test_x_removes_a_planned_piece_after_asking(offen, monkeypatch):
     from tui import ansichten as A
     u, s = offen
     sent = []
@@ -344,7 +344,7 @@ def test_d_removes_a_planned_piece_after_asking(offen, monkeypatch):
     monkeypatch.setattr(A.schematix, "api_call",
                         lambda p, m="GET", b=None, **k: sent.append(b) or real(p, m, b, **k))
     u.SCHEMATIX["canvas"].fokus = "device:router"
-    _t(u, "d")
+    _t(u, "x")
     assert "remove Router from the scheme? y / n" in _bild(u, s)
     _t(u, "y")
     ids = {p["id"] for p in sent[-1]["pieces"]}
@@ -476,5 +476,5 @@ def test_run_errors_are_pinned_on_the_board(offen):
 def test_same_version_from_another_node(offen):
     u, _s = offen
     u.SCHEMATIX["canvas"].fokus = "node:minipc"
-    _t(u, "s")
+    _t(u, "u")
     assert _puts(u, "/api/schematix/same-version")

@@ -53,10 +53,12 @@
 #
 # Bedienung (Zustände, Sasha 2026-10-09; Belegung: die Tastentabelle
 # TASTEN unten, memory/hub/desk_view.md):
-#   ruhe       ↑↓←→ Fokus springt zum nächsten Kasten in der Richtung,
-#              enter greift, + legt einen neuen an (gleich gegriffen),
-#              e bearbeiten, v verbinden, d löschen (Rückfrage), o öffnen
-#              (wenn die Art es kann), esc zurück
+#   ruhe       ↑↓←→ / w a s d move a free cursor over the surface
+#              (2026-10-31, see "Cursor" below); the piece under it is
+#              focused. tab / shift+tab jump to the next / previous piece.
+#              enter greift, + legt einen neuen an (gleich gegriffen, at the
+#              cursor), e bearbeiten, v verbinden, x/del löschen (Rückfrage),
+#              o öffnen (wenn die Art es kann), esc zurück
 #
 # `+`: hat die Ansicht eine Fabrik `neu` hereingegeben, legt der Canvas
 # selbst an. Ohne Fabrik meldet er „neu_waehlen" — die Ansicht zeigt einen
@@ -75,8 +77,19 @@
 #              es nicht (Anschlag mit kurzem Hinweis), über das Maximum auch
 #              nicht. Der Ausschnitt folgt der Ecke unten rechts.
 #   überall    W A S D (Großbuchstaben) schiebt den Ausschnitt, ebenso
-#              shift+↑↓←→ und alt+↑↓←→; beim Greifen reist der Kasten mit
-#              (er liegt ja in der Hand)
+#              shift+↑↓←→ und alt+↑↓←→ and the mouse wheel / two-finger
+#              scroll; beim Greifen reist der Kasten mit (er liegt ja in der
+#              Hand). Lower-case w a s d are the arrows in every state.
+#
+# Cursor (2026-10-31, Sasha: arrows only "aimed at the pieces that are
+# there instead of moving smoothly over the surface"): (cx, cy) is a world
+# cell, None until first used. Arrows move it cell by cell (held: the same
+# acceleration and cap as panning), the view follows when it nears the
+# edge, and it may go into empty space within the growable area
+# (`pan_bounds`). Panning does not move it; an arrow while it is out of
+# view starts again from the middle of the view. Mouse (`zeiger`, `rad`):
+# a click puts the cursor on the cell, dragging a piece carries it,
+# dragging empty space drags the surface, the wheel pans.
 #
 # Weich (2026-10-10, Sasha: „ich möchte dass die bewegung über das canvas
 # weicher ist"): (vx, vy) bleibt die Lage, mit der alles rechnet. Gezeichnet
@@ -130,13 +143,23 @@ BESCHLEUNIGUNG, BESCHLEUNIGUNG_MAX = 1.5, 4.0
 # here in the block so every app on it gets them:
 #  - one step is at most a quarter of the view in that axis (never below
 #    the base step) — the eye can still follow;
-#  - panning stops where the far edge of the content reaches the middle of
-#    the view: a piece in view stays in view (Canvas.pan_bounds). Only the
-#    step that would go further out is held; the opposite direction always
-#    moves at once.
-#    While something is in the hand there is no limit (the surface stays
-#    unbounded; the carried piece is content and travels along).
+#  - growable surface (Sasha, same day: "the surface should stay endless —
+#    you can extend it as far as you like"): the reachable area is the
+#    content's bounding box plus one full view on every side
+#    (Canvas.pan_bounds). You can always go a view past the edge into empty
+#    space to put something new there, the area grows with what you build,
+#    and you can never get lost far out in the void. Only the step that
+#    would go further out is held; the opposite direction always moves at
+#    once. While something is in the hand there is no limit (the carried
+#    piece is content and pushes the edge out); an empty canvas is free.
 PAN_VIEW_DIVISOR = 4
+# Cursor (2026-10-31): base step per arrow (columns are half as tall as
+# rows, so two columns feel like one row), accelerated like panning.
+CURSOR_X, CURSOR_Y = 2, 1
+# Mouse wheel / two-finger scroll: cells per notch. However many notches a
+# fast swipe piles up into one frame, the view moves at most one capped
+# pan step per frame (`rad`) — no fling.
+RAD_X, RAD_Y = 4, 2
 
 
 def pan_step(pos, d, lo, hi):
@@ -182,19 +205,26 @@ def _runden(x):
 # Shift+↑↓ von Haus aus.
 _SCHIEBEN = [("W/A/S/D", "schieben", "move view"), ("alt+↑↓←→", "schieben"),
              ("shift+↑↓←→", "schieben")]
-_KOPF = [("↑↓←→", "waehlen", "select")] + _SCHIEBEN[:1] + [("enter", "greifen", "grab")]
+# Lower-case w a s d are the arrows (2026-10-31, Sasha pressed them and
+# nothing happened: only the capitals were bound). They move the cursor at
+# rest, the piece while carrying, the target while connecting, the size
+# while resizing. Delete moved from d to x/del to free them.
+PFEILE = "↑↓←→ w/a/s/d"
+CURSOR = (PFEILE, "waehlen", "move cursor")
+SPRINGEN = [("tab", "springen", "next piece"), ("shift+tab", "springen")]
+_KOPF = [CURSOR] + _SCHIEBEN[:1] + [("enter", "greifen", "grab")] + SPRINGEN
 _FUSS = [("r", "groesse", "size"), ("+", "neu", "new"), ("v", "verbinden", "connect"),
-         ("d", "loeschen", "delete"), ("del", "loeschen"), ("esc", "zu", "back")] + _SCHIEBEN[1:]
+         ("x", "loeschen", "delete"), ("del", "loeschen"), ("esc", "zu", "back")] + _SCHIEBEN[1:]
 TASTEN = {
-    "ruhe": [("↑↓←→", "waehlen", "select"), _SCHIEBEN[0], ("+", "neu", "new"),
-             ("esc", "zu", "back")] + _SCHIEBEN[1:],
+    "ruhe": [CURSOR, _SCHIEBEN[0], ("+", "neu", "new"),
+             ("esc", "zu", "back")] + SPRINGEN + _SCHIEBEN[1:],
     "kasten": _KOPF + _FUSS,
-    "greifen": [("↑↓←→", "bewegen", "move"), _SCHIEBEN[0], ("enter", "ablegen", "drop"),
+    "greifen": [(PFEILE, "bewegen", "move"), _SCHIEBEN[0], ("enter", "ablegen", "drop"),
                 ("esc", "zurueck", "cancel")] + _SCHIEBEN[1:],
-    "verbinden": [("↑↓←→", "ziel", "target"), _SCHIEBEN[0], ("enter/v", "verbinden", "connect"),
+    "verbinden": [(PFEILE, "ziel", "target"), _SCHIEBEN[0], ("enter/v", "verbinden", "connect"),
                   ("esc", "zurueck", "cancel")] + _SCHIEBEN[1:],
     "frage": [("j", "ja", "yes"), ("y", "ja"), ("n/esc", "nein", "no")],
-    "groesse": [("←→", "aendern", "width"), ("↑↓", "aendern", "height"), _SCHIEBEN[0],
+    "groesse": [("←→ a/d", "aendern", "width"), ("↑↓ w/s", "aendern", "height"), _SCHIEBEN[0],
                 ("enter", "behalten", "keep"), ("esc", "zurueck", "undo")] + _SCHIEBEN[1:],
 }
 
@@ -215,6 +245,7 @@ def tabelle_mit(arten):
 # Neutraler Tastenname → Richtung (Pfeile, W A S D, alt+/shift+Pfeil)
 _PFEIL = {"up": "hoch", "down": "runter", "left": "links", "right": "rechts"}
 _RICHTUNG = dict(_PFEIL, W="hoch", A="links", S="runter", D="rechts",
+                 w="hoch", a="links", s="runter", d="rechts",
                  **{"alt+" + k: r for k, r in _PFEIL.items()},
                  **{"shift+" + k: r for k, r in _PFEIL.items()})
 
@@ -301,9 +332,16 @@ class Canvas:
         # cursor; enter does not attach and reports Ergebnis("abgelehnt",
         # ziel, reason) — refused, never greyed out. None = everything fits.
         self.passt = None
+        # The free cursor (world cell) — None until an arrow or a click
+        # puts it somewhere.
+        self.cx = self.cy = None
+        # Where the host draws the canvas on the screen (row, column of the
+        # view's top left cell) — for the mouse. The host sets it each frame.
+        self.ursprung = (0, 0)
+        self._zug = None                 # mouse drag: {"id", "x", "y", "bewegt"}
 
     def __repr__(self):                  # Zustand sichtbar machen (Tests vergleichen repr)
-        return "Canvas(%r)" % ((self.vx, self.vy, self.fokus, self.modus, self.griff,
+        return "Canvas(%r)" % ((self.vx, self.vy, self.cx, self.cy, self.fokus, self.modus, self.griff,
                                 self.ziel, self.frage, self.groesse, self.elemente,
                                 self.verbindungen),)
 
@@ -383,6 +421,9 @@ class Canvas:
     def aktion_schieben(self, taste):
         return self.taste("pan_" + _RICHTUNG[taste])
 
+    def aktion_springen(self, taste):
+        return self.taste("vorheriger" if taste == "shift+tab" else "naechster")
+
     def aktion_greifen(self, _taste):
         return self.taste("enter")
 
@@ -452,30 +493,42 @@ class Canvas:
             self._pan_faktor = 1.0
         return self._pan_faktor
 
-    def pan_bounds(self):
-        """(lo_x, hi_x, lo_y, hi_y) for vx/vy while panning: the far edge
-        of the content may reach the middle of the view, no further.
-        Sideways only the pieces in the rows now in view count (up/down:
-        those in the columns now in view) — on a sparse board (Schematix:
-        one cloud on top, a column of apps) the box around everything has
-        empty corners, and a piece in view must stay in view. Nothing in
-        that band → all pieces. None = no limit (empty canvas, or
-        something in the hand)."""
+    def flaeche(self):
+        """The growable area (x0, y0, x1, y1), end exclusive: the content's
+        bounding box plus one full view on every side. None = no limit
+        (empty canvas, or something in the hand)."""
         if not self.elemente or self.modus == "greifen":
             return None
         els = self.elemente
-        zeilen = [e for e in els if e["y"] < self.vy + self.vh and e["y"] + e["h"] > self.vy] or els
-        spalten = [e for e in els if e["x"] < self.vx + self.vw and e["x"] + e["w"] > self.vx] or els
-        mx, my = self.vw // 2, self.vh // 2
-        return (min(e["x"] for e in zeilen) - mx, max(e["x"] + e["w"] for e in zeilen) - mx,
-                min(e["y"] for e in spalten) - my, max(e["y"] + e["h"] for e in spalten) - my)
+        return (min(e["x"] for e in els) - self.vw, min(e["y"] for e in els) - self.vh,
+                max(e["x"] + e["w"] for e in els) + self.vw,
+                max(e["y"] + e["h"] for e in els) + self.vh)
+
+    def pan_bounds(self):
+        """(lo_x, hi_x, lo_y, hi_y) for vx/vy while panning: the view stays
+        inside the growable area (`flaeche`) — at most one view past the
+        content's edge. None = no limit."""
+        f = self.flaeche()
+        if f is None:
+            return None
+        return f[0], f[2] - self.vw, f[1], f[3] - self.vh
+
+    def _deckel(self):
+        """The largest pan step per axis: a quarter of the view, never below
+        the base step."""
+        return (max(PAN_X, self.vw // PAN_VIEW_DIVISOR), max(PAN_Y, self.vh // PAN_VIEW_DIVISOR))
 
     def _pan(self, richtung):
         f = self._pan_faktor_neu(richtung)
-        px = min(_runden(PAN_X * f), max(PAN_X, self.vw // PAN_VIEW_DIVISOR))
-        py = min(_runden(PAN_Y * f), max(PAN_Y, self.vh // PAN_VIEW_DIVISOR))
+        kx, ky = self._deckel()
+        px, py = min(_runden(PAN_X * f), kx), min(_runden(PAN_Y * f), ky)
         dx, dy = {"links": (-px, 0), "rechts": (px, 0),
                   "hoch": (0, -py), "runter": (0, py)}[richtung]
+        self._pan_um(dx, dy)
+
+    def _pan_um(self, dx, dy):
+        """Move the view by (dx, dy) within the growable area; while
+        carrying, the piece travels along and there is no limit."""
         if self.modus == "greifen":
             self.vx += dx
             self.vy += dy
@@ -491,18 +544,175 @@ class Canvas:
         self.vx = pan_step(self.vx, dx, g[0], g[1])
         self.vy = pan_step(self.vy, dy, g[2], g[3])
 
+    # ── Cursor (2026-10-31) ───────────────────────────────────────────
+    def unter(self, wx, wy):
+        """The topmost piece covering world cell (wx, wy), or None."""
+        for e in reversed(self.elemente):
+            if e["x"] <= wx < e["x"] + max(3, e["w"]) and e["y"] <= wy < e["y"] + max(3, e["h"]):
+                return e
+        return None
+
+    def _im_ausschnitt(self, wx, wy):
+        return self.vx <= wx < self.vx + self.vw and self.vy <= wy < self.vy + self.vh
+
+    def ablage_punkt(self):
+        """Where `+` puts a new piece: the cursor if it is in view, else the
+        middle of the view."""
+        if self.cx is not None and self._im_ausschnitt(self.cx, self.cy):
+            return self.cx, self.cy
+        return self.mitte_des_ausschnitts()
+
+    def cursor_setzen(self, wx, wy):
+        """Cursor onto a world cell; the piece under it gets the focus."""
+        self.cx, self.cy = wx, wy
+        e = self.unter(wx, wy)
+        self.fokus = e["id"] if e else None
+
+    def _cursor_gehen(self, richtung):
+        """One arrow at rest: the cursor moves (held: accelerating, capped
+        at a quarter view), stays inside the growable area and the view
+        follows when it nears the edge."""
+        fokus = self.element(self.fokus)
+        if fokus is not None and (self.cx is None or self.unter(self.cx, self.cy) is not fokus):
+            self.cx, self.cy = schnur.mitte(fokus)       # go on from the focused piece
+        elif self.cx is None or not self._im_ausschnitt(self.cx, self.cy):
+            self.cx, self.cy = self.mitte_des_ausschnitts()
+        f = self._pan_faktor_neu("cursor_" + richtung)
+        kx, ky = self._deckel()
+        sx, sy = min(_runden(CURSOR_X * f), kx), min(_runden(CURSOR_Y * f), ky)
+        dx, dy = {"links": (-sx, 0), "rechts": (sx, 0),
+                  "hoch": (0, -sy), "runter": (0, sy)}[richtung]
+        g = self.flaeche()
+        if g is None:
+            x, y = self.cx + dx, self.cy + dy
+        else:
+            x = pan_step(self.cx, dx, g[0], g[2] - 1)
+            y = pan_step(self.cy, dy, g[1], g[3] - 1)
+        self.cursor_setzen(x, y)
+        rx, ry = min(4, self.vw // 4), min(2, self.vh // 4)
+        if x < self.vx + rx:
+            self.vx = x - rx
+        elif x >= self.vx + self.vw - rx:
+            self.vx = x - self.vw + rx + 1
+        if y < self.vy + ry:
+            self.vy = y - ry
+        elif y >= self.vy + self.vh - ry:
+            self.vy = y - self.vh + ry + 1
+
+    # ── Mouse (2026-10-31) ────────────────────────────────────────────
+    # The host reads the terminal (tui/bausteine/sgr_mouse.py) and hands in
+    # screen coordinates; `ursprung` turns them into cells of the drawn view.
+    def rad(self, dx, dy):
+        """Wheel / two-finger scroll: dx, dy notches piled up in one frame
+        (negative = left/up). Pans at most one capped step per axis — a
+        fast swipe can't fling. Not while a question is open."""
+        if self.modus == "frage" or not (dx or dy):
+            return None
+        kx, ky = self._deckel()
+        px = max(-kx, min(kx, dx * RAD_X))
+        py = max(-ky, min(ky, dy * RAD_Y))
+        self._pan_um(px, py)
+        return None
+
+    def maus(self, ereignisse):
+        """Mouse events of one frame (sgr_mouse.Ereignis: art, x, y, dx,
+        dy) → the last Ergebnis (a drop) or None."""
+        raus = None
+        for e in ereignisse:
+            if e.art == "wheel":
+                self.rad(e.dx, e.dy)
+            else:
+                raus = self.zeiger(e.art, e.x, e.y) or raus
+        return raus
+
+    def _welt(self, sx, sy):
+        """Screen cell → world cell of what is drawn there (at the display
+        position while gliding) — None outside the view."""
+        x, y = sx - self.ursprung[1], sy - self.ursprung[0]
+        if not (0 <= x < self.vw and 0 <= y < self.vh):
+            return None
+        ox, oy = self.anzeige_lage()
+        return ox + x, oy + y
+
+    def zeiger(self, art, sx, sy):
+        """Left button: art "press" | "drag" | "release" at screen (sx, sy).
+        Press puts the cursor there (the piece under it is focused); dragging
+        a piece carries it and release drops it (Ergebnis like enter);
+        dragging empty space drags the surface along. At rest only — while
+        connecting a press picks the target; otherwise ignored."""
+        w = self._welt(sx, sy)
+        if art == "press":
+            self._zug = None
+            if w is None:
+                return None
+            if self.modus == "verbinden":
+                e = self.unter(*w)
+                if e is not None and e["id"] != self.fokus:
+                    self.ziel = e["id"]
+                return None
+            if self.modus != "ruhe":
+                return None
+            self.cursor_setzen(*w)
+            e = self.unter(*w)
+            self._zug = {"id": e["id"] if e else None, "x": w[0], "y": w[1], "bewegt": False}
+            return None
+        zug = self._zug
+        if zug is None:
+            return None
+        if art == "drag":
+            if w is None:
+                return None
+            dx, dy = w[0] - zug["x"], w[1] - zug["y"]
+            if not (dx or dy):
+                return None
+            zug["bewegt"] = True
+            if zug["id"] is None:                  # drag the surface along
+                if self.modus == "ruhe":
+                    self._pan_um(-dx, -dy)
+                    self.springen()                # the cell under the hand stays the same
+                return None
+            if self.modus == "ruhe" and self.fokus == zug["id"]:
+                self._ruhe("enter")                # pick it up, as enter does
+            if self.modus == "greifen" and self.griff["id"] == zug["id"]:
+                e = self.element(zug["id"])
+                e["x"] += dx
+                e["y"] += dy
+                zug["x"], zug["y"] = w
+                self.cursor_setzen(*w)
+                self.fokus = zug["id"]
+            return None
+        # release
+        self._zug = None
+        if zug["id"] is not None and zug["bewegt"] and self.modus == "greifen":
+            return self._greifen("enter")
+        return None
+
+    def _springen(self, schritt):
+        """tab / shift+tab: the next / previous piece in reading order (top
+        to bottom, left to right); the first jump takes the piece nearest
+        the middle of the view."""
+        reihe = sorted(self.elemente, key=lambda e: (e["y"], e["x"]))
+        if not reihe:
+            return
+        fokus = self.element(self.fokus)
+        neu = (reihe[(reihe.index(fokus) + schritt) % len(reihe)] if fokus in reihe
+               else self._naechster_zur_mitte())
+        self.fokus = neu["id"]
+        self.cx, self.cy = schnur.mitte(neu)
+        self.folgen(neu)
+
     def _ruhe(self, ev):
         fokus = self.element(self.fokus)
         if ev in ("hoch", "runter", "links", "rechts"):
-            neu = self._naechster(fokus, ev) if fokus else self._naechster_zur_mitte()
-            if neu:
-                self.fokus = neu["id"]
-                self.folgen(neu)
+            self._cursor_gehen(ev)
+            return None
+        if ev in ("naechster", "vorheriger"):
+            self._springen(1 if ev == "naechster" else -1)
             return None
         if ev == "neu":
             if self.neu_fabrik is None:
                 return Ergebnis("neu_waehlen", None, "")
-            mx, my = self.mitte_des_ausschnitts()
+            mx, my = self.ablage_punkt()
             e = self.neu_fabrik(mx, my)
             if e:
                 self.neu_ablegen(e)
@@ -591,9 +801,10 @@ class Canvas:
         return None
 
     def neu_ablegen(self, e):
-        """Ein frisches Element mitten in den Ausschnitt legen und gleich
-        greifen (enter legt ab = gespeichert, esc nimmt es wieder weg)."""
-        mx, my = self.mitte_des_ausschnitts()
+        """Ein frisches Element mitten in den Ausschnitt (or onto the cursor,
+        `ablage_punkt`) legen und gleich greifen (enter legt ab =
+        gespeichert, esc nimmt es wieder weg)."""
+        mx, my = self.ablage_punkt()
         e["x"], e["y"] = mx - e["w"] // 2, my - e["h"] // 2
         self.elemente.append(e)
         self.fokus = e["id"]
@@ -752,6 +963,10 @@ class Canvas:
                 self.ziel, self.fokus]
         for e in sorted(self.elemente, key=lambda e: e.get("id") in oben):
             self._kasten(sicht.get(e.get("id"), e), setze, ox, oy)
+        # The cursor on empty space (on a piece, the piece's focus frame
+        # shows where it is).
+        if self.modus == "ruhe" and self.cx is not None and self.unter(self.cx, self.cy) is None:
+            setze(self.cx, self.cy, "+", "fokus")
         return self._zeilen(netz)
 
     def _in_der_hand(self, ox, oy):

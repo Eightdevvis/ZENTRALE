@@ -78,6 +78,10 @@ LAUF_TICK_MS = ansichten.technik.LAUF_TICK_MS   # Takt der Schleife, während ei
 BEENDEN = ansichten.basis.BEENDEN       # 'q' aus einer Ansicht: Hauptschleife verlassen
 STRG_C = 3                              # Strg+C als Zeichen (raw-Modus, run_ui)
 fussleiste = ansichten.fussleiste       # die Tastenzeile ganz unten
+try:                                    # mouse/touchpad on the canvas (2026-10-31)
+    from tui.bausteine import sgr_mouse
+except ImportError:
+    from bausteine import sgr_mouse
 ansichten.basis.kern_pfad()
 import uhr  # noqa: E402  – core/uhr.py: die eine Uhr + Tageswechsel
 
@@ -827,6 +831,43 @@ def taste_verteilen(u, ch):
             return BEENDEN
 
 
+def _programm_im_fokus(u):
+    z = u.z
+    return getattr(z, "programme", {}).get(ansichten.fenster.aktives_programm(z))
+
+
+def canvas_maus_pflegen(u, nur_aus=False):
+    """Mouse reporting on while the program in front wants it (`maus_will`:
+    a canvas is open — Desk, Schematix), off otherwise
+    (tui/bausteine/sgr_mouse.py). nur_aus: only switch off now."""
+    p = _programm_im_fokus(u)
+    will = bool(p is not None and hasattr(p, "maus_will") and p.maus_will()
+                and sgr_mouse.gewuenscht())
+    if will and nur_aus:
+        return
+    sgr_mouse.MODUS.setzen(will)
+
+
+def maus_lesen(u, ch):
+    """ch starts a mouse report while the canvas mouse is on? Then read it
+    and everything piled up behind it, hand it to the program in front and
+    -> True (the key is used up). Otherwise -> False and ch goes its way."""
+    import curses
+    if not sgr_mouse.MODUS.an or ch not in (sgr_mouse.ESC, curses.KEY_MOUSE):
+        return False
+    u.stdscr.timeout(10)
+    ereignisse = sgr_mouse.lesen(ch, u.stdscr.getch, curses.ungetch)
+    if ereignisse is None:
+        return False
+    bz, z = u.bz, u.z
+    if bz.cmd_mode or bz.help_latched or u.erinnerung.nag_active or fussleiste.erklaert(z):
+        return True                      # something lies on top: the mouse does nothing
+    p = _programm_im_fokus(u)
+    if p is not None and hasattr(p, "maus"):
+        p.maus(ereignisse)
+    return True
+
+
 def bild_zeichnen(u):
     """Ein Bild: Daten holen, Kopf, Spalten, Mitte, Befehlszeile, Fuß,
     Reminder (früher die zweite Hälfte der Hauptschleife von run_ui)."""
@@ -1257,8 +1298,12 @@ def run_ui(stdscr, store):
         # Läuft gerade eine stdout-Zeile durch, reicht ein Mittelding
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         # Maus nur im offenen Chat (ansichten/maus.py: warum das Markieren im
-        # Terminal so heil bleibt).
+        # Terminal so heil bleibt). The canvas mouse (Desk, Schematix) is
+        # switched off before and on after it, so the two never overwrite
+        # each other's terminal modes on the frame the focus changes.
+        canvas_maus_pflegen(u, nur_aus=True)
         chat.maus_pflegen()
+        canvas_maus_pflegen(u)
         # „antwort läuft" ohne lebenden Strom-Thread → zurücksetzen
         # (2026-10-09, ansichten/chat_strom.py).
         chat.waechter()
@@ -1277,6 +1322,8 @@ def run_ui(stdscr, store):
                        else 33 if fast else 60 if AI["active"]      # das Auge lebt
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
         ch = stdscr.getch()
+        if maus_lesen(u, ch):        # a mouse report went to the canvas
+            ch = -1
 
         if ch == curses.KEY_RESIZE:  # Zellform neu messen (Farbkreis rund), 2026-10-11
             z.groesse_neu()
@@ -1372,7 +1419,10 @@ def main():
     try:
         while True:
             try:
-                curses.wrapper(run_ui, store)
+                try:
+                    curses.wrapper(run_ui, store)
+                finally:              # mouse reporting off, whatever happened (sgr_mouse.py)
+                    sgr_mouse.MODUS.setzen(False)
                 if RELOAD["an"]:
                     break             # Hot Reload: unten per exec ersetzen
                 if weglegen_statt_beenden():

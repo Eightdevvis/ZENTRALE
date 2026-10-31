@@ -453,7 +453,7 @@ def _desk_verbinden(u):
 
 
 def _desk_frage(u):
-    _desk(u); zt.taste_verteilen(u, ord("d"))
+    _desk(u); zt.taste_verteilen(u, ord("x"))
 
 
 def _desk_bild(u):

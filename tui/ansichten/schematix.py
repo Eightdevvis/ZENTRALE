@@ -16,11 +16,14 @@
 # the Desk sends the whole desk.
 #
 # Keys (one table, tasten.py; mainstream and collision-free letters):
-#   ↑↓←→ select · W A S D move the view · enter grab / drop · + add a piece
-#   · d remove a planned piece · m make a planned thing real (documented)
+#   ↑↓←→ / w a s d move the cursor over the board (the piece under it is
+#   selected) · tab / shift+tab next / previous piece · W A S D, mouse wheel
+#   or two-finger scroll move the view · click selects, drag carries
+#   (tui/bausteine/canvas.py) · enter grab / drop · + add a piece
+#   · x/del remove a planned piece · m make a planned thing real (documented)
 #   · v draw a wire (red ✕ on a socket that does not fit) · p plugs of a
 #   piece (x unplugs / plugs) · r Run: check → diff → enter switches
-#   · s on another node: same version as that one
+#   · u on another node: same version as that one
 #   · 1–5 layers on/off · i versions panel of a node · c colours · esc back
 
 import threading
@@ -33,10 +36,10 @@ from .tasten import Tasten
 from .translate import _
 
 try:
-    from tui.bausteine import canvas as cv
+    from tui.bausteine import canvas as cv, sgr_mouse
     from tui.bausteine.farbwaehler import Farbwaehler
 except ImportError:                     # started as a script: tui/ is on the path
-    from bausteine import canvas as cv
+    from bausteine import canvas as cv, sgr_mouse
     from bausteine.farbwaehler import Farbwaehler
 
 LAYERS = ("data", "services", "hardware", "network", "power")
@@ -45,11 +48,11 @@ SCHEME = "home"
 VIA = "◦"                               # where a trace meets a piece (memory/hub/schematix_style.md)
 
 _PAN = [("W/A/S/D", "schieben", "move view"), ("alt+↑↓←→", "schieben"), ("shift+↑↓←→", "schieben")]
-_SELECT = [("↑↓←→", "waehlen", "select"), _PAN[0]]
+_SELECT = [cv.CURSOR, _PAN[0]] + cv.SPRINGEN
 _TAIL = [("+", "neu", "add"), ("1/2/3/4/5", "ebene", "layers"), ("c", "farben", "colours"),
          ("esc", "zu", "back")] + _PAN[1:]
 _GRAB = [("enter", "greifen", "grab")]
-_REMOVE = [("d", "entfernen", "remove"), ("del", "entfernen")]
+_REMOVE = [("x", "entfernen", "remove"), ("del", "entfernen")]
 _WIRE = [("v", "verbinden", "draw wire"), ("p", "stecker", "plugs")]
 _RUN = [("r", "run", "run")]
 
@@ -259,16 +262,16 @@ class Schematix:
     TASTEN = Tasten.zusammen({
         "board": _SELECT + _RUN + _TAIL,
         "piece": _SELECT + _GRAB + _WIRE + _RUN + _TAIL,
-        "node": _SELECT + _GRAB + [("i", "versionen", "versions"), ("s", "gleiche_fassung", "same version")]
+        "node": _SELECT + _GRAB + [("i", "versionen", "versions"), ("u", "gleiche_fassung", "same version")]
         + _WIRE + _RUN + _TAIL,
         "planned": _SELECT + _GRAB + _REMOVE + _WIRE + _RUN + _TAIL,
         "thing": _SELECT + _GRAB + [("m", "dokumentieren", "make real")] + _REMOVE + _WIRE + _RUN + _TAIL,
-        "connect": [("↑↓←→", "ziel", "target"), _PAN[0], ("enter/v", "verbinden", "connect"),
+        "connect": [(cv.PFEILE, "ziel", "target"), _PAN[0], ("enter/v", "verbinden", "connect"),
                     ("esc", "zurueck", "cancel")] + _PAN[1:],
         "plugs": [("↑↓", "stecker_waehlen", "select"), ("x", "umstecken", "unplug / plug"),
                   ("esc", "stecker_zu", "back")],
         "run": [("enter", "ausfuehren", "switch"), ("esc", "run_zu", "back")],
-        "grab": [("↑↓←→", "bewegen", "move"), _PAN[0], ("enter", "ablegen", "drop"),
+        "grab": [(cv.PFEILE, "bewegen", "move"), _PAN[0], ("enter", "ablegen", "drop"),
                  ("esc", "zurueck", "cancel")] + _PAN[1:],
         "ask": [("y", "ja", "yes"), ("j", "ja"), ("n/esc", "nein", "no")],
         "picker": [("↑↓", "wahl", "select"), ("enter", "nehmen", "take"), ("esc", "wahl_zu", "cancel")],
@@ -309,12 +312,28 @@ class Schematix:
         ansicht = self.ansicht()
         if self.S["msg"] and not ansicht.startswith("farbe:"):
             self.S["msg"] = ""
+        if self.S["canvas"] is not None:
+            sgr_mouse.pfeile_schlucken(ch, self.z.stdscr)   # no fling from piled-up arrows
         erg = self.TASTEN.verteilen(self, ansicht, ch)
         if ansicht.startswith("farbe:"):
             self._farbe_ergebnis(erg)
         elif isinstance(erg, cv.Ergebnis):
             self._ergebnis(erg)
         return None
+
+    # ── Mouse (tui/bausteine/sgr_mouse.py; the canvas does the moving) ──
+    def maus_will(self):
+        S = self.S
+        return bool(S["active"] and S["canvas"] is not None and S["farbe"] is None
+                    and S["ebene"] != "colours" and S["picker"] is None and S["run"] is None
+                    and S["plugs"] is None)
+
+    def maus(self, ereignisse):
+        if not self.maus_will():
+            return
+        erg = self.S["canvas"].maus(ereignisse)
+        if isinstance(erg, cv.Ergebnis):
+            self._ergebnis(erg)
 
     def _ergebnis(self, erg):
         S = self.S
@@ -357,6 +376,9 @@ class Schematix:
         return self.S["canvas"].aktion_waehlen(taste)
 
     aktion_bewegen = aktion_waehlen
+
+    def aktion_springen(self, taste):
+        return self.S["canvas"].aktion_springen(taste)
 
     def aktion_schieben(self, taste):
         return self.S["canvas"].aktion_schieben(taste)

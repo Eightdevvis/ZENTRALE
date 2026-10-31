@@ -327,7 +327,7 @@ def test_ansicht_verbinden_und_loeschen_speichert(ansicht):
     d.taste(10)
     assert desk.laden("v")["verbindungen"][0]["von"] == "a"
     assert desk.laden("v") and lies("v")["edges"][0]["fromSide"] == "right"
-    d.taste(ord("d"))
+    d.taste(ord("x"))
     d.taste(ord("j"))
     assert [e["id"] for e in desk.laden("v")["elemente"]] == ["b"]
     assert desk.laden("v")["verbindungen"] == []

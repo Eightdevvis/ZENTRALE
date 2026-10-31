@@ -165,20 +165,35 @@ lists), input bursts that pile up (key repeat, terminals turning a
 touchpad swipe into arrow keys).
 
 **How right:** limits live in the shared block, not per app. One step is
-at most a quarter of the view (`PAN_VIEW_DIVISOR`); panning stops where
-the content's far edge reaches the middle of the view — sideways measured
-on the pieces in the rows now in view, so a piece in view stays in view
-(`Canvas.pan_bounds`, `pan_step`). Only the outward step is held; the
-opposite direction moves at once. Carrying a piece and an empty canvas
-stay unbounded.
+at most a quarter of the view (`PAN_VIEW_DIVISOR`). The surface is a
+**growable surface**, not a fence at the content: the reachable area is
+the content's bounding box plus one full view on every side
+(`Canvas.flaeche`, `pan_bounds`, `pan_step`) — you can always go a view
+past the edge into empty space to build there, the area grows with what
+you build, and you can never get lost far out (Sasha, 31.10.2026: „desk
+soll eigentlich endlos bleiben … dass man die fläche halt unendlich
+ausbauen kann"; the first fix, "stop where the content's edge reaches the
+middle", was against that). Only the outward step is held; the opposite
+direction moves at once. Carrying a piece (it pushes the edge out) and an
+empty canvas stay unbounded. The same area bounds the free cursor
+(arrows), and the mouse wheel / two-finger scroll moves at most one capped
+step per frame however many reports a swipe piles up
+(`tui/bausteine/sgr_mouse.py` sums them, `Canvas.rad` caps); piled-up
+arrows (a terminal turning the wheel into arrow keys) count once
+(`sgr_mouse.pfeile_schlucken`).
 
 **Guard:** `tests/test_canvas_pan_apps.py` — the same bursts (120 × S, D,
-W, A) into Desk and Schematix, in-process and in a real PTY: bounded per
-key, a piece still on screen after a full repaint, the way back moves.
-Plus `tests/test_desk_canvas.py::test_held_pan_is_bounded_never_lost_and_recovers`.
+W, A, and 120-report wheel swipes down/right/up/left) into Desk and
+Schematix, in-process and in a real PTY: bounded per key / per swipe,
+always inside the growable area, the way back moves at once and finds the
+board; mouse reporting is off again after quitting. Plus
+`tests/test_desk_canvas.py` (`test_held_pan_is_bounded_never_lost_and_recovers`,
+`test_the_growable_surface_grows_with_what_is_built`, cursor tests) and
+`tests/test_canvas_mouse.py`.
 
 **Known finds:**
 
 | Where | What | Effect |
 |---|---|---|
 | `canvas.Canvas._pan` | step × up to 4, no cap, no bound | Schematix flew off the board and looked stuck (Desk latent); fixed 31.10.2026 |
+| `canvas.Canvas.pan_bounds` (first fix) | stopped where the content's edge reached the middle | no room to build next to the content — against "endless"; growable surface the same day |
