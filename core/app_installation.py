@@ -232,7 +232,10 @@ def installieren(adresse, ansichten) -> dict:
         rest = [e for e in reg.lesen() if e["name"] != name]
         rest.append({"name": name, "quelle": s["@id"], "ordner": ziel, "ansichten": gewaehlt,
                      "am": (alt or {}).get("am")
-                     or datetime.now().astimezone().isoformat(timespec="seconds")})
+                     or datetime.now().astimezone().isoformat(timespec="seconds"),
+                     "source": {"kind": "git", "ref": url},
+                     "version": str(m.get("version") or ""),
+                     "data": (alt or {}).get("data") or {}})
         reg.schreiben(rest)
     shop.holen(s["@id"])                          # installiert heißt auch: geholt
     mark_owned(s["@id"])

@@ -22,7 +22,7 @@ import pytest
 from devkit import profiles, workspace
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "scripts"))
+sys.path.append(os.path.join(ROOT, "scripts"))   # last: scripts/abgleich.py must not shadow core/abgleich.py
 import release_archive  # noqa: E402
 
 LISTE = [{"id": "einkauf", "name": "Einkauf", "created": "2026-10-01", "next_item": 2,
@@ -142,3 +142,56 @@ def test_publishing_runs_this_test_first():
     upload = script.index('hoch(`pakete/')
     gate = script.index("tests/test_alte_fassung.py")
     assert gate < upload
+
+
+# ── The app register (node-local, never synced) ──────────────────────
+#
+# Register v2 (memory/hub/app_delivery_plan.md step 1) adds fields; a node
+# that goes back to an older release must still read the file the newer one
+# wrote. Readers: every archived release that has core/app_register.py, plus
+# the last commit before v2 (no release had the register yet on 2026-10-31).
+
+REGISTER_BEFORE_V2 = "4e755ee"
+
+_OLD_READER = r"""
+import json, sys, types
+folder, reader = sys.argv[1], sys.argv[2]
+ai_config = types.ModuleType("ai_config")
+ai_config.setting = lambda k, *a: folder if k == "installiert_ordner" else None
+dateien = types.ModuleType("dateien")
+dateien.knoten = lambda: "node"
+sys.modules.update(ai_config=ai_config, dateien=dateien)
+ns = {"__file__": reader, "__name__": "app_register"}
+exec(compile(open(reader).read(), reader, "exec"), ns)
+print(json.dumps([[e["name"], e["ordner"], e["ansichten"]] for e in ns["lesen"]()]))
+"""
+
+
+def _register_readers():
+    readers = []
+    for commit in [*release_archive.RELEASES.values(), REGISTER_BEFORE_V2]:
+        r = subprocess.run(["git", "-C", ROOT, "show", f"{commit}:core/app_register.py"],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            readers.append((commit, r.stdout))
+    return readers
+
+
+def test_older_code_reads_the_v2_register(tmp_path):
+    import app_register
+    app_register.schreiben([
+        {"name": "budget", "quelle": "zentrale://shop/apps/budget", "ordner": "/x/budgeter",
+         "ansichten": ["browser"], "am": "2026-10-31T12:00:00+01:00",
+         "source": {"kind": "zentrale-package", "ref": "https://x/budget.tar.gz"},
+         "version": "0.4.1", "data": {"files": "zentrale-data"}}])
+    folder = os.path.dirname(app_register.datei())
+    os.replace(app_register.datei(), os.path.join(folder, "apps-node.json"))
+    readers = _register_readers()
+    assert any(c == REGISTER_BEFORE_V2 for c, _ in readers), "the commit before v2 must be readable"
+    for commit, source in readers:
+        path = tmp_path / f"app_register_{commit}.py"
+        path.write_text(source, encoding="utf-8")
+        r = subprocess.run([sys.executable, "-I", "-c", _OLD_READER, folder, str(path)],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"{commit}: {r.stderr}"
+        assert json.loads(r.stdout) == [["budget", "/x/budgeter", ["browser"]]], commit

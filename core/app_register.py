@@ -16,6 +16,16 @@
 # im Ordner — hier steht nur, was Sasha gewählt hat (dasselbe Objekt, nicht
 # kopiert).
 #
+# Register v2 (memory/hub/app_delivery_plan.md step 1, 2026-10-31): every
+# entry also says HOW it got here and what it runs —
+#     "source": {"kind": "git", "ref": "<repo address>"},   # source adapter
+#     "version": "1.2.0",                                    # installed now
+#     "data": {}                                             # data plugs
+# The file carries "format": 2. Old entries (no `source`) read as a `git`
+# source whose ref is the checkout's own origin (ref ""), version "" and no
+# data plugs. Old releases keep reading the file: they only look at name,
+# ordner and ansichten, which v2 still writes.
+#
 # Wo Apps wohnen: Einstellung `app_ordner` (Env ZENTRALE_APP_ORDNER),
 # Standard der Ordner, in dem ZENTRALE liegt — dort stehen schon Tutor und
 # Karte.
@@ -32,6 +42,8 @@ _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 NAME = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 ORDNER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SCHEMATA = ("https", "ssh", "file")
+FORMAT = 2
+KIND = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 
 
 # ── Orte ──────────────────────────────────────────────────────────────
@@ -62,12 +74,29 @@ def lesen() -> list:
     for e in (d.get("apps") if isinstance(d, dict) else None) or []:
         if (isinstance(e, dict) and NAME.match(str(e.get("name") or ""))
                 and isinstance(e.get("ordner"), str) and isinstance(e.get("ansichten"), list)):
-            raus.append(e)
+            raus.append(normalized(e))
     return raus
 
 
+def normalized(e) -> dict:
+    """One register entry in v2 form. An entry without a valid `source`
+    (written before v2) reads as a `git` source with ref "" (= the
+    checkout's own origin); `version` defaults to "", `data` to {}."""
+    e = dict(e)
+    src = e.get("source")
+    if not (isinstance(src, dict) and KIND.match(str(src.get("kind") or ""))
+            and isinstance(src.get("ref", ""), str)):
+        src = {"kind": "git", "ref": ""}
+    e["source"] = {"kind": str(src["kind"]), "ref": str(src.get("ref") or "")}
+    e["version"] = e["version"] if isinstance(e.get("version"), str) else ""
+    e["data"] = dict(e["data"]) if isinstance(e.get("data"), dict) else {}
+    return e
+
+
 def schreiben(eintraege) -> None:
-    dateien.json_schreiben(datei(), {"apps": sorted(eintraege, key=lambda e: e["name"])})
+    dateien.json_schreiben(datei(), {"format": FORMAT,
+                                     "apps": sorted((normalized(e) for e in eintraege),
+                                                    key=lambda e: e["name"])})
 
 
 def alle() -> list:

@@ -97,6 +97,10 @@ def test_installieren_merkt_nur_die_gewaehlten(laden):
     assert os.path.isfile(os.path.join(ziel, "app.toml"))
     assert not os.path.exists(os.path.join(ai.app_ordner(), ai.LADEN, "sparbuch"))
     assert [e["ansichten"] for e in ai.alle()] == [["browser"]]
+    # register v2: how it got here and what runs
+    e = ai.alle()[0]
+    assert e["source"] == {"kind": "git", "ref": laden.as_uri()}
+    assert e["version"] == "0.1.0" and e["data"] == {}
     assert apps.pfad("sparbuch") == ziel
     # installiert heißt auch geholt
     assert ADRESSE in {o["typeOfGood"]["@id"] for o in
