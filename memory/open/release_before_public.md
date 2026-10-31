@@ -13,5 +13,6 @@ prepared but switched off (`deploy/verteilung.toml`, `oeffentlich = false`;
   still name Sasha (see `memory/hub/produkt_inventur.md`).
 - **Legal:** copyright of AI-written code, privacy (voice, conversations,
   health), provider terms.
+- **Signature** for our own packages ([package_signing.md](package_signing.md)).
 - Then: `oeffentlich = true`; `server/src/paket.ts` needs a code-less route if
   the cloud should serve public packages.

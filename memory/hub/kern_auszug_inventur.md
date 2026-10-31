@@ -16,8 +16,9 @@ A8, A9, the resolve route for the calendar, the Prüfstand by setting, guards
 E5/E7/E8 — `listen_baum` left the TUI door; `listen_bild` stays for the
 list view's root boxes until Sasha decides where the root's picture lives
 ([list_root_picture.md](../open/list_root_picture.md)).
-**Recommended next step:** D step 4 (one way to get an app), then Lists
-moves out (step 5, [list_extraction_plan.md](list_extraction_plan.md)).
+**Recommended next step:** D step 4 (since 31.10.: ZENTRALE docks any
+program from any source, [app_delivery_plan.md](app_delivery_plan.md)), then
+Lists moves out (step 5, [list_extraction_plan.md](list_extraction_plan.md)).
 Two hub gaps every later app needs are now named and placed in D: **apps
 bring their own AI tools and skills** (section F) and **a generic frame for
 local device adapters** (section G). Since 2026-10-31 (`7b0bab0`, Sasha,
@@ -270,7 +271,7 @@ takes ~7,350 lines of that back into the hub.
 | 1 | Hub basics: `/api/apps`, start/stop, autostart, forwarding, tile over HTTP, E1/E2/E4 | every app needs it | M | **done `15d4aa1`** |
 | 2 | Map as proof app | fan-out 0, tests only the hub mechanics | S | **done `db9e40b`** |
 | 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | No move, no new repo; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | **done `81ddcf9`** (31.10.); `listen_bild` still in the door for the root's boxes ([list_root_picture.md](../open/list_root_picture.md)) |
-| 4 | **One way to get an app**: tutor and map through the store, uninstall for downloaded apps | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | S–M | open, **plan [app_delivery_plan.md](app_delivery_plan.md)** (6 questions for Sasha) ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
+| 4 | **Dock anything from anywhere** (reframed by Sasha 31.10.): pluggable source adapters (our packages, git, Flatpak, distro packages, images …), install without account, data location as a `files` socket, uninstall with zip export; tutor and map through it as proof | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | M | open, **plan [app_delivery_plan.md](app_delivery_plan.md)** (rewritten 31.10.; steps marked B are needed before Lists; 4 questions for Sasha, first: login) ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
 | 5 | **Lists moves out** as a package (`offers: tile`, `needs: data/sync`), calendar and Morgenblick ask over HTTP | first app with readers in the core; needs 3 + 4 | M | open |
 | 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano decided: own app) | S each | open |
 | 7 | **Hub gap F: apps bring AI tools and skills** (generator and skill loader read installed packages; skills row in [app_motor_plan.md](app_motor_plan.md)) | every later app has AI tools (graphs, mail, calendar), and the screen guide needs it ([screen_guide_plan.md](../ki/screen_guide_plan.md) step 0b). Not needed for 3–6, so it does not block the next step | M | open |
@@ -399,6 +400,35 @@ tool in their package).
   dock to any program, so the Schmied builds the adapter and the AI tool
   for them. Replaces the 25.10. wording "AI tool is its own store package"
   in [printer_adapter.md](../open/printer_adapter.md).
+- **Step 4 reframed (answers to the first step-4 plan, 2026-10-31):** not
+  "a store for our apps" but a frame for every program in the digital world
+  (*„millionen von apps … die man an zentrale dranstöpseln kann"*). Plan:
+  [app_delivery_plan.md](app_delivery_plan.md).
+  1. **Sources are pluggable**: apt, Flatpak, images, URL/tarball, git, our
+     packages … each a source adapter (install, update, hold, remove,
+     version) like the device adapters; the store is only a catalog that
+     points at sources. Later the catalog may stream in what sources offer
+     (AppStream, PackageKit, Repology — plan 2.2a).
+  2. **Installing needs no account and no syncer** — local to one machine;
+     account/cloud only carry data to other machines.
+  3. **Signature later**: each source checks its own trust; our packages
+     are signed before going public ([package_signing.md](../open/package_signing.md)).
+  4. **Uninstall** exports the app's data as a zip to review or throw away
+     by hand; for foreign programs only declared locations, ZENTRALE says
+     where data probably still is.
+  5. **Data location is a `files` socket** (home = local, cloud folder =
+     synced, anywhere); default = the user's choice; no core edit per app
+     (ends the core-side sync allow-list problem).
+  6. **Preinstalled = what one needs to operate ZENTRALE**, whatever the use
+     case: core, `zentrale` CLI, TUI, Schematix, the store. No checklist;
+     everything else the user installs.
+  7. **Moving out of the core is a one-time special case**: no big update
+     machinery; plan chose "install first, then switch", guided per node,
+     with backup before, verify old = new after, written roll-back. **No
+     data loss — ZENTRALE is Sasha's only calendar.**
+  8. Login: **open**, question Q1 in the plan. Framing (Sasha): ZenCloud is
+     itself a third-party provider (Cloudflare) with our login on top, so
+     our account is one sync provider among others.
 
 **Open:**
 
@@ -457,6 +487,8 @@ tool in their package).
 
 ## Historie
 
+- **2026-10-31** — D step 4 reframed by Sasha ("dock anything from
+  anywhere"); decisions in H, plan [app_delivery_plan.md](app_delivery_plan.md) rewritten.
 - **2026-10-31** — D step 3 done (`81ddcf9`): A8, A9, `POST /api/lists/aufloesen`
   for the calendar, the Prüfstand by setting, guards E5/E7/E8; fork on the
   list view's root picture filed ([list_root_picture.md](../open/list_root_picture.md)).

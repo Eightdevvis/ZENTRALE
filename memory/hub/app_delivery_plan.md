@@ -1,338 +1,467 @@
-# One way to get an app — delivery, update, hold, uninstall, moving out (plan)
+# Dock anything from anywhere — sources, install, update, hold, uninstall, data, moving out (plan)
 
-**Stand 2026-10-31: plan only, nothing built; six forks wait for Sasha
-(section 4).** Blueprint for roadmap step 4 of
-[kern_auszug_inventur.md](kern_auszug_inventur.md) section D: every node gets
-every app the same way — through the store — before Lists (step 5,
+**Stand 2026-10-31 (rewritten the same day after Sasha's answers): plan only,
+nothing built. Decided: the universal frame (section 2). Open: four forks
+for Sasha (section 5), the first is the login topic.** Blueprint for
+roadmap step 4 of [kern_auszug_inventur.md](kern_auszug_inventur.md)
+section D (decisions: section H there). It must hold before Lists (step 5,
 [list_extraction_plan.md](list_extraction_plan.md)) and Schematix (step 10,
-[../open/schematix_extraction.md](../open/schematix_extraction.md)) leave the
-core. Builds on the building kit ([building_kit_plan.md](building_kit_plan.md)
-§3 tiny core + bundle, §4 cloud preinstalled, §5 node lifecycle and holds),
-the store ([shop.md](shop.md) "Apps installieren", "Built-in apps,
-ownership, holds"), the plug dialog ([port_types.md](port_types.md)) and the
-app engine ([app_motor_plan.md](app_motor_plan.md) §4–5). Decided by Sasha:
-**one repo per app** (GitHub, private, created with `gh` as `Eightdevvis`).
+[../open/schematix_extraction.md](../open/schematix_extraction.md)) leave
+the core. Builds on the building kit ([building_kit_plan.md](building_kit_plan.md)
+§3 tiny core + bundle, §5 node lifecycle and holds), the ports and plug
+dialog ([port_types.md](port_types.md)), the adapter idea
+([adapter.md](adapter.md), inventory section G) and the store
+([shop.md](shop.md)).
 
 ## Why
 
+Sasha, 2026-10-31, on the first version ("a store for our apps"):
+
+> *„wir denken nicht mehr dran dass wir paar apps gebaut haben. wir denken
+> stattdessen, dass es millionen von apps in der flut der digitalen welt
+> gibt die man an zentrale dranstöpseln kann wenn man will."*
+
+> *„wir sprechen bei diesen architektur entscheidungen nich nur über unsere
+> projekte sondern einfach einen rahmen der für alle funktionieren kann."*
+
+So step 4 is no longer "deliver our apps": it is **ZENTRALE can dock any
+program from any source**, and our own apps are just one source among many.
+The old reasons still hold underneath:
+
 - **The Mini-PC lesson** ([building_kit_plan.md](building_kit_plan.md) §0):
-  a node was installed, synced once and then went silent, because what kept
-  it alive arrived later and nothing pulled it. The same happens to an app:
-  sync is per app (`core/abgleich_apps.py` builds its table from the
-  *installed* manifests plus `core/eingebaute_apps.py`). The day `fokus`
-  leaves `EINGEBAUT`, a node that has no lists package simply stops syncing
-  `data/lists.json` — no error, the lists just go stale there.
-- **Today there are three ways to get an app**, not one: built-in (compiled
-  into the core), hard-coded neighbour folder (`core/apps.py` `BEKANNT`:
-  tutor, map), and the store (budget, `git clone`). Every extraction would
-  add to the second way unless the store becomes the only one.
-- **The store way does not work on a fresh node yet**: it clones private
-  GitHub repos over SSH — a fresh PC (Sasha reinstalls it soon, not joined
-  meanwhile) has no GitHub key, so every downloaded app fails there.
-- CLAUDE.md "Apps live outside the core": *preinstalled = installed at
-  signup, deselectable/holdable*, never compiled in.
+  what a node needs must reach it by a normal path, or it goes silent. The
+  day `fokus` leaves `EINGEBAUT`, a node without the lists package stops
+  syncing `data/lists.json` — no error, the lists go stale there.
+- **Today there are three ways to get an app** (built-in, hard-coded
+  neighbour folder, store via `git clone`), and the store way fails on a
+  fresh node (no GitHub key).
+- **Every new app with data needs a core edit** today (the sync allow-list
+  lives in the core) — the opposite of "apps live outside the core".
 
 ## 1. What exists today (measured 2026-10-31, read from code)
 
+Unchanged from the first version; the facts the frame must absorb.
+
 ### 1.1 Mechanisms
 
-| Part | Where | What it does | Gap for step 4 |
+| Part | Where | What it does | Gap |
 |---|---|---|---|
-| Catalog | `core/shop_katalog.jsonld`, `core/shop.py`, `GET /api/shop` | schema.org `ItemList`; apps carry `downloadUrl` (git repo) + `app_name`, built-ins carry `built_in: true` | only budget, cloud, cloud folder are listed; tutor/map are not |
-| Install (download) | `core/app_installation.py` `laden`/`installieren`, `POST /api/apps/laden|installieren` | `git clone` into `<app_ordner>/.laden/<repo>` → check `app.toml` → move to `<app_ordner>/<repo>` → register; adopts an existing checkout of the same repo | needs `git` (installer does not check it) and **GitHub access** (budget: `ssh://git@github.com/Eightdevvis/budgeter.git`); no checksum, no signature |
-| Register | `core/app_register.py` → `data/hub/apps-<node>.json` (not synced) | name, source address, folder, chosen views, date | no version field; laptop holds only `budget` |
-| Where code lands | `app_register.app_ordner()`: setting `app_ordner`, default the folder that contains ZENTRALE | laptop: `~/codicus/` | installed node: `~/.local/share/zentrale/hub/` next to the release folders `38/`, `39/` (⚠ prüfen: `_ROOT` uses `abspath`, not `realpath`) |
-| Plug dialog at install | `core/plugs.py`, `app_installation.plug`; CLI `zentrale apps install|plug`; TUI store | asks every `needs` socket; a required socket left unplugged withdraws the app from the register (folder stays) | — (works for any app) |
-| Built-in store apps | `core/builtin_store_apps.py` | cloud, cloud folder: "installed" = the existing node setting; remove = setting off, nothing deleted | — |
-| Update | `core/app_update.py`, run by `zentrale update --automatic` (daily timer) after the core | `git pull --ff-only` per register entry; skips held apps and checkouts with local changes | no health check, no roll-back, no version choice; nothing for apps outside the register (tutor, map) |
-| Hold | `app_register.holds()`, setting `app_holds` (never synced), `POST /api/apps/hold` | `{name: {version, commit, since}}` | holds a git commit, not a package version |
+| Catalog | `core/shop_katalog.jsonld`, `core/shop.py`, `GET /api/shop` | schema.org `ItemList`; apps carry `downloadUrl` (git repo) + `app_name`, built-ins `built_in: true` | lists only budget, cloud, cloud folder; one source kind only (git) |
+| Install | `core/app_installation.py` `laden`/`installieren`, `POST /api/apps/laden|installieren` | `git clone` into `<app_ordner>/.laden/<repo>` → check `app.toml` → move → register; adopts an existing checkout | needs `git` and **GitHub access** (budget: `ssh://git@github.com/Eightdevvis/budgeter.git`); no checksum |
+| Register | `core/app_register.py` → `data/hub/apps-<node>.json` (not synced) | name, source address, folder, chosen views, date | no `version`, no source kind |
+| Where code lands | `app_register.app_ordner()`: setting `app_ordner`, default the folder containing ZENTRALE | laptop: `~/codicus/` | installed node: `~/.local/share/zentrale/hub/` beside the release folders (⚠ prüfen: `_ROOT` uses `abspath`, not `realpath`) |
+| Plug dialog | `core/plugs.py`, `app_installation.plug`; `zentrale apps install|plug`; TUI store | asks every `needs` socket; a required socket left open withdraws the app | works for any app |
+| Built-in store apps | `core/builtin_store_apps.py` | cloud, cloud folder: "installed" = a node setting | — |
+| Update | `core/app_update.py`, run by `zentrale update --automatic` after the core | `git pull --ff-only` per register entry; skips held apps and dirty checkouts | no health check, no roll-back; nothing for tutor/map |
+| Hold | `app_register.holds()`, setting `app_holds` (never synced), `POST /api/apps/hold` | `{name: {version, commit, since}}` | holds a git commit |
 | Uninstall | `app_installation.entfernen`, `POST /api/apps/remove` | built-ins only | **downloaded apps: 501** ([../open/store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
-| Hard-coded apps | `core/apps.py` `BEKANNT = {tutor: language-tutor, karte: zentrale-karte}`; TUI wheel `startseite.py` `RAD_APPS` (`m`, `u`), `rad_wahl.py`, `app_start.py` + `scripts/open_tutor_room.py` | found as sibling folders, always "installed" when the folder exists | [../open/store_tutor_map_migration.md](../open/store_tutor_map_migration.md); inventory A15, A16 |
-| Bundle | `scripts/paket_bauen.py` `bundle()` → `BUNDLE.json` in the core tarball | core + `EINGEBAUT` at the release; `BEKANNT` + catalog apps without version | nothing reads it on the node yet (only documentation of the release) |
-| Signup/second device | `zentrale_cli/wizard.py` `_offer_owned`; `core/account_ownership.py` (`/v1/besitz`) | built-ins owned by the account are switched on; downloaded ones only get a hint "get them in the store" | no "preinstalled" set; no download in the wizard |
-| Core package | `deploy/paket.txt` → `scripts/paket_bauen.py` → cloud R2 `pakete/`, `GET /v1/paket`, `/v1/paket/<v>.tar.gz` (`server/src/paket.ts`, invite code or session) | sha256 checked, unpacked beside, self-test, switch `aktuell`, previous release kept | the model to copy for apps |
-| Data across core updates | `zentrale_cli/aktualisieren.py`: `hub/<release>/data -> ../../data` | everything under `data/` survives updates | the tutor's patterns are `tutor/data/**` (`eingebaute_apps.ERSATZ`) — **outside `data/`**, so on an installed node they would sit inside the release folder (⚠ prüfen: never tested on an installed node) |
-| Sync allow-list | `core/abgleich_auswahl.ABGLEICH` (positive list, deny by default) | a manifest pattern syncs only if it is on this core list | **every new app with data needs a core edit** — contradicts "apps outside the core" |
+| Hard-coded apps | `core/apps.py` `BEKANNT = {tutor, karte}`; TUI wheel `RAD_APPS`, `rad_wahl.py`, `app_start.py`, `scripts/open_tutor_room.py` | sibling folders, "installed" when the folder exists | [../open/store_tutor_map_migration.md](../open/store_tutor_map_migration.md); inventory A15, A16 |
+| Bundle | `scripts/paket_bauen.py` `bundle()` → `BUNDLE.json` in the core tarball | core + `EINGEBAUT` at the release | nothing reads it on the node yet |
+| Core package | `deploy/paket.txt` → `scripts/paket_bauen.py` → R2 `pakete/`, `GET /v1/paket` (`server/src/paket.ts`, invite code or session) | sha256, unpack beside, self-test, switch `aktuell`, previous release kept | the model to copy for our packages; **the node fetches updates with its session** (`zentrale_cli/aktualisieren.py:156`) |
+| Data across core updates | `zentrale_cli/aktualisieren.py`: `hub/<release>/data -> ../../data` | everything under `data/` survives | tutor data is `tutor/data/**` (`eingebaute_apps.ERSATZ`), **outside `data/`** (⚠ prüfen: never tested on an installed node) |
+| Sync allow-list | `core/abgleich_auswahl.ABGLEICH` (positive list, deny by default) | a manifest pattern syncs only if it is on this core list | **every new app with data needs a core edit** |
+| Cloud folder | `core/cloud_folder.py`, `~/Zentrale/Cloud` = `data/cloud/**` in the sync namespace | a visible folder that syncs through the Mitte | the natural "synced location" for app data |
+| Mitte back ends | `core/abgleich.py` setting `abgleich_mitte_art` = `git` (old private repo) or `http` (ZenCloud) | sync already has two back ends behind one interface | the seed of "sync as an adapter" (section 4) |
 
 ### 1.2 Per node
 
-| Node | How it runs ZENTRALE | How apps get there today | Missing for "one way" |
+| Node | Runs ZENTRALE as | Apps today | Missing |
 |---|---|---|---|
-| **Laptop** (`0RAMMachine`, Sasha's dev machine) | git checkout `~/codicus/ZENTRALE` | built-ins in the core; tutor/map as sibling checkouts (`BEKANNT`); budget via store (adopted own checkout) | tutor/map into the register; the checkout must keep working as "developer source" |
-| **PC, fresh install** (soon, not joined meanwhile) | `install.sh` with invite code → `~/.local/share/zentrale/hub/<release>` | built-ins only; store install fails without a GitHub key; tutor/map: nothing (no sibling folder) | a package source that needs only the account; preinstalled set at signup; **the natural first real test** |
-| **Pi** (outpost, no `core/`) | package cut by `deploy/aussenposten.txt`, pulled from the PC backend (`scripts/aussenposten_update.py`) | tutor parts as `app:tutor/…` lines read from the PC's sibling folder; map deliberately not | separate review ([../open/pi_review.md](../open/pi_review.md)); here only: the PC's builder must read app parts from the *installed* package, not a sibling repo (step 8) |
-| **Mini-PC** (installed 24.10., release 39, silent) | `install.sh` | built-ins of release 39 | must be healed first ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)); then it is the test case for "an app leaves the core while the node is on an old release" |
-| **Phone** | APK; chat and calendar compiled in (`mobile/lib/`), no app register | none | not part of step 4: the app engine's step 1 ([app_motor_plan.md](app_motor_plan.md) §6, [../open/app_engine_decisions.md](../open/app_engine_decisions.md)). Lists/Schematix are not on the phone, so nothing is lost there now |
+| **Laptop** (Sasha's dev machine) | git checkout `~/codicus/ZENTRALE` | built-ins; tutor/map as sibling checkouts; budget via store (adopted) | tutor/map in the register; checkouts stay as `git` source |
+| **PC, fresh install** (soon, not joined) | `install.sh` → `~/.local/share/zentrale/hub/<release>` | built-ins only; store fails without a GitHub key | a source that needs no key and no account; **the first real test** |
+| **Pi** (outpost, no `core/`) | package cut by `deploy/aussenposten.txt`, pulled from the PC | tutor parts as `app:tutor/…` lines from the PC's sibling folder | the PC's builder reads app parts from the register, not a sibling repo ([../open/pi_review.md](../open/pi_review.md)) |
+| **Mini-PC** (release 39, silent) | `install.sh` | built-ins of release 39 | heal first ([../open/minipc_finish_setup.md](../open/minipc_finish_setup.md)); then the test case "app moved out, node on an old release" |
+| **Phone** | APK, chat and calendar compiled in | none | not part of step 4 ([app_motor_plan.md](app_motor_plan.md) §6); later the phone gets its own sources (APK, F-Droid) in the same frame |
 
-### 1.3 The app repos
+### 1.3 Our app repos
 
-| App | Repo | Remote | `[daten]` | Notes |
-|---|---|---|---|---|
-| tutor | `~/codicus/language-tutor` | `git@github.com:Eightdevvis/language-tutor.git` | **none** (fallback `eingebaute_apps.ERSATZ`, [../open/tutor_manifest_data.md](../open/tutor_manifest_data.md)) | data at `ZENTRALE/tutor/data` |
-| map (`karte`) | `~/codicus/zentrale-karte` | **none** ([../open/map_repo_remote.md](../open/map_repo_remote.md)) | none needed (no user data) | 29 MB map data + numpy |
-| budget | `~/codicus/budgeter` | `Eightdevvis/budgeter` (catalog) | none on purpose (DB in `~/.local/share/budget/`, stays on the node) | first store app |
+| App | Repo | Remote | Data |
+|---|---|---|---|
+| tutor | `~/codicus/language-tutor` | `Eightdevvis/language-tutor` | no `[daten]` (fallback `ERSATZ`, [../open/tutor_manifest_data.md](../open/tutor_manifest_data.md)); data at `ZENTRALE/tutor/data` |
+| map (`karte`) | `~/codicus/zentrale-karte` | **none** ([../open/map_repo_remote.md](../open/map_repo_remote.md)) | none (29 MB map data + numpy in the code) |
+| budget | `~/codicus/budgeter` | `Eightdevvis/budgeter` | DB in `~/.local/share/budget/`, on purpose node-local |
 
-## 2. The one path
+## 2. The frame (decided by Sasha 2026-10-31)
 
-One sentence: **the store catalog says what exists, the cloud holds the
-package files, the node installs a versioned package beside the old one,
-switches only after a health check, and the register is the one truth of
-what is installed here.** Git checkouts stay, but only as the developer's
-source on Sasha's machine.
-
-### 2.1 Where a package comes from (fork Q1)
+One sentence: **a catalog says what exists and where to get it; a source
+adapter installs, updates, holds and removes it; the register is the one
+truth of what is installed on this machine; the app's data is plugged into
+a location like any other socket.**
 
 ```
- app repo (GitHub, private)          ZENTRALE cloud (R2)                  node
- ─────────────────────────           ───────────────────                  ────
- tag v1.2.0 ──▶ scripts/app_paket_bauen.py ──▶ apps/<name>/neueste.json ──▶ GET /v1/apps/<name>
-                (on Sasha's machine,          apps/<name>/<v>.tar.gz   ──▶ GET /v1/apps/<name>/<v>.tar.gz
-                 like the core package)                                   (session; sha256 checked)
- catalog item:  downloadUrl = zentrale cloud address of the package, app_name, version list
+ catalog item ──points at──▶ sources: [flatpak:org.gimp.GIMP, apt:gimp, zentrale-package:<url>]
+      │                                     │ node picks one it has an adapter for
+      ▼                                     ▼
+ dock card (optional)              source adapter  ── install / update / hold / remove / version / check
+ start, ports, data locations               │
+      └───────────────▶ register (this node: name, source, version, data plugs, hold)
+                                            │
+                          plug dialog: data → files location (home | cloud folder | anywhere)
 ```
 
-- The catalog stays the one list of what exists (`core/shop_katalog.jsonld`
-  today, later from Sasha's server — the exchange point in `shop.md`).
-- Recommended: the **cloud** serves app packages exactly like the core
-  package (same build script style, same R2 bucket, same session rule). A
-  node needs only its account — no GitHub key, no `git`.
-- `git` stays for one case: a **developer source** (Sasha's checkouts). The
-  register records `source: package | checkout`; `checkout` entries are
-  updated by `git pull --ff-only` as today, `package` entries by the cloud.
-- Package format: a `.tar.gz` like the core (one unpack and checksum path;
-  [app_motor_plan.md](app_motor_plan.md) §1 says `.zip` — part of Q1).
-- What goes into a package: a positive list in the app repo (`paket.txt`,
-  same rules as `deploy/paket.txt`: never `data/`, `.git`, keys). The
-  builder refuses otherwise.
+### 2.1 Sources are pluggable (decision 1)
 
-### 2.2 Where an app lives on a node
+A **source adapter** is the same idea as a device adapter (inventory
+section G, [../open/printer_adapter.md](../open/printer_adapter.md)): the
+core keeps one interface and a broker; each source docks with its own small
+manifest. The interface, one per source kind, never per program:
 
-| What | Where | Survives | Why |
+| Call | Answers |
+|---|---|
+| `available(ref)` | versions it can install, newest first |
+| `install(ref, version?)` | installed version + where the program now is |
+| `update(ref)` / `rollback(ref)` | new (or previous) version; `rollback` only where the source can (else a clear "this source cannot go back") |
+| `hold(ref, version)` / `release(ref)` | the source's own hold if it has one (apt hold, Flatpak mask), else ZENTRALE's hold |
+| `remove(ref)` | removed, without touching user data (apt `remove`, never `purge`) |
+| `version(ref)` | what is installed now, or nothing |
+| `check(ref)` | runs? (our apps: `/hub/gesund`; foreign: the program starts / `--version` answers) |
+| `trust` | what the source itself verifies (signature, checksum, nothing) — shown, never faked |
+
+Source kinds, first and later:
+
+| Kind | Ref | Root? | Trust (decision 3: each source checks its own) |
 |---|---|---|---|
-| Code | `~/.local/share/zentrale/apps/<name>/<version>/` + `apps/<name>/aktuell -> <version>` (checkout nodes: the checkout folder) | app updates (previous version kept) | same pattern as the core: switch a link, roll back by switching it back |
-| Own venv (only if the app has `requirements.txt`) | `apps/<name>/<version>/venv` (reused when requirements are unchanged, like `aktualisieren.py`) | — | map needs numpy; budget and tutor use stdlib or ZENTRALE's |
-| Register | `data/hub/apps-<node>.json` + new fields `version`, `source` | core updates (`data/` symlink) | per node, never synced (standort_und_app.md) |
-| Holds | setting `app_holds` (`data/ai_config.json`) — `version` becomes the key fact, `commit` only for checkouts | core updates | per node |
-| App data | under `data/` only (fork Q4) | core and app updates, uninstall (fork Q3) | `data/` is the only folder that survives a core update today |
+| `zentrale-package` | HTTPS URL + sha256 (our cloud or any URL; a plain tarball is the same adapter) | no | sha256 now, signature before public ([../open/package_signing.md](../open/package_signing.md)) |
+| `git` | repo address + branch | no | none beyond the transport; **developer source** (Sasha's checkouts) |
+| `flatpak` | app id, `--user` | no | Flatpak signs |
+| `image` | OCI image, rootless (podman) | no | digest pinned; registry signature where offered |
+| `appimage` / single file | URL + sha256 | no | sha256 |
+| `apt`, `pacman`, … (likely one PackageKit adapter, 2.2a) | package name | **yes** | the distribution signs |
+| later: `apk`/F-Droid (phone), Flathub/Debian **catalogs** as catalog adapters | — | — | — |
 
-### 2.3 Install
+**Rule for root sources:** ZENTRALE never runs sudo and never keeps a
+password (building kit §5.2). A root source asks through the system's own
+prompt (polkit) when a person is there, or says in one sentence what to run;
+without a person it only reports "update available".
 
-1. Store / CLI / wizard / Schematix "install" → `POST /api/apps/laden`
-   reads the catalog item: `source = package` → `GET /v1/apps/<name>`
-   (newest or a chosen version; the store already lets Sasha pick views,
-   picking a version is the same dialog).
-2. Download beside (`apps/<name>/.laden/`), **sha256** against
-   `neueste.json` (later signature, fork Q2), unpack with the `data` filter
-   (as the core does), read `app.toml`, check `name == app_name`.
-3. Venv if needed, **self-test**: start it, `GET /hub/gesund` answers (tile
-   apps: `/hub/kachel` answers). Fails → folder removed, nothing registered,
-   one sentence why.
-4. Views chosen → **plug dialog** (`plugs.sockets`, unchanged): `data → sync`
-   is asked by the sync choice as today; `model`, `files` … are asked here. A
-   required socket left open withdraws the app (unchanged rule).
-5. Register entry (`version`, `source`), `aktuell` link, ownership marked
-   (`/v1/besitz`) when logged in. The wheel shows it (`GET /api/apps`).
+### 2.2 The catalog points, it does not hold
+
+- A catalog item: name, description, **`sources`** (one or more, the node
+  picks the first kind it has an adapter for, order by a setting), optional
+  **dock card**. The old `downloadUrl` is read as one `git` source.
+- **Dock card** = what ZENTRALE needs to treat a program as an app: how to
+  start it, the ports it offers/needs, its data locations. Our apps carry it
+  as `app.toml`. A foreign program gets one from the catalog (written by us
+  or later the Schmied, inventory section H "foreign programs"). **Without a
+  card** a program is still installed, updated and launchable — it just has
+  no ports and no data to export (2.6).
+- Our packages are one source among many, listed in the same catalog.
+- Today's catalog stays the one list (`core/shop_katalog.jsonld`, later
+  from Sasha's server). **Later (idea, not planned in detail):** instead
+  of curating by hand, the store streams in what existing sources offer
+  (2.2a).
+
+### 2.2a Later: stream catalogs in, on mainstream standards
+
+Rule "open standard formats" (no own format): the likely base for source
+adapters and catalog are three existing standards (checked briefly
+2026-10-31, from their public docs):
+
+| Standard | What it covers | Use for us |
+|---|---|---|
+| **AppStream** (freedesktop.org) | metadata format for software components: name, summary, icons, screenshots, licence, releases, categories, content rating; distro and Flatpak repos ship it as catalog data (Debian/Ubuntu `DEP-11`, Fedora, Arch, Flathub) | the catalog side: read a source's AppStream data instead of writing items by hand; our dock card sits next to it |
+| **PackageKit** | one D-Bus API to search, install, update and remove across distro package managers (apt, dnf, pacman, zypper … via back ends), with polkit for root; GNOME Software and KDE Discover use it (plus Flatpak's own library) | one source adapter covers every distro package manager instead of `apt` and `pacman` separately (step 14), and brings the polkit prompt |
+| **Repology** | aggregates package names and versions across hundreds of repositories; **information only**, installs nothing | which sources carry a program and how current each is — to pick a source, never to install |
+
+Later step 17. Not needed for step 4 or Lists.
+
+### 2.3 Install: local, no account, no syncer (decision 2)
+
+Installing touches one machine only. Account and cloud matter only for
+carrying data (and the list of owned apps) to other machines.
+
+1. Store / CLI / Schematix "install" → catalog item → pick the source.
+2. Source adapter `install`. For `zentrale-package` (kept from the first
+   version, the safe mechanics): download beside
+   (`~/.local/share/zentrale/apps/<name>/.laden/`), **sha256**, unpack with
+   the `data` filter, read `app.toml`, check `name`, own venv only if the app
+   has `requirements.txt`, then `apps/<name>/<version>/` + link
+   `apps/<name>/aktuell`.
+3. **Self-test** (`check`). Fails → removed again, nothing registered, one
+   sentence why.
+4. **Plug dialog** (`plugs.sockets`, unchanged) — now including the data
+   location (2.5).
+5. Register entry: `source {kind, ref}`, `version`, data plugs. Logged in →
+   also marked owned (`/v1/besitz`), so another device can offer it; not
+   logged in → nothing else happens.
+
+Foreign programs land wherever their source puts them (Flatpak in
+`~/.local/share/flatpak`, apt system-wide); ZENTRALE records, never moves
+them. **Where our packages are downloaded from without an account: fork Q2.**
 
 ### 2.4 Update, hold, roll-back
 
-- `zentrale update --automatic` (daily timer) after the core: for each
-  `package` entry not held → newest version from the cloud → steps 2–3 of
-  install beside the running one → switch `aktuell` → restart the app if it
-  ran → health check → failed → switch back, one note in `status`. The last
-  two versions stay on disk.
-- **Hold** = "stay on version X" (store `h`, unchanged UI). Auto-update skips
-  it; a held app keeps working as long as its contracts are offered
-  (building kit rule 6).
-- **Manual**: store detail "update now" / "go back to the previous version".
-  `zentrale apps update <name>` and `zentrale apps rollback <name>` for the
-  terminal fallback.
-- Versions do **not** sync between nodes (building kit §2.2 rule 5,
-  decided 30.10.); the "same version" wire in Schematix stays as built.
+- `zentrale update --automatic` (daily timer) after the core: per register
+  entry not held → its adapter's `update` → `check` → failed → `rollback`
+  and one note in `status`. Who updates foreign programs: fork Q4.
+- `zentrale-package` (kept from the first version): new version installed
+  beside the running one, switch `aktuell`, restart if it ran, health
+  check, switch back on failure; the last two versions stay on disk.
+- **Hold** = "stay on version X" (store `h`); auto-update skips it; a held
+  app keeps working as long as its contracts are offered (building kit
+  rule 6). Manual: store "update now" / "previous version",
+  `zentrale apps update|rollback <name>`.
+- Versions do **not** sync between nodes (building kit §2.2 rule 5).
 
-### 2.5 Uninstall — and where the data goes
+### 2.5 The data location is a socket (decision 5)
 
-- `POST /api/apps/remove` for downloaded apps (today 501): stop the process,
-  take the register entry and its hold away, switch its `data → sync` wire
-  and its other wires off **through the one gate** (`generations`), remove
-  the code folder. The wheel and `/api/apps` no longer show it.
-- **The cloud is never touched** (Sasha's rule "the cloud is never
-  overwritten"): uninstall only stops this node's sync of the app's
-  patterns; the Mitte keeps everything; other nodes keep running the app.
-- **The local copy of the data**: fork Q3 (recommended: kept, with an
-  explicit "also delete the data on this device" choice).
-- **Reinstall later**: the first sync of that app treats the node like a new
-  device — **cloud wins, the local leftover is set aside** (the existing
-  held-back rule of the first sync), Sasha chooses. Never a silent merge
-  from an old local copy into the cloud.
-- Ownership (`/v1/besitz`) stays — the account still owns it, so another
-  device or a reinstall offers it again.
-- Built-in apps and the mandatory adapter keep their existing remove rules
-  (adapter: never removable).
+- An app's data is a **`files` socket** (port type `files`, scope
+  `instance`, already in `contracts/ports/1/types.json`). The app says what
+  it keeps (its folder layout, relative); **where** is a plug.
+- Providers of a location: **home** (`~/.local/share/zentrale/data/<app>/`,
+  local only), **cloud folder** (`~/Zentrale/Cloud/…`, synced everywhere,
+  because the cloud folder syncs), **anywhere** (a path, a stick, later a
+  network share). The default is the user's choice, asked once in the
+  wizard and kept as a setting (per account when logged in — "one way",
+  not per device).
+- **Sync follows the location, not a list in the core.** An app whose data
+  sits in the cloud folder syncs because the folder does. No per-app entry
+  in `core/abgleich_auswahl.ABGLEICH` ever again: that list keeps only the
+  core's legacy files and may only shrink (new guard, step 6). Secrets never
+  go into a data location; they go through the adapter's encrypted store
+  ([adapter.md](adapter.md)).
+- **One legacy provider:** "ZENTRALE data" = today's `data/` with today's
+  allow-list. Apps that move out of the core plug into it, so their files
+  stay exactly where they are (2.8).
+- **Moving data = re-plugging**, one generic operation for every app:
+  stop the app → copy to the new location → verify (same files, same
+  sha256) → switch the plug through the gate → start → the old copy stays
+  as a backup until the person deletes it. Never a silent move.
 
-### 2.6 Plugs and ports
+### 2.6 Uninstall: export first, then remove (decision 4)
 
-Nothing new: the plug dialog is already app-agnostic (`plugs.py`,
-`plug_store.py`). Two additions only:
-- **Uninstall unplugs** through the gate (else the next compile fails on a
-  missing piece — compare [../open/catalog_lifecycle_decisions.md](../open/catalog_lifecycle_decisions.md) question 2).
-- **Moved-out apps keep their wires**: the package uses the same app name
-  (`fokus`, `schematix`) and the same socket ids as its `PORTS` entry in
-  `core/eingebaute_apps.py`, so `abgleich_apps["fokus"]` and every plug stay
-  valid — no question is asked again.
+1. Stop the app.
+2. **Export** every data location the app (or its dock card) declares into
+   one zip, default in a visible folder (`~/Zentrale/Exports/<app>-<date>.zip`,
+   ⚠ prüfen the name at build). Verify the zip (every file in, sha256
+   equal). Export fails → stop, nothing removed.
+3. Unplug its wires **through the one gate** (`generations`), so the next
+   compile does not miss a piece; register entry and hold out.
+4. Source adapter `remove`.
+5. Data: a **local** location is emptied (the zip has it; the person reviews
+   or throws it away by hand). A **synced** location is never emptied by an
+   uninstall on one machine — other machines may still run the app, and the
+   cloud is never overwritten. "Delete this app's data everywhere" is its
+   own explicit action, zip first as well.
+6. **Foreign programs:** only declared locations are exported; everything
+   else stays untouched, and ZENTRALE tells where data probably still is
+   (`~/.config/<name>`, `~/.local/share/<name>`, `~/.var/app/<id>` for
+   Flatpak …), as a list, never deleting it.
+- Reinstall later: a synced location is plugged again as it is; a local
+  one starts empty (or the person imports the zip). Ownership stays with
+  the account.
+- Built-ins and the mandatory adapter keep their own remove rules (adapter:
+  never removable).
 
-### 2.7 "Preinstalled at signup"
+### 2.7 Preinstalled: what you need to operate ZENTRALE (decision 6)
 
-- The catalog item gets `additionalProperty preinstalled: true` (one truth,
-  in the catalog — not a list in the core). Which apps: fork Q5.
-- **Signup / first login** (wizard, after "cloud"): one checklist "These
-  apps come with ZENTRALE — untick what you don't want here", all ticked.
-  Confirm → each is installed by the normal path (2.3), plug dialog with
-  defaults, ownership marked. A deselected one is simply not installed; it
-  stays in the store.
-- **Second device**: the existing "owned elsewhere" step installs downloaded
-  apps too (today it only points to the store), same checklist, default
-  ticked.
-- **Holdable** like any package (2.4). No special code path: preinstalled
-  is only a default tick.
-- Built-ins (cloud, cloud folder, adapter) keep their own setting path until
-  they leave the core.
+- **The rule** (Sasha 31.10.): everything one needs to *operate* ZENTRALE —
+  whatever one uses it for — is installed; nothing else. A piece is
+  preinstalled only if without it the person cannot run, wire, install or
+  remove anything.
+- Under that rule today: **core, `zentrale` CLI, TUI, Schematix and the
+  store (catalog + store client)**. Nothing else, **no checklist**.
+  Everything else the person installs; guides and a tutorial come later.
+- Core, CLI, TUI and store are the core package itself. **Schematix** stays built
+  in until inventory step 10; then it is a package the installer (and the
+  first update that drops it from the core, 2.8) installs — holdable and
+  removable like any app. No account needed.
+- The cloud keeps its path from building kit §4: it comes with login. That
+  is the account's own piece, not an app list.
+- A logged-in second device is **offered** the owned apps (exists, `79482b5`)
+  — one list, nothing installed without a yes.
 
-### 2.8 An app moves out of the core — reaching nodes that had it built in
+### 2.8 Apps moving out of the core: once, never again (decision 7)
 
-The hard case (Lists first, then notes, piano, Schematix …). Goal: **no
-node loses an app it had, and every step can go back.**
+Lists, notes, piano, graphs, calendar, Schematix … leave the core once.
+That is a special case (CLAUDE.md "Apps live outside the core") and gets
+**no big update machinery** — the first version's `MOVED_OUT` table and
+automatic `ensure()` are dropped.
 
-**Order (enforced, not remembered):**
+**Chosen: "install first, then switch", guided per app** — simpler than an
+automatic migration (no new table, no trigger on every start) and safer
+(each move happens while a person watches, with a backup in hand):
 
-1. The app's repo exists, its package is **published in the cloud and
-   listed in the catalog** — while the core still has it built in. Same app
-   name, same data paths (Q4), same socket ids.
-2. The core release that removes it from `EINGEBAUT` adds one line to a new
-   table **`MOVED_OUT`** (`{name: {address, since_release}}`, next to the
-   legacy list in `core/eingebaute_apps.py`; the guard E9 list shrinks by
-   one, `MOVED_OUT` only grows).
-3. Publishing guard: `scripts/paket_bauen.py` refuses a release when an app
-   that was in `EINGEBAUT` of the previous release is neither still there
-   nor in `MOVED_OUT` with a catalog item that has a published package.
+1. The app's package exists in the catalog, with the **same app name, same
+   socket ids, its data socket plugged into the legacy provider "ZENTRALE
+   data"** — so it reads and writes the very same files
+   (`data/lists.json`, `data/features.json`). No data is converted.
+2. On each node, by a person (Sasha) with one guided command
+   (`zentrale apps install <name>` plus the checklist below): the package
+   is installed **while the core still has the app built in**; the built-in
+   wins until the core drops it (⚠ prüfen: the package must not serve the
+   same routes meanwhile — guard E8 runs only in tests).
+3. **Update guard, the only machinery:** a core release that drops an app
+   from its built-ins (old `BUNDLE.json` vs new `BUNDLE.json`, already in
+   every tarball) does not switch on a node where that app is not in the
+   register — the node stays on the old release (where the app is still
+   built in) and `status` says "install lists first". Checkout nodes (git
+   pull cannot be refused): the move is done on the laptop **before** the
+   removing commit lands; any other checkout shows a loud line in `status`
+   and the TUI start line until the package is installed.
+4. Devices with auto-update off stay on their release; nothing is lost.
 
-**On each node (two triggers, one function `moved_out.ensure()`):**
+**No data loss — ZENTRALE is Sasha's only calendar.** Every move, every
+node:
 
-| Node | Trigger | What happens |
+| When | What |
+|---|---|
+| **Before** | full backup of the app's files (`scripts/daten_sichern.py`, plus a dated copy outside the repo); a dev-profile rehearsal on a copy of the real data ([../betrieb/dev_mode.md](../betrieb/dev_mode.md)) |
+| **After** | verify old = new: sha256 of every data file unchanged by the switch; the app's read route answers byte-equal from the built-in (before) and the package (after), e.g. `GET /api/lists?view=1`; for the calendar also the count and a hash over all events and a check on the phone |
+| **Roll-back** (written down per app before the move) | go back to the previous core release (or `git revert` on a checkout) → the built-in returns; remove the package with its adapter. Because both use the same files, nothing is migrated back. If a file did change: restore from the backup |
+
+The calendar (inventory step 12) gets its own written move plan on top of
+this table before it starts.
+
+### 2.9 Plugs and ports
+
+Nothing new beyond 2.5 and 2.6: the plug dialog is app-agnostic
+(`plugs.py`, `plug_store.py`); uninstall unplugs through the gate
+([../open/catalog_lifecycle_decisions.md](../open/catalog_lifecycle_decisions.md)
+question 2); moved-out apps keep their names and socket ids, so
+`abgleich_apps["fokus"]` and every plug stay valid.
+
+## 3. Tutor and map first (proof of the path)
+
+They are already outside the core: catalog items with a `zentrale-package`
+source, `BEKANNT` empties, the wheel builds `m`/`u` from `/api/apps` (A16),
+the tutor starts via `POST /api/apps/tutor/start` (A15), the laptop's
+checkouts are adopted as `git` sources. The tutor's data gets a data socket
+(2.5) and leaves `ZENTRALE/tutor/data` once by re-plugging (copy, verify,
+switch); `eingebaute_apps.ERSATZ` goes.
+
+## 4. Open: login and sync as an adapter (decision 8 — not decided)
+
+Sasha: if sync only runs through a cloud, and that cloud is a provider we
+don't operate, the only login needed is at the provider — not at us. And:
+**ZenCloud is itself only a third-party provider (Cloudflare) with our
+login glued on top.** So our account is not something special — it is one
+sync provider among others, the one we happen to set up.
+
+**Today** ([knoten_beitritt.md](knoten_beitritt.md) "Bauplan v1",
+[adapter.md](adapter.md)): our own account (username only, Argon2id on the
+device, zero-knowledge) and ZenCloud (Cloudflare worker + D1 + R2). The
+account key encrypts everything; the server holds the wrapped keys, the
+Mitte (encrypted blobs + one head with compare-and-swap), device
+descriptions, ownership, the package downloads (invite code or session),
+the insecure-release warning and the usage watch. The adapter's secrets
+sync encrypted with the account key.
+
+**What "sync through provider X" would mean:**
+
+| Piece | Today (ZenCloud) | With a provider adapter |
 |---|---|---|
-| installed node (`install.sh`) | `zentrale update` of the **new** release, inside the self-test, **before** `aktuell` switches | for every `MOVED_OUT` app this node had (built-in apps are on every full node; an explicit "off" in `abgleich_apps` is still installed but stays unsynced — fork Q6) → install its package (2.3, no questions, plugs taken from the existing settings). Any failure → **stay on the old release** (which still has the app built in), one note in `status`. |
-| checkout node (laptop, PC as long as it runs from git) | backend start and the keeper (every sync run) | `git pull` already removed the module, so the same `ensure()` runs on start: installs from the sibling checkout if present (adopt), else from the cloud; until it succeeded, `status`, the TUI start line and `/api/apps` say loudly "lists moved out — not installed here" |
-| node with auto-update off | — | stays on its release, the app stays built in, nothing is lost; `status` shows "update available" as today |
-| Pi (outpost) | the PC's outpost build | nothing on the Pi itself: it is an HTTP client of the PC; the PC's list routes are forwarded to the package (list_extraction_plan: the TUI view stays in the hub) |
+| Sync | `HttpMitte` | `sync` port offered by a provider adapter (WebDAV/Nextcloud, S3, Dropbox, Google Drive …). The seed exists: `abgleich_mitte_art` already switches between `git` and `http` |
+| Head / conflicts | compare-and-swap in D1 (409) | needs a conditional write at the provider (ETag/`If-Match`; WebDAV, S3, Dropbox, Drive have one) — a provider without it cannot be a Mitte |
+| Keys | wrapped keys in D1 | the same wrapped-key file (same Argon2id/HKDF scheme, vectors unchanged) stored **inside the provider folder**; the password still unlocks it — an unlock phrase, not a login at us |
+| Zero-knowledge | server sees only ciphertext | unchanged: the provider sees only `*.enc` |
+| Node join | `PUT /v1/knoten` | `knoten/<name>.json` in the provider folder (a node writes only its own file — conflict-free by design, as today) |
+| Ownership | `/v1/besitz` | an encrypted file in the provider folder |
+| What still needs us | — | package downloads while private (Q2), the insecure-release warning (could be a public static file), the store catalog (public, no login) |
 
-**Roll-back:** going back to the previous core release (by hand, or by the
-self-heal) gives the built-in app back. Because the package reads and writes
-**the same files** (`data/lists.json`, `data/features.json`) in the same
-format, nothing has to be migrated in either direction — that is the main
-reason for recommending "keep existing data paths" in Q4. The installed
-package stays registered, and an old release reads the register too
-(`apps.aus_dem_laden`), so it would see a package `fokus` next to its
-built-in one. ⚠ prüfen in step 10: the built-in must win and the package
-must not be started on the same routes (guard E8 runs only in tests). Mixed
-nodes (one on the old release, one on
-the new) sync the same files the whole time.
+The options and the recommendation: question Q1. Not needed for step 4 —
+installing needs no account anyway (decision 2) — so it does not block
+Lists.
 
-### 2.9 Tutor and map first (proof of the path)
+## 5. Build steps
 
-They prove the whole path before anything leaves the core: they are already
-outside, have a process, views and (tutor) data. Tutor and map get catalog
-items and packages; `BEKANNT` empties; the wheel builds `m`/`u` from
-`/api/apps` (A16) and starts the tutor via `POST /api/apps/tutor/start` (A15).
-On the laptop the existing checkouts are adopted (`source: checkout`). The
-tutor's data moves under `data/` (Q4) with its `[daten]` in its own
-`app.toml`, and `eingebaute_apps.ERSATZ` goes.
+Each step ships alone, small enough for one agent, tested in the dev mode's
+fakes (fake cloud, fake systemctl, profiles). **B** = needed before Lists
+may move (inventory step 5). Order as listed; 2–4 may run in parallel
+after 1.
 
-## 3. Build steps
+| # | Step | B | Acceptance test |
+|---|---|---|---|
+| 1 | **Register v2**: `source {kind, ref}`, `version`, `data` plugs; old entries read as `git` | B | old register reads unchanged; round trip; old release reads the new file (`tests/test_alte_fassung.py`) |
+| 2 | **Source-adapter frame** in the core (interface 2.1, kind registry, contract vectors `contracts/sources/1/`); today's clone/pull wrapped as the `git` adapter, no behaviour change | B | existing store tests green through the adapter; a conformance suite every adapter must pass (fake adapter) |
+| 3 | **Catalog `sources`** + dock card fields; `downloadUrl` read as `git` | B | old catalog unchanged in `/api/shop`; item with two sources → node picks by setting |
+| 4a | **Package builder** `scripts/app_paket_bauen.py <repo>` (positive list `paket.txt` per repo, refuses `data/`, `.git`, keys) | B | builds tutor/map/budget; same input → same sha256 |
+| 4b | **Hosting** of our packages per Q2 (cloud routes `GET /v1/apps/<name>[/<v>.tar.gz]`, upload script, `server/openapi.yaml`) | B | vitest: access rule per Q2, 404 unknown, sha256 matches |
+| 4c | **`zentrale-package` adapter**: install beside, sha256, unpack, venv, self-test, `aktuell` link | B | fake cloud: works without `git` on PATH and without login; wrong sha256 → nothing installed; no `/hub/gesund` → nothing registered, sentence says why |
+| 5 | **Update, hold, roll-back** through the adapter (2.4), `zentrale apps update|rollback`, store buttons | B | N → N+1; broken N+1 → stays on N with a note; held untouched; roll-back byte-equal |
+| 6 | **Data socket**: providers home / cloud folder / anywhere / legacy "ZENTRALE data"; default-location setting + wizard question; sync follows the location; guard: `ABGLEICH` may only shrink | B (legacy provider only) | an app with data in the cloud folder syncs with no core edit; the guard fails on a new pattern in `ABGLEICH` |
+| 7 | **Re-plug data** (copy → verify → switch → keep backup) | — | interrupted copy → old plug stays; verify mismatch → no switch; backup present after success |
+| 8 | **Uninstall with export** (2.6): zip, verify, unplug through the gate, adapter `remove`; synced locations untouched; foreign: probable locations listed | B (roll-back of a move removes a package) | after remove: not in `/api/apps`, no wire, Run compiles, zip complete, fake cloud unchanged; failing export → nothing removed |
+| 9 | **Tutor and map through the store** (section 3), tutor data re-plugged, `ERSATZ` gone, `BEKANNT` empty | B (proof) | fresh profile installs both from the fake cloud, wheel shows them; laptop lists them as `git` sources |
+| 10 | **Outpost build reads installed packages** (`app:<name>/…` from the register) | with 9 | outpost package byte-equal before/after on the laptop |
+| 11 | **Move-out guard** (2.8 step 3): `BUNDLE.json` diff in the update self-test; loud `status` line on checkouts; move checklist template (backup, verify, roll-back) in `memory/hub/` | B | old-release test: N with a fake built-in, N+1 without it → node without the package stays on N with the note; with the package → switches, data files byte-equal |
+| 12 | **Fresh PC = the real test** (Sasha, by hand): install with invite code, **no login**, install budget and tutor, update, hold, uninstall (zip appears), reinstall; then log in and see the data sync | B | checklist in `memory/open/` ticked; findings → `memory/open/` |
+| 13 | **First foreign source: Flatpak `--user`** + one dock card for a real program (e.g. a PDF viewer needing `files`) | — | install/update/remove a real Flatpak in a dev profile; its `files` socket plugs to the cloud folder |
+| 14 | Distro packages through **one PackageKit adapter** (covers apt, pacman, dnf …; polkit prompt or one sentence), `image`, `appimage` | — | per adapter the conformance suite; no sudo anywhere (guard) |
+| 15 | Schematix as a preinstalled package (with inventory step 10) | — | fresh install has it; removable and holdable |
+| 16 | **Signature** for our packages (before public, [../open/package_signing.md](../open/package_signing.md)) | — | tampered package refused; unsigned only in dev mode |
+| 17 | Later: **catalog streamed in** from sources' AppStream data, Repology as version information (2.2a) | — | a Flathub/Debian program appears in the store without a hand-written item |
 
-Each step ships alone and is small enough for one agent. Tests run in the
-dev mode's fakes (fake cloud, fake systemctl, profiles — [../betrieb/dev_mode.md](../betrieb/dev_mode.md)).
-Steps 1–3 can run in parallel; 4 needs 2+3.
+After the B steps (and 12 on the real PC) Lists may move: its package
+plugs into "ZENTRALE data", Sasha installs it per node with the move
+checklist, then the core release drops `fokus`.
 
-| # | Step | Acceptance test |
-|---|---|---|
-| 1 | **Repos and manifests.** `gh repo create Eightdevvis/zentrale-karte --private`, push ([../open/map_repo_remote.md](../open/map_repo_remote.md)); tutor `app.toml` gets `[daten]` ([../open/tutor_manifest_data.md](../open/tutor_manifest_data.md)) — path per Q4; `paket.txt` in tutor, map, budget | E3 guard green in each repo; `abgleich_apps.tabelle()` unchanged for the tutor with `ERSATZ` removed |
-| 2 | **App package builder** `scripts/app_paket_bauen.py <repo>` → `dist/apps/<name>-<version>.tar.gz` + `neueste.json` (version from `app.toml`, positive list, forbidden paths as `paket_bauen.py`) | builds tutor/map/budget; refuses `data/`, `.git`, keys; same input → same sha256 |
-| 3 | **Cloud routes** `GET /v1/apps/<name>` and `/v1/apps/<name>/<version>.tar.gz` (session required, R2 `apps/<name>/…`), upload script beside `paket_hochladen.mjs`, `server/openapi.yaml` | vitest: 401 without session, 404 unknown, sha256 matches; contract vector file `contracts/app-packages/1/` |
-| 4 | **Install from a package** (`source: package`) in `app_installation`: download beside, sha256, unpack, venv, self-test (`/hub/gesund`), register `version`/`source`; catalog `downloadUrl` may be a cloud package address; git stays as `checkout` | fake cloud: install works without `git` on PATH; wrong sha256 → nothing installed; broken app (no `/hub/gesund`) → nothing registered, sentence says why |
-| 5 | **Update, hold, roll-back for packages** in `app_update` + `zentrale apps update|rollback`, store "update now"/"previous version" | N → N+1 switched; broken N+1 → stays on N with a note; held app untouched; roll-back restores N byte-equal |
-| 6 | **Uninstall downloaded apps** (`POST /api/apps/remove`, TUI `x`, `zentrale apps remove`): stop, unplug through the gate, register out, code out; data per Q3 | after remove: not in `/api/apps`, no wire, Run compiles; fake cloud unchanged; data files per Q3; reinstall → first sync cloud wins, local leftover set aside |
-| 7 | **Tutor and map through the store**: catalog items, packages published, `BEKANNT` empty (guard: may only shrink, then gone), wheel from `/api/apps` (A16), tutor start via route (A15), bundle builder stops reading `BEKANNT`, laptop checkouts adopted | E1 green; fresh dev profile installs tutor and map from the fake cloud and the wheel shows both; laptop: `GET /api/apps` lists them with `source: checkout` |
-| 8 | **Outpost build reads installed packages**: `app:<name>/…` lines resolve from the register's folder, not a sibling repo (Pi itself: [../open/pi_review.md](../open/pi_review.md)) | outpost package byte-equal before/after on the laptop |
-| 9 | **Preinstalled at signup**: catalog `preinstalled`, wizard checklist, second-device step installs downloaded owned apps | fresh profile → wizard → the ticked apps are installed and owned, the unticked one is not; second profile on the same fake account gets them offered and installed |
-| 10 | **`MOVED_OUT` + `ensure()` + publishing guard** (2.8), wired into the update self-test and the backend start/keeper | old-release test (`tests/test_alte_fassung.py`) extended: release N with a fake built-in app, N+1 without it + package in the fake cloud → after update the app is installed, its data file still syncs, nothing lost; package missing → node stays on N; checkout profile → `ensure()` installs on start; guard refuses a release that drops a built-in without `MOVED_OUT` |
-| 11 | **Fresh PC = the real test** (Sasha, by hand): checklist in `memory/open/` — install with invite code, log in, preinstalled apps there, budget from the store without a GitHub key, uninstall budget, reinstall, update an app, hold one | everything on the checklist ticked on the real PC; findings → `memory/open/` |
-| 12 | Signature (only after Q2): Ed25519 over the sha256, core and apps with one key system ([../open/phone_self_update_hardening.md](../open/phone_self_update_hardening.md)) | tampered package refused; unsigned only in dev mode |
+## 6. Questions for Sasha
 
-After 1–10 (and 11 on the real PC), step 5 of the inventory (Lists) may
-start: it then only adds `fokus` to `MOVED_OUT` and publishes its package.
-Schematix (step 10) follows the same recipe.
+Only the real forks; everything else above is decided by your answers of
+2026-10-31.
 
-## 4. Questions for Sasha
+**Q1 — Login: do we keep our own account, or does the cloud provider's
+login become the only one?** (section 4)
+- A: Keep our account + ZenCloud as the one sync; other providers maybe
+  later as extras. Least work, but everyone needs an account with us to
+  sync.
+- B: **Sync becomes an adapter, ZenCloud is just one provider among them**
+  — which it already is underneath: Cloudflare with our login on top (our
+  default, "works without setup"). Keys, devices and ownership move
+  into encrypted files inside whatever storage is plugged; our account is
+  then only the login of *our* provider. Someone with Nextcloud or Dropbox
+  needs no account with us at all. *Recommended* — it is "dock anything"
+  applied to sync, fits anonymity, and the switch (`git`/`http`) already
+  exists. Built after Lists, not before.
+- C: Drop our account and ZenCloud, providers only. Not recommended: no
+  zero-setup default, and people without a provider are left out.
 
-Each has a recommendation; nothing is decided until Sasha answers.
+**Q2 — Where do our own packages come from, so installing needs no
+account?** Today even the ZENTRALE update is fetched with the login session.
+- A: **Our cloud, opened by the invite code** the installer already asked
+  for (kept on the machine) or a session; public without a code on the day
+  ZENTRALE goes public. *Recommended* — works on the fresh PC today and
+  needs no GitHub key.
+- B: Public downloads right away (GitHub Releases or our cloud). Simplest,
+  but the code is public before the "before public" list is done.
+- C: Login required, as today. Contradicts decision 2.
 
-**Q1 — Where do app packages come from?**
-- A: **Our cloud** serves them like the ZENTRALE package (built from the app
-  repo by a script, stored in the cloud, the node needs only its account).
-  *Recommended* — works on a fresh PC and later for customers; GitHub stays
-  the place for code, not for delivery.
-- B: GitHub Releases of each private repo — every node needs a GitHub token.
-- C: `git clone` as today — every node needs a GitHub SSH key; fine for
-  Sasha's machines only.
-- Sub-point: package as `.tar.gz` like ZENTRALE itself (recommended) or
-  `.zip` as the app engine plan wrote.
+**Q3 — Which sources come with the core?**
+- A: **Only our packages (plain URL/tarball included) and git**; Flatpak,
+  apt, images … are adapters you install from the catalog like anything
+  else. *Recommended* — tiny core; our package source is enough to install
+  every other adapter.
+- B: Also Flatpak and PackageKit (apt, pacman …) built in — a foreign program works right after
+  install, but the core grows with every source.
 
-**Q2 — Signing: now or later?**
-- A: Now only a checksum over HTTPS from our own cloud; the real signature
-  (Ed25519) comes for ZENTRALE and apps together before going public.
-  *Recommended* — same protection level as the ZENTRALE package today.
-- B: Sign app packages right away (key management first).
-
-**Q3 — Uninstall: what happens to the app's data on this device?** (The cloud
-is never touched in any option.)
-- A: **Kept** on the device; a separate "also delete the data here" choice.
-  *Recommended* — nothing is ever lost by a click; on reinstall the cloud
-  wins and the leftover is set aside for you to choose.
-- B: Deleted on the device (the app engine plan said this).
-- C: Ask every time.
-
-**Q4 — Where does an app's data live on a node?**
-- A: Apps that move out **keep their current files** (`data/lists.json`
-  stays where it is); new apps get one folder each, `data/<app>/`, which
-  syncs without a core edit. *Recommended* — moving out needs no data
-  migration, and going back to an older version is free. The tutor moves its
-  data from `ZENTRALE/tutor/data` into `data/tutor/` once (today it would not
-  survive a ZENTRALE update on an installed node).
-- B: Every app moves its data into its own folder now — cleaner, but one
-  data migration per app, each with its own roll-back.
-
-**Q5 — What is preinstalled at signup?**
-- A: Everything that is built in today and moves out (lists, notes,
-  calendar, assistant, Schematix, piano, Desk/Werkstatt …) is ticked by
-  default, deselectable; tutor, map, budget are optional in the store.
-  *Recommended* — a new device feels like today's ZENTRALE.
-- B: Only the base (cloud, cloud folder, assistant); everything else is a
-  list to pick from.
-- C: You name the list.
-
-**Q6 — When an app moves out, what happens on a device that had it built in?**
-- A: The ZENTRALE update **installs it automatically** before switching to
-  the new version; if that fails, the device stays on the old version (where
-  the app is still built in). An app you had switched off for syncing stays
-  installed but unsynced. *Recommended* — nothing disappears, nothing is
-  asked, roll-back is free.
-- B: The update switches, and the next start asks "lists moved out —
-  install?".
-- (Devices with auto-update off stay on their version in both cases.)
+**Q4 — Who updates foreign programs?**
+- A: **ZENTRALE, by the same auto-update setting**, for every source that
+  needs no password (our packages, git, Flatpak `--user`, images); apt and
+  pacman only show "update available" and leave it to the system.
+  *Recommended* — one way for everything ZENTRALE installed, no root.
+- B: Foreign programs always update by their own system; ZENTRALE only
+  shows versions and holds.
+- C: ZENTRALE updates everything, apt included, with the password prompt.
 
 ## Historie
 
-- **2026-10-31** — written (docs only) for inventory step 4: measured the
-  three ways an app arrives today, per node type, and the gaps (GitHub key on
-  a fresh node, 501 on uninstall, tutor data outside `data/`, sync allow-list
-  in the core); proposed one path with cloud packages, `MOVED_OUT` and the
-  update gate; six questions for Sasha.
+- **2026-10-31 (second version)** — rewritten after Sasha's answers: from
+  "a store for our apps" to "dock anything from anywhere". Main differences
+  to the first version: sources are pluggable adapters (was: our cloud
+  packages + git only); installing needs no account (was: session
+  required); signature later and per source, open item filed (was Q2);
+  uninstall exports a zip, synced data never touched (was: keep/delete
+  question Q3); data location is a `files` socket, sync follows the
+  location, no core allow-list edits (was Q4: `data/<app>/` + core list);
+  preinstalled = what one needs to operate ZENTRALE (core, CLI, TUI,
+  Schematix, store) (was Q5: everything built in ticked); ZenCloud framed
+  as one third-party provider with our login on top; AppStream/PackageKit/
+  Repology noted as the later base for catalog and source adapters; moving out = "install first, then switch", guided, with backup/
+  verify/roll-back and one `BUNDLE.json` guard (was: `MOVED_OUT` table +
+  automatic `ensure()`, Q6); login/sync-as-adapter laid out as Q1. Kept:
+  the measured facts (section 1), the package install/update/roll-back
+  mechanics, tutor and map as the proof.
+- **2026-10-31 (first version, `375764a`)** — measured the three ways an app
+  arrives today, per node, and the gaps; proposed one path with cloud
+  packages, `MOVED_OUT` and the update gate; six questions for Sasha.

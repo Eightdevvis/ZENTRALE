@@ -54,6 +54,7 @@ How this folder works: [README.md](README.md). One line per open item.
 | [calendar_colours_followups.md](calendar_colours_followups.md) | Course colour table migrates on next backend restart; full suite after the colour change not run (OOM) | partly |
 | [phone_device_checks.md](phone_device_checks.md) | Phone: back gesture, login time, reminders, peephole feel, eye shape, edit flow only tested in simulation | yes (phone) |
 | [phone_self_update_hardening.md](phone_self_update_hardening.md) | Self-update: no Ed25519 manifest signature; Play build must drop the install permission | no |
+| [package_signing.md](package_signing.md) | Our own packages (core, apps, phone) need an Ed25519 signature before going public | no |
 | [phone_local_export.md](phone_local_export.md) | Phone: ZIP of local-only data to Downloads + "export everything" so uninstall loses nothing | no |
 | [phone_onboarding.md](phone_onboarding.md) | Phone: tutorial/onboarding, wanted later | yes (later) |
 | [app_engine_decisions.md](app_engine_decisions.md) | App engine: questions 3–7 open; step 1 (apps/ folders, register, install gating) not started | yes (questions) |
