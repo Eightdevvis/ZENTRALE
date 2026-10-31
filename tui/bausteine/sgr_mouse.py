@@ -217,3 +217,32 @@ def gewuenscht(umgebung=None):
 
 
 MODUS = Modus()
+
+
+def pflegen(programm, nur_aus=False):
+    """Main loop, every round: reporting on while the program in front
+    wants it (`maus_will`: a canvas is open — Desk, Schematix) and the user
+    did not switch it off, off otherwise. nur_aus: only switch off now (the
+    chat's ncurses mouse is maintained in between, so the two never
+    overwrite each other's modes on the frame the focus changes)."""
+    will = bool(programm is not None and hasattr(programm, "maus_will")
+                and programm.maus_will() and gewuenscht())
+    if not (will and nur_aus):
+        MODUS.setzen(will)
+
+
+def verteilen(ch, stdscr, programm, gesperrt=False):
+    """ch was just read. A mouse report while reporting is on? Then read it
+    and everything piled up behind it, hand it to `programm.maus(events)`
+    (not while something lies on top: `gesperrt`) and -> True — the key is
+    used up. Otherwise -> False and ch goes its usual way."""
+    if not MODUS.an or ch not in (ESC, KEY_MOUSE):
+        return False
+    import curses
+    stdscr.timeout(10)
+    ereignisse = lesen(ch, stdscr.getch, curses.ungetch)
+    if ereignisse is None:
+        return False
+    if not gesperrt and programm is not None and hasattr(programm, "maus"):
+        programm.maus(ereignisse)
+    return True

@@ -53,6 +53,11 @@ def verkabeln(z, u):
         z.horcher.verkabeln(n, p)
 
 
+def programm_im_fokus(z):
+    """The program object with the focus (None before `verkabeln`)."""
+    return getattr(z, "programme", {}).get(aktives_programm(z))
+
+
 def programm_mit_tabelle(z):
     """(name, programm, ansicht) des fokussierten Programms, wenn es eine
     Tastentabelle hat — sonst None."""

@@ -831,41 +831,12 @@ def taste_verteilen(u, ch):
             return BEENDEN
 
 
-def _programm_im_fokus(u):
-    z = u.z
-    return getattr(z, "programme", {}).get(ansichten.fenster.aktives_programm(z))
-
-
-def canvas_maus_pflegen(u, nur_aus=False):
-    """Mouse reporting on while the program in front wants it (`maus_will`:
-    a canvas is open — Desk, Schematix), off otherwise
-    (tui/bausteine/sgr_mouse.py). nur_aus: only switch off now."""
-    p = _programm_im_fokus(u)
-    will = bool(p is not None and hasattr(p, "maus_will") and p.maus_will()
-                and sgr_mouse.gewuenscht())
-    if will and nur_aus:
-        return
-    sgr_mouse.MODUS.setzen(will)
-
-
 def maus_lesen(u, ch):
-    """ch starts a mouse report while the canvas mouse is on? Then read it
-    and everything piled up behind it, hand it to the program in front and
-    -> True (the key is used up). Otherwise -> False and ch goes its way."""
-    import curses
-    if not sgr_mouse.MODUS.an or ch not in (sgr_mouse.ESC, curses.KEY_MOUSE):
-        return False
-    u.stdscr.timeout(10)
-    ereignisse = sgr_mouse.lesen(ch, u.stdscr.getch, curses.ungetch)
-    if ereignisse is None:
-        return False
+    """A mouse report for the canvas in front (tui/bausteine/sgr_mouse.py)?
+    -> True: read and handed over (or dropped while something lies on top)."""
     bz, z = u.bz, u.z
-    if bz.cmd_mode or bz.help_latched or u.erinnerung.nag_active or fussleiste.erklaert(z):
-        return True                      # something lies on top: the mouse does nothing
-    p = _programm_im_fokus(u)
-    if p is not None and hasattr(p, "maus"):
-        p.maus(ereignisse)
-    return True
+    oben = bz.cmd_mode or bz.help_latched or u.erinnerung.nag_active or fussleiste.erklaert(z)
+    return sgr_mouse.verteilen(ch, u.stdscr, ansichten.fenster.programm_im_fokus(z), oben)
 
 
 def bild_zeichnen(u):
@@ -1298,12 +1269,10 @@ def run_ui(stdscr, store):
         # Läuft gerade eine stdout-Zeile durch, reicht ein Mittelding
         # (LAUF_TICK_MS ≈ halber Zeichen-Schritt) — ein Bruchteil der 30 fps.
         # Maus nur im offenen Chat (ansichten/maus.py: warum das Markieren im
-        # Terminal so heil bleibt). The canvas mouse (Desk, Schematix) is
-        # switched off before and on after it, so the two never overwrite
-        # each other's terminal modes on the frame the focus changes.
-        canvas_maus_pflegen(u, nur_aus=True)
+        # Terminal so heil bleibt); the canvas mouse off before, on after it.
+        sgr_mouse.pflegen(ansichten.fenster.programm_im_fokus(z), nur_aus=True)
         chat.maus_pflegen()
-        canvas_maus_pflegen(u)
+        sgr_mouse.pflegen(ansichten.fenster.programm_im_fokus(z))
         # „antwort läuft" ohne lebenden Strom-Thread → zurücksetzen
         # (2026-10-09, ansichten/chat_strom.py).
         chat.waechter()
@@ -1321,9 +1290,7 @@ def run_ui(stdscr, store):
         stdscr.timeout(100 if adern and not (M["active"] or PIANO["active"])
                        else 33 if fast else 60 if AI["active"]      # das Auge lebt
                        else (LAUF_TICK_MS if LAUF["laeuft"] else 250))
-        ch = stdscr.getch()
-        if maus_lesen(u, ch):        # a mouse report went to the canvas
-            ch = -1
+        ch = -1 if maus_lesen(u, ch := stdscr.getch()) else ch   # mouse → canvas
 
         if ch == curses.KEY_RESIZE:  # Zellform neu messen (Farbkreis rund), 2026-10-11
             z.groesse_neu()

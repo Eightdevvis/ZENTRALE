@@ -128,8 +128,8 @@ s to u, to free w a s d. The cursor is drawn as `+` only on empty space
 man mit dem touchpad zwei finger drauf rumnavigieren kann"):
 `tui/bausteine/sgr_mouse.py` asks the terminal for 1000+1002+1006 (SGR)
 while a canvas has the focus (`maus_will` of Desk/Schematix, switched in
-the main loop: `zentrale_tui.canvas_maus_pflegen`) and reads the reports
-from the key stream itself (`maus_lesen`) — ncurses 6.4's own mouse drops
+the main loop: `sgr_mouse.pflegen`) and reads the reports
+from the key stream itself (`sgr_mouse.verteilen`) — ncurses 6.4's own mouse drops
 the sideways wheel (66/67) and never reports a drag. A swipe's burst is
 summed into one wheel event per frame, the canvas pans at most one capped
 step for it (`Canvas.rad`); click / drag go to `Canvas.zeiger`. Off again

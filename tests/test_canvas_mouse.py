@@ -226,6 +226,11 @@ def maus_an(monkeypatch):
     return m
 
 
+def _vorn(u):
+    from tui.ansichten import fenster
+    return fenster.programm_im_fokus(u.z)
+
+
 def _melden(u, text):
     """Hand a report to the main loop's reader, as getch delivers it."""
     u.stdscr.folge = [ord(c) for c in text[1:]]
@@ -239,7 +244,7 @@ def test_the_app_in_front_wants_the_mouse_and_gets_wheel_and_click(welt, maus_an
     s.folge = []
     c = oeffnen(u)
     _bild(u, s)                                          # the view learns size and place
-    zt.canvas_maus_pflegen(u)
+    sm.pflegen(_vorn(u))
     assert maus_an.an
     kx, ky = max(cv.PAN_X, c.vw // 4), max(cv.PAN_Y, c.vh // 4)
     for knopf in (65, 67, 64, 66):                       # down, right, up, left
@@ -265,10 +270,10 @@ def test_the_app_in_front_wants_the_mouse_and_gets_wheel_and_click(welt, maus_an
     u.bz.cmd_mode = False
     # The app closes: reporting goes off.
     _t(u, 27)
-    zt.canvas_maus_pflegen(u)
+    sm.pflegen(_vorn(u))
     if u.SCHEMATIX["active"] or (u.DESK["active"] and u.DESK["ebene"] == "canvas"):
         _t(u, 27)
-        zt.canvas_maus_pflegen(u)
+        sm.pflegen(_vorn(u))
     assert not maus_an.an
 
 
@@ -280,7 +285,7 @@ def test_mouse_off_means_reports_are_not_read(welt, monkeypatch):  # noqa: F811
     assert not zt.maus_lesen(u, 27)                      # esc goes its usual way
     monkeypatch.setenv("ZENTRALE_TUI_MAUS", "aus")
     _desk(u)
-    zt.canvas_maus_pflegen(u)
+    sm.pflegen(_vorn(u))
     assert not m.an
 
 
