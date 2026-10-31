@@ -396,11 +396,10 @@ tool in their package).
      the cloud folder, streamed over the network from elsewhere — whatever
      offers the port (Sasha: "sehr flexibel"). **Sharing = plugging:** two
      apps that plug the same folder share memory. Across nodes ZenCloud
-     unifies it (Sasha: no extra sync step to think about; the `sync` port
-     type in the registry is only how today's per-app cloud choice is
-     recorded, ⚠ prüfen whether it stays a user-visible wire at all).
+     unifies it; the `sync` wire to ZenCloud stays visible (Sasha 31.10.).
+     No syncing outside ZenCloud.
    - **Two writers on one folder** (e.g. two models write the same memory
-     file at once): open. Proposal (Claude): every write goes through the
+     file at once): decided 2026-10-31 — they **must take turns**. Every write goes through the
      file app with a version check — write only if the file is still the
      version that was read (like HTTP `If-Match`), otherwise refuse with
      "read again and merge". Nothing is overwritten silently; same spirit as
