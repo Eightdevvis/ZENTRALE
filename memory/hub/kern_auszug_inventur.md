@@ -373,17 +373,33 @@ tool in their package).
 
 **Open:**
 
-1. **The AI's place in the architecture** (Sasha unsure, 2026-10-31). The
-   first idea was the AI at the heart of the core, sorting things; but
-   deterministic code sorts better, and users should decide whether to plug
-   in an AI at all, and which, in which format. Example: news needs an AI,
-   the AI does not need news; an AI without news has no news tools. Proposal
-   (Claude, not decided): split **model access** from **assistant**. Model
-   access = the existing port type `model`, offered by a model adapter
-   (`ki-anbieter`, Ollama …), plugged by the user. The **assistant** is an
-   app like any other: needs `model`, and has a socket for tools (many);
-   apps offer their AI tools into it. News needs `model` (to summarise),
-   not the assistant. The core only brokers; no AI in the core.
+1. **The AI's place in the architecture.** Direction agreed by Sasha
+   2026-10-31, details still open. The first idea was the AI at the heart of
+   the core, sorting things; but deterministic code sorts better, and users
+   decide whether to plug in an AI at all, which, and in which format.
+   - **Model access is a port, almost like hardware.** Port type `model`,
+     offered by model adapters (Anthropic API, local Ollama, …). **Several at
+     once** (Sasha): every connection is its own offer; each app decides per
+     socket which one it plugs (plug dialog). An app with several roles
+     declares several `model` sockets (e.g. the assistant: chat, cheap
+     fallback); news plugs the local one, the assistant the API.
+   - **The assistant is an app** like any other: needs `model` and has a
+     socket for many AI tools; apps offer their tools into it (optional part
+     of their package, see above). News needs `model` (to summarise), not
+     the assistant: news needs an AI, the AI does not need news.
+   - **Memory is not mystical, it is a folder.** Creating files and writing
+     text is a base "app" every computer has (platform, like the `files`
+     port type: "a folder of plain files for people"). The AI memory is such
+     a folder of Markdown files (it already is: `data/gedaechtnis/`,
+     [gedaechtnis_dateien.md](../ki/gedaechtnis_dateien.md)); the assistant
+     needs a `files` socket for it. **Sharing = wiring:** two apps that plug
+     the same folder share memory, a `sync` wire carries it to the other
+     nodes, no wire keeps it local. Where sharing makes sense and where not
+     is then a plug decision per app, not core code.
+   - Still open: what of today's memory logic (topics, index, notes,
+     projects, skills) is the assistant's and what is the base file app;
+     a separate doc when it gets built.
+   - No AI in the core; the core only brokers.
 2. **Backend reachable from the network:** the ZENTRALE server listens on
    every network address (`ui/app.py:90`), so any device in the same network
    (hotspot, foreign WLAN) can reach it; the login check is in mode
