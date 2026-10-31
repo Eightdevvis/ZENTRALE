@@ -44,8 +44,9 @@ Deshalb fühlte sich ZENTRALE dümmer an als dasselbe Modell im nackten Chat.
 Bis 2026-10-31 blieb der Graph abschaltbar im Baum. Seitdem ist er **aus dem
 Code** (Sasha: gehört ins Archiv): Beschreibung und Testskripte in
 [../archive/associative_graph/](../archive/associative_graph/README.md), der
-Code in der Git-Historie; Sashas Dateien `data/ai_graph*.json` liegen
-unangetastet, nur liest sie nichts mehr. Wenn er je
+Code in der Git-Historie; Sashas Dateien `data/ai_graph*.json` are archived
+(laptop: `~/.local/share/zentrale/archive/concept-graph-2026-10-31/`), nichts
+liest sie mehr. Wenn er je
 wiederkommt, dann mit einem Schema — [Graphiti](https://github.com/getzep/graphiti)
 (Apache 2.0) hat genau die drei fehlenden Stücke: eigene Entity-Typen als
 Pydantic-Schema, bi-temporale Gültigkeit mit Invalidierung, und Episoden-Knoten,

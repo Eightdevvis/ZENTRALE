@@ -31,6 +31,11 @@ Durchgehen also auf beiden Rechnern entscheiden.
 | `ai_graph_cloud.json.bak-vor-zeitputz` | 0,9 MB | Cloud-Graph vor dem Zeit-Putz | dito |
 | `mail_secrets.enc.bak` | 1 KB | Sicherung der verschlüsselten Mail-Zugänge (22.08.) | dito — vor dem Löschen prüfen, ob `mail_secrets.enc` aktuell ist |
 
+**2026-10-31:** the three `ai_graph*` backups above and `ai_graph.json`,
+`ai_graph_cloud.json` moved to
+`~/.local/share/zentrale/archive/concept-graph-2026-10-31/` (outside the repo,
+so rsync does not spread them; graph code removed in `40938b3`).
+
 **Bewusst NICHT beiseite gelegt (schlafend, nicht verwaist):**
 `ai_graph.json` und `ai_graph_cloud.json`. Der Konzept-Graph ist seit
 18.08.2026 aus, aber der Seed beim ersten Chat schreibt noch hinein, und mit

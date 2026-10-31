@@ -179,6 +179,7 @@ Budget (`budgeter`) is the first app installed through the store.
   **build as a new app instead of moving, M–L.** Unchanged.
 - **News:** `news.py` (875), no route, AI `read_news`, fan-in `ki_werkzeuge`,
   `main.py`, **no tests**, untouched for weeks → decided: its own app (section H).
+  Uses `core/embeddings.py` (see the embeddings decision in section H).
 - **Morgenblick:** 3 modules, 1,049 lines, 2 routes, fan-out 10 (all sources).
   Collector over everything → **only when the sources have HTTP + rights. M, late.**
 
@@ -215,7 +216,8 @@ desk — block or app?) is not drawn yet. Schematix and own apps use the block.
 - **Concept graph** (`graph.py`, `consolidation`, `embeddings`, 2,497 lines)
   off since 18.08. **Done `40938b3`:** removed from the code, not moved
   (section H). `consolidation` (transcript queue) and `embeddings` (local
-  bge-m3 client for news and ASCII search) stay with the assistant.
+  bge-m3 client for news and ASCII search) stay with the assistant;
+  `embeddings` untouched for now (decision in section H).
 
 ### Sensors
 
@@ -272,12 +274,12 @@ takes ~7,350 lines of that back into the hub.
 | 8 | **Hub gap G: device-adapter frame** | printer and screen guide wait on it; independent of the extraction, can run in parallel once 7 is done | M | open ([printer_adapter.md](../open/printer_adapter.md)) |
 | 9 | Graphs + cycle | untangle first: AI tools through F instead of privates, one write path, one picture (A13), cycle marks over HTTP, A10–A12 | L | open |
 | 10 | Schematix as its own package, preinstalled, deselectable | code quiet since 31.10. (`f004864`); needs 4 (store path, holds) | M | open ([schematix_extraction.md](../open/schematix_extraction.md)) |
-| 11 | Mail (rebuild as app), News (own app, decided) | AI tools through F, rights | M–L | open |
+| 11 | Mail (rebuild as app), News (own app, decided; whether it needs `embeddings` and through which port is decided at the rebuild, section H) | AI tools through F, rights | M–L | open |
 | 12 | Calendar | A2, A5–A7 into the core **first** (A1 done `270fada`) | L | open |
 | 13 | Morgenblick | needs HTTP of all sources | M | open |
 | 14 | **Base app for files** + **untangle the assistant**: creating files and writing text is a base app every computer has; the AI memory is just a folder plugged via a `files` port (section H, open item 1). Sort what of today's memory logic (topics, index, notes, projects, skills) belongs to the assistant and what to the base file app. **Architecture questions go to Sasha before building** (Sasha: go slow, stop when unsure, especially architecture) | 15 moves the assistant out; it must know first which half is its own and which half is the platform's file app, or the memory moves twice | M–L | open, **waits for Sasha** (architecture) |
 | 15 | Ablage + memory + assistant | after F and 14, the assistant's own tools leave with it | L | open |
-| 16 | Concept graph out of the code (`graph.py`, extractor, cloud embedder, switches, graph tests) | decided in H; dead code since 18.08., imported by 7 core modules | M | **done `40938b3`** |
+| 16 | Concept graph out of the code (`graph.py`, extractor, cloud embedder, switches, graph tests) | decided in H; dead code since 18.08., imported by 7 core modules. `core/embeddings.py` stays untouched for now (news, `ascii_lib`; section H). Old graph data archived outside the repo: `~/.local/share/zentrale/archive/concept-graph-2026-10-31/` (laptop) | M | **done `40938b3`** |
 | **17** | **Full memory inventory** | **all `memory/` docs (and Claude's home memory notes about ZENTRALE) checked against the new state after the move, so everything is current** | **M** | **open** |
 
 **Why Lists before the AI gap (F):** Lists has no AI tool, so F would only
@@ -375,8 +377,18 @@ tool in their package).
   local client (news and `ascii_lib` use it; not graph), switches and graph
   tests removed; docs in
   [../archive/associative_graph/](../archive/associative_graph/README.md).
-  Sasha's `data/ai_graph.json`, `data/ai_graph_cloud.json` untouched,
-  nothing reads them.
+  Sasha's `data/ai_graph.json`, `data/ai_graph_cloud.json` and the three
+  graph backups from `data/_beiseite/` were archived on 2026-10-31 to
+  `~/.local/share/zentrale/archive/concept-graph-2026-10-31/` on the laptop —
+  outside the repo, because the rsync boot sync carries every untracked file
+  (also `data/_beiseite/`) and never deletes. The PC (and any other node)
+  still holds its copies in `data/`; a pull from there brings them back
+  until they are archived there too.
+- **Embeddings (`core/embeddings.py`, local bge-m3 client):** stays untouched
+  for now; news and `ascii_lib` still use it. No work on it now: News and
+  ASCII date from the early days and get rebuilt cleanly as apps later;
+  whether they need embeddings at all, and through which port (e.g. like
+  `model`), is decided then.
 - **Where an app's AI tool lives:** in the app's package, **as an optional
   part, like an adapter**. Default: it comes with the app; it can be left
   out at install and added later ("you notice you need it for your AI").

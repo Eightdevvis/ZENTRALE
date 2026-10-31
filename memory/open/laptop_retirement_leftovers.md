@@ -11,7 +11,8 @@ Do not wipe the laptop before this list is empty.
   remote (probably discarded agent work), `worktree-import-memory-pruefen`
   (1 commit); untracked `zentrale-cloud-plan.md` (610 lines),
   `claude_web_template/`, `INPUT/`; `data/` parts outside the sync
-  (`ai_graph*.json`, `kalender_snapshots/`, `kalender_verlauf/`,
+  (`ai_graph*.json` — since 2026-10-31 in
+  `~/.local/share/zentrale/archive/concept-graph-2026-10-31/`, `kalender_snapshots/`, `kalender_verlauf/`,
   `klassifikator_beispiele/`, `_beiseite/`).
 - **Other repos:** `trading` has uncommitted `bot/`, `scripts/`,
   `run_backtest.py`.
