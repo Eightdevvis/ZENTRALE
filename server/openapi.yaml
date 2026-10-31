@@ -97,6 +97,20 @@ components:
         size: { type: integer, minimum: 1, description: APK size in bytes. }
         notes: { type: string, maxLength: 2000 }
         published_at: { type: string, format: date-time, description: Set by the server. }
+    AppPackages:
+      type: object
+      required: [name, versions]
+      properties:
+        name: { type: string }
+        versions:
+          type: array
+          items:
+            type: object
+            required: [version, sha256, size]
+            properties:
+              version: { type: string }
+              sha256: { $ref: "#/components/schemas/Sha256" }
+              size: { type: integer, minimum: 1 }
     Paket:
       type: object
       required: [version, sha256, groesse]
@@ -141,6 +155,47 @@ paths:
           schema: { type: string, pattern: "^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$" }
         - { $ref: "#/components/parameters/code" }
       security: [{}, { sitzung: [] }]
+      responses:
+        "200":
+          description: The package
+          content: { application/gzip: { schema: { type: string, format: binary } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+  /v1/apps/{name}:
+    get:
+      summary: The published versions of one of our app packages, newest first.
+      description: |
+        While ZENTRALE is not public, only a full login session may fetch our
+        own packages (memory/hub/app_delivery_plan.md, Q2) — no invite code.
+        Built by scripts/app_paket_bauen.py, uploaded by
+        server/scripts/app_hochladen.mjs.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$" }
+      security: [{ sitzung: [] }]
+      responses:
+        "200":
+          description: Versions
+          content: { application/json: { schema: { $ref: "#/components/schemas/AppPackages" } } }
+        "401": { $ref: "#/components/responses/Fehler" }
+        "403": { $ref: "#/components/responses/Fehler" }
+        "404": { $ref: "#/components/responses/Fehler" }
+  /v1/apps/{name}/{version}.tar.gz:
+    get:
+      summary: Download one version of an app package (check its sha256 from /v1/apps/{name}).
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$" }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$" }
+      security: [{ sitzung: [] }]
       responses:
         "200":
           description: The package

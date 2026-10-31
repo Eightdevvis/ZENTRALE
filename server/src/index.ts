@@ -9,6 +9,7 @@ import { besitzHolen, besitzSetzen, knotenEntfernen, knotenListe, knotenSetzen }
 import { mitteBlob, mitteDatei, mitteEnthaelt, mitteFehlende, mitteHolen, mitteStand } from "./mitte";
 import { neuerZaehler, nutzungRoute, zaehlendeUmgebung, zaehlerSchreiben, speicherNachzaehlen, cloudflareAbfragen } from "./nutzung";
 import { installSh, paketDatei, paketInfo } from "./paket";
+import { appFile, appInfo } from "./apps";
 import { apkGet, apkPut, releaseGet, releasePut } from "./phone";
 import { markInsecure } from "./release";
 
@@ -28,6 +29,8 @@ export const ROUTEN: Route[] = [
   { methode: "GET", pfad: "/install.sh", handler: (env) => installSh(env) },
   { methode: "GET", pfad: "/v1/paket", handler: (env, a, _p, t) => paketInfo(env, a, t) },
   { methode: "GET", pfad: "/v1/paket/{version}.tar.gz", handler: (env, a, p, t) => paketDatei(env, a, t, p.version) },
+  { methode: "GET", pfad: "/v1/apps/{name}", handler: (env, a, p, t) => appInfo(env, a, t, p.name) },
+  { methode: "GET", pfad: "/v1/apps/{name}/{version}.tar.gz", handler: (env, a, p, t) => appFile(env, a, t, p.name, p.version) },
   { methode: "POST", pfad: "/v1/konto", handler: (env, a, _p, t) => kontoAnlegen(env, a, t) },
   { methode: "POST", pfad: "/v1/vorab", handler: (env, a) => vorab(env, a) },
   { methode: "POST", pfad: "/v1/sitzung", handler: (env, a, _p, t) => anmelden(env, a, t) },
