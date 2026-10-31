@@ -140,24 +140,147 @@ def ordner_name(url) -> str:
     return n[:-4] if n.endswith(".git") else n
 
 
-def quelle_fehler(stueck):
-    """Ein Stück der Kategorie apps muss sagen, woher es kommt
-    (`downloadUrl`, ein git-Repo über https/ssh/file) und wie die App heißt
-    (`app_name`). → None oder ein Satz, was fehlt (shop.pruefen macht daraus
-    einen kaputten Katalog).
-    A built-in app (`built_in` true, still inside the core package — building
-    kit step 10) has no `downloadUrl`; it only needs its `app_name`."""
-    if built_in(stueck):
-        return None if NAME.match(app_name(stueck)) else "app_name fehlt oder ist ungültig"
-    url = stueck.get("downloadUrl")
+def _git_ref_error(url):
     teile = urllib.parse.urlsplit(url) if isinstance(url, str) else None
     if teile is None or teile.scheme not in SCHEMATA or not teile.path.strip("/"):
         return "downloadUrl fehlt oder ist kein git-repo (https, ssh, file)"
     if not ORDNER_NAME.match(ordner_name(url)):
         return "downloadUrl endet nicht auf einen ordnernamen"
+    return None
+
+
+def quelle_fehler(stueck):
+    """Ein Stück der Kategorie apps muss sagen, woher es kommt und wie die
+    App heißt (`app_name`). Woher: `sources` (catalog v2, see below) and/or
+    the old `downloadUrl` (a git repo over https/ssh/file). → None oder ein
+    Satz, was fehlt (shop.pruefen macht daraus einen kaputten Katalog).
+    A built-in app (`built_in` true, still inside the core package — building
+    kit step 10) has no source; it only needs its `app_name`."""
+    if built_in(stueck):
+        return None if NAME.match(app_name(stueck)) else "app_name fehlt oder ist ungültig"
+    roh = _property(stueck, "sources")
+    if roh is not None:
+        fehler = _sources_error(roh)
+        if fehler:
+            return fehler
+    if roh is None or "downloadUrl" in stueck:
+        fehler = _git_ref_error(stueck.get("downloadUrl"))
+        if fehler:
+            return fehler
+    fehler = _dock_card_error(_property(stueck, "dock_card"))
+    if fehler:
+        return fehler
     if not NAME.match(app_name(stueck)):
         return "app_name fehlt oder ist ungültig"
     return None
+
+
+# ── Catalog v2: sources and dock card (app_delivery_plan.md step 3) ──
+#
+# A catalog item points at one or more sources; the node picks the first
+# kind it has a source adapter for, in the order of the node setting
+# `source_order` (plan 2.2). In the item (schema.org PropertyValue, the
+# open standard the catalog already uses):
+#     {"name": "sources", "value": ["zentrale-package:https://…/budget",
+#                                   "git:ssh://git@github.com/x/budgeter.git"]}
+# One source = "<kind>:<ref>" (the kind before the first colon). The old
+# `downloadUrl` is read as one more `git` source, after the listed ones.
+#     {"name": "dock_card", "value": {"start": "…", "ansichten": […], …}}
+# Dock card = what ZENTRALE needs to treat a program as an app (start,
+# ports, data locations) — the keys of an app.toml. Optional: our apps
+# carry it as their app.toml, a foreign program gets it from the catalog.
+
+SOURCE_ORDER = "source_order"
+DEFAULT_SOURCE_ORDER = ("zentrale-package", "flatpak", "packagekit", "git")
+DOCK_CARD_STRINGS = ("start", "adresse", "titel", "version", "icon")
+DOCK_CARD_LISTS = ("ansichten", "liefert", "rechte")
+
+
+def _property(stueck, name):
+    for p in stueck.get("additionalProperty") or []:
+        if isinstance(p, dict) and p.get("name") == name:
+            return p.get("value")
+    return None
+
+
+def _split_source(text):
+    kind, _, ref = str(text).partition(":")
+    return kind, ref
+
+
+def _sources_error(roh):
+    if not isinstance(roh, list) or not roh:
+        return "sources ist keine liste von quellen"
+    for q in roh:
+        if not isinstance(q, str):
+            return "sources: %r ist kein text" % (q,)
+        kind, ref = _split_source(q)
+        if not KIND.match(kind) or not ref.strip() or len(ref) > 512:
+            return "sources: %r ist nicht <art>:<ort>" % q
+        if kind == "git":
+            fehler = _git_ref_error(ref)
+            if fehler:
+                return "sources: " + fehler.replace("downloadUrl", "git-quelle")
+    return None
+
+
+def _dock_card_error(card):
+    if card is None:
+        return None
+    if not isinstance(card, dict):
+        return "dock_card ist kein objekt"
+    for k in DOCK_CARD_STRINGS:
+        if k in card and not isinstance(card[k], str):
+            return "dock_card: %s ist kein text" % k
+    for k in DOCK_CARD_LISTS:
+        if k in card and not (isinstance(card[k], list) and all(isinstance(x, str) for x in card[k])):
+            return "dock_card: %s ist keine liste von texten" % k
+    return None
+
+
+def sources(stueck) -> list:
+    """Every source of a catalog item, as listed: [{"kind", "ref"}]; the
+    old `downloadUrl` last as `git` (once). Built-ins have none."""
+    if built_in(stueck):
+        return []
+    raus = []
+    for q in _property(stueck, "sources") or []:
+        if isinstance(q, str):
+            kind, ref = _split_source(q)
+            raus.append({"kind": kind, "ref": ref})
+    url = stueck.get("downloadUrl")
+    if isinstance(url, str) and {"kind": "git", "ref": url} not in raus:
+        raus.append({"kind": "git", "ref": url})
+    return raus
+
+
+def dock_card(stueck):
+    """The item's dock card (dict) or None."""
+    card = _property(stueck, "dock_card")
+    return dict(card) if isinstance(card, dict) else None
+
+
+def source_order() -> list:
+    """Node setting `source_order`: kinds in preference order (a list, or a
+    comma-separated text from the environment). Kinds not named keep the
+    default order after the named ones."""
+    roh = ai_config.setting(SOURCE_ORDER)
+    if isinstance(roh, str):
+        roh = [x.strip() for x in roh.split(",")]
+    eigen = [k for k in (roh if isinstance(roh, list) else []) if isinstance(k, str) and KIND.match(k)]
+    return list(dict.fromkeys([*eigen, *DEFAULT_SOURCE_ORDER]))
+
+
+def pick_source(stueck, kinds):
+    """The source this node uses for an item: among the item's sources whose
+    kind is in `kinds` (the kinds this node has an adapter for), the one
+    whose kind comes first in `source_order()`; kinds the order does not
+    name come after, in catalog order. → {"kind", "ref"} or None."""
+    usable = [q for q in sources(stueck) if q["kind"] in set(kinds)]
+    order = source_order()
+    rang = {k: i for i, k in enumerate(order)}
+    usable.sort(key=lambda q: rang.get(q["kind"], len(order)))   # stable: catalog order
+    return usable[0] if usable else None
 
 
 # ── Holds (building kit step 12) ─────────────────────────────────────

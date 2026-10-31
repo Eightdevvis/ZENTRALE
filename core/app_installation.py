@@ -123,8 +123,17 @@ def _ansichten(m) -> list:
 
 # ── Laden und installieren ───────────────────────────────────────────
 
+# Source kinds this node can install today: only `git` (clone/pull). The
+# source-adapter frame (app_delivery_plan.md step 2) replaces this list.
+KINDS = ("git",)
+
+
 def _orte(stueck):
-    url = stueck["downloadUrl"]
+    q = reg.pick_source(stueck, KINDS)
+    if q is None:
+        raise InstallFehler("this device has no installer yet for: %s"
+                            % ", ".join(sorted({x["kind"] for x in reg.sources(stueck)})), 501)
+    url = q["ref"]
     name = _ordner_name(url)
     return url, os.path.join(app_ordner(), name), os.path.join(app_ordner(), LADEN, name)
 
