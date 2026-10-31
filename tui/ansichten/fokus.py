@@ -12,9 +12,18 @@
 # curses-Farben abgebildet (FARBROLLEN) und die Stücke gemalt; der
 # Pixel-Bernstein ist eine reine TUI-Veredelung an der Stelle, die die Quelle
 # angibt. Regel: memory/hub/listen_app.md.
+#
+# Since lists step 3 (2026-10-31, memory/hub/list_extraction_plan.md) this
+# view computes no list logic in its own process: counts, effective done and
+# display order come with GET /api/lists?view=1 (`view` on every node), the
+# "einordnen" targets from GET /api/lists/targets, the picture of an open
+# level from GET /api/lists/<lid>/bild. Only the forest root still draws its
+# boxes with listen_bild.kasten in process (open question to Sasha, see
+# memory/open/list_root_picture.md).
 
 import curses
 import time
+import urllib.parse
 
 try:                                    # Pixel-Baustein (tui/pixel.py)
     from tui import pixel
@@ -24,8 +33,7 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from .basis import BEENDEN, api_call
 from .desk_kacheln import farbe as rolle_farbe
 from .tasten import Tasten
-import listen_baum  # noqa: E402  – core/, eingehängt von basis.kern_pfad
-import listen_bild  # noqa: E402  – das EINE Bild einer Liste (auch die Kachel)
+import listen_bild  # noqa: E402  – root boxes only (memory/open/list_root_picture.md)
 
 
 def bar(pct, length=10):
@@ -34,19 +42,37 @@ def bar(pct, length=10):
     return "█" * n + "░" * (length - n)
 
 
-# Die reinen Baum-Helfer wohnen seit 2026-10-10 in core/listen_baum.py — die
-# Listen-Kachel (core/kachel_fokus.py) zeigt eine Liste damit genauso wie
-# diese Ansicht. Hier unter den alten Namen.
-liste_zaehlen = listen_baum.zaehlen
-liste_erledigt = listen_baum.erledigt
-liste_hat_fokus = listen_baum.hat_fokus
-liste_ordnen = listen_baum.ordnen
-bernstein_steine = listen_baum.steine
-l_path_to = listen_baum.pfad_zu
-l_flatten = listen_baum.flach
-l_count = listen_baum.zaehlen
-l_done = listen_baum.erledigt
-l_find_item = listen_baum.finden
+# Finding a node by id in the tree the core sent — plain walking, no list
+# rules (counts, done, order come in `view`, GET /api/lists?view=1).
+def _nodes(items, above=()):
+    """Every item with the ids above it: [(item, (ids…)), …], stored order."""
+    out = []
+    for it in items or []:
+        if isinstance(it, dict):
+            out.append((it, tuple(above)))
+            out += _nodes(it.get("items"), tuple(above) + (it.get("id"),))
+    return out
+
+
+def l_find_item(items, iid):
+    """The item with this id anywhere below (or None)."""
+    return next((it for it, _a in _nodes(items) if it.get("id") == iid), None)
+
+
+def l_path_to(items, iid):
+    """Ids from the top of the list down to iid (inclusive) — or None."""
+    return next((list(a) + [iid] for it, a in _nodes(items) if it.get("id") == iid), None)
+
+
+def l_view(node):
+    """What the core says about a node (GET /api/lists?view=1)."""
+    v = node.get("view") if isinstance(node, dict) else None
+    return v if isinstance(v, dict) else {}
+
+
+def l_done(node):
+    """Effectively done (a folder is when all its points are) — from the core."""
+    return bool(l_view(node).get("complete"))
 
 
 def l_toggle_msg(it):
@@ -95,7 +121,7 @@ class Fokus:
         #          "new" (Liste anlegen/umbenennen) | "place"/"move"/"move_new"
         #   proots : Projekt-Roots als Deskriptoren [{lid,iid}] (iid None = Liste)
         #   fsel   : Cursor-Index in der Forest-Wurzel (proots + Nicht-Projekt-Listen)
-        #   isel   : in "view" Index in liste_ordnen(…) der offenen Ebene; -1 =
+        #   isel   : in "view" Index in l_vitems() der offenen Ebene; -1 =
         #            die Bernsteinleiste oben (enter → abgeschlossene zeigen)
         #   showdone: in "view" nur die abgeschlossenen Einträge der Ebene zeigen
         self.L = z.L = {"active": False, "view": "forest", "lists": [], "sel": 0,
@@ -119,7 +145,7 @@ class Fokus:
         (/api/projects → obere Forest-Zone) frisch ziehen."""
         L, l_fclamp = self.L, self.l_fclamp
         try:
-            L["lists"] = api_call("/api/lists") or []
+            L["lists"] = api_call("/api/lists?view=1") or []
         except Exception:
             L["lists"] = []
         try:
@@ -164,10 +190,7 @@ class Fokus:
         if node is None:
             return None
         kids = node.get("items")
-        if isinstance(kids, list) and kids:
-            d, t = l_count(kids)
-        else:
-            d, t = (1 if node.get("done") else 0, 1)
+        d, t = l_view(node).get("done", 0), l_view(node).get("total", 0)
         whole = desc.get("iid") is None
         name = node.get("name") if whole else node.get("text")
         return {"lid": desc["lid"], "iid": desc.get("iid"),
@@ -237,9 +260,15 @@ class Fokus:
         Breadcrumb-Liste) anhand L["def"] + L["path"]. container-id ist None auf
         oberster Ebene (Listen-Wurzel) bzw. die id des reingegangenen Eintrags.
         Ein gebrochener Pfad (Eintrag inzwischen weg) wird hier gekürzt."""
+        items, pid, crumbs, _node = self._offen()
+        return items, pid, crumbs
+
+    def _offen(self):
+        """l_container plus the open node itself (list or item) — its `view`
+        holds the display order of the level."""
         L = self.L
         if not L["def"]:
-            return [], None, []
+            return [], None, [], None
         node = L["def"]
         pid = None
         crumbs = [str(L["def"].get("name") or "")]
@@ -255,14 +284,17 @@ class Fokus:
             crumbs.append(str(nxt.get("text") or ""))
         if valid != L["path"]:
             L["path"] = valid
-        return (node.get("items") or []), pid, crumbs
+        return (node.get("items") or []), pid, crumbs, node
 
     def l_vitems(self):
-        """Die offene Ebene so, wie sie angezeigt wird (liste_ordnen): offen
-        und sortiert — oder nur das Abgeschlossene (showdone)."""
-        L, l_container = self.L, self.l_container
-        items, _pid, _cr = l_container()
-        return liste_ordnen(items, L["showdone"])
+        """Die offene Ebene so, wie sie angezeigt wird: offen und sortiert —
+        oder nur das Abgeschlossene (showdone). The order is the core's
+        (`view.order` / `view.finished` of the open node)."""
+        L = self.L
+        items, _pid, _cr, node = self._offen()
+        ids = l_view(node).get("finished" if L["showdone"] else "order") or []
+        by_id = {it.get("id"): it for it in items if isinstance(it, dict)}
+        return [by_id[i] for i in ids if i in by_id]
 
     def l_index_in_container(self, iid):
         """Index des Eintrags mit iid in der ANGEZEIGTEN Ebene (l_vitems; 0,
@@ -283,29 +315,24 @@ class Fokus:
     def l_forest_targets(self, skind, slid, siid):
         """Alle Ziel-Knoten zum Einordnen über ALLE Listen hinweg — flach, mit
         Tiefe & Label, OHNE den eigenen Teilbaum (kein Zyklus). Jeder Eintrag:
-        {lid, iid (None = Listen-Top als Ziel), label}. So kann `>` auf jeder
-        Ebene jeden Knoten erreichen (oben wie unten gleich)."""
+        {lid, iid (None = Listen-Top als Ziel), label}. Which ones: the core
+        (GET /api/lists/targets); asked once per loaded state."""
         L = self.L
-        excl = set()                                  # eigener Teilbaum (nur item-Quelle)
-        if skind == "item":
-            src_lst = next((l for l in L["lists"] if isinstance(l, dict) and l.get("id") == slid), None)
-            src = l_find_item((src_lst or {}).get("items"), siid)
-            if src is not None:
-                for it, _d in l_flatten([src]):
-                    excl.add(it.get("id"))
-        out = []
-        for l in L["lists"]:
-            if not isinstance(l, dict):
-                continue
-            lid = l.get("id")
-            if skind == "list" and lid == slid:       # ganze Quell-Liste raus
-                continue
-            out.append({"lid": lid, "iid": None, "label": str(l.get("name") or "")})
-            for it, d in l_flatten(l.get("items")):
-                if skind == "item" and lid == slid and it.get("id") in excl:
-                    continue                          # eigener Teilbaum
-                out.append({"lid": lid, "iid": it.get("id"),
-                            "label": "  " * (d + 1) + str(it.get("text") or "")})
+        key = (skind, slid, siid, id(L.get("lists")))
+        memo = self.__dict__.setdefault("_memo", {}).get("ziele")
+        if memo and memo[0] == key:
+            return memo[1]
+        q = "/api/lists/targets?kind=%s&lid=%s" % (skind, urllib.parse.quote(str(slid or "")))
+        if siid is not None:
+            q += "&iid=%d" % siid
+        try:
+            got = api_call(q) or []
+        except Exception:
+            got = []
+        out = [{"lid": t.get("lid"), "iid": t.get("iid"),
+                "label": "  " * int(t.get("tiefe") or 0) + str(t.get("text") or "")}
+               for t in got if isinstance(t, dict)]
+        self._memo["ziele"] = (key, out)
         return out
 
     def l_sync_def(self):
@@ -676,10 +703,10 @@ class Fokus:
         """(container-id, angezeigte Einträge, gewählter Eintrag oder None,
         Bernsteinleiste da?) der offenen Ebene."""
         L = self.L
-        items, pid, _cr = self.l_container()      # nur die offene Ebene
+        items, pid, _cr, node = self._offen()     # nur die offene Ebene
         vis = self.l_vitems()                     # so, wie sie angezeigt wird
         cur = vis[L["isel"]] if 0 <= L["isel"] < len(vis) else None
-        return pid, vis, cur, l_count(items)[1] > 0
+        return pid, vis, cur, bool(items) and l_view(node).get("total", 0) > 0
 
     def _bernstein_klemmen(self):
         """Steht unter dem Bernstein nichts, ist er gewählt — so zeigt die
@@ -1001,14 +1028,13 @@ class Fokus:
             return
 
         if L["view"] == "view" and L["def"]:
-            # Das Bild der Ebene kommt ganz aus listen_bild (wie die Kachel);
+            # Das Bild der Ebene kommt ganz aus listen_bild (wie die Kachel, über HTTP);
             # hier nur malen, dazu der Pixel-Bernstein.
             self._bernstein_klemmen()
-            items, _pid, crumbs = l_container()   # NUR die offene Ebene (Ordner-Sicht)
+            l_container()                         # cuts a broken drill path
             input_row = by + bh - 3
             list_bottom = (input_row - 1) if L["adding"] else bottom
-            bild = listen_bild.ebene(items, iw, list_bottom - by, pfad=crumbs,
-                                     nur_erledigte=L["showdone"], auswahl=L["isel"])
+            bild = self._ebene_bild(iw, list_bottom - by)
             self._malen(by + 1, ix, bild["zeilen"])
             if bild["bernstein"]:
                 self._bernstein(by + 1 + bild["bernstein"]["zeile"], bx, ix, bild["bernstein"])
@@ -1134,6 +1160,31 @@ class Fokus:
             if L["msg"]:
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
 
+    def _ebene_bild(self, w, h):
+        """The picture of the open level from the core (GET
+        /api/lists/<lid>/bild, the same as the tile) — asked again only when
+        something it shows changed (the loaded lists, path, selection, size)."""
+        L = self.L
+        lid = L["def"].get("id")
+        key = (lid, tuple(L["path"]), L["isel"], L["showdone"], w, h, id(L.get("lists")))
+        memo = self.__dict__.setdefault("_memo", {}).get("bild")
+        if memo and memo[0] == key:
+            return memo[1]
+        q = "/api/lists/%s/bild?w=%d&h=%d&auswahl=%d" % (
+            urllib.parse.quote(str(lid)), max(1, w), max(1, h), L["isel"])
+        if L["path"]:
+            q += "&pfad=" + ",".join(str(i) for i in L["path"])
+        if L["showdone"]:
+            q += "&erledigte=1"
+        try:
+            bild = api_call(q) or {}
+        except Exception:
+            bild = {}
+        if not isinstance(bild.get("zeilen"), list):
+            bild = {"zeilen": [[["liste nicht erreichbar", "leise"]]], "bernstein": None}
+        self._memo["bild"] = (key, bild)
+        return bild
+
     def _malen(self, y, x, zeilen, y_max=None):
         """Neutrale Zeilen (Stücke [text, rolle], core/listen_bild.py) ab
         (y, x) malen: Rolle → TUI-Farbe (FARBROLLEN), sonst nichts."""
@@ -1167,7 +1218,7 @@ class Fokus:
                 for i, (ch, fg, bgc) in enumerate(line):
                     safe_addstr(y + r, x + i, ch, pix_attr(fg, bgc))
         else:                                     # ohne 256 Farben: Spalten schattieren
-            cols = bernstein_steine(done, total, sw)
+            cols = list(info.get("steine") or "")    # columns from the core's picture
             for r in (0, 1):
                 safe_addstr(y + r, x, "▐", C["amberdk"])
                 safe_addstr(y + r, x + 1 + sw, "▌", C["amberdk"])

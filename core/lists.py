@@ -32,6 +32,23 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data
 _REGISTRY = os.path.join(_DATA_DIR, 'lists.json')
 _FEATURES = os.path.join(_DATA_DIR, 'features.json')
 
+# Where the lists live, by setting (lists step 3, 2026-10-31,
+# memory/hub/list_extraction_plan.md): ZENTRALE_LISTS_DIR points both files
+# into another folder — the Prüfstand uses it so it can never write into
+# Sasha's real lists (incl. l_zentrale). Read on every access, so a process
+# (or a child process) set up with it never sees data/. Without the setting
+# the module paths above count (tests bend those).
+LOCATION_SETTING = "ZENTRALE_LISTS_DIR"
+
+
+def files():
+    """(personal registry, feature tracker) — the two list files in use now."""
+    folder = (os.environ.get(LOCATION_SETTING) or "").strip()
+    if folder:
+        folder = os.path.abspath(os.path.expanduser(folder))
+        return os.path.join(folder, 'lists.json'), os.path.join(folder, 'features.json')
+    return _REGISTRY, _FEATURES
+
 
 def _load_file(path):
     """Eine Registry-Datei von Disk lesen (leere Liste, wenn nicht vorhanden)."""
@@ -42,7 +59,7 @@ def _load_file(path):
 
 
 def _save_file(path, lists):
-    os.makedirs(_DATA_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     dateien.json_schreiben(path, lists)
     # Echte Änderung geschrieben → Peer-Push anstoßen (no-op ohne AUTOPUSH).
     try:
@@ -61,7 +78,8 @@ def _load():
     gezogen (Wochentag-Ordner → flache Items) und, falls das etwas ändert,
     zurückgespeichert. Idempotent: danach No-op."""
     global _week_migrated
-    lists = _load_file(_REGISTRY) + _load_file(_FEATURES)
+    registry, features = files()
+    lists = _load_file(registry) + _load_file(features)
     if not _week_migrated:
         _week_migrated = True
         if _migrate_week_flat(lists):
@@ -76,13 +94,14 @@ def _save(lists):
     andere → lists.json. Geschrieben wird nur, was sich gegenüber Disk wirklich
     geändert hat — damit eine reine Feature-Pflege lists.json NICHT berührt.
     """
-    feat_ids = {l.get('id') for l in _load_file(_FEATURES)}
+    registry, features_file = files()
+    feat_ids = {l.get('id') for l in _load_file(features_file)}
     features = [l for l in lists if l.get('id') in feat_ids]
     personal = [l for l in lists if l.get('id') not in feat_ids]
-    if features != _load_file(_FEATURES):
-        _save_file(_FEATURES, features)
-    if personal != _load_file(_REGISTRY):
-        _save_file(_REGISTRY, personal)
+    if features != _load_file(features_file):
+        _save_file(features_file, features)
+    if personal != _load_file(registry):
+        _save_file(registry, personal)
 
 
 def _slug(name):
@@ -327,7 +346,8 @@ def read_lists():
     die einmalige »week«-Migration noch aus, wird sie nur im Speicher
     angewendet; die Dateien bleiben unberührt (das erledigt der nächste
     schreibende Zugriff)."""
-    lists = _load_file(_REGISTRY) + _load_file(_FEATURES)
+    registry, features = files()
+    lists = _load_file(registry) + _load_file(features)
     if not _week_migrated:
         _migrate_week_flat(lists)
     return lists
@@ -873,3 +893,55 @@ def reorder_item(lid, iid, delta):
     sib[idx], sib[j] = sib[j], sib[idx]
     _save(lists)
     return True
+
+
+# ── Lists step 3 (2026-10-31): what surfaces and the calendar ask over HTTP ──
+# memory/hub/list_extraction_plan.md. The rules live in listen_baum (pure)
+# and listen_bild (the ONE picture); here only reading once and handing over.
+# All of these only read (read_lists never writes).
+
+def lists_with_view():
+    """`GET /api/lists?view=1` (A8): every list and item with its `view`
+    (counts, effective done, display order) — computed here, not in the TUI."""
+    import listen_baum
+    return listen_baum.with_view(list_lists())
+
+
+def filing_targets(kind, lid, iid=None):
+    """`GET /api/lists/targets` (A8): where a list or item can be filed into."""
+    import listen_baum
+    if kind not in ("list", "item"):
+        raise ValueError("kind: list or item")
+    return listen_baum.targets(read_lists(), kind, lid, iid)
+
+
+def resolve(ids, n=0):
+    """`POST /api/lists/aufloesen`: each node id (`<list>` or
+    `<list>/<item>`) → what is on top now (listen_baum.resolve). The lists
+    are read once for all."""
+    import listen_baum
+    try:
+        n = max(0, min(int(n or 0), 20))
+    except (TypeError, ValueError):
+        n = 0
+    current = read_lists()
+    return [listen_baum.resolve(current, qid, n) for qid in ids]
+
+
+def level_picture(lid, w, h, path=(), selection=None, finished=False, top=None,
+                  head_free=0):
+    """`GET /api/lists/<lid>/bild` (A9): the picture of ONE level of a list —
+    exactly what listen_bild.ebene draws for the tile, plus the level's
+    valid drill path (`pfad`, a broken one is cut) and its names (`namen`).
+    KeyError if the list is gone."""
+    import listen_baum
+    import listen_bild
+    lst = next((l for l in read_lists() if isinstance(l, dict) and l.get("id") == lid), None)
+    if lst is None:
+        raise KeyError(lid)
+    items, valid, names = listen_baum.level(lst, list(path or ()))
+    pic = listen_bild.ebene(items, w, h, pfad=names, nur_erledigte=bool(finished),
+                            auswahl=selection, oben=top, kopf_frei=head_free)
+    pic["kaesten"] = [list(k) for k in pic["kaesten"]]
+    pic.update(pfad=valid, namen=names)
+    return pic

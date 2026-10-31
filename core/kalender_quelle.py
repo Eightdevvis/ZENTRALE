@@ -25,17 +25,17 @@
 # core/adressen.py, wie die Listen-Kachel sie nennt).
 #
 # Auflösung: oberstes OFFENES Blatt in Anzeige-Reihenfolge der Listen
-# (listen_baum.ordnen — dieselbe Reihenfolge wie Listen-Ansicht und Kachel;
-# ein Ordner oben → sein oberstes offenes Blatt). Billig: die Listen werden
-# je Kalender-Abruf höchstens EINMAL gelesen (lists.read_lists, schreibt
-# garantiert nicht), jede Quelle einmal aufgelöst.
+# (dieselbe Reihenfolge wie Listen-Ansicht und Kachel; ein Ordner oben → sein
+# oberstes offenes Blatt). Die Regel gehört den Listen: seit 2026-10-31
+# (lists step 3) fragt der Kalender sie über lists.resolve (= POST
+# /api/lists/aufloesen, Regel in listen_baum.resolve). Billig: je
+# Kalender-Abruf EIN Aufruf für alle Quellen (liest nie schreibend).
 #
 # Dienst (Schicht 2, memory/system/bauplan_kern.md).
 
 import re
 
 import adressen
-import listen_baum
 import lists
 from kalender_fehler import KalenderAbgelehnt
 
@@ -115,95 +115,58 @@ def aus_adresse(text) -> dict | None:
 
 
 # ── Nachsehen ──────────────────────────────────────────────────────────
-def _knoten(q: dict, listen: list):
-    """(knoten, name, lid) — die Liste bzw. der Projekt-Eintrag — oder None."""
-    lid, _, iid = q["id"].partition("/")
-    lst = next((l for l in listen if isinstance(l, dict) and l.get("id") == lid), None)
-    if lst is None:
-        return None
-    if not iid:
-        return lst, lst.get("name") or lid, lid
-    it = listen_baum.finden(lst.get("items"), int(iid))
-    if it is None:
-        return None
-    return it, it.get("text") or iid, lid
-
-
-def oberstes(items):
-    """Das oberste offene BLATT in Anzeige-Reihenfolge (oder None)."""
-    reihe = listen_baum.ordnen(items)
-    if not reihe:
-        return None
-    it = reihe[0]
-    kids = it.get("items") if isinstance(it.get("items"), list) else []
-    return oberstes(kids) if kids else it
-
-
-def offene(items, n: int) -> list:
-    """Die ersten `n` offenen BLÄTTER in Anzeige-Reihenfolge (das erste ist
-    oberstes()) — fürs Ansehen in der TUI: „jetzt X, danach Y, Z"."""
-    raus = []
-
-    def gehen(ebene):
-        for it in listen_baum.ordnen(ebene):
-            if len(raus) >= n:
-                return
-            kids = it.get("items") if isinstance(it.get("items"), list) else []
-            if kids:
-                gehen(kids)
-            else:
-                raus.append(it)
-    gehen(items)
-    return raus
-
-
-def _listen_lesen() -> list | None:
+# Since lists step 3 (2026-10-31) WHAT is on top is asked from the lists
+# (lists.resolve = POST /api/lists/aufloesen, the rule in listen_baum) — the
+# calendar no longer computes list logic in its own code. When the lists move
+# out as an app (memory/hub/list_extraction_plan.md step 5), only _resolve
+# turns into an HTTP call.
+def _resolve(ids: list, n: int = 0) -> list | None:
+    """Ask the lists once for all ids → [{zustand, titel, name, eintrag,
+    offene, projekt}] — or None (lists unreadable: everything "fehlt")."""
+    if not ids:
+        return []
     try:
-        return lists.read_lists()
+        return lists.resolve(ids, n)
     except Exception:
         return None
 
 
-def aufloesen(quelle, rueckfall: str | None = None, listen: list | None = None) -> dict:
+def _formed(quelle) -> dict | None:
+    try:
+        return form(quelle)
+    except KalenderAbgelehnt:
+        return None
+
+
+def _answer(r: dict | None, rueckfall) -> dict:
+    if r is None or r["zustand"] == FEHLT:
+        return {"titel": rueckfall, "quelle_name": rueckfall, "zustand": FEHLT, "eintrag": None}
+    return {"titel": r["titel"], "quelle_name": r["name"], "zustand": r["zustand"],
+            "eintrag": r["eintrag"]}
+
+
+def aufloesen(quelle, rueckfall: str | None = None) -> dict:
     """Eine Quelle jetzt auflösen →
       {"titel", "quelle_name", "zustand": "ok"|"leer"|"fehlt", "eintrag"}
     ok:    titel = oberster offener Punkt, eintrag = {"liste", "id"} (zum Abhaken)
     leer:  titel = "<Name> — alles erledigt"
     fehlt: Liste/Eintrag gelöscht (oder unlesbar) → titel = `rueckfall`."""
-    if listen is None:
-        listen = _listen_lesen()
-    try:
-        q = form(quelle)
-    except KalenderAbgelehnt:
-        q = None
-    treffer = _knoten(q, listen) if q and listen is not None else None
-    if treffer is None:
-        return {"titel": rueckfall, "quelle_name": rueckfall, "zustand": FEHLT, "eintrag": None}
-    knoten, name, lid = treffer
-    blatt = oberstes(knoten.get("items"))
-    if blatt is None:
-        if q["art"] == PROJEKT and "/" in q["id"] and not listen_baum.erledigt(knoten):
-            # ein Projekt-Eintrag ohne Unterpunkte IST selbst der Schritt
-            return {"titel": name, "quelle_name": name, "zustand": OK,
-                    "eintrag": {"liste": lid, "id": knoten.get("id")}}
-        return {"titel": f"{name} — alles erledigt", "quelle_name": name,
-                "zustand": LEER, "eintrag": None}
-    return {"titel": blatt.get("text") or "?", "quelle_name": name, "zustand": OK,
-            "eintrag": {"liste": lid, "id": blatt.get("id")}}
+    q = _formed(quelle)
+    found = _resolve([q["id"]]) if q else None
+    return _answer(found[0] if found else None, rueckfall)
 
 
 def pruefen(quelle) -> tuple[dict, str]:
     """Zum Setzen: Form UND Existenz → (quelle, name). QUELLE-UNBEKANNT, wenn
     es die Liste nicht gibt bzw. der Knoten kein Projekt ist."""
     q = form(quelle)
-    listen = _listen_lesen() or []
-    treffer = _knoten(q, listen)
-    if treffer is None:
+    found = _resolve([q["id"]])
+    r = found[0] if found else None
+    if r is None or r["zustand"] == FEHLT:
         raise KalenderAbgelehnt("QUELLE-UNBEKANNT", f"{q['art']} {q['id']!r} gibt es nicht")
-    knoten, name, _lid = treffer
-    if q["art"] == PROJEKT and not knoten.get("project"):
+    if q["art"] == PROJEKT and not r["projekt"]:
         raise KalenderAbgelehnt("QUELLE-UNBEKANNT", f"{q['id']!r} ist kein Projekt")
-    return q, name
+    return q, r["name"]
 
 
 def vorschau(quelle, n: int = 4) -> dict:
@@ -211,31 +174,37 @@ def vorschau(quelle, n: int = 4) -> dict:
     Zustand und die ersten `n` offenen Punkte als Text —
     {"name", "zustand", "punkte": [...]}. Schreibt nie."""
     n = max(1, min(int(n or 4), 20))
-    r = aufloesen(quelle, None)
-    if r["zustand"] != OK:
-        return {"name": r["quelle_name"], "zustand": r["zustand"], "punkte": []}
-    q = form(quelle)
-    knoten, name, _lid = _knoten(q, _listen_lesen() or [])
-    punkte = [it.get("text") or "?" for it in offene(knoten.get("items"), n)]
-    return {"name": name, "zustand": OK, "punkte": punkte or [r["titel"]]}
+    q = _formed(quelle)
+    found = _resolve([q["id"]], n) if q else None
+    r = found[0] if found else None
+    a = _answer(r, None)
+    if a["zustand"] != OK:
+        return {"name": a["quelle_name"], "zustand": a["zustand"], "punkte": []}
+    return {"name": r["name"], "zustand": OK, "punkte": r["offene"] or [r["titel"]]}
 
 
 # ── An Ausgaben hängen ─────────────────────────────────────────────────
 def anreichern(eintraege) -> None:
     """Jedem Eintrag mit `quelle` titel_live, quelle_name, quelle_zustand und
-    quelle_eintrag dazuschreiben (im Dict). Listen einmal lesen, jede Quelle
-    einmal auflösen; `label` bleibt der gespeicherte Rückfall."""
+    quelle_eintrag dazuschreiben (im Dict). Die Listen einmal fragen, jede
+    Quelle einmal auflösen; `label` bleibt der gespeicherte Rückfall."""
     mit = [e for e in eintraege if isinstance(e, dict) and e.get("quelle")]
     if not mit:
         return
-    listen = _listen_lesen()
-    gemerkt = {}
+    keys = {}
     for e in mit:
         q = e["quelle"]
-        schl = (q.get("art"), q.get("id")) if isinstance(q, dict) else repr(q)
-        if schl not in gemerkt:
-            gemerkt[schl] = aufloesen(q, None, listen)
-        r = gemerkt[schl]
+        key = (q.get("art"), q.get("id")) if isinstance(q, dict) else repr(q)
+        if key not in keys:
+            keys[key] = _formed(q)
+    ids = sorted({q["id"] for q in keys.values() if q})
+    found = _resolve(ids)
+    by_id = dict(zip(ids, found)) if found is not None else {}
+    for e in mit:
+        q = e["quelle"]
+        key = (q.get("art"), q.get("id")) if isinstance(q, dict) else repr(q)
+        formed = keys[key]
+        r = _answer(by_id.get(formed["id"]) if formed else None, None)
         e["titel_live"] = r["titel"] or e.get("label")
         e["quelle_name"] = r["quelle_name"] or e.get("label")
         e["quelle_zustand"] = r["zustand"]
@@ -259,30 +228,32 @@ def auswahl() -> dict:
     """Für GET /api/calendar/quellen: alle Listen und Projekte mit dem, was
     jetzt oben steht. {"listen": [...], "projekte": [...]}, je
     {art, id, name, titel, zustand}."""
-    listen = _listen_lesen() or []
-
-    def zeile(art, qid):
-        r = aufloesen({"art": art, "id": qid}, None, listen)
-        return {"art": art, "id": qid, "name": r["quelle_name"], "titel": r["titel"],
-                "zustand": r["zustand"]}
-
-    raus_l = [zeile(LISTE, l["id"]) for l in listen
-              if isinstance(l, dict) and isinstance(l.get("id"), str) and _ID[LISTE].match(l["id"])]
-    raus_p = []
+    try:
+        listen = lists.read_lists() or []
+    except Exception:
+        listen = []
+    wanted = []                                   # (art, id) in display order
 
     def projekte(items, lid):
         for it in items or []:
             if not isinstance(it, dict):
                 continue
             if it.get("project") and isinstance(it.get("id"), int):
-                raus_p.append(zeile(PROJEKT, f"{lid}/{it['id']}"))
+                wanted.append((PROJEKT, f"{lid}/{it['id']}"))
             projekte(it.get("items"), lid)
 
-    for l in listen:
-        if not (isinstance(l, dict) and isinstance(l.get("id"), str)
-                and _ID[LISTE].match(l["id"])):
-            continue
+    ok_lists = [l for l in listen if isinstance(l, dict) and isinstance(l.get("id"), str)
+                and _ID[LISTE].match(l["id"])]
+    n_lists = len(ok_lists)
+    wanted += [(LISTE, l["id"]) for l in ok_lists]
+    for l in ok_lists:
         if l.get("project"):
-            raus_p.append(zeile(PROJEKT, l["id"]))
+            wanted.append((PROJEKT, l["id"]))
         projekte(l.get("items"), l["id"])
-    return {"listen": raus_l, "projekte": raus_p}
+    found = _resolve([qid for _art, qid in wanted]) or [None] * len(wanted)
+    rows = []
+    for (art, qid), r in zip(wanted, found):
+        a = _answer(r, None)
+        rows.append({"art": art, "id": qid, "name": a["quelle_name"], "titel": a["titel"],
+                     "zustand": a["zustand"]})
+    return {"listen": rows[:n_lists], "projekte": rows[n_lists:]}

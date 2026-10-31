@@ -471,6 +471,8 @@ def _listen_und_graphen_nie_in_echten_daten(_test_ordner, monkeypatch):
     import graphs
     import lists
     ordner = _frisch(_test_ordner, "listen_graphen")
+    # The place by setting (lists step 3) would beat the module paths below.
+    monkeypatch.delenv("ZENTRALE_LISTS_DIR", raising=False)
     monkeypatch.setattr(lists, "_DATA_DIR", str(ordner))
     monkeypatch.setattr(lists, "_REGISTRY", str(ordner / "lists.json"))
     monkeypatch.setattr(lists, "_FEATURES", str(ordner / "features.json"))

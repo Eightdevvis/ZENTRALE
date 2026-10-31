@@ -65,6 +65,13 @@ tags:
       The calendar of this node (core/kalender*.py). Only the edit route is
       described here so far; the older calendar routes are listed in
       memory/hub/routen_altlast.md.
+  - name: lists
+    description: >
+      The list program (core/lists.py, listen_baum.py, listen_bild.py) —
+      moves out as an app with the SAME paths
+      (memory/hub/list_extraction_plan.md). Described so far: the list tree
+      and the read-only routes of lists step 3 (2026-10-31); the writing
+      list routes are listed in memory/hub/routen_altlast.md.
   - name: app-seite
     description: >
       Was eine Prozess-App selbst beantwortet (unter ihrer `adresse`, nur auf
@@ -1363,6 +1370,162 @@ paths:
                   error: {type: string}
                   gesperrt: {const: true}
 
+  /api/lists:
+    get:
+      tags: [lists]
+      operationId: listsAll
+      summary: All lists with their items; with view=1 also counts and display order
+      description: >
+        The raw list tree (core/lists.py). Belongs to the list program and
+        moves with it (memory/hub/list_extraction_plan.md); without `view`
+        the answer is exactly what it always was. With `view=1` (lists step
+        3, A8, 2026-10-31) every list and every item also carries `view`, so
+        no surface computes list logic itself.
+      parameters:
+        - {name: view, in: query, required: false, schema: {type: string, enum: ["1", "true"]}}
+      responses:
+        "200":
+          description: The lists in stored order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ListNode"}
+    post:
+      tags: [lists]
+      operationId: listsCreate
+      summary: Create a list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, minLength: 1}
+      responses:
+        "200":
+          description: The new list
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ListNode"}
+        "400":
+          description: Empty name
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
+
+  /api/lists/targets:
+    get:
+      tags: [lists]
+      operationId: listsTargets
+      summary: Where a list or an item can be filed into ("einordnen", `>`)
+      description: >
+        Every list (tiefe 0) and every item (tiefe 1…) across all lists, flat
+        in stored order — without the source's own subtree (no cycle) and,
+        for kind=list, without the source list itself (A8, 2026-10-31).
+      parameters:
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [list, item]}}
+        - {name: lid, in: query, required: true, schema: {type: string}}
+        - {name: iid, in: query, required: false, schema: {type: integer}}
+      responses:
+        "200":
+          description: The targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/FilingTarget"}
+        "400":
+          description: kind or iid wrong
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
+
+  /api/lists/{lid}/bild:
+    parameters:
+      - {name: lid, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [lists]
+      operationId: listsLevelPicture
+      summary: The picture of ONE level of a list (the same one the tile shows)
+      description: >
+        core/listen_bild.ebene over the level reached by the drill path `pfad`
+        (A9, 2026-10-31): head, amber bar, items as boxes, the selection as a
+        role. Plus where things are, so a surface can refine without
+        computing (the TUI paints the bar as pixel stones). Only reads.
+      parameters:
+        - {name: w, in: query, required: true, schema: {type: integer, minimum: 1, maximum: 400}}
+        - {name: h, in: query, required: true, schema: {type: integer, minimum: 1, maximum: 400}}
+        - {name: pfad, in: query, required: false, description: "item ids, comma separated (a broken path is cut)", schema: {type: string}}
+        - {name: auswahl, in: query, required: false, description: "index of the selected box, -1 = the amber bar", schema: {type: integer, minimum: -1}}
+        - {name: erledigte, in: query, required: false, description: "show the finished points instead of the open ones", schema: {type: string, enum: ["0", "1", "true", "false"]}}
+        - {name: oben, in: query, required: false, description: "first box shown (else the window follows auswahl)", schema: {type: integer, minimum: 0}}
+        - {name: kopf_frei, in: query, required: false, schema: {type: integer, minimum: 0, maximum: 400}}
+      responses:
+        "200":
+          description: The picture
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ListPicture"}
+        "400":
+          description: A number is missing or wrong
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
+        "404":
+          description: No such list
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
+
+  /api/lists/aufloesen:
+    post:
+      tags: [lists]
+      operationId: listsResolve
+      summary: What is on top of each list or project now
+      description: >
+        The topmost OPEN point in display order (a folder on top → its topmost
+        open point) of each node, read once for all (2026-10-31). The
+        calendar's live titles (core/kalender_quelle.py) come from here.
+        `ok`: titel = that point, eintrag = it (to tick it); an item without
+        points of its own is the step itself. `leer`: titel = "<name> —
+        alles erledigt". `fehlt`: gone, titel and name null. Only reads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quellen]
+              properties:
+                quellen:
+                  type: array
+                  maxItems: 500
+                  items:
+                    oneOf:
+                      - {type: string, description: "<list> or <list>/<item>"}
+                      - {type: object, required: [id], properties: {id: {type: string}}}
+                offene: {type: integer, minimum: 0, maximum: 20, description: "also the first n open points"}
+      responses:
+        "200":
+          description: One result per source, same order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ergebnisse]
+                properties:
+                  ergebnisse:
+                    type: array
+                    items: {$ref: "#/components/schemas/ListResolution"}
+        "400":
+          description: quellen is not a list
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
+
   /hub/gesund:
     servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",
                variables: {port: {default: "5070"}}}]
@@ -1682,6 +1845,91 @@ components:
               withdrawn: {type: boolean}
 
   schemas:
+    ListNode:
+      type: object
+      description: A list (id, name, items) or an item (id, text, done, items?) — stored as is
+      properties:
+        id: {type: [string, integer]}
+        name: {type: string}
+        text: {type: string}
+        done: {type: boolean}
+        focus: {type: boolean}
+        project: {type: boolean}
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/ListNode"}
+        view: {$ref: "#/components/schemas/ListView"}
+    ListView:
+      type: object
+      description: Only with GET /api/lists?view=1 — computed by the core, not stored
+      required: [done, total, complete]
+      additionalProperties: false
+      properties:
+        done: {type: integer, minimum: 0, description: finished leaves below (an item without points counts itself)}
+        total: {type: integer, minimum: 0}
+        complete: {type: boolean, description: effectively done (a folder is done when all its points are)}
+        order: {type: array, items: {type: integer}, description: "display order of the open points (focus on top, then fewest open)"}
+        finished: {type: array, items: {type: integer}, description: the finished points (behind the amber bar)}
+    FilingTarget:
+      type: object
+      required: [lid, iid, text, tiefe]
+      additionalProperties: false
+      properties:
+        lid: {type: string}
+        iid: {type: [integer, "null"], description: null = the top of that list}
+        text: {type: string}
+        tiefe: {type: integer, minimum: 0}
+    ListPicture:
+      type: object
+      required: [zeilen, bernstein, kaesten, leer, oben, oben_max, versteckt, pfad, namen]
+      properties:
+        zeilen: {type: array, items: {$ref: "#/components/schemas/Zeile"}}
+        bernstein:
+          oneOf:
+            - {type: "null"}
+            - type: object
+              required: [zeile, breite, done, total, steine]
+              properties:
+                zeile: {type: integer}
+                breite: {type: integer}
+                done: {type: integer}
+                total: {type: integer}
+                steine: {type: string, pattern: "^[LU ]*$", description: "per column of the bar: L lit stone, U empty stone, space a joint"}
+        kaesten:
+          type: array
+          description: "[row, index in the display order] of each box shown"
+          items: {type: array, items: {type: integer}, minItems: 2, maxItems: 2}
+        leer:
+          oneOf:
+            - {type: "null"}
+            - type: object
+              required: [zeile, art]
+              properties:
+                zeile: {type: integer}
+                art: {type: string, enum: [abgeschlossen, erledigt, leer]}
+        oben: {type: integer}
+        oben_max: {type: integer}
+        versteckt: {type: integer}
+        pfad: {type: array, items: {type: integer}, description: the valid drill path}
+        namen: {type: array, items: {type: string}, description: names from the list down to this level}
+    ListResolution:
+      type: object
+      required: [zustand, titel, name, eintrag, offene, projekt]
+      additionalProperties: false
+      properties:
+        zustand: {type: string, enum: [ok, leer, fehlt]}
+        titel: {type: [string, "null"]}
+        name: {type: [string, "null"]}
+        eintrag:
+          oneOf:
+            - {type: "null"}
+            - type: object
+              required: [liste, id]
+              properties:
+                liste: {type: string}
+                id: {type: integer}
+        offene: {type: array, items: {type: string}}
+        projekt: {type: boolean}
     SchematixMap:
       type: object
       required: [format, node, pieces, wires, layers, notes]

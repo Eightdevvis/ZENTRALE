@@ -46,7 +46,8 @@ def _kachel(lid, w, h, erledigte=False):
 
 
 def _tui(lst, w, h, showdone=False):
-    """Die Listen-Ansicht auf einem Schein-Bildschirm, Inhalt genau w×h."""
+    """Die Listen-Ansicht auf einem Schein-Bildschirm, Inhalt genau w×h. Since
+    lists step 3 it asks the backend for the picture (see the test)."""
     from tui.ansichten.fokus import Fokus
     bw, bh = w + 4, h + 2                             # Rahmen + Hinweiszeile
     gitter = [[" "] * bw for _ in range(bh)]
@@ -69,9 +70,16 @@ def _tui(lst, w, h, showdone=False):
     return ["".join(r)[2:2 + w] for r in gitter[1:1 + h]]
 
 
-def test_dieselbe_liste_ist_in_kachel_und_tui_dasselbe_bild():
+def test_dieselbe_liste_ist_in_kachel_und_tui_dasselbe_bild(monkeypatch):
     lid = _liste()
-    lst = next(l for l in lists.read_lists() if l["id"] == lid)
+    from ui.app import app
+    from tui.ansichten import fokus as fokus_ansicht
+    app.config.update(TESTING=True)
+    c = app.test_client()
+    monkeypatch.setattr(fokus_ansicht, "api_call",
+                        lambda pfad, method="GET", body=None, timeout=3.0:
+                        c.open(pfad, method=method, json=body).get_json())
+    lst = next(l for l in c.get("/api/lists?view=1").get_json() if l["id"] == lid)
     for w, h, erledigte in ((36, 16, False), (30, 10, False), (24, 12, True)):
         kachel = [_text(z) for z in _kachel(lid, w, h, erledigte)["zeilen"]]
         tui = _tui(lst, w, h, showdone=erledigte)
@@ -129,7 +137,9 @@ def test_tui_kasten_zeichnet_nicht_selbst():
     for f in (Fokus.kasten_render, Fokus._malen):
         assert not (set(inspect.getsource(f)) & set("┌┐└┘│▸◆★")), f.__name__
     quelle = inspect.getsource(Fokus.draw_list_tool)
-    assert "listen_bild.ebene(" in quelle and "rows_render" not in quelle
+    assert "self._ebene_bild(" in quelle and "rows_render" not in quelle
+    # the level's picture comes from the core over HTTP (lists step 3, A9)
+    assert "/api/lists/%s/bild" in inspect.getsource(Fokus._ebene_bild)
 
 
 def test_listen_bild_nur_rollen_aus_dem_woerterbuch_und_ohne_kern():

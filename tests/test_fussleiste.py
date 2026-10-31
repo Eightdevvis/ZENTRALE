@@ -144,6 +144,35 @@ DESK = {"name": "Elektronik", "stand": "s1", "verbindungen": [], "elemente": [
      "kachel": {"v": 2, "adresse": "zentrale://kalender/ausschnitt?modus=mitlaufend&tage=7"}}]}
 
 
+# What the fake backend's lists are right now: a fresh copy per TUI (bauen),
+# state builders change it and let the view reload (tests/tasten_zustaende/fokus.py).
+JETZT = {"listen": copy.deepcopy(LISTEN)}
+
+
+def _listen_antwort(pfad):
+    """The list routes of lists step 3 (2026-10-31), computed by the core's
+    rules over JETZT — the view asks them instead of computing itself."""
+    import listen_baum
+    import listen_bild
+    from urllib.parse import parse_qs, urlsplit
+    teile = urlsplit(pfad)
+    q = {k: v[0] for k, v in parse_qs(teile.query).items()}
+    listen = JETZT["listen"]
+    if teile.path == "/api/lists":
+        return listen_baum.with_view(copy.deepcopy(listen)) if q.get("view") else copy.deepcopy(listen)
+    if teile.path == "/api/lists/targets":
+        iid = int(q["iid"]) if q.get("iid") else None
+        return listen_baum.targets(listen, q.get("kind"), q.get("lid"), iid)
+    lid = teile.path.split("/")[3]
+    lst = next(l for l in listen if l["id"] == lid)
+    pfad_ids = [int(x) for x in q.get("pfad", "").split(",") if x]
+    items, gueltig, namen = listen_baum.level(lst, pfad_ids)
+    bild = listen_bild.ebene(items, int(q["w"]), int(q["h"]), namen,
+                             nur_erledigte=bool(q.get("erledigte")),
+                             auswahl=int(q["auswahl"]) if "auswahl" in q else None)
+    return dict(bild, pfad=gueltig, namen=namen)
+
+
 def antwort(pfad, methode):
     """Das gefälschte Backend: erfundene Daten je Pfad (Chat, Gespräche,
     Gedächtnis, Ablage, Projekte wie im Bildschirm-Werkzeug tests/tui_schirm)."""
@@ -211,8 +240,8 @@ def antwort(pfad, methode):
         return copy.deepcopy(GRAPHEN)
     if p.startswith("/api/data/"):
         return [{"date": "2026-10-06", "value": 7}]
-    if p == "/api/lists":
-        return copy.deepcopy(LISTEN)
+    if p in ("/api/lists", "/api/lists/targets") or (p.startswith("/api/lists/") and p.endswith("/bild")):
+        return _listen_antwort(pfad)
     if p == "/api/projects":
         return []
     if p == "/api/calendar":
@@ -281,6 +310,7 @@ def welt(monkeypatch, tmp_path):
 
     def bauen():
         aufrufe.clear(); nebenwirkung.clear()
+        JETZT["listen"] = copy.deepcopy(LISTEN)
         z = A.kontext.Kontext(Schirm(), Store(), False, Theme())
         z.apply_theme("night")
         z.cycle_theme = lambda: nebenwirkung.append("theme")

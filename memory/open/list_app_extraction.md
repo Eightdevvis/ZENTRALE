@@ -13,8 +13,10 @@ Auszug aus" — follow that, not a copy here. Step plan (core first, then the mo
 - `core/kachel_fokus.py` imports hub code (`kachel_form`, `kachel_parameter`,
   `adressen`).
 - `core/lists.py` uses `dateien`; its storage should move to `daten/fokus/`.
-- `core/kalender_quelle.py`, `core/morgenblick_daten.py`,
-  `ui/routen/kalender.py` and the Prüfstand read `lists` directly — later
-  they have to ask over HTTP.
+- `core/morgenblick_daten.py` and `ui/routen/kalender.py` read `lists`
+  directly — later they have to ask over HTTP. `core/kalender_quelle.py`
+  asks through one seam since 31.10. (`lists.resolve` = `POST
+  /api/lists/aufloesen`; the selection still enumerates `lists.read_lists`);
+  the Prüfstand takes the place by setting (`ZENTRALE_LISTS_DIR`).
 - Tile parameter `tiefe` is deprecated (no effect since 11.10.); it can leave
   the schema in `core/kachel_fokus.py` once no old desk addresses use it.

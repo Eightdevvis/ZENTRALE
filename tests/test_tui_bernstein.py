@@ -2,7 +2,7 @@
 
 Abgeschlossenes verschwindet aus der normalen Sicht (es steckt im Bernstein),
 der Fokus klebt oben, der Rest sortiert sich nach wenigsten offenen Punkten."""
-from tui.ansichten.fokus import bernstein_steine, liste_ordnen
+from listen_baum import ordnen as liste_ordnen, steine as bernstein_steine  # the rules (core)
 
 
 def _blatt(i, done=False, focus=False):
@@ -105,13 +105,31 @@ def _schirm(h=24, w=40):
     return f, gitter
 
 
-def test_eintrag_ist_kasten_mit_titel_ohne_leiste():
+def _ueber_http(monkeypatch, lst):
+    """Since lists step 3 the view asks the backend (counts, order, the
+    picture of a level): here the real one through Flask's test client, with
+    `lst` as the only list. → the list as the view loads it (with `view`)."""
+    import json as _json
+    import lists as _lists
+    from ui.app import app
+    from tui.ansichten import fokus as _fokus
+    with open(_lists._REGISTRY, "w", encoding="utf-8") as f:
+        _json.dump([lst], f, ensure_ascii=False)
+    app.config.update(TESTING=True)
+    c = app.test_client()
+    monkeypatch.setattr(_fokus, "api_call",
+                        lambda pfad, method="GET", body=None, timeout=3.0:
+                        c.open(pfad, method=method, json=body).get_json())
+    return c.get("/api/lists?view=1").get_json()[0]
+
+
+def test_eintrag_ist_kasten_mit_titel_ohne_leiste(monkeypatch):
     f, gitter = _schirm()
     f.L = {"view": "view", "path": [], "showdone": False, "isel": 0,
            "adding": False, "msg": "", "imode": "add", "input": "",
-           "def": {"id": "l1", "name": "einkauf", "items": [
+           "def": _ueber_http(monkeypatch, {"id": "l1", "name": "einkauf", "items": [
                _blatt(1), _blatt(2, done=True),
-               _ordner(3, [_blatt(4), _blatt(5)])]}}
+               _ordner(3, [_blatt(4), _blatt(5)])]})}
     f.draw_list_tool(0, 0, 24, 40)
     zeilen = ["".join(r) for r in gitter]
     titel = [i for i, z in enumerate(zeilen) if "▸ o3" in z or " p1 " in z]
@@ -126,7 +144,7 @@ def test_eintrag_ist_kasten_mit_titel_ohne_leiste():
     assert "1/4" in "".join(zeilen[:titel[0]])      # Status nur im Bernstein oben
 
 
-def test_pixel_bernstein_sitzt_wo_die_quelle_ihn_hinlegt():
+def test_pixel_bernstein_sitzt_wo_die_quelle_ihn_hinlegt(monkeypatch):
     """Der Pixel-Bernstein ist nur Veredelung: gleiche Zeilen, gleiche Breite,
     der Zähler an derselben Stelle wie im Bild aus core/listen_bild.py."""
     import listen_bild
@@ -138,7 +156,7 @@ def test_pixel_bernstein_sitzt_wo_die_quelle_ihn_hinlegt():
     f.z.PIX_MODUS = "mix"
     f.L = {"view": "view", "path": [], "showdone": False, "isel": 0,
            "adding": False, "msg": "", "imode": "add", "input": "",
-           "def": {"id": "l1", "name": "einkauf", "items": items}}
+           "def": _ueber_http(monkeypatch, {"id": "l1", "name": "einkauf", "items": items})}
     f.draw_list_tool(0, 0, 24, 40)
     zeile = "".join(gitter[1 + erwartet["bernstein"]["zeile"]])
     assert leiste.endswith(" 1/3") and zeile.rstrip().endswith(" 1/3")

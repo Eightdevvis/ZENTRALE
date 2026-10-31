@@ -47,7 +47,11 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
                         ("NUTZUNG", "nutzung"),
                         # 2026-10-30: Timer-Dateien (zentrale timers) nie in Sashas
                         # echtes ~/.config/systemd/user.
-                        ("SYSTEMD_USER", "systemd_user")):
+                        ("SYSTEMD_USER", "systemd_user"),
+                        # 2026-10-31 (lists step 3): Sasha's lists, incl. his
+                        # tracker l_zentrale — the place by setting
+                        # (core/lists.py files()), never data/.
+                        ("LISTS", "listen")):
         os.environ[f"ZENTRALE_{name}_DIR"] = os.path.join(tmp, unter)
     os.environ["ZENTRALE_LOKALE_KI"] = "aus"         # kein Ollama, Chat über die Cloud
     os.environ["ZENTRALE_MAIL"] = "off"
@@ -124,12 +128,11 @@ def umlenken(tmp: str):
     setzen(transkript, "_DIR", os.path.join(tmp, "ai_transcripts"))
     # Listen (2026-10-10): Termine können ihren Titel aus einer Liste nehmen
     # (kalender_quelle) — die KI liest und der Fall legt Listen an. Nie Sashas.
-    import lists
-    listen = os.path.join(tmp, "listen")
-    os.makedirs(listen, exist_ok=True)
-    setzen(lists, "_DATA_DIR", listen)
-    setzen(lists, "_REGISTRY", os.path.join(listen, "lists.json"))
-    setzen(lists, "_FEATURES", os.path.join(listen, "features.json"))
+    # Since lists step 3 (2026-10-31) the place comes by setting
+    # (ZENTRALE_LISTS_DIR, set in vorbereiten), no longer by bending lists'
+    # module paths — the lists can move out as an app without the bench
+    # knowing their insides. Here only the folder.
+    os.makedirs(os.path.join(tmp, "listen"), exist_ok=True)
     # Nach der Antwort: Transkript/Graph merken. Für die Prüfung belanglos,
     # und mit eingeschaltetem Graphen kostete es pro Zug einen Aufruf.
     setzen(consolidation, "zug_vormerken", lambda *a, **k: None)

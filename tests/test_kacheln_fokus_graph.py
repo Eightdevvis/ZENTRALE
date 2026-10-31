@@ -169,7 +169,7 @@ def test_liste_kopf_bernstein_kaesten_und_rollen(einkauf):
 def test_liste_wie_die_ansicht_geordnet(einkauf):
     """Dieselbe Reihenfolge wie die Listen-Ansicht (listen_baum.ordnen):
     was weniger offen hat, steht weiter oben."""
-    from tui.ansichten.fokus import liste_ordnen
+    from listen_baum import ordnen as liste_ordnen
     lst = next(l for l in lists.read_lists() if l["id"] == einkauf)
     zeilen = bildtext(holen(listen_adresse(einkauf), w=36, h=30)[1])
     erwartet = [("▸ " if it.get("items") else "") + it["text"]

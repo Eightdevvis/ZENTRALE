@@ -170,7 +170,7 @@ def ebene(items, w, h, pfad=(), nur_erledigte=False, auswahl=None, oben=None,
     (blättern, sonst folgt das Fenster der Auswahl); kopf_frei: so viele
     Zellen rechts im Kopf frei lassen.
 
-    → {zeilen, bernstein: {zeile, breite, done, total} | None,
+    → {zeilen, bernstein: {zeile, breite, done, total, steine} | None,
        kaesten: [(zeile, index)], leer: {zeile, art} | None,
        oben, oben_max, versteckt}"""
     done, total = listen_baum.zaehlen(items)
@@ -180,8 +180,11 @@ def ebene(items, w, h, pfad=(), nur_erledigte=False, auswahl=None, oben=None,
             "oben": 0, "oben_max": 0, "versteckt": 0}
     leiste, breite = bernstein(done, total, w, gewaehlt=(auswahl == -1))
     if leiste:
+        # steine: the columns of the bar (listen_baum.steine) — a surface
+        # that paints the bar its own way (TUI) takes them from here.
         raus["bernstein"] = {"zeile": len(zeilen), "breite": breite,
-                             "done": done, "total": total}
+                             "done": done, "total": total,
+                             "steine": "".join(listen_baum.steine(done, total, breite - 2))}
         zeilen += leiste
     zeilen.append([["─" * w, R_TRENN]])
     platz = h - len(zeilen)

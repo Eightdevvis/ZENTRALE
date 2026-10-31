@@ -30,6 +30,8 @@ tui/ansichten/
 tui/bausteine/
 # Reine Helfer, die Ansichten und Kacheln teilen (2026-10-10): stdlib-only,
 # ohne Kern-Imports. Ohne sie starten Listen- und Graph-Werkzeug nicht.
+# listen_baum: no longer imported by tui/ (lists step 3, 2026-10-31) — only
+# because listen_bild imports it; both leave when the root boxes come over HTTP.
 core/listen_baum.py
 # Das eine Bild einer Liste (2026-10-11): die Listen-Ansicht malt nur das.
 core/listen_bild.py

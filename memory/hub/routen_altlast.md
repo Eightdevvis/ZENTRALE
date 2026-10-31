@@ -58,7 +58,6 @@ Nichts neu eintragen — beschreiben.
 | `/api/graphs` | graphs |
 | `/api/graphs/` | graphs |
 | `/api/graphs/reminders` | graphs |
-| `/api/lists` | lists |
 | `/api/lists/` | lists |
 | `/api/log` | log |
 | `/api/mail` | mail |

@@ -25,6 +25,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRAEFIXE = ("/api/kachel", "/api/desk", "/api/shop", "/api/werkstatt", "/api/tasten", "/api/apps",
             "/api/wires", "/api/schematix", "/api/pieces",
             "/api/calendar/edit")   # /api/kachel* deckt /api/kacheln mit
+# Single list routes described so far (lists step 3, 2026-10-31); the other
+# /api/lists* routes are legacy in memory/hub/routen_altlast.md.
+GENAU = ("/api/lists", "/api/lists/targets", "/api/lists/<lid>/bild", "/api/lists/aufloesen")
 METHODEN = {"get", "put", "post", "delete", "patch"}
 
 
@@ -55,7 +58,7 @@ def _routen():
     from ui.app import app
     raus = set()
     for r in app.url_map.iter_rules():
-        if not r.rule.startswith(PRAEFIXE):
+        if not (r.rule.startswith(PRAEFIXE) or r.rule in GENAU):
             continue
         pfad = re.sub(r"<(?:[^:>]+:)?([^>]+)>", r"{\1}", r.rule)
         raus |= {(pfad, m.lower()) for m in r.methods if m.lower() in METHODEN}

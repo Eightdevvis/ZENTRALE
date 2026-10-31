@@ -151,3 +151,164 @@ def finden(items, iid):
         if it.get("id") == iid:
             return it
     return None
+
+
+# ── Lists step 3 (2026-10-31, memory/hub/list_extraction_plan.md) ─────
+# What the TUI's list view computed in its own process (A8) and what the
+# calendar computed with these helpers in its own code now comes over HTTP
+# from the lists' routes (ui/routen/listen.py). The rules stay here.
+
+def level(lst, path):
+    """One level of a list along a drill path of item ids →
+    (direct items, valid path, names). A broken path (an item is gone) is
+    cut where it breaks."""
+    lst = lst if isinstance(lst, dict) else {}
+    node_ = lst
+    valid, names = [], [str(lst.get("name") or lst.get("id") or "")]
+    for iid in path or []:
+        nxt = next((it for it in _dicts(node_.get("items")) if it.get("id") == iid), None)
+        if nxt is None:
+            break
+        node_ = nxt
+        valid.append(iid)
+        names.append(str(nxt.get("text") or ""))
+    items = node_.get("items")
+    return (items if isinstance(items, list) else []), valid, names
+
+
+def _view(node_, whole):
+    """What a surface needs to show one node without computing: counts over
+    the leaves, effective done, and — for a node with points — the display
+    order of its open points and its finished points (ids)."""
+    kids = _kinder(node_)
+    done, total = zaehlen(node_.get("items")) if whole else knoten_zaehlen(node_)
+    view = {"done": done, "total": total,
+            "complete": erledigt(node_) if not whole else bool(total) and done == total}
+    if kids or whole:
+        view["order"] = [it.get("id") for it in ordnen(kids or [])]
+        view["finished"] = [it.get("id") for it in ordnen(kids or [], True)]
+    return view
+
+
+def with_view(lists):
+    """`GET /api/lists?view=1`: the same lists, each list and each item with
+    a `view` {done, total, complete, order?, finished?} (A8). New dicts, the
+    input is not changed."""
+    def item(it):
+        out = {k: v for k, v in it.items() if k != "items"}
+        if isinstance(it.get("items"), list):
+            out["items"] = [item(c) if isinstance(c, dict) else c for c in it["items"]]
+        out["view"] = _view(it, False)
+        return out
+
+    out = []
+    for lst in lists or []:
+        if not isinstance(lst, dict):
+            out.append(lst)
+            continue
+        new = {k: v for k, v in lst.items() if k != "items"}
+        if isinstance(lst.get("items"), list):
+            new["items"] = [item(c) if isinstance(c, dict) else c for c in lst["items"]]
+        new["view"] = _view(lst, True)
+        out.append(new)
+    return out
+
+
+def targets(lists, kind, lid, iid=None):
+    """Where a list (kind "list") or an item (kind "item") can be filed into
+    ("einordnen", `>`), across ALL lists — flat, in stored order, WITHOUT the
+    source's own subtree (no cycle) and without the source list itself.
+    → [{lid, iid (None = top of that list), text, tiefe}] (tiefe 0 = list)."""
+    excl = set()
+    if kind == "item":
+        src_lst = next((l for l in _dicts(lists) if l.get("id") == lid), None)
+        src = finden((src_lst or {}).get("items"), iid)
+        if src is not None:
+            excl = {it.get("id") for it, _d in flach([src])}
+    out = []
+    for lst in _dicts(lists):
+        this = lst.get("id")
+        if kind == "list" and this == lid:
+            continue
+        out.append({"lid": this, "iid": None, "text": str(lst.get("name") or ""), "tiefe": 0})
+        for it, d in flach(lst.get("items")):
+            if kind == "item" and this == lid and it.get("id") in excl:
+                continue
+            out.append({"lid": this, "iid": it.get("id"), "text": str(it.get("text") or ""),
+                        "tiefe": d + 1})
+    return out
+
+
+# Resolve a node to "what is on top now": the calendar shows a time slot's
+# title live from a list or project (core/kalender_quelle.py), behind
+# POST /api/lists/aufloesen.
+
+OK, EMPTY, MISSING = "ok", "leer", "fehlt"
+
+
+def node(lists, qid):
+    """`"<list>"` or `"<list>/<item>"` → (node, name, list id, is_item) or None."""
+    lid, _, iid = str(qid or "").partition("/")
+    lst = next((l for l in _dicts(lists) if l.get("id") == lid), None)
+    if lst is None:
+        return None
+    if not iid:
+        return lst, lst.get("name") or lid, lid, False
+    if not iid.isdigit():
+        return None
+    it = finden(lst.get("items"), int(iid))
+    if it is None:
+        return None
+    return it, it.get("text") or iid, lid, True
+
+
+def top_leaf(items):
+    """The topmost open LEAF in display order (or None)."""
+    row = ordnen(items)
+    if not row:
+        return None
+    kids = _kinder(row[0])
+    return top_leaf(kids) if kids else row[0]
+
+
+def open_leaves(items, n):
+    """The first `n` open LEAVES in display order (the first is top_leaf)."""
+    out = []
+
+    def walk(lvl):
+        for it in ordnen(lvl):
+            if len(out) >= n:
+                return
+            kids = _kinder(it)
+            if kids:
+                walk(kids)
+            else:
+                out.append(it)
+    walk(items)
+    return out
+
+
+def resolve(lists, qid, n=0):
+    """One node, now → {"zustand": ok|leer|fehlt, "titel", "name",
+    "eintrag": {liste, id} | None, "offene": [first n open points],
+    "projekt": bool}.
+    ok:    titel = topmost open point, eintrag = that point (to tick it)
+    leer:  titel = "<name> — alles erledigt"
+    fehlt: list/item gone → titel and name None (the caller has a fallback)."""
+    hit = node(lists, qid)
+    if hit is None:
+        return {"zustand": MISSING, "titel": None, "name": None, "eintrag": None,
+                "offene": [], "projekt": False}
+    it, name, lid, is_item = hit
+    project = bool(it.get("project"))
+    leaf = top_leaf(it.get("items"))
+    if leaf is None:
+        if is_item and not erledigt(it):
+            # an item without points of its own IS the step itself
+            return {"zustand": OK, "titel": name, "name": name, "offene": [],
+                    "eintrag": {"liste": lid, "id": it.get("id")}, "projekt": project}
+        return {"zustand": EMPTY, "titel": "%s — alles erledigt" % name, "name": name,
+                "eintrag": None, "offene": [], "projekt": project}
+    points = [p.get("text") or "?" for p in open_leaves(it.get("items"), n)] if n > 0 else []
+    return {"zustand": OK, "titel": leaf.get("text") or "?", "name": name, "offene": points,
+            "eintrag": {"liste": lid, "id": leaf.get("id")}, "projekt": project}

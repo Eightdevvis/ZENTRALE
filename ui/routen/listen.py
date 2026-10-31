@@ -22,8 +22,78 @@ bp = Blueprint('listen', __name__)
 
 @bp.route('/api/lists')
 def api_lists():
-    """Alle Listen-Definitionen inkl. ihrer Einträge."""
+    """Alle Listen-Definitionen inkl. ihrer Einträge. With ?view=1 (lists
+    step 3, A8) every list and item also carries `view` {done, total,
+    complete, order?, finished?} — counts and display order from the core,
+    so no surface computes them."""
+    if request.args.get('view') in ('1', 'true'):
+        return jsonify(lists.lists_with_view())
     return jsonify(lists.list_lists())
+
+
+# ── Lists step 3 (2026-10-31): read-only answers for surfaces and the
+# calendar, so they do not compute list logic in their own process
+# (memory/hub/list_extraction_plan.md). Shapes: openapi.yaml.
+
+def _int_arg(name, default=None, low=None, high=None):
+    raw = request.args.get(name)
+    if raw is None or raw == '':
+        return default
+    value = int(raw)                       # ValueError → 400 by the caller
+    if (low is not None and value < low) or (high is not None and value > high):
+        raise ValueError(name)
+    return value
+
+
+@bp.route('/api/lists/targets')
+def api_lists_targets():
+    """?kind=list|item&lid=…[&iid=…] → [{lid, iid, text, tiefe}]: where the
+    list or item can be filed into (`>`), without its own subtree."""
+    a = request.args
+    try:
+        iid = _int_arg('iid')
+        return jsonify(lists.filing_targets(a.get('kind'), a.get('lid'), iid))
+    except ValueError as e:
+        return jsonify({"error": "kind=list|item, lid, iid as number (%s)" % e}), 400
+
+
+@bp.route('/api/lists/<lid>/bild')
+def api_lists_picture(lid):
+    """The picture of ONE level of a list (A9) — the same one the tile shows:
+    ?w=&h=[&pfad=4,7][&auswahl=-1..][&erledigte=1][&oben=][&kopf_frei=] →
+    {zeilen, bernstein, kaesten, leer, oben, oben_max, versteckt, pfad, namen}."""
+    a = request.args
+    try:
+        w = _int_arg('w', low=1, high=400)
+        h = _int_arg('h', low=1, high=400)
+        if w is None or h is None:
+            raise ValueError("w and h")
+        path = [int(p) for p in (a.get('pfad') or '').split(',') if p.strip()]
+        selection = _int_arg('auswahl', low=-1)
+        top = _int_arg('oben', low=0)
+        head_free = _int_arg('kopf_frei', 0, low=0, high=400)
+    except ValueError as e:
+        return jsonify({"error": "w, h (1–400) and numbers for pfad/auswahl/oben/kopf_frei (%s)" % e}), 400
+    try:
+        return jsonify(lists.level_picture(
+            lid, w, h, path, selection, a.get('erledigte') in ('1', 'true'), top, head_free))
+    except KeyError:
+        return jsonify({"error": "unbekannte liste"}), 404
+
+
+@bp.route('/api/lists/aufloesen', methods=['POST'])
+def api_lists_resolve():
+    """Body {quellen: ["<list>" | "<list>/<item>" | {id}], offene?: n} →
+    {ergebnisse: [{zustand, titel, name, eintrag, offene, projekt}]} in the
+    same order: what is on top of each list or project now (the calendar's
+    live titles, core/kalender_quelle.py)."""
+    body = request.get_json(silent=True) or {}
+    sources = body.get('quellen')
+    if not isinstance(sources, list) or len(sources) > 500:
+        return jsonify({"error": "quellen: a list (at most 500)"}), 400
+    ids = [q.get('id') if isinstance(q, dict) else q for q in sources]
+    ids = [str(i) if isinstance(i, (str, int)) and not isinstance(i, bool) else "" for i in ids]
+    return jsonify({"ergebnisse": lists.resolve(ids, body.get('offene') or 0)})
 
 
 @bp.route('/api/projects')

@@ -193,6 +193,10 @@ Listen·Fokus-Werkzeug (Toggle).
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
 | `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,project,items:[{id,text,done,items?:[…]}]}]`). |
+| `/api/lists?view=1`                   | GET     | Same, every list/item with `view` {done, total, complete, order, finished} (lists step 3, 2026-10-31; shape: `openapi.yaml`). |
+| `/api/lists/targets`                  | GET     | `?kind=list\|item&lid&iid` → "einordnen" targets `[{lid, iid, text, tiefe}]` (`openapi.yaml`). |
+| `/api/lists/<lid>/bild`               | GET     | Picture of ONE level (`?w&h&pfad&auswahl&erledigte`), the same as the tile (`openapi.yaml`). |
+| `/api/lists/aufloesen`                | POST    | `{quellen, offene?}` → what is on top of each list/project now (calendar titles; `openapi.yaml`). |
 | `/api/lists`                          | POST    | Neue Liste. Body `{name}`. 400 bei leerem Namen. id = `l_<slug>` (kollisionsfrei). |
 | `/api/projects`                       | GET     | Verschachtelter Projekt-Baum: `[{id,name,lid,done,total,children:[…]}]` (geflaggte Top-Level-Listen + rekursiv geflaggte Unter-Einträge). done/total = erledigte/alle Blätter rekursiv. Quelle der oberen Zone im Listen·Fokus-Werkzeug. |
 | `/api/projects/focused`               | GET     | Der EINE fokussierte Knoten als Teilbaum `{name,done,total,focus,children:[…]}` — oder `null`. Quelle der rechten `focus`-Box in allen Fronten. |

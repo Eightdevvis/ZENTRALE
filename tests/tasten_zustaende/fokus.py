@@ -20,9 +20,9 @@ def wald(u):
 
 def _projekt(u, mit_kindern):
     """Wurzel mit „milch" als Projekt-Knoten oben (Ordner oder Blatt)."""
-    wald(u)
     if mit_kindern:
-        u.L["lists"][0]["items"][0]["items"] = [{"id": 5, "text": "x", "done": False}]
+        F.JETZT["listen"][0]["items"][0]["items"] = [{"id": 5, "text": "x", "done": False}]
+    wald(u)
     u.L["proots"] = [{"lid": "l1", "iid": 1}]
     u.L["fsel"] = 0
 
@@ -32,13 +32,13 @@ def ebene(u):
 
 
 def _alles_erledigt(u):
+    F.JETZT["listen"][0]["items"][0]["done"] = True   # nur noch der Bernstein
     ebene(u)
-    u.L["def"]["items"][0]["done"] = True       # nur noch der Bernstein
 
 
 def _nur_eine_liste(u):
+    F.JETZT["listen"] = F.JETZT["listen"][:1]
     wald(u)
-    u.L["lists"] = u.L["lists"][:1]
     _t(u, ">")
 
 
