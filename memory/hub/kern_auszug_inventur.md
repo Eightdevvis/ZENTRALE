@@ -110,7 +110,7 @@ id → **fixed `a4c4872`** (only known categories/graphs, test
 writes non-atomically as a second write path beside `graphs.log_value`
 (`ui/routen/erfassung.py:162–200`), and the backend listens on `0.0.0.0`
 (`ui/app.py:90`) with access mode "melden" by default (`core/zugang.py:35`) →
-decision H1.
+open decision H2 (backend reachable).
 
 ## B. App candidates
 
@@ -143,7 +143,7 @@ Budget (`budgeter`) is the first app installed through the store.
 - **Piano:** `melodies.py` (152), `tone.py` (355, in the TUI door),
   `ui/routen/klavier.py` (4), `tui/ansichten/klavier.py` (1,158) · fan-in 0
   (only the own TUI view uses `tone`) · fan-out `datasync`, `dateien`, `state` ·
-  **loose, S**; whether it belongs in the product at all: decision H4.
+  **loose, S**; decided: its own app (section H).
 
 ### Graphs / series + cycle
 
@@ -154,7 +154,7 @@ Budget (`budgeter`) is the first app installed through the store.
 | AI | `create_series`, `log_series`, `read_series` — still reach **private** `graphs._REGISTRY`, `graphs._values_path` (`ki_werkzeuge.py:467, 473, 531`) |
 | Fan-in | 6: `kacheln.py`, `ki_werkzeuge.py`, `ui/routen/kalender.py` (`cycle` marks in `/api/calendar`), TUI `basis.py` (`graph_reihen` via the door), Prüfstand `pruefstand_verhalten.py:74–75`, `umgebung.py:121–124` (bend `_DATA_DIR`/`_REGISTRY`) |
 | Fan-out | **`gedaechtnis`, `gedaechtnis_ablage`**, `uhr`, `dateien`, `datasync`, `adressen`, `kachel_form`, `kachel_parameter`, `state` |
-| Verdict | unchanged: **tightly bound** to the AI memory and the calendar; health data (cycle) local only. **L**, untangle first (D step 9) and decide H2 |
+| Verdict | unchanged: **tightly bound** to the AI memory and the calendar; health data (cycle) local only. **L**, untangle first (D step 9); series place decided (section H) |
 
 ### Schematix (wiring map) — built-in app, measured on request of the building-kit session
 
@@ -176,7 +176,7 @@ Budget (`budgeter`) is the first app installed through the store.
   (fetcher), `morgenblick_daten`. Rebuild planned (mbsync/notmuch) →
   **build as a new app instead of moving, M–L.** Unchanged.
 - **News:** `news.py` (875), no route, AI `read_news`, fan-in `ki_werkzeuge`,
-  `main.py`, **no tests**, untouched for weeks → decision H3.
+  `main.py`, **no tests**, untouched for weeks → decided: its own app (section H).
 - **Morgenblick:** 3 modules, 1,049 lines, 2 routes, fan-out 10 (all sources).
   Collector over everything → **only when the sources have HTTP + rights. M, late.**
 
@@ -211,8 +211,8 @@ desk — block or app?) is not drawn yet. Schematix and own apps use the block.
   calendar, mail, news, graphs, memory, Ablage, web, sandbox, skills directly
   (`:24–43`). Which parts are hub and which belong to the apps: **section F**.
 - **Concept graph** (`graph.py`, `consolidation`, `embeddings`, 2,497 lines)
-  off since 18.08.; `cloud.py`/`ai.py` still import it → delete, don't move
-  (decision H5).
+  off since 18.08.; `cloud.py`/`ai.py` still import it → archive and remove
+  from the code, don't move (decided, section H).
 
 ### Sensors
 
@@ -263,12 +263,12 @@ takes ~7,350 lines of that back into the hub.
 | 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | **next step.** No move, no new repo, no decision of Sasha needed; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | open |
 | 4 | **One way to get an app**: tutor and map through the store, uninstall for downloaded apps | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | S–M | open ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
 | 5 | **Lists moves out** as a package (`offers: tile`, `needs: data/sync`), calendar and Morgenblick ask over HTTP | first app with readers in the core; needs 3 + 4 | M | open |
-| 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano only if H4 = keep) | S each | open |
+| 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano decided: own app) | S each | open |
 | 7 | **Hub gap F: apps bring AI tools and skills** (generator and skill loader read installed packages; skills row in [app_motor_plan.md](app_motor_plan.md)) | every later app has AI tools (graphs, mail, calendar), and the screen guide needs it ([screen_guide_plan.md](../ki/screen_guide_plan.md) step 0b). Not needed for 3–6, so it does not block the next step | M | open |
 | 8 | **Hub gap G: device-adapter frame** | printer and screen guide wait on it; independent of the extraction, can run in parallel once 7 is done | M | open ([printer_adapter.md](../open/printer_adapter.md)) |
-| 9 | Graphs + cycle | untangle first: H2, AI tools through F instead of privates, one write path, one picture (A13), cycle marks over HTTP, A10–A12 | L | open |
+| 9 | Graphs + cycle | untangle first: AI tools through F instead of privates, one write path, one picture (A13), cycle marks over HTTP, A10–A12 | L | open |
 | 10 | Schematix as its own package, preinstalled, deselectable | after the restyle and canvas rework are merged (building-kit session gives the word); needs 4 (store path, holds) | M | open ([schematix_extraction.md](../open/schematix_extraction.md)) |
-| 11 | Mail (rebuild as app), News (H3) | AI tools through F, rights | M–L | open |
+| 11 | Mail (rebuild as app), News (own app, decided) | AI tools through F, rights | M–L | open |
 | 12 | Calendar | A1, A2, A5–A7 into the core **first**; A1 can be pulled forward any time as a bug fix (H6) | L | open |
 | 13 | Morgenblick | needs HTTP of all sources | M | open |
 | 14 | Ablage + memory + assistant | after F, the assistant's own tools leave with it | L | open |
@@ -329,7 +329,7 @@ the app package table has no skills row. Fix (D step 7): generator and skill
 loader also read `ki/werkzeuge.json` and `ki/skills/` of every installed app,
 trust level by package signature (today only `core/anbindungen/` may use the
 Python transport), tool visible only while the app is installed and its
-wires are live. Contradiction to settle first: decision H7.
+wires are live. Settled 2026-10-31: in the app package as an optional part (section H).
 
 ## G. Generic frame for local device adapters
 
@@ -347,26 +347,51 @@ per device kind, adapter docks with its own manifest) and the screen guide
 screen first, printer second. Place: D step 8, after F (both users ship an AI
 tool in their package).
 
-## H. Decisions for Sasha
+## H. Decisions
 
-1. **Backend reachable from the LAN:** listens on `0.0.0.0` with access mode
-   "melden". Switch to "an" (needs the key on the Pi) or bind narrower?
-2. **Where graph series live:** in the AI memory (`themen/…reihe.json`, today)
-   or in the graphs app's own data? Blocks D step 9.
-3. **News:** keep (then as an app with tests) or drop?
-4. **Piano:** part of the product or not ([produkt_inventur.md](produkt_inventur.md))?
-5. **Concept graph** (2,497 lines, off since 18.08.): delete?
-6. **Calendar A1** (edit = up to 7 writes, no rollback): fix now as a bug, or
-   wait for the calendar extraction (D step 12)?
-7. **Where an app's AI tool lives:** inside the app package
-   ([screen_guide_plan.md](../ki/screen_guide_plan.md), [app_motor_plan.md](app_motor_plan.md))
-   or as a separate store package the hub offers after install
-   ([printer_adapter.md](../open/printer_adapter.md): "AI tool is its own
-   store package, not given to the AI automatically")? The two plans
-   contradict each other; F needs one answer.
-8. **Lists data:** stays at `data/lists.json`/`data/features.json` and the app
-   finds it by setting (22.10. plan), or moves to an app data folder
-   ([listen_app.md](listen_app.md) item 3)?
+**Decided by Sasha, 2026-10-31:**
+
+- **Graph series:** not a question of place. There are apps and tools; where
+  someone keeps a series is their choice. Fact: the graphs app owns its
+  series; the AI writes memory as text; a (planned) AI tool lets the AI write
+  into the graphs app directly. D step 9 is unblocked.
+- **News:** its own app (not dropped, not core).
+- **Piano:** its own app.
+- **Lists:** its own app, data with the app.
+- **Concept graph:** belongs in the archive; it was never cleaned away
+  (`graph.py`, `consolidation`, `embeddings` still in `core/`, imported by
+  `cloud.py`, `ai.py`, `news.py`, `ki_antwort.py`, `ollama.py`,
+  `cloud_openai.py`, `ascii_lib.py`) → remove from the code, keep only in
+  history/`memory/archive/`.
+- **Where an app's AI tool lives:** in the app's package, **as an optional
+  part, like an adapter**. Default: it comes with the app; it can be left
+  out at install and added later ("you notice you need it for your AI").
+  Foreign (non-homebrew) programs do not ship an AI tool; ZENTRALE should
+  dock to any program, so the Schmied builds the adapter and the AI tool
+  for them. Replaces the 25.10. wording "AI tool is its own store package"
+  in [printer_adapter.md](../open/printer_adapter.md).
+
+**Open:**
+
+1. **The AI's place in the architecture** (Sasha unsure, 2026-10-31). The
+   first idea was the AI at the heart of the core, sorting things; but
+   deterministic code sorts better, and users should decide whether to plug
+   in an AI at all, and which, in which format. Example: news needs an AI,
+   the AI does not need news; an AI without news has no news tools. Proposal
+   (Claude, not decided): split **model access** from **assistant**. Model
+   access = the existing port type `model`, offered by a model adapter
+   (`ki-anbieter`, Ollama …), plugged by the user. The **assistant** is an
+   app like any other: needs `model`, and has a socket for tools (many);
+   apps offer their AI tools into it. News needs `model` (to summarise),
+   not the assistant. The core only brokers; no AI in the core.
+2. **Backend reachable from the network:** the ZENTRALE server listens on
+   every network address (`ui/app.py:90`), so any device in the same network
+   (hotspot, foreign WLAN) can reach it; the login check is in mode
+   "melden" (logs, but lets everything through, `core/zugang.py:35`).
+   Enforce the check (the Pi then needs the key) or only accept the own
+   machine?
+3. **Calendar A1** (edit = up to 7 writes, no rollback): fix now as a bug,
+   or with the calendar extraction (D step 12)?
 
 ## Historie
 

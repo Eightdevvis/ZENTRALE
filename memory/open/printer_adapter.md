@@ -21,9 +21,10 @@ of the AI, local over IPP / eSCL, no HP cloud.
   builds missing ones).
 - **App „Printer"** ships a default adapter; a different printer swaps only
   the adapter.
-- **AI tool** is its own store package, not given to the AI automatically.
-  If adapter + AI are installed, the hub asks „download AI printer tool?".
-  Don't build the store dialog now, just keep the packages separate.
+- **AI tool** (changed 2026-10-31, inventory section H): an optional part of
+  the app package, like an adapter; comes by default, can be left out and
+  added later. ~~Own store package~~.
+  Left out at install → the hub can offer it later when an AI is plugged in.
 
 **Shared frame (2026-10-31):** the screen guide needs the same device-adapter
 frame and will be its first user; the printer comes second

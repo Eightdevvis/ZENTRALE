@@ -55,7 +55,7 @@ forwarding of `/api/lists*`, `/api/projects*`; a small HTTP-only client for
 terminal view (HTTP only).
 
 **Data:** where `data/lists.json` and `data/features.json` (Sasha's tracker
-`l_zentrale`) live afterwards is decision H8 of the inventory.
+`l_zentrale`) live afterwards is decided: lists are their own app, data with the app (inventory section H).
 
 **What proves nothing broke:**
 - record answers before the move (`GET /api/lists`, `/api/projects`,
