@@ -13,9 +13,9 @@ is 263 modules / 76,700 lines (was 184 / 67,900), the TUI door is unchanged
 rows A2, A5–A19 are all still open; A5 grew (Muss/Soll mode). A1 done
 `270fada` (31.10.: one edit = one call). **D step 3 done `81ddcf9`** (31.10.):
 A8, A9, the resolve route for the calendar, the Prüfstand by setting, guards
-E5/E7/E8 — `listen_baum` left the TUI door; `listen_bild` stays for the
-list view's root boxes until Sasha decides where the root's picture lives
-([list_root_picture.md](../open/list_root_picture.md)).
+E5/E7/E8 — `listen_baum` left the TUI door; `listen_bild` followed the same
+day (the root's boxes over `GET /api/lists?view=1&box=W`, Sasha's option 2),
+so the TUI imports no list module.
 **Recommended next step:** D step 4 (since 31.10.: ZENTRALE docks any
 program from any source, [app_delivery_plan.md](app_delivery_plan.md)), then
 Lists moves out (step 5, [list_extraction_plan.md](list_extraction_plan.md)).
@@ -61,7 +61,7 @@ it is a judgement, the line counts are exact. `mobile/` was not measured
 | TUI routes without description (E4 legacy list) | 81 | **78** (only the map left, 23.10.); 74 after lists step 3 (`/api/lists` described) |
 | TUI `tui/` | ~31,100 lines | **33,798 lines**, 94 files (Schematix view ~1,200 new) |
 | Calendar in the TUI | 14 files, 6,148 lines | **15 files, 6,495 lines** |
-| TUI → core import door | `theme tone pc_status listen_baum listen_bild graph_reihen stil tastentabelle uhr` | **unchanged** (guard E2 holds it); since `81ddcf9` without `listen_baum` (8 modules) |
+| TUI → core import door | `theme tone pc_status listen_baum listen_bild graph_reihen stil tastentabelle uhr` | **unchanged** (guard E2 holds it); since `81ddcf9` without `listen_baum`, since 31.10. (root boxes) also without `listen_bild` (7 modules) |
 
 Size of the groups that move (core only): calendar 29 modules / 12,058 lines,
 memory+projects+skills 30 / 9,958 (6,497 of it skill templates), Ablage and
@@ -88,7 +88,7 @@ several files + tests), L (several sessions). Line numbers checked 2026-10-31.
 | A6 | `kalender_ansichten.py:376–450` `_normiere`, `_tag_eintraege` | what stands on a day (cancelled/disabled hidden, one-day span = event, end rules, order) | missing: normalised day list from `/api/calendar` | M | open, unchanged |
 | A7 | `kalender_motive.py:25` `EBENE = "rhythmus"` (copy), resolving phases | part of A6 | — | S | open, unchanged |
 | A8 | `tui/ansichten/fokus.py` (`l_desc_view`, `l_container`, `l_vitems`, `l_forest_targets`) via `listen_baum` **in process** | done/total counts, display order, path, "file into" targets | `GET /api/lists?view=1` (`view` per node: done/total, complete, order, finished), `GET /api/lists/targets` | M | **done `81ddcf9`** (31.10.) |
-| A9 | `fokus.py:27–28` imports `listen_bild` | **the picture of the list in process**; `/api/kachel` only reaches the *top* level (`core/kachel_fokus.py` has no `pfad`/`auswahl`) | `GET /api/lists/<lid>/bild` with `pfad`, `auswahl`, `erledigte` (same picture as the tile) | M | **done `81ddcf9`** for a level; the root's boxes still `listen_bild.kasten` in process — fork, waits for Sasha ([list_root_picture.md](../open/list_root_picture.md)) |
+| A9 | `fokus.py:27–28` imports `listen_bild` | **the picture of the list in process**; `/api/kachel` only reaches the *top* level (`core/kachel_fokus.py` has no `pfad`/`auswahl`) | `GET /api/lists/<lid>/bild` with `pfad`, `auswahl`, `erledigte` (same picture as the tile) | M | **done `81ddcf9`** for a level; the root's boxes over `GET /api/lists?view=1&box=W` (31.10., Sasha's option 2: boxes from the list program, zones/labels/scrolling in the TUI) |
 | A10 | `graphen.py:117` `_vorhersage_tage` | estimates for gaps (mean of last 7); `/predict` only sets the flag | missing: server delivers estimates | S | open, unchanged |
 | A11 | `graphen.py:33, 50` `GRAPH_TYPES`, `cycle_axis` | duplicate of `graphs.VALID_TYPES`; cycle window → days | `/api/graphs/typen`, `/api/cycle` with days | S | open, unchanged |
 | A12 | `graphen.py:596–602`, `basis.py:88` `parse_clock` | value per type checked in the client; `/api/log` checks only that the category is known (since `a4c4872`), not the value | check in the graph route | S | open (route half: category check done) |
@@ -270,7 +270,7 @@ takes ~7,350 lines of that back into the hub.
 | 0 | Security `/api/data`, `/api/log` | keys readable from the LAN | S | **done `a4c4872`** (rest: H1) |
 | 1 | Hub basics: `/api/apps`, start/stop, autostart, forwarding, tile over HTTP, E1/E2/E4 | every app needs it | M | **done `15d4aa1`** |
 | 2 | Map as proof app | fan-out 0, tests only the hub mechanics | S | **done `db9e40b`** |
-| 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | No move, no new repo; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | **done `81ddcf9`** (31.10.); `listen_bild` still in the door for the root's boxes ([list_root_picture.md](../open/list_root_picture.md)) |
+| 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | No move, no new repo; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | **done `81ddcf9`** (31.10.); `listen_bild` left the door too (root boxes over HTTP, same day) |
 | 4 | **Dock anything from anywhere** (reframed by Sasha 31.10.): pluggable source adapters (our packages, git, Flatpak, distro packages, images …), install without account, data location as a `files` socket, uninstall with zip export; tutor and map through it as proof | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | M | open, **plan [app_delivery_plan.md](app_delivery_plan.md)** (rewritten 31.10.; steps marked B are needed before Lists; 4 questions for Sasha, first: login) ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
 | 5 | **Lists moves out** as a package (`offers: tile`, `needs: data/sync`), calendar and Morgenblick ask over HTTP | first app with readers in the core; needs 3 + 4 | M | open |
 | 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano decided: own app) | S each | open |
@@ -490,8 +490,9 @@ tool in their package).
 - **2026-10-31** — D step 4 reframed by Sasha ("dock anything from
   anywhere"); decisions in H, plan [app_delivery_plan.md](app_delivery_plan.md) rewritten.
 - **2026-10-31** — D step 3 done (`81ddcf9`): A8, A9, `POST /api/lists/aufloesen`
-  for the calendar, the Prüfstand by setting, guards E5/E7/E8; fork on the
-  list view's root picture filed ([list_root_picture.md](../open/list_root_picture.md)).
+  for the calendar, the Prüfstand by setting, guards E5/E7/E8. Same day:
+  the list view's root boxes over `GET /api/lists?view=1&box=W` (Sasha's
+  option 2), `listen_bild` out of the TUI door.
 - **2026-10-31** — concept graph removed from the code (`40938b3`); D: rows 14
   (base app for files + untangle the assistant), 16 (graph, done) and 17
   (full memory inventory) added; Ablage + memory + assistant is now 15.

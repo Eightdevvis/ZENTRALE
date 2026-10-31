@@ -17,9 +17,10 @@
 # view computes no list logic in its own process: counts, effective done and
 # display order come with GET /api/lists?view=1 (`view` on every node), the
 # "einordnen" targets from GET /api/lists/targets, the picture of an open
-# level from GET /api/lists/<lid>/bild. Only the forest root still draws its
-# boxes with listen_bild.kasten in process (open question to Sasha, see
-# memory/open/list_root_picture.md).
+# level from GET /api/lists/<lid>/bild. The forest root's boxes come with
+# GET /api/lists?view=1&box=W (`view.box`, Sasha 2026-10-31: the list app
+# delivers the single boxes; zones, labels and scrolling are this surface's).
+# No list module is imported here.
 
 import curses
 import time
@@ -33,7 +34,11 @@ except ImportError:                     # als Skript gestartet: tui/ liegt im Pf
 from .basis import BEENDEN, api_call
 from .desk_kacheln import farbe as rolle_farbe
 from .tasten import Tasten
-import listen_bild  # noqa: E402  – root boxes only (memory/open/list_root_picture.md)
+
+
+# Rows of one root box (core/listen_bild.KASTEN_HOEHE); the root's scroll
+# window counts with it.
+BOX_HEIGHT = 3
 
 
 def bar(pct, length=10):
@@ -144,10 +149,14 @@ class Fokus:
         """Listen-Definitionen (inkl. Einträge) UND die Projekt-Roots
         (/api/projects → obere Forest-Zone) frisch ziehen."""
         L, l_fclamp = self.L, self.l_fclamp
+        q = "/api/lists?view=1"
+        if L.get("box_w"):                 # the root's boxes, as wide as drawn
+            q += "&box=%d" % L["box_w"]
         try:
-            L["lists"] = api_call("/api/lists?view=1") or []
+            L["lists"] = api_call(q) or []
         except Exception:
             L["lists"] = []
+        L["lists_box_w"] = L.get("box_w")
         try:
             pr = api_call("/api/projects") or []
         except Exception:
@@ -183,8 +192,8 @@ class Fokus:
 
     def l_desc_view(self, desc):
         """Flacher Anzeige-Knoten {name,done,total,branch,focus,project,whole,
-        lid,iid,eintrag} der Wurzel; `eintrag` ist, was sein Kasten zeigt
-        (listen_bild.eintrag, ohne ★ — die Zone „projekte" sagt es schon)."""
+        lid,iid,box} der Wurzel; `box` is its box from the core
+        (view.box {plain, selected}, GET /api/lists?view=1&box=W)."""
         l_realnode = self.l_realnode
         node = l_realnode(desc)
         if node is None:
@@ -198,7 +207,7 @@ class Fokus:
                 "branch": bool(isinstance(kids, list) and kids),
                 "focus": bool(node.get("focus")),
                 "project": bool(node.get("project")), "whole": whole,
-                "eintrag": listen_bild.eintrag(node, projekt_marke=False)}
+                "box": l_view(node).get("box")}
 
     def l_forest_rows(self):
         """Zwei-Zonen-Wurzel als (rows, ndiv): oben die Projekt-Roots
@@ -1124,7 +1133,7 @@ class Fokus:
                 seq.append(("lbl", "── listen ──" if ndiv else "listen"))
                 for j in range(ndiv, len(rows)):
                     seq.append(("node", rows[j], j))
-                heights = [3 if t[0] == "node" else 1 for t in seq]
+                heights = [BOX_HEIGHT if t[0] == "node" else 1 for t in seq]
                 starts, acc = [], 0
                 for h in heights:
                     starts.append(acc); acc += h
@@ -1149,8 +1158,8 @@ class Fokus:
                         if t[1]:
                             addclip(yy, ix, t[1], iw, C["faint"])
                     else:
-                        kasten_render(t[1]["eintrag"], ix, yy, iw, grid_bottom,
-                                      sel=(t[1] is sel_node))
+                        kasten_render(self._root_box(t[1], iw), ix, yy, iw,
+                                      grid_bottom, sel=(t[1] is sel_node))
                 if total_lines > top_line + Hh:
                     safe_addstr(grid_bottom, ix + iw - 5, "+", C["faint"])
             if L["adding"]:                        # neue Liste / umbenennen tippen
@@ -1159,6 +1168,41 @@ class Fokus:
                         iw, C["bright"])
             if L["msg"]:
                 addclip(bottom, ix, L["msg"], iw, C["faint"])
+
+    def _root_box(self, row, w):
+        """The box of one root node, w cells wide, from the core
+        (view.box, GET /api/lists?view=1&box=W). The loaded lists carry
+        boxes of the width last drawn; at another width (first draw, a
+        resize) the boxes are asked once for that width — without touching
+        the loaded state — and the next load brings them along."""
+        L = self.L
+        if L.get("lists_box_w") == w:
+            return row.get("box")
+        L["box_w"] = w
+        key = (w, id(L.get("lists")))
+        memo = self.__dict__.setdefault("_memo", {}).get("boxes")
+        if not (memo and memo[0] == key):
+            found = {}
+            try:
+                fresh = api_call("/api/lists?view=1&box=%d" % w) or []
+            except Exception:
+                fresh = []
+
+            def walk(lid, items):
+                for it in items or []:
+                    if isinstance(it, dict):
+                        if l_view(it).get("box"):
+                            found[(lid, it.get("id"))] = l_view(it)["box"]
+                        walk(lid, it.get("items"))
+
+            for lst in fresh if isinstance(fresh, list) else []:
+                if isinstance(lst, dict):
+                    if l_view(lst).get("box"):
+                        found[(lst.get("id"), None)] = l_view(lst)["box"]
+                    walk(lst.get("id"), lst.get("items"))
+            memo = (key, found)
+            self._memo["boxes"] = memo
+        return memo[1].get((row.get("lid"), row.get("iid")))
 
     def _ebene_bild(self, w, h):
         """The picture of the open level from the core (GET
@@ -1238,14 +1282,17 @@ class Fokus:
         if sel:
             safe_addstr(y, bx + 1, "›", C["bright"])
 
-    def kasten_render(self, e, x, y, w, y_max, sel=False):
-        """EIN Knoten als Kasten an (y, x): Aussehen aus listen_bild.kasten
-        (e = listen_bild.eintrag), hier nur gemalt. Was unter y_max fiele,
-        entfällt. Liefert die nächste freie y-Zeile."""
+    def kasten_render(self, box, x, y, w, y_max, sel=False):
+        """ONE node as a box at (y, x): the rows come from the core (view.box
+        {plain, selected}, w cells wide), only painted here. What would fall
+        below y_max is left out. Returns the next free row."""
         if y > y_max:
             return y_max + 1
-        self._malen(y, x, listen_bild.kasten(e, w, gewaehlt=sel), y_max)
-        return y + listen_bild.KASTEN_HOEHE
+        rows = (box or {}).get("selected" if sel else "plain")
+        if not isinstance(rows, list):        # no box (core not reached)
+            rows = [[], [["?", "leise"]], []]
+        self._malen(y, x, rows, y_max)
+        return y + BOX_HEIGHT
 
     def proj_render(self, node, x, y, w, y_max, sel_node=None, mark_focus=False):
         """Render-Routine für die verschachtelte Projekt-Anzeige der Fokus-Box —

@@ -108,6 +108,35 @@ def kasten(e, w, gewaehlt=False, mehr=0):
     return [[["┌" + "─" * innen + "┐", rand]], mitte, unten]
 
 
+def with_boxes(viewed, w):
+    """The boxes for the root of the list view (`GET /api/lists?view=1&box=W`,
+    Sasha 2026-10-31, option 2): every list and every item flagged as project
+    — the nodes that can stand at that root — gets `view.box` {plain,
+    selected}, its box w cells wide, without the ★ (the root's zone
+    „projekte" says it). Zones, labels and scrolling stay with the surface.
+    `viewed` is the answer of listen_baum.with_view; changed in place and
+    returned."""
+    def boxes(node):
+        if not isinstance(node.get("view"), dict):
+            return
+        e = eintrag(node, projekt_marke=False)
+        node["view"]["box"] = {"plain": kasten(e, w),
+                               "selected": kasten(e, w, gewaehlt=True)}
+
+    def walk(items):
+        for it in items or []:
+            if isinstance(it, dict):
+                if it.get("project"):
+                    boxes(it)
+                walk(it.get("items"))
+
+    for lst in viewed or []:
+        if isinstance(lst, dict):
+            boxes(lst)
+            walk(lst.get("items"))
+    return viewed
+
+
 # ── Status der Ebene ──────────────────────────────────────────────────
 
 def bernstein(done, total, w, gewaehlt=False):

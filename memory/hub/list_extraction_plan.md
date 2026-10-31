@@ -23,9 +23,15 @@ in-process import — exactly the hard case the hub must prove after the map
   {done, total, complete, order, finished} (without `view` byte-identical);
   `GET /api/lists/targets?kind&lid&iid` for "file into".
 - `fokus.py` no longer imports `listen_baum` → out of the TUI door.
-  **Not yet `listen_bild`:** the view's root (two zones) still draws its boxes
-  with `listen_bild.kasten` — the plan did not name the root; where its
-  picture lives is a fork for Sasha ([list_root_picture.md](../open/list_root_picture.md)).
+- **The root's boxes (done, after step 3):** the view's root (two zones) was
+  not named by the plan. Sasha decided 2026-10-31 (option 2): the list
+  program delivers the **single boxes**, arrangement (zones, labels) and
+  scrolling stay in the TUI — that is presentation. `GET /api/lists?view=1&box=W`
+  gives every list and every project item `view.box` {plain, selected}
+  (`listen_bild.with_boxes`, without ★); the TUI asks them at the width it
+  draws (`fokus._root_box`, the next load brings them along). `listen_bild`
+  left the TUI door and `deploy/aussenposten.txt` (with `listen_baum`) — the
+  TUI imports no list module any more.
 - **Resolve (done):** `POST /api/lists/aufloesen {quellen, offene?}` →
   `{ergebnisse: [{zustand, titel, name, eintrag, offene, projekt}]}`; rule in
   `listen_baum.resolve`. `kalender_quelle.py` asks through one seam

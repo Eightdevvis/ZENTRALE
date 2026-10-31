@@ -72,6 +72,36 @@ def test_view_carries_counts_and_display_order(c, spec):
     assert strip(viewed) == plain                        # only `view` is added
 
 
+def test_view_box_carries_the_root_boxes(c, spec):
+    """&box=W (Sasha 2026-10-31, option 2): every list and every project item
+    carries its box for the root of the list view — the same box listen_bild
+    draws, without the ★; other items carry none, the rest of `view` is the
+    same as without box."""
+    viewed = c.get("/api/lists?view=1").get_json()
+    boxed = c.get("/api/lists?view=1&box=30").get_json()
+    for node in boxed:
+        fits(spec, "ListNode", node)
+    einkauf, umzug = boxed[0], boxed[1]
+    baumarkt = einkauf["items"][3]                     # a project item in a plain list
+    expected = listen_bild.eintrag(FIXED_LISTS[0]["items"][3], projekt_marke=False)
+    assert baumarkt["view"]["box"] == {"plain": listen_bild.kasten(expected, 30),
+                                       "selected": listen_bild.kasten(expected, 30, gewaehlt=True)}
+    assert "★" not in json.dumps(umzug["view"]["box"], ensure_ascii=False)
+    assert "box" in boxed[2]["view"] and "box" in boxed[3]["view"]
+    assert "box" not in einkauf["items"][0]["view"]  # a plain item: no box
+
+    def strip(nodes):
+        return [{k: (strip(v) if k == "items" else
+                     ({a: b for a, b in v.items() if a != "box"} if k == "view" else v))
+                 for k, v in n.items()} for n in nodes]
+    assert strip(boxed) == viewed
+
+
+def test_view_box_rejects_a_wrong_width(c):
+    assert c.get("/api/lists?view=1&box=0").status_code == 400
+    assert c.get("/api/lists?view=1&box=x").status_code == 400
+
+
 def test_view_does_not_write(c):
     before = open(lists._REGISTRY, "rb").read()
     c.get("/api/lists?view=1")

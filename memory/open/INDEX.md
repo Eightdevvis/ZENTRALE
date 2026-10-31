@@ -18,7 +18,6 @@ How this folder works: [README.md](README.md). One line per open item.
 | [printer_adapter.md](printer_adapter.md) | Printer via pluggable adapters (core as broker): blueprint + IPP adapter not started; printer not on a shared network yet | yes (network, go) |
 | [smartwatch_import.md](smartwatch_import.md) | Xiaomi Smart Band 11 → ZENTRALE: Gadgetbridge test pending, no importer exists yet | yes (test on phone) |
 | [list_app_extraction.md](list_app_extraction.md) | List app (`fokus`) not pulled out of ZENTRALE yet; hub imports, direct `lists` readers, deprecated `tiefe` | no |
-| [list_root_picture.md](list_root_picture.md) | List view root still draws its boxes with `listen_bild` in process; where the root's picture lives is a fork | yes (pick option) |
 | [list_names_english.md](list_names_english.md) | List rebuild left German names (`listen_bild`, `listen_app.md`, role `auswahl`) | no |
 | [backup_dashboard_focus_box.md](backup_dashboard_focus_box.md) | Backup dashboard draws the focus box the old way (`proj_render`, pink bars) | yes (decide) |
 | [tracker_rename_decisions.md](tracker_rename_decisions.md) | Tracker after the 11.10. rename: unclear items, German titles, items to tick off | yes (Sasha keeps the tracker) |

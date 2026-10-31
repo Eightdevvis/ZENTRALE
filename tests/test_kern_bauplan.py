@@ -410,7 +410,8 @@ def test_jeder_routen_bereich_ist_eingehaengt():
 # Die Tür der TUI am 2026-10-22. Darf nur SCHRUMPFEN: steht im Bauplan ein
 # Modul, das hier fehlt, ist es neu — und neu darf keins dazukommen (die TUI
 # holt Fach-Bild und -Zahl über HTTP). Fliegt eins raus, hier mit streichen.
-TUI_TUER_HOECHSTENS = {"theme", "tone", "pc_status", "listen_bild",
+# listen_bild left 2026-10-31 (the root boxes come over HTTP).
+TUI_TUER_HOECHSTENS = {"theme", "tone", "pc_status",
                        "graph_reihen", "stil", "tastentabelle", "uhr"}
 
 

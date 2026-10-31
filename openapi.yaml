@@ -1380,9 +1380,14 @@ paths:
         moves with it (memory/hub/list_extraction_plan.md); without `view`
         the answer is exactly what it always was. With `view=1` (lists step
         3, A8, 2026-10-31) every list and every item also carries `view`, so
-        no surface computes list logic itself.
+        no surface computes list logic itself. With `view=1&box=W`
+        (2026-10-31, Sasha's decision for the root of the list view: the list
+        program delivers the single boxes, zones/labels/scrolling stay with
+        the surface) every list and every item flagged as project also
+        carries `view.box`, its box W cells wide (core/listen_bild.with_boxes).
       parameters:
         - {name: view, in: query, required: false, schema: {type: string, enum: ["1", "true"]}}
+        - {name: box, in: query, required: false, description: "width of the root boxes in cells (only with view=1)", schema: {type: integer, minimum: 1, maximum: 400}}
       responses:
         "200":
           description: The lists in stored order
@@ -1391,6 +1396,11 @@ paths:
               schema:
                 type: array
                 items: {$ref: "#/components/schemas/ListNode"}
+        "400":
+          description: box is not a width 1-400
+          content:
+            application/json:
+              schema: {type: object, required: [error], properties: {error: {type: string}}}
     post:
       tags: [lists]
       operationId: listsCreate
@@ -1870,6 +1880,14 @@ components:
         complete: {type: boolean, description: effectively done (a folder is done when all its points are)}
         order: {type: array, items: {type: integer}, description: "display order of the open points (focus on top, then fewest open)"}
         finished: {type: array, items: {type: integer}, description: the finished points (behind the amber bar)}
+        box:
+          type: object
+          description: "Only with box=W: the node's box for the root of the list view (lists and project items), without the project star"
+          required: [plain, selected]
+          additionalProperties: false
+          properties:
+            plain: {type: array, minItems: 3, maxItems: 3, items: {$ref: "#/components/schemas/Zeile"}}
+            selected: {type: array, minItems: 3, maxItems: 3, items: {$ref: "#/components/schemas/Zeile"}}
     FilingTarget:
       type: object
       required: [lid, iid, text, tiefe]

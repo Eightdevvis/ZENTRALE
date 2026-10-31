@@ -900,11 +900,20 @@ def reorder_item(lid, iid, delta):
 # and listen_bild (the ONE picture); here only reading once and handing over.
 # All of these only read (read_lists never writes).
 
-def lists_with_view():
+def lists_with_view(box_width=None):
     """`GET /api/lists?view=1` (A8): every list and item with its `view`
-    (counts, effective done, display order) — computed here, not in the TUI."""
+    (counts, effective done, display order) — computed here, not in the TUI.
+
+    box_width (`&box=W`, 2026-10-31, Sasha's option 2 for the root of the
+    list view): every node that can stand at that root — every list and
+    every item flagged as project — also carries `view.box`, its box
+    (listen_bild.kasten, W cells wide, without the ★: the root's zone says
+    it) as {plain, selected} (listen_bild.with_boxes). Which zone, labels
+    and scrolling: the surface."""
     import listen_baum
-    return listen_baum.with_view(list_lists())
+    import listen_bild
+    out = listen_baum.with_view(list_lists())
+    return listen_bild.with_boxes(out, box_width) if box_width else out
 
 
 def filing_targets(kind, lid, iid=None):

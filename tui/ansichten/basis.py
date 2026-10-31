@@ -28,8 +28,8 @@ PROJEKT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file
 def kern_pfad():
     """core/ HINTEN an den Suchpfad hängen — für die wenigen reinen Helfer,
     die TUI und Kern teilen (Tür `tui/` in memory/system/bauplan_kern.md;
-    seit 2026-10-10 auch listen_baum und graph_reihen, damit Kachel und
-    Ansicht dasselbe rechnen). Hinten, damit nichts aus core/ ein Modul der
+    seit 2026-10-10 auch graph_reihen, damit Kachel und Ansicht dasselbe
+    rechnen; list modules none since 2026-10-31). Hinten, damit nichts aus core/ ein Modul der
     TUI verdeckt."""
     kern = os.path.join(PROJEKT, "core")
     if kern not in sys.path:

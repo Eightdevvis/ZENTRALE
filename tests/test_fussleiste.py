@@ -159,7 +159,10 @@ def _listen_antwort(pfad):
     q = {k: v[0] for k, v in parse_qs(teile.query).items()}
     listen = JETZT["listen"]
     if teile.path == "/api/lists":
-        return listen_baum.with_view(copy.deepcopy(listen)) if q.get("view") else copy.deepcopy(listen)
+        if not q.get("view"):
+            return copy.deepcopy(listen)
+        viewed = listen_baum.with_view(copy.deepcopy(listen))
+        return listen_bild.with_boxes(viewed, int(q["box"])) if q.get("box") else viewed
     if teile.path == "/api/lists/targets":
         iid = int(q["iid"]) if q.get("iid") else None
         return listen_baum.targets(listen, q.get("kind"), q.get("lid"), iid)

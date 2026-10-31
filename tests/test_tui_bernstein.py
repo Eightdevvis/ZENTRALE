@@ -162,3 +162,45 @@ def test_pixel_bernstein_sitzt_wo_die_quelle_ihn_hinlegt(monkeypatch):
     assert leiste.endswith(" 1/3") and zeile.rstrip().endswith(" 1/3")
     assert zeile.rstrip().index(" 1/3") == 2 + leiste.index(" 1/3")
     assert "▐" not in zeile                         # Pixel statt Rückfall-Fassung
+
+
+def test_root_paints_the_boxes_from_the_core(monkeypatch):
+    """The root of the list view (Sasha 2026-10-31, option 2): each box comes
+    from the core (GET /api/lists?view=1&box=W, view.box) and is only painted;
+    zones and labels stay with the TUI. The project zone shows no ★."""
+    import json as _json
+    import listen_bild
+    import lists as _lists
+    from ui.app import app
+    from tui.ansichten import fokus as _fokus
+    projekt = {"id": "l2", "name": "umzug", "project": True, "items": [_blatt(1)]}
+    with open(_lists._REGISTRY, "w", encoding="utf-8") as f:
+        _json.dump([{"id": "l1", "name": "einkauf", "items": [_blatt(1)]}, projekt], f)
+    app.config.update(TESTING=True)
+    c = app.test_client()
+    asked = []
+
+    def api(pfad, method="GET", body=None, timeout=3.0):
+        asked.append(pfad)
+        return c.open(pfad, method=method, json=body).get_json()
+    monkeypatch.setattr(_fokus, "api_call", api)
+    f, gitter = _schirm()
+    f.L = {"view": "forest", "lists": [], "proots": [], "fsel": 0, "sel": 0,
+           "adding": False, "confirm": False, "msg": "", "imode": "add", "input": ""}
+    f.l_load()
+    f.draw_list_tool(0, 0, 24, 40)
+    assert "/api/lists?view=1&box=36" in asked      # boxes as wide as drawn
+    zeilen = ["".join(r) for r in gitter]
+    text = "\n".join(zeilen)
+    assert "projekte" in text and "listen" in text  # the TUI's zones
+    assert "★" not in text
+    e = listen_bild.eintrag(projekt, projekt_marke=False)
+    gewaehlt = ["".join(t for t, _r in z) for z in listen_bild.kasten(e, 36, gewaehlt=True)]
+    i = next(i for i, z in enumerate(zeilen) if "umzug" in z)
+    assert [z[2:38] for z in zeilen[i - 1:i + 2]] == gewaehlt
+    assert "einkauf" in text
+    # the next load brings the boxes along, no extra ask
+    asked.clear()
+    f.l_load()
+    f.draw_list_tool(0, 0, 24, 40)
+    assert asked == ["/api/lists?view=1&box=36", "/api/projects"]

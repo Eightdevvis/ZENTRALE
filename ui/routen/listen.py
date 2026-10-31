@@ -27,7 +27,12 @@ def api_lists():
     complete, order?, finished?} — counts and display order from the core,
     so no surface computes them."""
     if request.args.get('view') in ('1', 'true'):
-        return jsonify(lists.lists_with_view())
+        # &box=W: the boxes for the root of the list view (Sasha 2026-10-31)
+        try:
+            box = _int_arg('box', low=1, high=400)
+        except ValueError as e:
+            return jsonify({"error": "box: a width 1–400 (%s)" % e}), 400
+        return jsonify(lists.lists_with_view(box))
     return jsonify(lists.list_lists())
 
 

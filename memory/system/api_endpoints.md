@@ -193,7 +193,7 @@ Listen·Fokus-Werkzeug (Toggle).
 | Endpoint                              | Methode | Beschreibung                          |
 |---------------------------------------|---------|---------------------------------------|
 | `/api/lists`                          | GET     | Alle Listen inkl. Einträge (`[{id,name,created,next_item,project,items:[{id,text,done,items?:[…]}]}]`). |
-| `/api/lists?view=1`                   | GET     | Same, every list/item with `view` {done, total, complete, order, finished} (lists step 3, 2026-10-31; shape: `openapi.yaml`). |
+| `/api/lists?view=1`                   | GET     | Same, every list/item with `view` {done, total, complete, order, finished} (lists step 3, 2026-10-31; shape: `openapi.yaml`). With `&box=W` every list and project item also carries `view.box` {plain, selected} — the boxes for the root of the list view. |
 | `/api/lists/targets`                  | GET     | `?kind=list\|item&lid&iid` → "einordnen" targets `[{lid, iid, text, tiefe}]` (`openapi.yaml`). |
 | `/api/lists/<lid>/bild`               | GET     | Picture of ONE level (`?w&h&pfad&auswahl&erledigte`), the same as the tile (`openapi.yaml`). |
 | `/api/lists/aufloesen`                | POST    | `{quellen, offene?}` → what is on top of each list/project now (calendar titles; `openapi.yaml`). |
