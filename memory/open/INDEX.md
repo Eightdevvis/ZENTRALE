@@ -79,3 +79,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [canvas_navigation_model.md](canvas_navigation_model.md) | Canvas block: wheel pans only down; arrows/wasd should pan the surface, modifier+arrows move the cursor — after the core move | no (after core move) |
 | [node_reach_without_find_pc.md](node_reach_without_find_pc.md) | Reach a node without find-pc: ZENTRALE knows address/wake of its nodes from the node description | no |
 | [pi_review.md](pi_review.md) | Pi: look at what really runs there (key file, kiosk mode) | yes |
+| [catalog_lifecycle_decisions.md](catalog_lifecycle_decisions.md) | Piece catalog add/remove/replace: undo window, `piece-missing`, name on replace | yes |

@@ -6,7 +6,9 @@ wires, Run gate — [port_types.md](port_types.md)) and on Schematix
 ([schematix.md](schematix.md)). Respects the permanent rule "apps live
 outside the core" (CLAUDE.md) and the pending
 [Schematix extraction](../open/schematix_extraction.md). Sasha's decisions
-(2026-10-31) are recorded in section 12; no open questions left.
+(2026-10-31) are recorded in section 12. Catalog lifecycle (add, remove,
+replace): section 13, its open questions in
+[catalog_lifecycle_decisions.md](../open/catalog_lifecycle_decisions.md).
 
 > **The core in five sentences**
 >
@@ -466,12 +468,14 @@ Core first, Schematix UI only after Schematix has its own package.
 | 2 | **`describe` port type** in `types.json` + vector | registry test green; a sketch with two describers on the register compiles, one with a cycle does not |
 | 3 | **Register in the core**: store, resolve = description ⊕ edits, `GET /api/descriptions?q=`, `GET /api/descriptions/<id>`, `PUT …/<id>/edits`, in `openapi.yaml`; files in the sync positive list | re-describing with a changed base keeps the edits byte-identical; a changed `base_hash` is reported; a second node reads the description without describing again |
 | 4 | **Gate re-check**: an edit or re-describe that changes ports compiles every affected scheme + the projection; misfits → `broken` with reason and `was` | printer loses `print` → the scheme wire becomes broken, is still in the file, Run refuses with `wire-broken`; undo → documented again; a live wire never returns without Run |
+| 4a | **Catalog lifecycle in the core** (section 13): catalog entries `present`/`missing`/`tombstone`, add/remove/replace as sketch changes through the gate and Run, 30-day undo, `replaced_by`, conflicts to `beiseite/` | the tests of section 13 (add, remove, re-add, conflict, missing, replace) |
 | 5 | **Tier 1**: manifest reader writes descriptions for every installed and store app | every installed app has a description, ports equal its manifest, all `high`, `from: manifest` |
 | 6 | **Device table to the core**: `kinds.json` moves from `contracts/schematix/1/` to `contracts/pieces/1/device_kinds.json` (coordinate with the extraction), plus the `unknown` icon block | the ten kinds resolve as `device:*` descriptions with their icons; Schematix reads them through the register route |
 | 7 | **Standard describer** (core default adapter, offers `describe`): package db, `.desktop`, AppStream, manpage, MIME, Flatpak/Snap; mapping table | on a fixture root: GIMP → name, theme icon, `files` need, `high`; a fake binary that writes a marker when run is described and **the marker never appears**; a random ELF → "?" description |
-| — | **Schematix extraction** ([open item](../open/schematix_extraction.md)) — not part of this plan, but steps 8–9 wait for it | Schematix runs as its own package and uses only public routes |
+| — | **Schematix extraction** ([open item](../open/schematix_extraction.md)) — not part of this plan, but steps 8–9a wait for it | Schematix runs as its own package and uses only public routes |
 | 8 | **Inventory modal** in the Schematix package: `+`, type-to-search with icons, known → in hand, unknown → interpret dialog (KI checkbox) → card → drop; `i` stays versions | PTY test: `+`, type `gim`, enter → piece in hand, enter → documented on the board; an unknown entry shows the interpret dialog first; esc twice closes |
 | 9 | **Edit on the board** (`e`): name, icon, ports, confirm line for wires that will break | PTY test: remove a port with a wire on it → confirm line names the wire → wire red, Run refused |
+| 9a | **Remove / replace on the board** (Schematix package): `x`/`del` (today only planned pieces) removes any piece, `+` → card → "replace"; both show the diff, confirm, Run; missing pieces grey with "!" | PTY test: remove a piece with two wires → diff names both → Run → gone; replace Firefox with LibreWolf → one broken wire red; undo restores |
 | 10 | **KI describer package** (store, own repo, `needs model`, `offers describe`): per-piece KI checkbox, local-model path, checker | with a fake model: only fields below `medium` are filled, marked `from: ki`, ports `low`; the sent payload equals the shown list exactly; checkbox off or no `model` wire → no call, "?" stays |
 | 11 | **Other consumers**: store cards and plug dialog show the resolved name/icon/summary; the assistant reads the register | the store shows an edited name; the plug dialog lists a described program as provider only when its ports fit |
 
@@ -489,6 +493,83 @@ Core first, Schematix UI only after Schematix has its own package.
 | 8 | KI describer preinstalled? | no, from the store |
 | 9 | Drop an unknown program before interpreting? | no, the interpret dialog is mandatory; then dropped automatically as documented (installed on that device) or planned |
 | 10 | KI describer package name | internal detail: `piece-describer-ai` |
+| 11 | Datasheets for every piece in the world? | **no** — only a **catalog of the pieces in your own system** (installed apps, your devices and things, programs pulled into the inventory or described); the core must add, remove cleanly and replace (section 13) |
+
+## 13. Catalog lifecycle: add, remove, replace
+
+Sasha, 2026-10-31: *„dann muss der kern in der lage sein alte rauszuschmeißen
+sauber und neue reinzulegen, oder direkt ersetzung zu führen."* The register
+(section 5) holds one **catalog entry per piece** (`program:gimp@laptop`):
+the piece id, a reference to its description by `id` (never a copy), its
+edits, its state (`present` · `missing` · `tombstone`). Descriptions exist
+only for catalog entries; the inventory's "not yet described" list is names
+only. **One way:** every operation below is a change to the sketch, checked
+by the gate, shown as one diff and applied by Run as one generation — the
+same `check → show → switch, way back` as any wire.
+
+**Add.** Describe (section 4) or read the manifest → datasheet with
+provenance (`from`, `confidence`, `source`) → validated against the
+description schema (and the port registry) → catalog entry `present` → it
+shows in the inventory and can be dropped on the board. Adding a piece
+changes no wire, so the diff is one line and Run only stores it.
+
+**Remove.** (1) Every wire on the piece is collected; the diff lists exactly
+the wires that would be cut ("3 wires cut: GIMP → Cloud folder (files) …").
+(2) A **live** wire another node owns → refused: "run Schematix there"
+(as today, [schematix.md](schematix.md)); nothing is removed half. (3) Sasha
+confirms → Run removes the wires in one generation, then the entry becomes a
+**tombstone** `{id, removed, removed_by, edits, wires}` (like device removal,
+building kit step 8). (4) The tombstone keeps the edits and the cut wires
+for **30 days** (proposal): "re-add" restores piece, edits and wires (wires
+as documented/planned; a former live wire needs Run again). After 30 days
+only `{id, removed, removed_by}` stays, forever — small, and it is what stops
+another device's sync from bringing the piece back. (5) Nothing leaves the
+cloud without a tombstone in its place; a device that edited the entry
+*after* the tombstone does not win silently — its version is set aside
+(`beiseite/`) and Sasha chooses (cloud never overwritten).
+
+**Catalog vs. package.** Removing a ZENTRALE app *from the catalog* only
+takes it off the board and cuts its wires — the package stays installed.
+**Uninstalling** the package implies catalog removal: the uninstall runs the
+remove flow above first (same diff, same refusal) and only then deletes the
+package ([store uninstall is still missing](../open/store_app_lifecycle.md)).
+A program the **OS removed** (apt, Flatpak, file deleted) is found missing by
+the standard describer on that node → the entry turns **`missing`**: grey
+"!" on the board, wires stay and are marked, nothing is cut, never silently
+gone. Sasha then removes it (flow above), replaces it, or reinstalls (→
+`present` again). A live wire on a missing app refuses Run (`piece-missing`).
+
+**Replace** (Firefox → LibreWolf, router A → router B). One action, no new
+key (`r` is Run): with the cursor on the old piece, `+` opens the inventory,
+the new one is picked, and its card offers "replace <old>". The new piece
+takes the old one's **place, wires and — optionally — its edited name** (a
+checkbox in the diff, default off); only the description reference changes.
+Every wire is re-checked against the new ports (section 5.2): fitting plug
+types stay, the rest become **`broken`** with reason, visible. One diff
+("kept 4 · broken 1: Firefox → Password store (secrets)"), applied by Run as
+one generation; **undo** = roll back that generation, the old piece returns
+with its wires and edits. The old entry becomes a **tombstone with
+`replaced_by: <new id>`** (the new entry gets `replaces`), not a live
+"replaced by" entry: a live entry could still be dropped or wired elsewhere
+and would be two objects for one place; the tombstone blocks resurrection by
+sync and still records the history for undo.
+
+**Rule tie-ins.** One way: add, remove, replace, missing → all through the
+gate and Run, no side door. Dasselbe Objekt: entries, tombstones and wires
+reference descriptions by `id`; nothing is copied. Cloud never overwritten:
+the tombstone is the only way something disappears, conflicts are set aside
+for Sasha.
+
+| Operation | Acceptance test (later build) |
+|---|---|
+| add | a described program becomes a `present` entry; an invalid datasheet (unknown port type) is refused with the field named; no wire changes |
+| remove | diff names every wire; confirm + Run → wires gone in one generation, entry is a tombstone; a second node syncing an old copy does not bring it back; a live wire owned by another node → refused "run Schematix there", nothing changed |
+| re-add | within 30 days: piece, edits and wires return (former live wire as documented until Run); after: entry without old edits |
+| conflict | a node edits the entry offline after the tombstone → its version lands in `beiseite/`, the cloud keeps the tombstone |
+| uninstall / missing | uninstall runs the remove flow first; a program deleted by the OS turns `missing`, its wires stay; Run with a live wire on a missing app → `piece-missing` |
+| replace | Firefox → LibreWolf: fitting wires stay, the rest `broken` with reason; one generation; undo restores Firefox with all wires and edits; old entry is a tombstone with `replaced_by` |
+
+New questions: [catalog_lifecycle_decisions.md](../open/catalog_lifecycle_decisions.md).
 
 ## History
 
@@ -500,3 +581,7 @@ Core first, Schematix UI only after Schematix has its own package.
   on `+`, edits per piece, self-descriptions authoritative, sync via the
   `data`→`sync` wire, per-piece KI checkbox; "the core in five sentences"
   added. Open item `piece_descriptions_decisions.md` closed.
+- **2026-10-31** — section 13 catalog lifecycle (Sasha: the core keeps only
+  the catalog of your own system and must add, remove and replace cleanly):
+  tombstones, 30-day undo, `missing`, replace with `replaced_by`; build
+  steps 4a and 9a.
