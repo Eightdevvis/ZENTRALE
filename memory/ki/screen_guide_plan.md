@@ -2,8 +2,9 @@
 
 **Stand 2026-10-31: plan, nothing built.** One AI tool `screen` (actions
 `look`, `point`) needs a new port type `screen`; adapters offer it per
-surface (first: the X11 desktop via AT-SPI plus screenshot). A skill
-`teacher` makes the AI show the way instead of clicking. First use: Sasha
+surface (first: the X11 desktop via AT-SPI plus local screenshot reading). Tool
+and skill `teacher` ship as one app package `screen-guide`, not in the core;
+no picture of the screen goes to the cloud. The skill makes the AI show the way instead of clicking. First use: Sasha
 learns the Arduino IDE. Built once, it works on any surface that gets an
 adapter (browser, Android, AR later) without touching tool or skill.
 
@@ -13,10 +14,18 @@ adapter (browser, Android, AR later) without touching tool or skill.
 |---|---|---|
 | Port type `screen` | `contracts/ports/1/types.json` (+ vector in `scripts/port_vectors.py`) | yes |
 | Map format | `contracts/screen-map/1/` (schema + vectors), like `contracts/ports/1/` | yes, by pattern |
-| AI tool `screen` | `core/werkzeug_screen.py` (action schemas, like `core/werkzeug_kalender.py`), group `screen` in `core/werkzeug_gruppen.py` | yes; the target "AI tool = own store package" is not built for any tool yet |
-| Skill `teacher` | shipped in `core/skill_vorlagen/`, installed into `ki/skills/teacher/SKILL.md` | yes |
+| App package `screen-guide` | `app.toml` (`needs = ["screen@^1"]`), like the Werkstatt apps | yes |
+| AI tool `screen` | in the package: `ki/werkzeuge.json`, a tool description (`anbindung.schema.json`) that calls the adapter over HTTP — no Python in the core | **half**: the generator reads descriptions today only from `core/anbindungen/` and `data/anbindungen/`, not from app packages |
+| Skill `teacher` | in the package: `ki/skills/teacher/SKILL.md` | **half**: skills load today only from `ki/skills/`; the app package table (`app_motor_plan.md` section 1) has no row for skills yet |
 | Adapter `screen-x11` | **none yet** | **no** — see below |
-| Image blocks in tool results | `core/cloud.py`, `_tool_result` | yes |
+
+**Why not the core.** `core/werkzeug_*.py` and `core/skill_vorlagen/` are
+there for history: they were built before the hub and app model. The target
+is a bare core and everything else as apps (`zentrale-hub-vision`,
+`kern_auszug_inventur.md`: the assistant's tools move out last). A new tool
+does not add to that pile. What is missing is small and needed by every
+future app anyway: the generator and the skill loader also look into
+installed app packages (`ki/werkzeuge.json`, `ki/skills/`). That is step 0b.
 
 **The adapter has no home.** Adapters today are *connections to outside
 services* (`core/adapter_anschluss.schema.json` allows only
@@ -65,9 +74,12 @@ None runs on Sasha's i3/X11 laptop. We take the ideas, not the code.
   (`memory/hub/port_types.md`): the port type is the fixed contract, an
   adapter offers it for one surface, the tool needs it and never knows which
   adapter answers. A new surface = a new adapter, nothing else.
-- **Map first, picture only when needed.** Text is a fraction of an image's
-  tokens, and less of Sasha's screen leaves the machine (ground pillar:
-  privacy). The screenshot is a fallback for parts the map does not cover.
+- **The map, never the picture.** The adapter reads the screenshot itself
+  (AT-SPI, local OCR, later a detector) and turns it into the map; the model
+  only ever sees text. Cheaper, and nothing of Sasha's screen leaves the
+  machine (ground pillar: privacy). Sasha, 2026-10-31: the AI should not need
+  a screenshot when our tool converts it. If tests show questions the map
+  cannot answer (colours, plots), the map grows a field — no picture path.
 - **The AI shows, Sasha clicks.** Learning only works if Sasha's hand does it.
   A later `click` action is possible but goes through the permission gate
   (`erlaubnis_gate.md`) and is not part of this plan.
@@ -86,7 +98,7 @@ family (plan 1.3 of `building_kit_plan.md`).
 ### 2. The map format — `zentrale-screen-map/1`
 
 One format every adapter fills, JSON with a JSON Schema in
-`contracts/screen/1/`. Roles from WAI-ARIA (`button`, `menuitem`, `tab`,
+`contracts/screen-map/1/`. Roles from WAI-ARIA (`button`, `menuitem`, `tab`,
 `textbox` …), no own words (open standard formats).
 
 ```json
@@ -134,23 +146,18 @@ page), `screen-android` (accessibility service), AR (Mini, see
 
 ### 4. AI tool `screen`
 
-Built through the tool generator where it fits (action schemas in MCP form
-+ `x-zentrale`), loaded on demand (tool search, W-07), group `screen`.
+A tool description in the package (MCP form + `x-zentrale`, transport HTTP
+to the adapter), run through the generator's protective layer, loaded on
+demand (tool search, W-07).
 
 | action | input | answer |
 |---|---|---|
-| `look` | `focus` (element id, optional), `picture` (bool, default false) | the map (trimmed); with `picture` the screenshot as an image block |
+| `look` | `focus` (element id, optional) | the map (trimmed) |
 | `point` | `id`, `label` (short text shown at the marker) | "shown: #17 Upload" or an error with the next step |
 
 Description (bible W-01: what, when yes, when no, what not) says among
 other things: use `look` before every `point`; point at one thing at a time;
 never claims to click; the map shows only the focused window.
-
-**Gap to close first:** pictures from tool results do not reach the cloud
-model today (`browser.md`: only Sasha's attachments carry images,
-`core/cloud.py` builds image blocks only there). Anthropic accepts image
-blocks inside `tool_result`; `cloud.py` must pass them through. Without
-that, `picture: true` is blind.
 
 ### 5. Skill `teacher`
 
@@ -172,20 +179,30 @@ Name `screen` confirmed by Sasha 2026-10-31.
 
 0. **Device-adapter frame** (shared with the printer, see above): blueprint
    in `memory/hub/adapter.md`, then the generic frame.
+0b. **Apps bring AI tools and skills:** the generator and the skill loader
+   also read installed app packages; add the skills row to
+   `app_motor_plan.md`.
 1. **Probe on the real IDE** (no AI, no money): dump the AT-SPI tree of the
    Arduino IDE with and without the accessibility flag; screenshot + local
    OCR of the same window. Decides how much the fallback must do.
 2. Port type `screen` + map schema + vectors.
 3. Adapter `screen-x11`: map, pointer, overlay; a small CLI to test it
    (`zentrale screen look`, `zentrale screen point 17`).
-4. `cloud.py`: image blocks in tool results.
-5. Tool `screen` with descriptions and examples (W-01, W-05).
-6. Skill `teacher`.
-7. Try it on Arduino with Sasha; one test-bench case (`pruefstand.md`) per typical question
+4. Tool `screen` with descriptions and examples (W-01, W-05).
+5. Skill `teacher`.
+6. Try it on Arduino with Sasha; one test-bench case (`pruefstand.md`) per typical question
    ("where do I upload", "what is this button", "how do I pick the board").
    Costs computed before the run.
 
-## Open
+## Other surfaces later
 
-- Privacy of `picture: true` (a screenshot of Sasha's screen goes to the
-  cloud model): free like `look`, or through the gate once per conversation?
+- **Wayland** (the other window system; GNOME on a stock Ubuntu runs it, KDE
+  too): programs may not take screenshots of other windows, read the mouse
+  globally or draw over other windows without asking through a portal. So
+  `screen-x11` does not work there; a node with Wayland gets its own adapter.
+  Sasha's laptop runs X11 (i3), so nothing to do now.
+
+## Historie
+
+- 2026-10-31: first draft had a `picture` option (screenshot to the cloud
+  model) and the tool in `core/`; both dropped the same day (Sasha).
