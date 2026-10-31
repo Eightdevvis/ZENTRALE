@@ -1,8 +1,8 @@
 # Dock anything from anywhere — sources, install, update, hold, uninstall, data, moving out (plan)
 
-**Stand 2026-10-31 (rewritten the same day after Sasha's answers): plan only,
-nothing built. Decided: the universal frame (section 2). Open: four forks
-for Sasha (section 5), the first is the login topic.** Blueprint for
+**Stand 2026-10-31 (rewritten the same day after Sasha's answers; his
+answers to Q1–Q4 recorded the same evening, section 6): the frame (section 2)
+and all four forks are decided; build status per step in section 5.** Blueprint for
 roadmap step 4 of [kern_auszug_inventur.md](kern_auszug_inventur.md)
 section D (decisions: section H there). It must hold before Lists (step 5,
 [list_extraction_plan.md](list_extraction_plan.md)) and Schematix (step 10,
@@ -129,12 +129,26 @@ Source kinds, first and later:
 | `apt`, `pacman`, … (likely one PackageKit adapter, 2.2a) | package name | **yes** | the distribution signs |
 | later: `apk`/F-Droid (phone), Flathub/Debian **catalogs** as catalog adapters | — | — | — |
 
+**Which adapters ship (Q3, Sasha 31.10.):** the **store** — not the core;
+store ≠ core — ships with adapters for **our packages, git, PackageKit**
+(covers apt, dnf, pacman …) **and Flatpak**, by the rule "everything needed
+to operate ZENTRALE is preinstalled": a store without real sources is
+useless. Snap, AppImage, images and the rest are adapters you add. The core
+keeps only the interface and the broker (as for device adapters, inventory
+section G); the adapters belong to the store and move with it.
+
 **Rule for root sources:** ZENTRALE never runs sudo and never keeps a
 password (building kit §5.2). A root source asks through the system's own
 prompt (polkit) when a person is there, or says in one sentence what to run;
 without a person it only reports "update available".
 
 ### 2.2 The catalog points, it does not hold
+
+**Catalog source (Sasha 31.10.):** the store reads the **AppStream** data the
+repositories already publish (apt's metadata incl. icons, Flathub's appstream
+file) and installs through PackageKit/Flatpak; **Repology** is the fallback
+for programs not in AppStream ("where to get it"). The store keeps its own
+look, with icons. Our hand-written catalog stays for our own apps.
 
 - A catalog item: name, description, **`sources`** (one or more, the node
   picks the first kind it has an adapter for, order by a setting), optional
@@ -187,13 +201,23 @@ carrying data (and the list of owned apps) to other machines.
 
 Foreign programs land wherever their source puts them (Flatpak in
 `~/.local/share/flatpak`, apt system-wide); ZENTRALE records, never moves
-them. **Where our packages are downloaded from without an account: fork Q2.**
+them. **Our own packages (Q2, Sasha 31.10.):** while nothing is public, a
+node fetches them with Sasha's **normal login** (he is the only user; no
+invite-code construction). "Install without account" holds for every
+foreign source now, and for our packages from the day ZENTRALE goes public.
+Then: an info site (e.g. Vercel) and the packages where everyone is (public
+GitHub Releases, Flathub, an own apt repo) — so ZENTRALE installs itself
+through the same sources as any program.
 
 ### 2.4 Update, hold, roll-back
 
 - `zentrale update --automatic` (daily timer) after the core: per register
   entry not held → its adapter's `update` → `check` → failed → `rollback`
-  and one note in `status`. Who updates foreign programs: fork Q4.
+  and one note in `status`.
+- **"Updates" area in the store (Q4, Sasha 31.10.):** shows what is out of
+  date; default "ZENTRALE updates everything"; or only selected programs
+  automatically; or manual. Sources that need root go through polkit / the
+  system's own password prompt — ZENTRALE never runs sudo.
 - `zentrale-package` (kept from the first version): new version installed
   beside the running one, switch `aktuell`, restart if it ran, health
   check, switch back on failure; the last two versions stay on disk.
@@ -262,7 +286,9 @@ them. **Where our packages are downloaded from without an account: fork Q2.**
 - Under that rule today: **core, `zentrale` CLI, TUI, Schematix and the
   store (catalog + store client)**. Nothing else, **no checklist**.
   Everything else the person installs; guides and a tutorial come later.
-- Core, CLI, TUI and store are the core package itself. **Schematix** stays built
+- Core, CLI and TUI are the core package. The **store is not the core**
+  (Sasha 31.10.: store ≠ core) — it is preinstalled and brings the source
+  adapters (2.1); today its code still sits in the core package. **Schematix** stays built
   in until inventory step 10; then it is a package the installer (and the
   first update that drops it from the core, 2.8) installs — holdable and
   removable like any app. No account needed.
@@ -330,7 +356,13 @@ checkouts are adopted as `git` sources. The tutor's data gets a data socket
 (2.5) and leaves `ZENTRALE/tutor/data` once by re-plugging (copy, verify,
 switch); `eingebaute_apps.ERSATZ` goes.
 
-## 4. Open: login and sync as an adapter (decision 8 — not decided)
+## 4. Login and sync as an adapter (decision 8 — decided: Q1 B)
+
+**Decided by Sasha 2026-10-31 (Q1: yes):** the cloud is already a building
+block — it offers the `sync` port, and ZenCloud is today's only provider;
+the plug principle was planned from the start. "Adapter" only means a
+second provider can later use the same socket. **Built after Lists move**
+(step 18). The analysis below stays as the blueprint.
 
 Sasha: if sync only runs through a cloud, and that cloud is a provider we
 don't operate, the only login needed is at the provider — not at us. And:
@@ -359,7 +391,7 @@ sync encrypted with the account key.
 | Ownership | `/v1/besitz` | an encrypted file in the provider folder |
 | What still needs us | — | package downloads while private (Q2), the insecure-release warning (could be a public static file), the store catalog (public, no login) |
 
-The options and the recommendation: question Q1. Not needed for step 4 —
+Question Q1, answered B. Not needed for step 4 —
 installing needs no account anyway (decision 2) — so it does not block
 Lists.
 
@@ -376,75 +408,50 @@ after 1.
 | 2 | **Source-adapter frame** in the core (interface 2.1, kind registry, contract vectors `contracts/sources/1/`); today's clone/pull wrapped as the `git` adapter, no behaviour change | B | existing store tests green through the adapter; a conformance suite every adapter must pass (fake adapter) |
 | 3 | **Catalog `sources`** + dock card fields; `downloadUrl` read as `git` | B | old catalog unchanged in `/api/shop`; item with two sources → node picks by setting |
 | 4a | **Package builder** `scripts/app_paket_bauen.py <repo>` (positive list `paket.txt` per repo, refuses `data/`, `.git`, keys) | B | builds tutor/map/budget; same input → same sha256 |
-| 4b | **Hosting** of our packages per Q2 (cloud routes `GET /v1/apps/<name>[/<v>.tar.gz]`, upload script, `server/openapi.yaml`) | B | vitest: access rule per Q2, 404 unknown, sha256 matches |
-| 4c | **`zentrale-package` adapter**: install beside, sha256, unpack, venv, self-test, `aktuell` link | B | fake cloud: works without `git` on PATH and without login; wrong sha256 → nothing installed; no `/hub/gesund` → nothing registered, sentence says why |
-| 5 | **Update, hold, roll-back** through the adapter (2.4), `zentrale apps update|rollback`, store buttons | B | N → N+1; broken N+1 → stays on N with a note; held untouched; roll-back byte-equal |
+| 4b | **Hosting** of our packages per Q2 (cloud routes `GET /v1/apps/<name>[/<v>.tar.gz]`, upload script, `server/openapi.yaml`); while private: **login session only** | B | vitest: no session → 401, 404 unknown, sha256 matches |
+| 4c | **`zentrale-package` adapter**: install beside, sha256, unpack, venv, self-test, `aktuell` link; fetches with the session | B | fake cloud: works without `git` on PATH; without login → nothing installed, one sentence "log in to fetch our packages"; wrong sha256 → nothing installed; no `/hub/gesund` → nothing registered, sentence says why |
+| 5 | **Update, hold, roll-back** through the adapter (2.4), `zentrale apps update|rollback`; store **"Updates" area** (out-of-date list; mode all / selected / manual, Q4) | B | N → N+1; broken N+1 → stays on N with a note; held untouched; roll-back byte-equal; mode "selected" skips the others, "manual" updates nothing |
 | 6 | **Data socket**: providers home / cloud folder / anywhere / legacy "ZENTRALE data"; default-location setting + wizard question; sync follows the location; guard: `ABGLEICH` may only shrink | B (legacy provider only) | an app with data in the cloud folder syncs with no core edit; the guard fails on a new pattern in `ABGLEICH` |
 | 7 | **Re-plug data** (copy → verify → switch → keep backup) | — | interrupted copy → old plug stays; verify mismatch → no switch; backup present after success |
 | 8 | **Uninstall with export** (2.6): zip, verify, unplug through the gate, adapter `remove`; synced locations untouched; foreign: probable locations listed | B (roll-back of a move removes a package) | after remove: not in `/api/apps`, no wire, Run compiles, zip complete, fake cloud unchanged; failing export → nothing removed |
 | 9 | **Tutor and map through the store** (section 3), tutor data re-plugged, `ERSATZ` gone, `BEKANNT` empty | B (proof) | fresh profile installs both from the fake cloud, wheel shows them; laptop lists them as `git` sources |
 | 10 | **Outpost build reads installed packages** (`app:<name>/…` from the register) | with 9 | outpost package byte-equal before/after on the laptop |
 | 11 | **Move-out guard** (2.8 step 3): `BUNDLE.json` diff in the update self-test; loud `status` line on checkouts; move checklist template (backup, verify, roll-back) in `memory/hub/` | B | old-release test: N with a fake built-in, N+1 without it → node without the package stays on N with the note; with the package → switches, data files byte-equal |
-| 12 | **Fresh PC = the real test** (Sasha, by hand): install with invite code, **no login**, install budget and tutor, update, hold, uninstall (zip appears), reinstall; then log in and see the data sync | B | checklist in `memory/open/` ticked; findings → `memory/open/` |
-| 13 | **First foreign source: Flatpak `--user`** + one dock card for a real program (e.g. a PDF viewer needing `files`) | — | install/update/remove a real Flatpak in a dev profile; its `files` socket plugs to the cloud folder |
-| 14 | Distro packages through **one PackageKit adapter** (covers apt, pacman, dnf …; polkit prompt or one sentence), `image`, `appimage` | — | per adapter the conformance suite; no sudo anywhere (guard) |
+| 12 | **Fresh PC = the real test** (Sasha, by hand): install with invite code, **log in** (our packages need the session while private, Q2), install budget and tutor, update, hold, uninstall (zip appears), reinstall; see the data sync | B | checklist in `memory/open/` ticked; findings → `memory/open/` |
+| 13 | **Store's preinstalled foreign source 1: Flatpak `--user`** (Q3) + one dock card for a real program (e.g. a PDF viewer needing `files`) | — (preinstalled with the store; after Lists) | install/update/remove a real Flatpak in a dev profile; its `files` socket plugs to the cloud folder |
+| 14 | **Store's preinstalled foreign source 2: one PackageKit adapter** (Q3; covers apt, pacman, dnf …; polkit prompt, never sudo) | — (preinstalled with the store; after Lists) | conformance suite; no sudo anywhere (guard); without a person: only "update available" |
+| 14b | Adapters you add: `image`, `appimage`, Snap … (from the catalog like any app) | — | per adapter the conformance suite |
 | 15 | Schematix as a preinstalled package (with inventory step 10) | — | fresh install has it; removable and holdable |
 | 16 | **Signature** for our packages (before public, [../open/package_signing.md](../open/package_signing.md)) | — | tampered package refused; unsigned only in dev mode |
-| 17 | Later: **catalog streamed in** from sources' AppStream data, Repology as version information (2.2a) | — | a Flathub/Debian program appears in the store without a hand-written item |
+| 17 | **Catalog from AppStream** (apt metadata incl. icons, Flathub appstream file), **Repology as fallback** for programs not in AppStream (2.2); store keeps its own look with icons | — (with 13/14) | a Flathub/Debian program appears in the store with its icon, without a hand-written item |
+| 18 | **Sync as an adapter** (Q1 B, section 4): ZenCloud the first provider of the `sync` socket; keys, devices, ownership as encrypted files in the plugged storage | — (after Lists) | own blueprint before building |
+
+Later UX idea (Sasha 31.10., not planned): while ZENTRALE boots, connect the
+cloud right away and pick which apps to take over from the old nodes.
 
 After the B steps (and 12 on the real PC) Lists may move: its package
 plugs into "ZENTRALE data", Sasha installs it per node with the move
 checklist, then the core release drops `fokus`.
 
-## 6. Questions for Sasha
+## 6. Questions for Sasha — answered 2026-10-31
 
-Only the real forks; everything else above is decided by your answers of
-2026-10-31.
+All four forks are answered; the answers are worked into sections 2–5.
 
-**Q1 — Login: do we keep our own account, or does the cloud provider's
-login become the only one?** (section 4)
-- A: Keep our account + ZenCloud as the one sync; other providers maybe
-  later as extras. Least work, but everyone needs an account with us to
-  sync.
-- B: **Sync becomes an adapter, ZenCloud is just one provider among them**
-  — which it already is underneath: Cloudflare with our login on top (our
-  default, "works without setup"). Keys, devices and ownership move
-  into encrypted files inside whatever storage is plugged; our account is
-  then only the login of *our* provider. Someone with Nextcloud or Dropbox
-  needs no account with us at all. *Recommended* — it is "dock anything"
-  applied to sync, fits anonymity, and the switch (`git`/`http`) already
-  exists. Built after Lists, not before.
-- C: Drop our account and ZenCloud, providers only. Not recommended: no
-  zero-setup default, and people without a provider are left out.
-
-**Q2 — Where do our own packages come from, so installing needs no
-account?** Today even the ZENTRALE update is fetched with the login session.
-- A: **Our cloud, opened by the invite code** the installer already asked
-  for (kept on the machine) or a session; public without a code on the day
-  ZENTRALE goes public. *Recommended* — works on the fresh PC today and
-  needs no GitHub key.
-- B: Public downloads right away (GitHub Releases or our cloud). Simplest,
-  but the code is public before the "before public" list is done.
-- C: Login required, as today. Contradicts decision 2.
-
-**Q3 — Which sources come with the core?**
-- A: **Only our packages (plain URL/tarball included) and git**; Flatpak,
-  apt, images … are adapters you install from the catalog like anything
-  else. *Recommended* — tiny core; our package source is enough to install
-  every other adapter.
-- B: Also Flatpak and PackageKit (apt, pacman …) built in — a foreign program works right after
-  install, but the core grows with every source.
-
-**Q4 — Who updates foreign programs?**
-- A: **ZENTRALE, by the same auto-update setting**, for every source that
-  needs no password (our packages, git, Flatpak `--user`, images); apt and
-  pacman only show "update available" and leave it to the system.
-  *Recommended* — one way for everything ZENTRALE installed, no root.
-- B: Foreign programs always update by their own system; ZENTRALE only
-  shows versions and holds.
-- C: ZENTRALE updates everything, apt included, with the password prompt.
+| Q | Answer (Sasha, 2026-10-31) | Where it went |
+|---|---|---|
+| **Q1 login** | **Yes (B):** the cloud is already a building block offering the `sync` port, ZenCloud is today's only provider; "adapter" only means a second provider can use the same socket later. Build after the lists move. | section 4, step 18 |
+| **Q2 our packages** | While nothing is public, a node fetches Sasha's own packages with his **normal login** (only user, no invite-code construction). "Install without account" holds for all foreign sources now and for ours from going public. Later: info site (e.g. Vercel) + packages where everyone is (public GitHub Releases, Flathub, own apt repo). | 2.3, steps 4b/4c/12 |
+| **Q3 sources that ship** | The **store** (store ≠ core) ships adapters for our packages, git, **PackageKit** and **Flatpak** — "everything needed to operate ZENTRALE is preinstalled". Snap, AppImage, images … are adapters you add. Catalog: AppStream from the repos, Repology as fallback, own look with icons. | 2.1, 2.2, 2.7, steps 13/14/14b/17 |
+| **Q4 updates** | An **"Updates" area in the store**: shows what is out of date; default "ZENTRALE updates everything", or only selected programs, or manual. Root sources through polkit / the system's prompt, never sudo by ZENTRALE. | 2.4, step 5 |
 
 ## Historie
+
+- **2026-10-31 (answers)** — Q1–Q4 answered by Sasha and recorded (section
+  6): sync as an adapter after Lists (step 18); our packages with the
+  normal login while private; the store (≠ core) ships our-package, git,
+  PackageKit and Flatpak adapters (steps 13/14 = its preinstalled set,
+  after Lists); "Updates" area in the store (step 5); catalog from
+  AppStream with Repology as fallback (step 17).
 
 - **2026-10-31 (second version)** — rewritten after Sasha's answers: from
   "a store for our apps" to "dock anything from anywhere". Main differences

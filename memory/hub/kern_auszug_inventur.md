@@ -271,7 +271,7 @@ takes ~7,350 lines of that back into the hub.
 | 1 | Hub basics: `/api/apps`, start/stop, autostart, forwarding, tile over HTTP, E1/E2/E4 | every app needs it | M | **done `15d4aa1`** |
 | 2 | Map as proof app | fan-out 0, tests only the hub mechanics | S | **done `db9e40b`** |
 | 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | No move, no new repo; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | **done `81ddcf9`** (31.10.); `listen_bild` left the door too (root boxes over HTTP, same day) |
-| 4 | **Dock anything from anywhere** (reframed by Sasha 31.10.): pluggable source adapters (our packages, git, Flatpak, distro packages, images …), install without account, data location as a `files` socket, uninstall with zip export; tutor and map through it as proof | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | M | open, **plan [app_delivery_plan.md](app_delivery_plan.md)** (rewritten 31.10.; steps marked B are needed before Lists; 4 questions for Sasha, first: login) ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
+| 4 | **Dock anything from anywhere** (reframed by Sasha 31.10.): pluggable source adapters (our packages, git, Flatpak, distro packages, images …), install without account, data location as a `files` socket, uninstall with zip export; tutor and map through it as proof | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | M | open, **plan [app_delivery_plan.md](app_delivery_plan.md)** (rewritten 31.10.; steps marked B are needed before Lists; Q1–Q4 answered 31.10.) ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
 | 5 | **Lists moves out** as a package (`offers: tile`, `needs: data/sync`), calendar and Morgenblick ask over HTTP | first app with readers in the core; needs 3 + 4 | M | open |
 | 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano decided: own app) | S each | open |
 | 7 | **Hub gap F: apps bring AI tools and skills** (generator and skill loader read installed packages; skills row in [app_motor_plan.md](app_motor_plan.md)) | every later app has AI tools (graphs, mail, calendar), and the screen guide needs it ([screen_guide_plan.md](../ki/screen_guide_plan.md) step 0b). Not needed for 3–6, so it does not block the next step | M | open |
@@ -426,9 +426,13 @@ tool in their package).
      machinery; plan chose "install first, then switch", guided per node,
      with backup before, verify old = new after, written roll-back. **No
      data loss — ZENTRALE is Sasha's only calendar.**
-  8. Login: **open**, question Q1 in the plan. Framing (Sasha): ZenCloud is
-     itself a third-party provider (Cloudflare) with our login on top, so
-     our account is one sync provider among others.
+  8. Login: **decided 31.10. (Q1 B)** — the cloud offers the `sync` port,
+     ZenCloud is today's only provider; a second provider can use the same
+     socket later; built after Lists. Same evening (plan section 6): our
+     packages with the normal login while private (Q2); the store (≠ core)
+     ships adapters for our packages, git, PackageKit and Flatpak (Q3);
+     "Updates" area in the store, root only via polkit (Q4); catalog from
+     AppStream, Repology as fallback.
 
 **Open:**
 
