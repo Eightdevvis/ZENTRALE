@@ -11,10 +11,13 @@ mode, Schematix), the adapter, account/cloud. **Nothing else moved out**: core
 is 263 modules / 76,700 lines (was 184 / 67,900), the TUI door is unchanged
 (9 modules), 78 TUI routes still have no description (was 81). The TUI logic
 rows A2, A5–A19 are all still open; A5 grew (Muss/Soll mode). A1 done
-`270fada` (31.10.: one edit = one call).
-**Recommended next step:** D step 3 — make Lists ready to move *inside* the
-core (A8, A9, a resolve route for the calendar, Prüfstand by setting) plus the
-cheap guards E5/E7/E8; recipe in [list_extraction_plan.md](list_extraction_plan.md).
+`270fada` (31.10.: one edit = one call). **D step 3 done `81ddcf9`** (31.10.):
+A8, A9, the resolve route for the calendar, the Prüfstand by setting, guards
+E5/E7/E8 — `listen_baum` left the TUI door; `listen_bild` stays for the
+list view's root boxes until Sasha decides where the root's picture lives
+([list_root_picture.md](../open/list_root_picture.md)).
+**Recommended next step:** D step 4 (one way to get an app), then Lists
+moves out (step 5, [list_extraction_plan.md](list_extraction_plan.md)).
 Two hub gaps every later app needs are now named and placed in D: **apps
 bring their own AI tools and skills** (section F) and **a generic frame for
 local device adapters** (section G). Since 2026-10-31 (`7b0bab0`, Sasha,
@@ -54,10 +57,10 @@ it is a judgement, the line counts are exact. `mobile/` was not measured
 | of which AI tool machinery that should stay hub (section F) | — | 13 units, 7,352 lines (still counted under "must move") |
 | Routes in `ui/` | 171 (145 paths) in 25 areas | **192 (160 paths) in 25 route modules**; the map's 5 are forwarded now |
 | paths in `openapi.yaml` | 21 | **48**; 41 of the 160 backend paths described: apps, schematix, wires, pieces, werkstatt, shop, desk, kachel(n), tasten. Calendar, lists, graphs, notes, mail, AI: **none** |
-| TUI routes without description (E4 legacy list) | 81 | **78** (only the map left, 23.10.) |
+| TUI routes without description (E4 legacy list) | 81 | **78** (only the map left, 23.10.); 74 after lists step 3 (`/api/lists` described) |
 | TUI `tui/` | ~31,100 lines | **33,798 lines**, 94 files (Schematix view ~1,200 new) |
 | Calendar in the TUI | 14 files, 6,148 lines | **15 files, 6,495 lines** |
-| TUI → core import door | `theme tone pc_status listen_baum listen_bild graph_reihen stil tastentabelle uhr` | **unchanged** (guard E2 holds it) |
+| TUI → core import door | `theme tone pc_status listen_baum listen_bild graph_reihen stil tastentabelle uhr` | **unchanged** (guard E2 holds it); since `81ddcf9` without `listen_baum` (8 modules) |
 
 Size of the groups that move (core only): calendar 29 modules / 12,058 lines,
 memory+projects+skills 30 / 9,958 (6,497 of it skill templates), Ablage and
@@ -83,8 +86,8 @@ several files + tests), L (several sessions). Line numbers checked 2026-10-31.
 | A5 | `kalender_deadline.py` `VORWARNUNG_STANDARD`, `SOLL_TAGE` (copies), `rest_minuten`, `stufe`, and since 24.10. **`soll_anwenden`/`modus_anwenden`/`verpasst`** (Muss/Soll mode, `c0b1368`, `3cd1467`) | warning stage of a deadline; where a Soll copy stands, "soll verpasst" | missing: `/api/calendar` delivers `rest`/`stufe`/Soll position (core has `im_fenster`, `rest_text`, `SOLL_HOECHSTENS`) | S → **M** | open, **grew** |
 | A6 | `kalender_ansichten.py:376–450` `_normiere`, `_tag_eintraege` | what stands on a day (cancelled/disabled hidden, one-day span = event, end rules, order) | missing: normalised day list from `/api/calendar` | M | open, unchanged |
 | A7 | `kalender_motive.py:25` `EBENE = "rhythmus"` (copy), resolving phases | part of A6 | — | S | open, unchanged |
-| A8 | `tui/ansichten/fokus.py` (`l_desc_view`, `l_container`, `l_vitems`, `l_forest_targets`) via `listen_baum` **in process** | done/total counts, display order, path, "file into" targets | `GET /api/lists` gives the raw tree; counts/order/targets missing | M | open, unchanged |
-| A9 | `fokus.py:27–28` imports `listen_bild` | **the picture of the list in process**; `/api/kachel` only reaches the *top* level (`core/kachel_fokus.py` has no `pfad`/`auswahl`) | missing: tile/picture with `pfad`, `auswahl`, `erledigte` — **precondition for moving Lists** | M | open, unchanged |
+| A8 | `tui/ansichten/fokus.py` (`l_desc_view`, `l_container`, `l_vitems`, `l_forest_targets`) via `listen_baum` **in process** | done/total counts, display order, path, "file into" targets | `GET /api/lists?view=1` (`view` per node: done/total, complete, order, finished), `GET /api/lists/targets` | M | **done `81ddcf9`** (31.10.) |
+| A9 | `fokus.py:27–28` imports `listen_bild` | **the picture of the list in process**; `/api/kachel` only reaches the *top* level (`core/kachel_fokus.py` has no `pfad`/`auswahl`) | `GET /api/lists/<lid>/bild` with `pfad`, `auswahl`, `erledigte` (same picture as the tile) | M | **done `81ddcf9`** for a level; the root's boxes still `listen_bild.kasten` in process — fork, waits for Sasha ([list_root_picture.md](../open/list_root_picture.md)) |
 | A10 | `graphen.py:117` `_vorhersage_tage` | estimates for gaps (mean of last 7); `/predict` only sets the flag | missing: server delivers estimates | S | open, unchanged |
 | A11 | `graphen.py:33, 50` `GRAPH_TYPES`, `cycle_axis` | duplicate of `graphs.VALID_TYPES`; cycle window → days | `/api/graphs/typen`, `/api/cycle` with days | S | open, unchanged |
 | A12 | `graphen.py:596–602`, `basis.py:88` `parse_clock` | value per type checked in the client; `/api/log` checks only that the category is known (since `a4c4872`), not the value | check in the graph route | S | open (route half: category check done) |
@@ -266,7 +269,7 @@ takes ~7,350 lines of that back into the hub.
 | 0 | Security `/api/data`, `/api/log` | keys readable from the LAN | S | **done `a4c4872`** (rest: H1) |
 | 1 | Hub basics: `/api/apps`, start/stop, autostart, forwarding, tile over HTTP, E1/E2/E4 | every app needs it | M | **done `15d4aa1`** |
 | 2 | Map as proof app | fan-out 0, tests only the hub mechanics | S | **done `db9e40b`** |
-| 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | **next step.** No move, no new repo, no decision of Sasha needed; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | open |
+| 3 | **Lists ready to move, inside the core** (A9, A8, resolve route for the calendar, Prüfstand by setting) + guards **E5, E7, E8** | No move, no new repo; shrinks the TUI door by `listen_baum`/`listen_bild`; the guards are read-only tests that stop new copies and route clashes before more apps leave | M | **done `81ddcf9`** (31.10.); `listen_bild` still in the door for the root's boxes ([list_root_picture.md](../open/list_root_picture.md)) |
 | 4 | **One way to get an app**: tutor and map through the store, uninstall for downloaded apps | before Lists leaves the repo, every node (PC, Pi, Mini-PC) must get it the normal way, or a node silently loses its lists (the Mini-PC lesson, [building_kit_plan.md](building_kit_plan.md) 0) | S–M | open ([store_tutor_map_migration.md](../open/store_tutor_map_migration.md), [store_app_lifecycle.md](../open/store_app_lifecycle.md)) |
 | 5 | **Lists moves out** as a package (`offers: tile`, `needs: data/sync`), calendar and Morgenblick ask over HTTP | first app with readers in the core; needs 3 + 4 | M | open |
 | 6 | Notes, Piano | same template, no AI tools, fan-in 0 (Notes + A14; Piano decided: own app) | S each | open |
@@ -300,13 +303,13 @@ computes the forecast and paints its own picture (unchanged since 22.10.).
 | E2 | `test_kern_bauplan.py` `TUI_TUER_HOECHSTENS`, `test_tui_tuer_schrumpft_nur`, `test_jedes_modul_der_tui_tuer_wird_gebraucht` | TUI door only shrinks | **built `15d4aa1`**; still 9 modules |
 | E3 | per app repo: `zentrale-karte/tests/test_karte_grenze.py`, `language-tutor/tests/test_tutor_grenze.py` | one app, one root | **built** for tutor and map; ⚠ prüfen: `budgeter` |
 | E4 | `tests/test_routen_beschrieben.py` + [routen_altlast.md](routen_altlast.md) | every TUI route described | **built `15d4aa1`**; 81 → 78 → 75 (31.10.: `kategorie`, `stil`, `typ` no longer called by the TUI) |
-| E5 | no copies in `tui/` ("wie core/…", constants equal to a core value) | no second truth | **not built**; today A2, A5, A7, A18, A20, `notizen.n_float_pos` → legacy list |
+| E5 | `tests/test_boundary_guards.py` (`COPIES_LEGACY`): no copies in `tui/` (a comment/docstring "wie core/…", "copy of core/…", "same rule as core/…", or a constant with a core constant's name and value) | no second truth | **built `81ddcf9`**; 33 known copies (A2, A5, A7, A14, A18, A20 and 23 without a row) — legacy list, only shrinks |
 | E6 | one user action = at most ONE write call (calendar plan builder) | all or nothing in the core | **built `270fada`** (31.10.): `kalender_werkzeuge._plan` refuses a second call; `tests/test_calendar_one_call.py` (every plan through `_plan`, every edit form one call); legacy list empty |
-| E7 | no data file in `tui/` (writes only on an allowlist) | no domain state in the surface | **not built**; `kalender_farben.json` gone (A4) |
-| E8 | route ownership: a path belongs to the hub or exactly one app; forwarding only there | no route without owner | **not built**: `app_weiterleitung.besitzer` takes the longest prefix, an app's `routen` can shadow a hub route and two apps can claim the same prefix unnoticed |
+| E7 | `test_boundary_guards.py` (`WRITES_ALLOWED`): `open(…,"w"/"a"/"x")`, `json.dump`, `os.replace`/`rename`, `shutil`, `write_text` in `tui/` only on an allowlist | no domain state in the surface | **built `81ddcf9`**; 12 places, all log, device settings/state or temp/cache |
+| E8 | `test_boundary_guards.py` (`ownership_problems`): every path belongs to the hub or exactly one app (`routen` in its app.toml — installed apps and the app repos next to ZENTRALE); no app shadows a hub route, no two apps claim the same/nested path; forwarding only in `ui/routen/hub_apps.py` | no route without owner | **built `81ddcf9`** (a test; `besitzer` itself still takes the longest prefix) |
 | E9 | `test_kern_bauplan.py` `test_no_new_built_in_apps`, `BUILT_IN_APPS_AT_MOST` + [bauplan_kern.md](../system/bauplan_kern.md) "Altlast: Built-in apps" | no new app inside the core; the built-in list only shrinks | **built `7b0bab0`** (31.10.) |
 
-E5, E7, E8 are read-only tests, seconds to run; E6 is built (legacy list empty).
+E5, E7, E8 are read-only tests, seconds to run (built `81ddcf9`); E6 is built (legacy list empty).
 
 ## F. AI tools and skills: hub machinery vs. app-owned
 
@@ -454,6 +457,9 @@ tool in their package).
 
 ## Historie
 
+- **2026-10-31** — D step 3 done (`81ddcf9`): A8, A9, `POST /api/lists/aufloesen`
+  for the calendar, the Prüfstand by setting, guards E5/E7/E8; fork on the
+  list view's root picture filed ([list_root_picture.md](../open/list_root_picture.md)).
 - **2026-10-31** — concept graph removed from the code (`40938b3`); D: rows 14
   (base app for files + untangle the assistant), 16 (graph, done) and 17
   (full memory inventory) added; Ablage + memory + assistant is now 15.

@@ -1,6 +1,6 @@
 # Lists (`fokus`) moves out — step plan
 
-**Stand 2026-10-31: plan, nothing built.** The recipe for D steps 3 and 5 of
+**Stand 2026-10-31: step 3 built (`81ddcf9`), step 5 not.** The recipe for D steps 3 and 5 of
 [kern_auszug_inventur.md](kern_auszug_inventur.md): first make Lists ready
 *inside* the core (step 3, the recommended next step), then, once every node
 can get an app through the store (step 4), move it into its own repo as a
@@ -13,21 +13,33 @@ week plan, Morgenblick, Prüfstand), and the TUI view draws through an
 in-process import — exactly the hard case the hub must prove after the map
 (which had fan-out 0). Graphs is blocked by the AI memory (inventory D step 9).
 
-## Step 3 — in the core, no move (each with a test)
+## Step 3 — in the core, no move (each with a test) — built `81ddcf9`
 
-- **A9:** the picture of one list level over HTTP — `POST /api/kachel` with
-  `pfad`, `auswahl`, `erledigte` (or `GET /api/lists/<lid>/bild`).
-- **A8:** `GET /api/lists` delivers per node `erledigt/gesamt`, the display
-  order, and a route for "file into" targets.
-- Then `tui/ansichten/fokus.py` imports neither `listen_baum` nor
-  `listen_bild` → both leave the TUI door (`TUI_TUER_HOECHSTENS` in
-  `tests/test_kern_bauplan.py`, `bauplan_kern.md`, `deploy/aussenposten.txt`).
-- **Resolve route for the calendar:** `POST /api/lists/aufloesen {quellen}` →
-  `{titel, zustand, offene}` (replaces `listen_baum` in `kalender_quelle.py`).
-- **Prüfstand:** list location by setting instead of bending
-  `lists._DATA_DIR` (`scripts/pruefstand_teile/umgebung.py:134`).
-- New routes go straight into `openapi.yaml` (E4).
-- Guards E5, E7, E8 in the same run (inventory section E).
+- **A9 (done):** `GET /api/lists/<lid>/bild?w&h&pfad&auswahl&erledigte` —
+  `listen_bild.ebene` over the level the drill path reaches (a broken path is
+  cut), plus `pfad`, `namen` and the bar's `steine`; the same picture as the
+  tile. The TUI asks it again only when list, path, selection or size change.
+- **A8 (done):** `GET /api/lists?view=1` — every list and item with `view`
+  {done, total, complete, order, finished} (without `view` byte-identical);
+  `GET /api/lists/targets?kind&lid&iid` for "file into".
+- `fokus.py` no longer imports `listen_baum` → out of the TUI door.
+  **Not yet `listen_bild`:** the view's root (two zones) still draws its boxes
+  with `listen_bild.kasten` — the plan did not name the root; where its
+  picture lives is a fork for Sasha ([list_root_picture.md](../open/list_root_picture.md)).
+- **Resolve (done):** `POST /api/lists/aufloesen {quellen, offene?}` →
+  `{ergebnisse: [{zustand, titel, name, eintrag, offene, projekt}]}`; rule in
+  `listen_baum.resolve`. `kalender_quelle.py` asks through one seam
+  (`_resolve` → `lists.resolve`, one call per calendar fetch) — in step 5 only
+  that seam becomes HTTP.
+- **Prüfstand (done):** setting `ZENTRALE_LISTS_DIR` (`lists.files()`), set in
+  `umgebung.vorbereiten`; `tests/test_lists_location.py` proves a bench
+  set-up plus writes leaves the real list files (incl. `l_zentrale`) byte-equal.
+- New routes in `openapi.yaml` (tag `lists`, also `GET/POST /api/lists`).
+- Guards E5, E7, E8: `tests/test_boundary_guards.py`.
+- **Byte-identical:** `tests/test_lists_recording.py` asks every existing list
+  route (and the calendar's list answers) on a fixed set and compares with
+  `tests/daten/lists_recording.json`, recorded before step 3 — the same file
+  proves step 5 through the forwarding.
 
 ## Step 5 — the move (after step 4: one way to get an app)
 
@@ -86,6 +98,7 @@ terminal view (HTTP only).
 
 ## Historie
 
+- **2026-10-31** — step 3 built (`81ddcf9`); root-picture fork filed.
 - **2026-10-31** — moved out of `kern_auszug_inventur.md` ("So zieht Listen
   aus", 22.10.), updated to the building kit (ports in `app.toml`, store path,
   bundle) and the guards that exist now.
