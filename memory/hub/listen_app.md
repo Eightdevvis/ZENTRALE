@@ -82,6 +82,8 @@ diese Tabelle, den Namen (`listen_*`) und die Import-Wächter.
 
 ## So sieht der spätere Auszug aus
 
+Step plan with proofs and risks (2026-10-31): [list_extraction_plan.md](list_extraction_plan.md).
+
 Wie beim Tutor ([hub_bauplan.md](hub_bauplan.md) „Schritt 1"): eigenes Repo,
 eigener Prozess, `app.toml` mit `liefert = ["kachel:liste"]`.
 

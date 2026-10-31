@@ -7,7 +7,8 @@ rebuild on 11.10.2026 (boxes + one shared image, commits `b53ded0`,
 The list app (`fokus`) is built to be pulled out of ZENTRALE, but is not
 pulled out yet. The full plan is in
 [../hub/listen_app.md](../hub/listen_app.md), section „So sieht der spätere
-Auszug aus" — follow that, not a copy here. In short, still tied in:
+Auszug aus" — follow that, not a copy here. Step plan (core first, then the move):
+[../hub/list_extraction_plan.md](../hub/list_extraction_plan.md). In short, still tied in:
 
 - `core/kachel_fokus.py` imports hub code (`kachel_form`, `kachel_parameter`,
   `adressen`).

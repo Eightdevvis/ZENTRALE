@@ -1,6 +1,10 @@
 # Screen guide — the AI sees the screen and points (plan)
 
-**Stand 2026-10-31: plan, nothing built.** One AI tool `screen` (actions
+**Stand 2026-10-31: plan, nothing built — parked since 2026-10-31** until the
+core extraction inventory ([../hub/kern_auszug_inventur.md](../hub/kern_auszug_inventur.md))
+is clean: it depends on steps 0 (device-adapter frame, inventory section G,
+order D step 8) and 0b (apps bring AI tools and skills, section F, D step 7),
+both hub work the inventory orders. One AI tool `screen` (actions
 `look`, `point`) needs a new port type `screen`; adapters offer it per
 surface (first: the X11 desktop via AT-SPI plus local screenshot reading). Tool
 and skill `teacher` ship as one app package `screen-guide`, not in the core;
