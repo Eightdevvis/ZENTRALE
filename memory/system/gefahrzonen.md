@@ -141,3 +141,44 @@ ZENTRALE.
 | Stelle | Was wich ab | Wirkung |
 |---|---|---|
 | `kalender_ics_abbildung.routine_kalender` | DTSTART = `seit`; dateutil überspringt einen Anfang ohne Regel-Tag, RFC 5545 zählt ihn | Phantom-Termine bei Google am Starttag (z. B. „ExPhy Tutorium" Do statt nur Fr); behoben 22.10.2026: DTSTART = erstes Vorkommen, `X-ZENTRALE-SEIT` |
+
+## 4. Pan without limits (since 31.10.2026)
+
+**What:** a view that moves a fixed step per key event (growing while a
+key is held) knows neither how fast that is in cells per second nor where
+the content is. Held W/A/S/D on the canvas building block
+(`tui/bausteine/canvas.py`) at 20 repeats/s × 4 acceleration moved 480
+columns / 240 rows a second and never stopped: the view left the content
+in under a second and sat in empty space where only the raster moves.
+Sasha, 31.10.2026, Schematix: „es fliegt zu schnell und is dann stuck".
+Desk ran the same code — small, wide desks and tapping hid it; Schematix's
+tall, sparse board showed it at once.
+
+**How to spot it:** holding a move key "flies"; afterwards only grid or
+background is on screen; the way back seems dead because it takes as many
+presses as went out. Bigger boards, smaller panes, faster key repeat make
+it worse.
+
+**Where it hides:** every new app on the canvas block, every other
+scrolling surface with key repeat or acceleration (wheels, maps, long
+lists), input bursts that pile up (key repeat, terminals turning a
+touchpad swipe into arrow keys).
+
+**How right:** limits live in the shared block, not per app. One step is
+at most a quarter of the view (`PAN_VIEW_DIVISOR`); panning stops where
+the content's far edge reaches the middle of the view — sideways measured
+on the pieces in the rows now in view, so a piece in view stays in view
+(`Canvas.pan_bounds`, `pan_step`). Only the outward step is held; the
+opposite direction moves at once. Carrying a piece and an empty canvas
+stay unbounded.
+
+**Guard:** `tests/test_canvas_pan_apps.py` — the same bursts (120 × S, D,
+W, A) into Desk and Schematix, in-process and in a real PTY: bounded per
+key, a piece still on screen after a full repaint, the way back moves.
+Plus `tests/test_desk_canvas.py::test_held_pan_is_bounded_never_lost_and_recovers`.
+
+**Known finds:**
+
+| Where | What | Effect |
+|---|---|---|
+| `canvas.Canvas._pan` | step × up to 4, no cap, no bound | Schematix flew off the board and looked stuck (Desk latent); fixed 31.10.2026 |

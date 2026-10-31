@@ -121,6 +121,34 @@ GLEIT_BILDER = 6
 # in eine andere Richtung wieder der Grundschritt.
 WIEDERHOLUNG_S = 0.08
 BESCHLEUNIGUNG, BESCHLEUNIGUNG_MAX = 1.5, 4.0
+# Pan limits (2026-10-31, Schematix "flies too fast, then stuck" — see
+# memory/system/gefahrzonen.md). Held W/A/S/D at 20 repeats/s with ×4
+# carried the view 480 columns / 240 rows a second, straight past the
+# content into empty space where only the raster moves. Two limits, both
+# here in the block so every app on it gets them:
+#  - one step is at most a quarter of the view in that axis (never below
+#    the base step) — the eye can still follow;
+#  - panning stops where the far edge of the content reaches the middle of
+#    the view: a piece in view stays in view (Canvas.pan_bounds). Only the
+#    step that would go further out is held; the opposite direction always
+#    moves at once.
+#    While something is in the hand there is no limit (the surface stays
+#    unbounded; the carried piece is content and travels along).
+PAN_VIEW_DIVISOR = 4
+
+
+def pan_step(pos, d, lo, hi):
+    """One pan step on one axis: pos + d, but not past lo/hi in the
+    direction of travel (a position already beyond stays, never jumps
+    back). PURE."""
+    neu = pos + d
+    if d > 0:
+        return min(neu, max(pos, hi))
+    if d < 0:
+        return max(neu, min(pos, lo))
+    return pos
+
+
 # Größe ändern (2026-10-10): Grenzen (Außenmaß mit Rahmen) für Arten ohne
 # eigenes `grenzen`. 3×3 ist der kleinste Kasten, den _kasten zeichnet; das
 # Maximum ist nur ein Schutz gegen versehentliches Riesenwachsen.
@@ -422,17 +450,44 @@ class Canvas:
             self._pan_faktor = 1.0
         return self._pan_faktor
 
+    def pan_bounds(self):
+        """(lo_x, hi_x, lo_y, hi_y) for vx/vy while panning: the far edge
+        of the content may reach the middle of the view, no further.
+        Sideways only the pieces in the rows now in view count (up/down:
+        those in the columns now in view) — on a sparse board (Schematix:
+        one cloud on top, a column of apps) the box around everything has
+        empty corners, and a piece in view must stay in view. Nothing in
+        that band → all pieces. None = no limit (empty canvas, or
+        something in the hand)."""
+        if not self.elemente or self.modus == "greifen":
+            return None
+        els = self.elemente
+        zeilen = [e for e in els if e["y"] < self.vy + self.vh and e["y"] + e["h"] > self.vy] or els
+        spalten = [e for e in els if e["x"] < self.vx + self.vw and e["x"] + e["w"] > self.vx] or els
+        mx, my = self.vw // 2, self.vh // 2
+        return (min(e["x"] for e in zeilen) - mx, max(e["x"] + e["w"] for e in zeilen) - mx,
+                min(e["y"] for e in spalten) - my, max(e["y"] + e["h"] for e in spalten) - my)
+
     def _pan(self, richtung):
         f = self._pan_faktor_neu(richtung)
-        px, py = _runden(PAN_X * f), _runden(PAN_Y * f)
+        px = min(_runden(PAN_X * f), max(PAN_X, self.vw // PAN_VIEW_DIVISOR))
+        py = min(_runden(PAN_Y * f), max(PAN_Y, self.vh // PAN_VIEW_DIVISOR))
         dx, dy = {"links": (-px, 0), "rechts": (px, 0),
                   "hoch": (0, -py), "runter": (0, py)}[richtung]
-        self.vx += dx
-        self.vy += dy
         if self.modus == "greifen":
+            self.vx += dx
+            self.vy += dy
             e = self.element(self.griff["id"])
             e["x"] += dx
             e["y"] += dy
+            return
+        g = self.pan_bounds()
+        if g is None:
+            self.vx += dx
+            self.vy += dy
+            return
+        self.vx = pan_step(self.vx, dx, g[0], g[1])
+        self.vy = pan_step(self.vy, dy, g[2], g[3])
 
     def _ruhe(self, ev):
         fokus = self.element(self.fokus)

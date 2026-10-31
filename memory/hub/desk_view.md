@@ -55,7 +55,7 @@ Feature") und „der Desk-Ordner soll IMMER mit ZENTRALE mitgesynct werden".
 | Modal | tippen, enter | Text, enter = neue Zeile; ←→↑↓ Pos1 Ende ⌫ Entf |
 | | ctrl+s | speichern |
 | | esc | abbrechen, nichts gespeichert |
-| überall außer Modal | **W A S D** (groß) | Ausschnitt schieben (6 Spalten / 3 Zeilen), W hoch, A links, S runter, D rechts; beim Greifen reist der Zettel mit. Gedrückt halten wird schneller (bis 4×). Kleinbuchstaben bleiben, was sie sind (d = löschen) |
+| überall außer Modal | **W A S D** (groß) | Ausschnitt schieben (6 Spalten / 3 Zeilen), W hoch, A links, S runter, D rechts; beim Greifen reist der Zettel mit. Gedrückt halten wird schneller (bis 4×, höchstens ¼ Ausschnitt je Schritt, nie vom Inhalt weg). Kleinbuchstaben bleiben, was sie sind (d = löschen) |
 | | shift+↑↓←→, alt+↑↓←→ | dasselbe, zusätzlich |
 
 **W A S D** ist seit 2026-10-10 die Hauptbelegung (Sasha: ZENTRALE soll
@@ -95,6 +95,15 @@ dann tickt `zentrale_tui.py` mit 33 ms, sonst ruhig. Gedrückt halten
 (Wiederholung derselben Richtung unter 80 ms) macht den Schritt je Druck
 ×1,5 bis 4× größer; nach einer Pause wieder der Grundschritt. Der Baustein
 macht beides nur, wenn die Ansicht es einschaltet (`weich`, `uhr`).
+
+**Pan limits** (2026-10-31, found through Schematix — "flies too fast,
+then stuck"; [../system/gefahrzonen.md](../system/gefahrzonen.md) #4): a
+step is at most a quarter of the view (never below the base step), and
+panning stops where the content's far edge reaches the middle of the view
+(sideways: the pieces in the rows in view), so a piece in view stays in
+view. Only the outward step is held; the other direction moves at once.
+No limit while carrying a piece or on an empty canvas. Holds for every app
+on the block (Desk, Schematix). Tests: `tests/test_canvas_pan_apps.py`.
 
 **Größe ändern** (2026-10-10, Sasha: die Größe muss man nachträglich
 ändern können — Kachel, Zettel, Bild): `r` auf dem gewählten Kasten. Der

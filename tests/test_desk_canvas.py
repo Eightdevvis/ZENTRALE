@@ -623,7 +623,9 @@ class Uhr:
 
 
 def test_gedrueckt_halten_beschleunigt_bis_vierfach_und_pause_setzt_zurueck():
-    c = leinwand()
+    # A wide board and a big view: neither pan limit (2026-10-31) is in reach.
+    c = leinwand(kreuz() + [zettel("fern", 2000, 0), zettel("tief", 0, 1000)])
+    c.vw, c.vh = 200, 80
     c.uhr = uhr = Uhr()
     schritte = []
     for _ in range(8):
@@ -642,6 +644,53 @@ def test_gedrueckt_halten_beschleunigt_bis_vierfach_und_pause_setzt_zurueck():
     vy = c.vy
     c.taste("pan_runter")                                      # andere Richtung: Grundschritt
     assert c.vy - vy == cv.PAN_Y
+
+
+def test_pan_step_holds_only_the_direction_of_travel():
+    assert cv.pan_step(0, 6, -50, 50) == 6
+    assert cv.pan_step(48, 6, -50, 50) == 50                   # stops at the bound
+    assert cv.pan_step(50, 6, -50, 50) == 50
+    assert cv.pan_step(50, -6, -50, 50) == 44                  # back: moves at once
+    assert cv.pan_step(80, 6, -50, 50) == 80                   # beyond already: stays,
+    assert cv.pan_step(80, -6, -50, 50) == 74                  # no jump back
+
+
+def test_held_pan_is_bounded_never_lost_and_recovers():
+    """2026-10-31, Schematix: held W/A/S/D carried the view 480 columns a
+    second past the content into empty space ("flies too fast, then
+    stuck"). Now: a step is at most a quarter view, panning stops where the
+    content's far edge reaches the middle, the way back moves at once."""
+    c = leinwand()                                              # content x -30..40, y -10..14
+    c.uhr = uhr = Uhr()
+    for richtung, achse, voll in (("rechts", "vx", c.vw), ("runter", "vy", c.vh),
+                                  ("links", "vx", c.vw), ("hoch", "vy", c.vh)):
+        for _ in range(200):                                    # a long burst
+            vor = getattr(c, achse)
+            c.taste("pan_" + richtung)
+            assert abs(getattr(c, achse) - vor) <= max(cv.PAN_X, voll // cv.PAN_VIEW_DIVISOR)
+            uhr.t += 0.02
+        lo_x, hi_x, lo_y, hi_y = c.pan_bounds()
+        assert lo_x <= c.vx <= hi_x and lo_y <= c.vy <= hi_y   # never past the content
+        zurueck = {"rechts": "links", "links": "rechts", "runter": "hoch", "hoch": "runter"}[richtung]
+        vor = getattr(c, achse)
+        uhr.t += 0.02
+        c.taste("pan_" + zurueck)                               # recovers at once, base step
+        assert abs(getattr(c, achse) - vor) == (cv.PAN_X if achse == "vx" else cv.PAN_Y)
+        assert any(e["x"] < c.vx + c.vw and e["x"] + e["w"] > c.vx            # a piece in view
+                   and e["y"] < c.vy + c.vh and e["y"] + e["h"] > c.vy for e in c.elemente)
+
+
+def test_pan_limits_free_while_carrying_and_on_an_empty_canvas():
+    c = leinwand([])
+    for _ in range(100):
+        c.taste("pan_rechts")
+    assert c.vx == -40 + 100 * cv.PAN_X                         # nothing to lose
+    c = leinwand([zettel("a", 0, 0)])
+    c.fokus = "a"
+    c.taste("enter")
+    for _ in range(100):
+        c.taste("pan_rechts")
+    assert c.element("a")["x"] == 100 * cv.PAN_X                # the hand carries it anywhere
 
 
 def test_ohne_uhr_immer_der_grundschritt():

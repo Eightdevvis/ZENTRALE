@@ -27,7 +27,7 @@ Start page → the **Erschaffen** wheel (beside Werkstatt and Shop) →
 | Key | What |
 |---|---|
 | ↑↓←→ | focus jumps to the next piece in that direction |
-| W A S D (also shift/alt+arrows) | move the view |
+| W A S D (also shift/alt+arrows) | move the view — held: faster, but at most a quarter view per step and never off the board (the Desk block's pan limits, [desk_view.md](desk_view.md)) |
 | enter | grab the piece, arrows move it, enter drops it (stored in the scheme), esc puts it back |
 | + | add a piece: installed apps, nodes, store apps, kinds of things — placed as **planned**, in the hand |
 | d / del (planned piece) | remove it from the scheme (asks y / n) — live pieces leave only when they leave reality |
