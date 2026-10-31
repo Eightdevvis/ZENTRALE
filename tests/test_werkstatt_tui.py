@@ -141,8 +141,14 @@ def test_plaetze_im_rad():
     namen = [n for _k, n in startseite.RAD_APPS]
     assert "desk" not in namen and "elektronik" in namen       # desk ist ein Baustein
     assert namen.index("kalender") == 2 and namen[-1] == "elektronik"
-    assert startseite.ERSCHAFFEN_APPS == ["werkstatt", "shop"]
+    assert startseite.ERSCHAFFEN_APPS == ["werkstatt", "shop", "schematix"]
+    # schematix still lacks its wheel symbol (Sasha picks it):
+    # memory/open/schematix_followups.md — remove it here once drawn.
+    symbol_pending = {"schematix"}
     for name in startseite.ERSCHAFFEN_APPS:
+        if name in symbol_pending:
+            assert not pixel.hat_symbol(name), "symbol exists now: drop it from symbol_pending"
+            continue
         assert pixel.hat_symbol(name)
         zeilen, schrift = pixel.symbol_zellen(name, 1.0, 0)
         assert "".join(c for _x, c, _f, _b in schrift) == name.upper()
