@@ -76,3 +76,4 @@ How this folder works: [README.md](README.md). One line per open item.
 | [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): the compiler's graph rules are not in Dart yet | no |
 | [schematix_extraction.md](schematix_extraction.md) | Schematix built into the core by mistake: move to its own package (preinstalled at signup), after restyle + canvas rework merge | no |
 | [schematix_followups.md](schematix_followups.md) | Schematix (building kit 13–15) leftovers: phone/web front, wheel symbol, English titles, install from the scheme, same version without effect yet | partly (symbol) |
+| [piece_descriptions_decisions.md](piece_descriptions_decisions.md) | Piece descriptions / Schematix inventory: 10 decisions (versions key, edit scope, sync, KI consent, Downloads) | yes |
