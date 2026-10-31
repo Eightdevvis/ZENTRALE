@@ -13,6 +13,7 @@ hier ist ein Ding, das man aufmacht und benutzt — im Unterschied zu
 | **Kalender: Deadline + Ganztägiges** | Termintyp deadline (Zeitpunkt mit Vorwarnung, .ics mit VALARM, leuchtet rot, kollidiert nie); Ganztägiges in der Woche gestapelt | [kalender_deadline.md](kalender_deadline.md) |
 | **Kalender: Jetzt-Linie** | goldener Strich mit ► zur aktuellen Uhrzeit in der Woche (C), durchgehend auch über Terminen; ► vor dem laufenden/nächsten Termin in A | [kalender_jetzt.md](kalender_jetzt.md) |
 | **Calendar colours** | one colour per event on every front: key (course/list/group), synced slot table `data/calendar_colours.json`, precedence STIL > COLOR > span > course > layer, palette `core/calendar_palette.json` | [calendar_colours.md](calendar_colours.md) |
+| **Calendar: one edit = one call** | an edit is one `PUT /api/calendar/edit`, saved all or nothing (`kalender.one_write`), guard E6 in the TUI | [calendar_one_edit.md](calendar_one_edit.md) |
 | **Kalender-Formular** | feste Plätze: Felder wechseln nie den Platz, was nicht gilt steht gedämpft („—") und wird übersprungen; Ganztägig bei Serien | [kalender_formular.md](kalender_formular.md) |
 | **Mail** | IMAP-Triage per Sender-Keymap; der Ordner IST der Status, kein Flag | [mail_system.md](mail_system.md) |
 | Mail neu: Übergabe an eine eigene Sitzung (Wünsche, Vorbild Kalender, Bestand, erste Fragen) | [mail_neu_uebergabe.md](mail_neu_uebergabe.md) |

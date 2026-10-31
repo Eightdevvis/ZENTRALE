@@ -1,15 +1,5 @@
 # Kalender-System (Layer-Modell)
 
-**Stand 2026-10-31:** One user edit = **one** call, all or nothing (inventory
-A1). `PUT /api/calendar/edit` (`core/kalender_bearbeiten.edit`) changes a
-one-time entry, a whole series or a whole span together with group, style,
-deadline, source and layer in ONE save; "once → series/span" (create new +
-delete old) happens in the same save. Underneath: `kalender.one_write()` —
-all writes inside it go to a working copy, saved once at the end, nothing on
-an exception. The TUI sends one call per action (guard E6:
-`kalender_werkzeuge._plan` refuses a second one). Details:
-[kalender_ics_bauplan.md](kalender_ics_bauplan.md) „One edit = one call".
-
 **Stand 2026-10-11:** Die Speicherschicht ist austauschbar — alte JSON
 (Code-Default) oder iCalendar-Ordner `data/kalender/` (eine .ics pro Termin);
 auf Sashas Rechnern ist seit Oktober **.ics live** (`kalender_speicher: ics`).
@@ -637,8 +627,7 @@ Die Anzeige ist nicht read-only — aus der Mitte lassen sich Einmal-Termine
 **anlegen, ändern, löschen** und **einzelne Routine-Vorkommen ab-/anschalten**,
 in allen drei Fronten. Schreib-Endpoints (`ui/routen/kalender.py`, alle direkt auf
 `core/kalender.py`): `POST /api/calendar/entry` (anlegen → `add_entry`),
-`PUT …/entry` (ändern = delete+add; the TUI edits via `PUT /api/calendar/edit`
-since 2026-10-31), `DELETE …/entry` (löschen → `delete_entry`),
+`PUT …/entry` (ändern = delete+add; TUI edits: [one call](calendar_one_edit.md)), `DELETE …/entry` (löschen → `delete_entry`),
 `POST /api/calendar/routine/skip` (Vorkommen de-/aktivieren → `set_routine_skip`),
 `DELETE /api/calendar/routine` (ganze Routine löschen → `delete_routine`).
 
