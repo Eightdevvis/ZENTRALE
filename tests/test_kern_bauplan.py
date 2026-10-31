@@ -450,3 +450,60 @@ def test_jedes_modul_der_tui_tuer_wird_gebraucht():
 def test_tuer_traegt_keinen_app_code():
     drin = sorted(bauplan_tueren()["tui/"] & ausgezogene_apps())
     assert not drin, f"Modul einer ausgezogenen App in der Tür der TUI: {drin}"
+
+
+# ── 8. Apps live outside the core (Sasha, 2026-10-31 — permanent) ─────
+# Schematix (building kit 13–15) was built into the core and has to be pulled
+# out again. So: the built-in apps in core/eingebaute_apps.py are a legacy
+# list that may only SHRINK. The bauplan table „Altlast: Built-in apps" names
+# them; this frozen set keeps the table itself from growing.
+
+BUILT_IN_APPS_AT_MOST = {
+    "fokus", "notizen", "kalender", "graph", "assistent", "ablage", "desk",
+    "schematix",  # to extract (memory/open/schematix_extraction.md)
+    "werkstatt", "mail", "klavier", "adapter", "cloud_folder", "cloud",
+    "tutor",  # already its own repo; ERSATZ fallback only
+}
+
+_RULE = ('CLAUDE.md, section "Apps live outside the core": build every new '
+         'app as its own package (own folder/repo with app.toml, like '
+         'tutor/map/budget), never as a module in core/, tui/ansichten/ or '
+         'ui/routen/ and never as an entry in core/eingebaute_apps.py. '
+         'A missing interface becomes a general building block in the core.')
+
+
+def built_in_apps_in_code():
+    """Every app name core/eingebaute_apps.py knows (pure data, layer 1)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_eingebaute_apps_guard", os.path.join(CORE, "eingebaute_apps.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    names = set()
+    for table in ("EINGEBAUT", "ERSATZ", "PORTS", "INSTANCE_PORTS"):
+        names |= set(getattr(mod, table, {}))
+    return names
+
+
+def built_in_apps_in_bauplan():
+    return {_code(z[0])[0] for z in _zeilen(_abschnitt("Altlast: Built-in apps"))}
+
+
+def test_no_new_built_in_apps():
+    new = sorted(built_in_apps_in_code() - built_in_apps_in_bauplan())
+    assert not new, f"New built-in app in core/eingebaute_apps.py: {new}. {_RULE}"
+    grown = sorted(built_in_apps_in_bauplan() - BUILT_IN_APPS_AT_MOST)
+    assert not grown, (
+        f"The bauplan table 'Altlast: Built-in apps' grew: {grown}. It may "
+        f"only shrink. {_RULE}")
+
+
+def test_extracted_built_in_apps_are_struck():
+    gone = sorted(built_in_apps_in_bauplan() - built_in_apps_in_code())
+    assert not gone, (
+        f"Well done — {gone} is no longer built in. Strike it in "
+        f"memory/system/bauplan_kern.md ('Altlast: Built-in apps').")
+    stale = sorted(BUILT_IN_APPS_AT_MOST - built_in_apps_in_bauplan())
+    assert not stale, (
+        f"{stale} left the bauplan table; strike it in "
+        f"tests/test_kern_bauplan.py BUILT_IN_APPS_AT_MOST too.")

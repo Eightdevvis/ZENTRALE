@@ -405,6 +405,35 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 |---|---|
 | `core/mail.py` | 1924 |
 
+### Altlast: Built-in apps
+
+Since 2026-10-31 (Sasha, permanent): **apps live outside the core** —
+CLAUDE.md, section „Apps live outside the core". Every app name that
+`core/eingebaute_apps.py` knows (keys of `EINGEBAUT`, `ERSATZ`, `PORTS`,
+`INSTANCE_PORTS`) must stand here, and this list may only SHRINK
+(`tests/test_kern_bauplan.py`, `BUILT_IN_APPS_AT_MOST`). A new app is never
+added here — it is built as its own package. When an app moves out, its line
+goes, in the same commit. Order and state of the extraction:
+[kern_auszug_inventur.md](../hub/kern_auszug_inventur.md).
+
+| App | Status |
+|---|---|
+| `fokus` | legacy, to extract ([list_app_extraction.md](../open/list_app_extraction.md)) |
+| `notizen` | legacy, to extract |
+| `kalender` | legacy, to extract |
+| `graph` | legacy, to extract |
+| `assistent` | legacy, to extract |
+| `ablage` | legacy, to extract |
+| `desk` | legacy, to extract (the Desk *building block* stays in the core) |
+| `schematix` | **to extract** — built into the core by mistake 2026-10-30 ([schematix_extraction.md](../open/schematix_extraction.md)) |
+| `werkstatt` | legacy, to extract |
+| `mail` | legacy, to extract |
+| `klavier` | legacy, to extract |
+| `adapter` | platform (the mandatory adapter), stays |
+| `cloud_folder` | platform-near store app, built-in for now (building_kit_plan.md §4) |
+| `cloud` | platform (account + sync service), stays |
+| `tutor` | already its own repo; only the `ERSATZ` fallback until its `app.toml` has `[daten]` |
+
 ## Wenn der Test rot wird
 
 - **„steht nicht im Bauplan"** — neues Modul in die Tabelle *Module*, in die
@@ -418,5 +447,8 @@ Sasha, 05.10.2026: einfrieren, dann zerlegen (Punkt 3).
 - **„Riese gewachsen"** — das Neue in eine eigene Funktion oder Datei legen.
   In der TUI heißt das: eine eigene Ansicht in `tui/ansichten/`
   ([tui_bauplan.md](tui_bauplan.md)).
+- **„New built-in app"** — build it as its own package (own folder/repo
+  with `app.toml`), never in `core/eingebaute_apps.py`. CLAUDE.md, „Apps
+  live outside the core".
 - **„Gut gemacht — kleiner geworden"** — die Zahl oben senken oder die Zeile
   streichen. Das ist der Sinn der Sache.

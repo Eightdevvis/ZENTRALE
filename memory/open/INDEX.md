@@ -74,4 +74,5 @@ How this folder works: [README.md](README.md). One line per open item.
 | [node_lifecycle_followups.md](node_lifecycle_followups.md) | Building kit steps 7/8 leftovers: server deploy (migration 0004), phone texts/header, router keys | yes (deploy) |
 | [key_rotation_old_data.md](key_rotation_old_data.md) | After a key change, old stands/blobs/history stay readable with the old key (lost device) | yes (pick direction) |
 | [run_gate_followups.md](run_gate_followups.md) | Run gate (building kit 9b): the compiler's graph rules are not in Dart yet | no |
+| [schematix_extraction.md](schematix_extraction.md) | Schematix built into the core by mistake: move to its own package (preinstalled at signup), after restyle + canvas rework merge | no |
 | [schematix_followups.md](schematix_followups.md) | Schematix (building kit 13–15) leftovers: phone/web front, wheel symbol, English titles, install from the scheme, same version without effect yet | partly (symbol) |

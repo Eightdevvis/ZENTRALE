@@ -34,6 +34,33 @@ ZENTRALE is meant to be English throughout. **Nothing new is built in German.**
 - Conversation language with Sasha and the KI's answers to him stay German —
   that is content, not code.
 
+## Apps live outside the core (Sasha, 2026-10-31 — permanent)
+
+Schematix (building kit 13–15) was built *into* the core and now has to be
+pulled out again. That never happens again — everything is built cleanly
+separated („alles schön differenziert und sauber getrennt").
+
+- **Every new app/program is its own package from the start:** own folder/repo
+  with `app.toml`, like tutor (`language-tutor`), map (`zentrale-karte`) and
+  budget.
+- **Never** new modules in `core/`, `tui/ansichten/` or `ui/routen/` for an
+  app, and **never** a new entry in `core/eingebaute_apps.py`.
+- **The core is platform only:** the command `zentrale`, hub door (manifest
+  reader, register, `/hub/*`), store client, account/cloud client + Mitte,
+  Run gate/compiler/port-type registry/wires, the Desk building block (and
+  other general building blocks), the mandatory adapter, the keeper, node
+  description.
+- **Apps use the core only via public interfaces** (routes, ports, building
+  blocks). An interface is missing → first build it in the core as a
+  *general* building block, then use it from the app.
+- **"Preinstalled" = the package is installed at signup** (like the cloud,
+  deselectable/holdable), not compiled into the core.
+- **Guard:** `tests/test_kern_bauplan.py` (`test_no_new_built_in_apps`) — the
+  apps in `core/eingebaute_apps.py` are a legacy list in
+  `memory/system/bauplan_kern.md` („Altlast: Built-in apps") that may only
+  shrink. Background: `memory/hub/building_kit_plan.md` §3; extraction order:
+  `memory/hub/kern_auszug_inventur.md`.
+
 ## Git-Workflow (gilt für ALLE Agenten — überschreibt die Default-Regel)
 
 Dieses Projekt gehört **einem** Menschen (Sasha), das GitHub-`origin` ist

@@ -5,6 +5,10 @@ entstehen und geholt werden, die Bausteine, die Apps nutzen, und der Weg
 zum Produkt. Wie der Kern darunter gebaut ist (Threads, Schichten, TUI,
 Topologie): [../system/INDEX.md](../system/INDEX.md).
 
+**Rule (Sasha, 2026-10-31 — permanent):** apps live outside the core — every
+new app is its own package; see CLAUDE.md „Apps live outside the core" and
+[building_kit_plan.md](building_kit_plan.md) §3.
+
 | Was du wissen willst | Datei |
 |---|---|
 | **Einstieg.** Hub-Bauplan — die eine Regel, Hub-Dienste, Manifest `app.toml`, Rechte, Umzug der Module, Kacheln, Adressen `zentrale://…`, Katalog, Farbrollen, KI-Werkzeuge aus dem Schema, Anbindungs-Pipe | [hub_bauplan.md](hub_bauplan.md) |
