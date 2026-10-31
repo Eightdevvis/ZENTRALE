@@ -392,10 +392,19 @@ tool in their package).
      port type: "a folder of plain files for people"). The AI memory is such
      a folder of Markdown files (it already is: `data/gedaechtnis/`,
      [gedaechtnis_dateien.md](../ki/gedaechtnis_dateien.md)); the assistant
-     needs a `files` socket for it. **Sharing = wiring:** two apps that plug
-     the same folder share memory, a `sync` wire carries it to the other
-     nodes, no wire keeps it local. Where sharing makes sense and where not
-     is then a plug decision per app, not core code.
+     needs a `files` socket for it. `files` means **any location**: local,
+     the cloud folder, streamed over the network from elsewhere — whatever
+     offers the port (Sasha: "sehr flexibel"). **Sharing = plugging:** two
+     apps that plug the same folder share memory. Across nodes ZenCloud
+     unifies it (Sasha: no extra sync step to think about; the `sync` port
+     type in the registry is only how today's per-app cloud choice is
+     recorded, ⚠ prüfen whether it stays a user-visible wire at all).
+   - **Two writers on one folder** (e.g. two models write the same memory
+     file at once): open. Proposal (Claude): every write goes through the
+     file app with a version check — write only if the file is still the
+     version that was read (like HTTP `If-Match`), otherwise refuse with
+     "read again and merge". Nothing is overwritten silently; same spirit as
+     "the cloud is never overwritten".
    - Still open: what of today's memory logic (topics, index, notes,
      projects, skills) is the assistant's and what is the base file app;
      a separate doc when it gets built.
