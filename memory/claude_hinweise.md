@@ -82,8 +82,8 @@ ständig; die Struktur muss mit dem Wachstum **besser** werden, nicht schlechter
 - `net.py` wrapt alle HTTP-Calls (außer Audio – `audio.py` loggt selbst,
   weil multipart-Upload Sonderbehandlung braucht) und loggt sie.
 - **Gedächtnis:** Datei-Gedächtnis (`core/gedaechtnis.py`,
-  `memory/ki/gedaechtnis_dateien.md`). Der Konzept-Graph (`graph.py`) ist
-  abgeschaltet (`GRAPH_KONTEXT`/`GRAPH_EXTRAKTION`), nicht gelöscht. Das
+  `memory/ki/gedaechtnis_dateien.md`). Der Konzept-Graph ist seit
+  2026-10-31 aus dem Code (`memory/archive/associative_graph/`). Das
   alte Legacy-`memory.py` (LTM/STM) existiert nicht mehr.
 - **Im Tutor-Modus** (`tools=...` an `chat_stream` gesetzt) wird **nichts**
   injiziert – der System-Prompt bleibt rein der Tutor-Prompt. Wer das ändern
@@ -118,8 +118,8 @@ ZENTRALE-seitig gilt:
   Kontakt nur per HTTP-Ereignis (`core/hub_ereignisse.py`).
 - Die **Gates für fremde Tool-Sets** bleiben: `ai.py` (`if tools is None`) und
   `core/cloud.py`/`core/cloud_openai.py` (`tutor_mode = tools is not None`) —
-  bei gesetzten Tools keine Gedächtnis-Injektion, keine Consolidation, kein
-  Graph, kein Gate, keine Bild-Marker, kein Jetzt-Block. Heute übergibt kein
+  bei gesetzten Tools keine Gedächtnis-Injektion, keine Consolidation
+  (Transkript), kein Gate, keine Bild-Marker, kein Jetzt-Block. Heute übergibt kein
   Aufrufer in ZENTRALE `tools=`; wer das wieder tut, muss diese Gates kennen.
 
 Umgekehrt gilt für den **Cloud-Kern**: lokal sieht alles von Cloud, Cloud

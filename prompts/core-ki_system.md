@@ -5,8 +5,7 @@
 - **Rolle:** Der Haupt-System-Prompt der ZENTRALE-KI. Formt Rolle, Stimme,
   Länge, Text-Effekte und den Turn-Abschluss. Wird bei **jedem** Chat-Turn
   mitgeschickt (Ziel-Länge ~410 Tokens inkl. Few-Shot). Meta-Regeln gegen
-  Lügen/Erfinden stehen separat (→ `core-ki_meta-regeln.md`); konkrete
-  Fähigkeiten/Grenzen leben als Graph-Knoten (→ `core-ki_selbstbild.md`).
+  Lügen/Erfinden stehen separat (→ `core-ki_meta-regeln.md`).
 
 ⚠ **Das hier ist die `klein`-Schiene.** Seit dem Schienen-Umbau 08/2026 leitet
 `core/profil/gross.py` (Cloud/Frontier-Modelle) dieselbe Persona ab, nimmt aber

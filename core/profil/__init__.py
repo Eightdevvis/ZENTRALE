@@ -5,7 +5,7 @@
 #
 # ── Das Bild ────────────────────────────────────────────────────────────
 # Ein Zug, mehrere Schienen. Der Zug ist der Kern: Tool-Ausfuehrung, Kalender,
-# Graph, Erlaubnis-Gate, Event-Protokoll, der Loop. Der ist fuer jedes Modell
+# Gedaechtnis, Erlaubnis-Gate, Event-Protokoll, der Loop. Der ist fuer jedes Modell
 # derselbe und wird nicht angefasst.
 #
 # Die Schiene ist alles, was die ANREDE ausmacht: Prompt-Texte, welche Tools

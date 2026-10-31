@@ -129,7 +129,7 @@ AUFHOL_QUERIES = [                # rückblickende Suchanfragen (DE + EN für Br
     "most important world news this week recap politics",
 ]
 
-# ── Ollama (identisch zu consolidation.py/ai.py, sonst Modell-Reload) ──
+# ── Ollama (identisch zu core/ollama.py, sonst Modell-Reload) ──
 OLLAMA_URL        = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
 OLLAMA_MODEL      = os.environ.get("OLLAMA_MODEL",      "qwen3.5:9b")
 OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")

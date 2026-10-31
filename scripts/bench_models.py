@@ -53,8 +53,8 @@ import urllib.request
 
 
 # ── core/ai.py importieren OHNE den Memory-Stack hochzufahren ──────────────
-# ai.py macht beim Laden `import net/context/graph/consolidation/kalender`.
-# Die wollen wir hier nicht (graph/consolidation laden den privaten Graphen,
+# ai.py macht beim Laden `import net/context/consolidation/kalender`.
+# Die wollen wir hier nicht (consolidation schreibt ins Transkript,
 # net braucht state, etc.). Trick: leere Platzhalter-Module in sys.modules
 # legen, BEVOR wir ai importieren. ai.py benutzt diese Module nur INNERHALB
 # von Funktionen, nicht auf Modul-Ebene - der Import klappt also mit Stubs,
@@ -67,9 +67,9 @@ sys.path.insert(0, _CORE)
 # Modul-Ebene (in der TOOLS-Definition), ein leerer Stub wuerfe da einen
 # AttributeError. Das echte kalender ist harmlos (nur json/datetime/dateutil +
 # state-Logging, kein privater Graph) und laedt beim Import keine Daten.
-# graph/consolidation/net/context/state bleiben gestubbt - die nutzt ai.py nur
+# consolidation/net/context/state bleiben gestubbt - die nutzt ai.py nur
 # INNERHALB von Funktionen, nie auf Modul-Ebene.
-for _m in ("net", "context", "graph", "consolidation", "state"):
+for _m in ("net", "context", "consolidation", "state"):
     if _m not in sys.modules:
         sys.modules[_m] = types.ModuleType(_m)
 

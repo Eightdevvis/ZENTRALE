@@ -65,8 +65,9 @@ SearXNG)")`). Man sieht im Panel also weiterhin, dass + wonach gesucht wurde.
 zugreifen«, »Web-Suche durchführen«, »Echtzeit-News/Wetter abrufen«) wurden
 zu Fähigkeiten (»im Internet suchen«, »Webseiten abrufen«). Code:
 `graph._SEED_CAPABILITIES`/`_SEED_LIMITS` (frische Installs) +
-`graph.migrate_internet_access()` (zieht bereits geseedete Graphen nach,
-idempotent, hängt in `graph.einmal_seeden` → self-healing bei jedem Boot).
+`graph.migrate_internet_access()` (zog bereits geseedete Graphen nach). Der
+Graph ist seit 2026-10-31 aus dem Code; was die KI kann, sagen heute ihre
+Werkzeuge und die Meta-Regeln der Schiene.
 
 ## Network-Transparenz
 

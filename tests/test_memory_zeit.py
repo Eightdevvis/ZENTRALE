@@ -23,8 +23,11 @@ Dazu die stille Nachwirkung: aus zwei datierten Nennungen liest ein
 Modell einen ZEITRAUM („du hattest bis gestern Fieber"), obwohl der Graph
 nur einzelne Tage kennt. Ein Zustand hängt an genau seinem Datum und sagt
 nichts über andere Tage.
+
+Seit 2026-10-31 ist der Graph aus dem Code. Geblieben sind die Lehren, die
+nicht am Graphen hingen: kein Kalender-Spiegel, und der Imprint liest den
+nahen Horizont, statt ihn zu schreiben.
 """
-import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -33,7 +36,6 @@ import pytest
 import ai
 import ki_prompt
 import consolidation
-import graph
 import kalender
 
 # Tests, die den Kalender-Speicher wirklich anfassen, laufen gegen BEIDE
@@ -48,192 +50,12 @@ def tmp_kalender(tmp_path, monkeypatch):
     return kalender.CAL_PATH
 
 
-@pytest.fixture
-def ohne_embeddings(monkeypatch):
-    """Kein Ollama, keine Vektoren — der Normalfall unterwegs.
-
-    Genau dieser Zustand hat den Schaden ausgelöst: ohne Embeddings fand
-    die Einstiegspunkt-Suche gar nichts, und der Spread startete nur an
-    den Naben.
-    """
-    monkeypatch.setattr(graph.embeddings, "_embed_raw", lambda t: None)
-    monkeypatch.setattr(graph.embeddings, "_cloud_embed", lambda t: None)
-    graph.embeddings._query_cache.clear()
-
-
-@pytest.fixture
-def welt(tmp_path, ohne_embeddings):
-    """Ein Graph im Kleinen wie Sashas echter: eine Nabe, viel Beifang.
-
-    Sasha hängt an allem, das heutige Datum an jeder Nennung. Nur „Sport"
-    hat mit der Testfrage zu tun.
-    """
-    p = str(tmp_path / "g.json")
-    heute = graph._today_str()
-    graph.add_turn_extraction(
-        [{"name": n, "type": t} for n, t in [
-            ("Sasha", "person"), ("Sport", "concept"), ("Geige", "object"),
-            ("Spanien", "place"), ("brain organoids", "project"),
-            ("Fieber", "state"), (heute, "event"), ("2026-08-09", "event"),
-        ]],
-        [{"from": "Sasha", "to": "Sport",           "rel": "kann"},
-         {"from": "Sasha", "to": "Geige",           "rel": "macht"},
-         {"from": "Sasha", "to": "Spanien",         "rel": "war-am"},
-         {"from": "Sasha", "to": "brain organoids", "rel": "arbeitet-an"},
-         {"from": "Sasha", "to": "Fieber",          "rel": "zustand"},
-         {"from": "Fieber", "to": "2026-08-09",     "rel": "geschah-am"},
-         {"from": "Geige",  "to": heute,            "rel": "erwähnt-am"},
-         {"from": "Spanien", "to": heute,           "rel": "erwähnt-am"}],
-        store=p)
-    return p
-
-
-FRAGE = "kann ich heute wieder sport machen"
-
-
-def _aktivierung(pfad, frage):
-    """{name: score} so wie der Kontext-Renderer es sieht."""
-    st = graph._get_store(pfad)
-    _, sortiert, _ = graph._activated_view(frage, st, graph.DEFAULT_HOPS, 25)
-    return dict(sortiert)
-
-
-# ── Die Frage steuert den Kontext ──────────────────────────────────────
-
-def test_gefragtes_thema_wird_einstiegspunkt(welt):
-    """„Sport" muss ganz oben stehen, nicht als Beifang mitschwimmen.
-
-    Ohne Embeddings ist der wörtliche Treffer die einzige Chance, das
-    Thema überhaupt zu finden.
-    """
-    a = _aktivierung(welt, FRAGE)
-    assert a["Sport"] == 1.0
-    assert a["Sport"] > a["Geige"]
-    assert a["Sport"] > a["Spanien"]
-
-
-def test_nabe_uebertoent_das_thema_nicht(welt):
-    """Sasha bleibt Anker, wird aber nicht zum Themen-Geber.
-
-    Mit voller Aktivierung landete alles, was einen Hop von Sasha weg
-    liegt, gleichauf im Kontext — unabhängig von der Frage.
-    """
-    a = _aktivierung(welt, FRAGE)
-    assert a["Sasha"] == pytest.approx(graph.ANKER_START)
-    assert a["Sasha"] < a["Sport"]
-    # und was nur über Sasha erreichbar ist, fällt deutlich zurück
-    assert a["Spanien"] < a["Sasha"]
-
-
-def test_ohne_treffer_tragen_die_anker_den_kontext(welt):
-    """Findet die Frage nichts, darf der Kontext nicht leer werden.
-
-    Die Dämpfung ist eine Rangfolge-Korrektur, kein Abschalten: ohne
-    eigene Einstiegspunkte sind Sasha und Heute alles, was wir haben.
-    """
-    a = _aktivierung(welt, "erzähl mir irgendwas")
-    assert a["Sasha"] == 1.0
-    assert a["Spanien"] > 0
-
-
-def test_praefix_findet_komposita(welt):
-    """„krank" muss den Knoten „Krankheit" finden.
-
-    Deutsche Komposita treffen sonst nie: gefragt wird nach dem
-    Wortstamm, gespeichert ist das Substantiv.
-    """
-    st = graph._get_store(welt)
-    with st.lock:
-        data = graph._load_raw(st)
-    data["nodes"]["Krankheit"] = {"type": "state"}
-    assert "Krankheit" in graph._lexical_entry_points("bin ich noch krank?", data)
-
-
-def test_teilwort_reicht_nicht(welt):
-    """Ein einzelnes Wort aus einem mehrwortigen Knoten reicht nicht.
-
-    Sonst zöge „work" den ganzen „work badhausen"-Komplex in jede Frage
-    über Arbeit.
-    """
-    st = graph._get_store(welt)
-    with st.lock:
-        data = graph._load_raw(st)
-    data["nodes"]["work badhausen"] = {"type": "event"}
-    assert "work badhausen" not in graph._lexical_entry_points("wie war die work", data)
-    assert "work badhausen" in graph._lexical_entry_points("wie war work badhausen", data)
-
-
-# ── Kanten nach Relevanz, nicht nach Entstehungs-Zufall ────────────────
-
-def test_kanten_zum_thema_stehen_vorn(welt):
-    """Der 40er-Schnitt und das Zeichenbudget dürfen nicht die alten
-    Kanten bevorzugen, nur weil sie zuerst in der Datei stehen."""
-    st = graph._get_store(welt)
-    _, _, kanten = graph._activated_view(FRAGE, st, graph.DEFAULT_HOPS, 25)
-    paare = [(e["from"], e["to"]) for e in kanten]
-    assert paare.index(("Sasha", "Sport")) < paare.index(("Sasha", "Spanien"))
-
-
-def test_erwaehnt_am_steht_hinten(welt):
-    """Buchhaltung über das Reden rangiert hinter Inhalt.
-
-    `erwähnt-am` machte die halbe Kantenliste aus und ist zugleich der
-    Grund, warum das heutige Datum eine Nabe ist.
-    """
-    st = graph._get_store(welt)
-    _, _, kanten = graph._activated_view(FRAGE, st, graph.DEFAULT_HOPS, 25)
-    rels = [e["rel"] for e in kanten]
-    assert rels.index("kann") < rels.index("erwähnt-am")
-
-
-# ── Ein Datum ist ein Tag, kein Zeitraum ───────────────────────────────
-
-def test_zeit_legende_bei_datums_kanten(welt):
-    """Der Block muss sagen, was geschah-am und erwähnt-am bedeuten —
-    sonst wird aus zwei Nennungen ein Zeitraum."""
-    text = graph.context_for_query(FRAGE, store=welt)
-    assert "kein Zeitraum" in text
-    assert "GEREDET" in text
-
-
-def test_keine_legende_ohne_datums_kanten(tmp_path, ohne_embeddings):
-    """Kein Erklärtext auf Vorrat: der Block geht bei jedem Turn
-    ungecacht mit raus.
-
-    Der Graph wird hier von Hand geschrieben, nicht über
-    add_turn_extraction: die hängt an jeden Turn `erwähnt-am`-Anker, also
-    hat ein gewachsener Graph praktisch immer Datums-Kanten. Ohne
-    Zeitanker (frisch geseedet, importiert) soll die Legende schweigen.
-    """
-    p = str(tmp_path / "g.json")
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump({"nodes": {"Sasha": {"type": "person"},
-                             "Geige": {"type": "object"}},
-                   "edges": [{"from": "Sasha", "to": "Geige", "rel": "macht"}]}, f)
-    text = graph.context_for_query("was ist mit der geige", store=p)
-    assert "Geige" in text
-    assert "kein Zeitraum" not in text
-
-
 # ── Der Kalender-Spiegel bleibt aus ────────────────────────────────────
 
-@pytest.fixture
-def extraktor(monkeypatch, tmp_path):
-    """Extraktor, der genau den Fehler von damals produziert: aus einer
-    Frage nach Sport wird ein Ereignis am heutigen Tag."""
-    heute = graph._today_str()
-    monkeypatch.setattr(consolidation, "_call_graph_extractor",
-                        lambda *a, **k: (
-                            [{"name": "Sport", "type": "concept"}],
-                            [{"from": "Sport", "to": heute, "rel": "geschah-am"}]))
-    monkeypatch.setattr(consolidation.transkript, "schreiben", lambda *a, **k: [])
-    return str(tmp_path / "g.json")
+def test_konsolidierung_schreibt_nicht_in_den_kalender(monkeypatch):
+    """Nach dem Turn wird ins Transkript geschrieben — und nirgendwo sonst.
 
-
-def test_konsolidierung_schreibt_nicht_in_den_kalender(extraktor, monkeypatch):
-    """Die Konsolidierung schreibt in den Graphen — und nirgendwo sonst.
-
-    Der Spiegel war ein Schreibweg am Erlaubnis-Gate vorbei: jeder
+    Der Kalender-Spiegel war ein Schreibweg am Erlaubnis-Gate vorbei: jeder
     Kalender-Schreib-TOOL-Call muss bestätigt werden, dieser Nebeneffekt
     im Hintergrund-Thread nie. Er ist gelöscht; dieser Test hält die Tür
     zu, falls jemand ihn "der Bequemlichkeit halber" wieder aufmacht.
@@ -241,9 +63,9 @@ def test_konsolidierung_schreibt_nicht_in_den_kalender(extraktor, monkeypatch):
     geschrieben = []
     monkeypatch.setattr(kalender, "_save_raw",
                         lambda *a, **k: geschrieben.append(a))
-    consolidation.extract_turn_into_graph(
-        "kann ich heute wieder sport machen", "kalendarisch nichts im Weg",
-        store=extraktor)
+    monkeypatch.setattr(consolidation.transkript, "schreiben", lambda *a, **k: [])
+    consolidation.record_turns(
+        "kann ich heute wieder sport machen", "kalendarisch nichts im Weg")
     assert geschrieben == []
 
 
@@ -307,7 +129,7 @@ def test_imprint_steht_im_gecachten_kopf(monkeypatch):
     import cloud
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "## Was ansteht\nZahnarzt")
     statisch  = cloud._static_system(None, tutor_mode=False)
-    fluechtig = cloud._volatile_text("", via_mic=False, tutor_mode=False)
+    fluechtig = cloud._volatile_text(via_mic=False, tutor_mode=False)
     assert "Zahnarzt" in statisch
     assert "Zahnarzt" not in fluechtig
 
@@ -336,100 +158,3 @@ def test_kalender_faellt_aus_chat_laeuft_weiter(monkeypatch):
         raise RuntimeError("kalender weg")
     monkeypatch.setattr(kalender, "imprint_for_prompt", kaputt)
     assert ai._imprint_prompt() == ""
-
-
-# ── Die Zeit-Regel im Extraktor-Prompt ─────────────────────────────────
-
-def test_extraktor_prompt_datiert_grob_statt_falsch():
-    """Regel 5 kannte nur das Beispiel „ich war heute müde" und stempelte
-    darum auf alles das heutige Datum. Drei Sachen müssen drinstehen
-    bleiben: die Unterscheidung Erzähltag ↔ Ereignistag, der GRÖBERE
-    Knoten statt eines erfundenen Tages, und dass Gegenwart trotzdem
-    normal datiert wird."""
-    p = " ".join(consolidation._GRAPH_EXTRACTOR_PROMPT.split())
-    assert "GRÖBER, NICHT FALSCH" in p        # gröber statt erfundener Tag
-    assert "nur so grob wie nötig" in p       # aber die feinste WAHRE Stufe
-    assert "2026-W34" in p                    # Wochenstufe als Beispiel
-    assert "GEGENWART IST DAGEGEN EINFACH" in p
-    assert "NICHT-EREIGNISSE" in p            # Fragen und Vorhaben
-    assert "nicht der des Geschehens" in p    # der Kern der Verwechslung
-
-
-def test_vier_zeit_aufloesungen():
-    """Tag, Woche, Monat, Jahr müssen als Zeit erkannt werden — sonst
-    kriegen sie einen Embedding-Vektor und rutschen durch jeden
-    Zeit-Filter."""
-    assert graph._zeit_typ("2026-08-17") == "time-day"
-    assert graph._zeit_typ("2026-W34") == "time-week"
-    assert graph._zeit_typ("2026-08") == "time-month"
-    assert graph._zeit_typ("2026") == "time-year"
-    assert graph._zeit_typ("Fieber") is None
-    assert graph._zeit_typ("W34") is None
-
-
-def test_woche_wird_als_spanne_ausgeschrieben(tmp_path, ohne_embeddings):
-    """„2026-W34" allein zwingt das Modell, ISO-Wochen selbst
-    auszurechnen — genau die Arithmetik, die reihenweise schiefgeht.
-    Python rechnet, das Modell liest ab."""
-    p = str(tmp_path / "g.json")
-    graph.add_turn_extraction(
-        [{"name": "Schüttelfrost", "type": "state"},
-         {"name": "2026-W34", "type": "concept"}],
-        [{"from": "Schüttelfrost", "to": "2026-W34", "rel": "geschah-am"}],
-        store=p)
-    text = graph.context_for_query("wann hatte ich schüttelfrost", store=p)
-    assert "2026-W34" in text
-    assert "17.08.–23.08.2026" in text
-
-
-def test_woche_als_subjekt_fliegt_raus():
-    """Eine Woche am falschen Ende ist genauso Müll wie ein Tag."""
-    sauber, drops = consolidation._sanitize_extracted(
-        [], [{"from": "2026-W34", "to": "Fieber", "rel": "hat"}])
-    assert sauber == []
-    assert drops["date_subject"] == 1
-
-
-def test_extraktor_kriegt_die_kalenderwoche_gesagt():
-    """Ohne Anker müsste der Extraktor die ISO-Woche selbst ausrechnen."""
-    body = consolidation._extractor_body("test", "antwort", "2026-08-17")
-    assert "2026-W34" in body          # diese Woche
-    assert "2026-W33" in body          # und die vorige, für „vor ein paar Tagen"
-    assert "Montag" in body
-
-
-def test_datum_wird_als_zeit_getypt_egal_was_der_extraktor_raet(tmp_path,
-                                                               ohne_embeddings):
-    """Der Extraktor tippte Datums-Knoten mal als `event`, mal als
-    `concept` — dann greifen die Filter nicht, die Zeit aussortieren."""
-    p = str(tmp_path / "g.json")
-    graph.add_turn_extraction(
-        [{"name": "2026-08-10", "type": "event"},
-         {"name": "2026-08", "type": "concept"}], [], store=p)
-    with open(p, encoding="utf-8") as f:
-        nodes = json.load(f)["nodes"]
-    assert nodes["2026-08-10"]["type"] == "time-day"
-    assert nodes["2026-08"]["type"] == "time-month"
-
-
-def test_monat_als_subjekt_fliegt_raus():
-    """Ein Monat am falschen Ende ist genauso Müll wie ein Tag."""
-    sauber, drops = consolidation._sanitize_extracted(
-        [], [{"from": "2026-08", "to": "Fieber", "rel": "hat"}])
-    assert sauber == []
-    assert drops["date_subject"] == 1
-
-
-def test_tages_knoten_tragen_ihren_bezug(tmp_path, ohne_embeddings):
-    """Ein nacktes ISO-Datum zwingt das Modell zum Rechnen — und es hat
-    den heutigen Tag prompt „gestern" genannt, obwohl der Jetzt-Block
-    danebenstand. Wochentag und Bezug kommen jetzt fertig mit."""
-    heute = date.today().isoformat()
-    gestern = (date.today() - timedelta(days=1)).isoformat()
-    p = str(tmp_path / "g.json")
-    graph.add_turn_extraction(
-        [{"name": "Fieber", "type": "state"}],
-        [{"from": "Fieber", "to": gestern, "rel": "geschah-am"}], store=p)
-    text = graph.context_for_query("wann hatte ich fieber", store=p)
-    assert f"{heute} [time-day] (" in text and "HEUTE)" in text
-    assert "gestern)" in text

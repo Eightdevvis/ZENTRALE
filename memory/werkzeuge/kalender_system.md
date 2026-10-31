@@ -699,7 +699,7 @@ aufgeräumt, der Toggle blendet alles **ein**.
 
 ## Cross-Reference Graph ↔ Kalender (typisches Beispiel, Historie)
 
-(Der Konzept-Graph ist seit 18.08.2026 abgeschaltet — `../ki/konzept_graph.md`;
+(Der Konzept-Graph ist seit 18.08.2026 abgeschaltet, seit 2026-10-31 aus dem Code — `../archive/associative_graph/konzept_graph.md`;
 das Muster gilt sinngemäß mit dem Datei-Gedächtnis.)
 
 User: „wie war Geige letzte Woche?"

@@ -317,8 +317,8 @@ Eintrag). Vertrag und vdirsyncer-Stand (`data/adapter/bruecke/**`): Art
 
 **Was mit der Umstellung NICHT mehr mitwandert** (rsync nahm es mit):
 `ai_config.json` — die KI-Schlüssel kommen seit 2026-10-24 über den Adapter;
-`mail_secrets.enc`; der Konzept-Graph `ai_graph*.json` (seit 18.08. aus,
-groß, wäre eine Zeile in der Liste); Takt-Merkzettel und Caches (pro Rechner,
+`mail_secrets.enc`; der Konzept-Graph `ai_graph*.json` (seit 18.08. aus, seit 31.10. aus dem
+Code; die Dateien liest nichts mehr); Takt-Merkzettel und Caches (pro Rechner,
 werden neu erzeugt).
 
 ## Zusammenführen — was für welche Datei gilt

@@ -27,12 +27,10 @@
 # jedes Tool-Use-fähige Ollama-Modell sollte funktionieren.
 #
 # ── Gedächtnis ───────────────────────────────────────────────────────
-# Der Konzept-Graph (core/graph.py) ist seit 18.08.2026 in beide Richtungen
-# per Default aus: nicht mehr in den Prompt GELESEN (graph.context_for_query
-# nur mit ZENTRALE_GRAPH_KONTEXT=1, siehe GRAPH_KONTEXT unten) und nicht mehr
-# BESCHRIEBEN (Tripel-Extraktion nur mit ZENTRALE_GRAPH_EXTRAKTION=1, siehe
-# core/consolidation.py). Pro Turn landet nur noch der Rohtext im Transkript
-# (core/transkript.py); der Identity-Seed (graph.einmal_seeden) läuft weiter. An seine Stelle trat das Datei-Gedächtnis
+# Der Konzept-Graph war seit 18.08.2026 aus und ist seit 2026-10-31 aus dem
+# Code (Archiv: memory/archive/associative_graph/). Pro Turn landet nur der
+# Rohtext im Transkript (core/consolidation.py → core/transkript.py). An seine
+# Stelle trat das Datei-Gedächtnis
 # (core/gedaechtnis.py) — bisher NUR auf dem Cloud-Pfad: Kopf-Block im
 # gecachten System-Prompt (cloud._static_system) plus die Notiz-Werkzeuge
 # aus core/profil/gross.py. Die lokale Schiene sieht davon heute nichts.
@@ -46,7 +44,6 @@ import json as _json   # Tool-Argumente, die Ollama als String liefert
 import threading  # Phase D: Auto-Save läuft in Daemon-Threads
 
 import net           # HTTP-Wrapper mit Terminal-Logging
-import graph         # Phase G: Konzept-Graph Memory (assoziativ, primary)
 import kalender              # Kalender-Layer (Termine, Routinen, erlebt)
 import profil                # Prompt-Schienen: welcher Prompt für welches Modell
 import werkzeug_schleife      # die EINE Tool-Schleife (lokal, Anthropic, OpenAI)
@@ -75,16 +72,16 @@ from ollama import think_opts as _think_opts   # noqa: E402,F401
 ADAPTIVE_THINK = SUPPORTS_THINK and os.environ.get("ZENTRALE_THINK", "1") != "0"
 
 
-# ── Prompt-Bausteine, Werkzeug-Ausführung, Graph-Seed ──────────────────
-# Seit 2026-10-06 in core/ki_prompt.py, core/ki_werkzeuge.py und
-# graph.einmal_seeden. Die alten Namen bleiben als Durchreiche zum LESEN und
-# AUFRUFEN (Bench-Skripte, Tests). Wer etwas ERSETZEN will, ersetzt das
-# Original: ki_prompt.<name>, ki_werkzeuge.ausfuehren, graph.einmal_seeden —
+# ── Prompt-Bausteine, Werkzeug-Ausführung ─────────────────────────────
+# Seit 2026-10-06 in core/ki_prompt.py und core/ki_werkzeuge.py. Die alten
+# Namen bleiben als Durchreiche zum LESEN und AUFRUFEN (Bench-Skripte, Tests).
+# Wer etwas ERSETZEN will, ersetzt das Original: ki_prompt.<name>,
+# ki_werkzeuge.ausfuehren —
 # auch der lokale Weg unten ruft sie über das Modul.
 import ki_prompt      # noqa: E402
 import ki_werkzeuge   # noqa: E402
 from ki_prompt import (                                               # noqa: E402,F401
-    _DASHVIEW, GRAPH_KONTEXT, _WEEKDAYS_DE, _MONTHS_DE, _now_prompt,
+    _DASHVIEW, _WEEKDAYS_DE, _MONTHS_DE, _now_prompt,
     _imprint_prompt, _alarm_prompt, _should_think, _last_user_query,
 )
 from ki_werkzeuge import ausfuehren as _execute_tool                  # noqa: E402,F401
@@ -162,7 +159,6 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     Tool-Calls erscheinen als werkzeug-Events im Chat; Fehler und die
     Rundengrenze als {"fehler": …}, nicht als Antworttext.
     """
-    graph.einmal_seeden()
     model         = model or OLLAMA_MODEL
     active_tools  = tools         if tools         is not None else TOOLS
     active_exec   = tool_executor if tool_executor is not None else ki_werkzeuge.ausfuehren
@@ -175,16 +171,11 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # Tutor-Modus (Tutor hat eigenen System-Prompt der schon vollständig
     # ist und andere Tool-Sets nutzt).
     if tools is None:
-        # Graph-Kontext: per Default AUS (GRAPH_KONTEXT, seit 18.08.2026),
-        # mem_ctx bleibt dann leer. Mit ZENTRALE_GRAPH_KONTEXT=1 kommt der
-        # Aktivierungs-Spread aus dem Konzept-Graphen zurück in den Prompt.
-        mem_ctx    = graph.context_for_query(user_query) if ki_prompt.GRAPH_KONTEXT else ""
         # ── Statischer Kopf (byte-identisch über alle Turns, cachebar) ──
         # Kommt von der Schiene: hier läuft Ollama, also `klein` — mit
         # Antwort-Suffix und Bild-Markern, die ein 9B braucht. Der Cloud-Pfad
         # holt sich denselben Kopf von seiner eigenen Schiene.
-        sys_prompt = profil.klein.system(system, dashview=ki_prompt._DASHVIEW,
-                                         graph=ki_prompt.GRAPH_KONTEXT)
+        sys_prompt = profil.klein.system(system, dashview=ki_prompt._DASHVIEW)
         # Der Imprint (heute/morgen) gehört noch zum stabilen Teil: er ändert
         # sich mit dem Tag und mit echten Kalender-Änderungen, nicht mit dem
         # Turn. Im wechselnden Teil würde er bei jedem Turn ungecacht bezahlt.
@@ -192,11 +183,8 @@ def chat_stream(messages: list, model: str = None, system: str = None,
         if imprint:
             sys_prompt += "\n\n" + imprint
         # ── Ab hier wechselt es pro Turn (siehe _PROMPT_ORDER-Notiz in core/ki_prompt.py) ──
-        if mem_ctx:
-            sys_prompt += "\n\n" + mem_ctx
-        # Jetzt-Block direkt HINTER den Graph-Kontext: er widerspricht genau
-        # dessen Datums-Knoten („das sind Erinnerungen, nicht heute"), und was
-        # zuletzt steht, sitzt am dichtesten an der User-Message.
+        # Jetzt-Block: was zuletzt steht, sitzt am dichtesten an der
+        # User-Message.
         sys_prompt += "\n\n" + ki_prompt._now_prompt()
         # Alarm-Kanal: offene Kalender-Erinnerungen randständig anhängen (nicht
         # mehr inline in der read_calendar-Ausgabe). Leer → kein Block.

@@ -18,7 +18,6 @@ import ascii_lib
 import cloud
 import ki_werkzeuge
 import ki_prompt
-import graph
 
 
 # ── Fake-Anthropic ─────────────────────────────────────────────────────
@@ -118,14 +117,11 @@ def fake(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def kein_echter_graph(monkeypatch):
-    """Graph-Lesen/Schreiben abklemmen: die Tests prüfen den Loop, nicht das
-    Memory. Die gespeicherten Turns werden mitgeschrieben, damit wir die
+def recorded_turns(monkeypatch):
+    """Das Merken abklemmen: die Tests prüfen den Loop, nicht das Transkript.
+    Die gemerkten Turns werden mitgeschrieben, damit wir die
     Isolations-Invariante prüfen können."""
     gespeichert = []
-    monkeypatch.setattr(cloud.graph, "context_for_query",
-                        lambda *a, **k: "## Erinnerung\n(test)")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
     return gespeichert
@@ -154,12 +150,12 @@ def _lauf(gen):
 
 # ── Der einfachste Fall: eine Runde, nur Text ──────────────────────────
 
-def test_einfache_antwort(fake, kein_echter_graph):
+def test_einfache_antwort(fake, recorded_turns):
     fake([{"text": ["Hallo ", "Sasha."], "stop_reason": "end_turn"}])
     events = _lauf(cloud.chat_stream(_msgs()))
     assert events == ["Hallo Sasha."]
     # Turn landet im CLOUD-Graphen, nicht im lokalen.
-    assert kein_echter_graph == [("was steht an?", "Hallo Sasha.", cloud.CLOUD_GRAPH)]
+    assert recorded_turns == [("was steht an?", "Hallo Sasha.", cloud.CLOUD_STORE)]
 
 
 def test_denk_tokens_werden_reflect_events(fake):
@@ -173,10 +169,10 @@ def test_denk_tokens_werden_reflect_events(fake):
     assert not any(isinstance(e, str) and "ich schau" in e for e in events)
 
 
-def test_denken_landet_nicht_im_gespeicherten_turn(fake, kein_echter_graph):
+def test_denken_landet_nicht_im_gespeicherten_turn(fake, recorded_turns):
     fake([{"thinking": ["grübel"], "text": ["Antwort."], "stop_reason": "end_turn"}])
     _lauf(cloud.chat_stream(_msgs()))
-    assert kein_echter_graph[0][1] == "Antwort."
+    assert recorded_turns[0][1] == "Antwort."
 
 
 # ── Request-Form ───────────────────────────────────────────────────────
@@ -206,15 +202,10 @@ def _breakpoints(kw) -> list:
 
 
 def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake, monkeypatch):
-    """Der Kern des Cache-Umbaus. Graph-Kontext und Uhrzeit standen frueher im
-    system-Feld, also VOR dem gesamten Verlauf — und weil die Uhr jeden Turn
-    eine andere ist, ging der ganze Verlauf jedes Mal ungecacht raus
-    (gemessen: in=7236, cache_read=0 fuer eine Drei-Wort-Antwort).
-
-    Der Graph-Kontext ist inzwischen per Default aus (Datei-Gedaechtnis).
-    Hier wird er absichtlich eingeschaltet: geprueft wird die PLATZIERUNG
-    des Wechselnden, und der Graph ist davon das anschaulichste Beispiel."""
-    monkeypatch.setattr(ki_prompt, "GRAPH_KONTEXT", True)
+    """Der Kern des Cache-Umbaus. Die Uhrzeit stand frueher im system-Feld,
+    also VOR dem gesamten Verlauf — und weil die Uhr jeden Turn eine andere
+    ist, ging der ganze Verlauf jedes Mal ungecacht raus (gemessen: in=7236,
+    cache_read=0 fuer eine Drei-Wort-Antwort)."""
     c = fake([{"text": ["ok"], "stop_reason": "end_turn"}])
     _lauf(cloud.chat_stream(_msgs()))
     kw = c.calls[0]
@@ -223,14 +214,12 @@ def test_wechselndes_haengt_hinten_an_der_letzten_user_nachricht(fake, monkeypat
     system = kw["system"][0]["text"]
     assert gross.SYSTEM in system
     assert "## Jetzt" not in system          # die Uhr gehoert NICHT nach vorn
-    assert "## Erinnerung" not in system     # der Graph auch nicht
 
     letzte = kw["messages"][-1]
     assert letzte["role"] == "user"
     bloecke = letzte["content"]
     assert bloecke[0]["text"] == "was steht an?"
     assert "## Jetzt" in bloecke[-1]["text"]
-    assert "## Erinnerung" in bloecke[-1]["text"]
 
 
 def test_breakpoint_sitzt_vor_dem_wechselnden(fake):
@@ -460,14 +449,14 @@ def test_frage_knopf_liefert_die_wahl_zurueck(fake, gate):
 
 # ── Terminale Tools ────────────────────────────────────────────────────
 
-def test_antwort_tool_ist_terminal(fake, kein_echter_graph):
+def test_antwort_tool_ist_terminal(fake, recorded_turns):
     """Kein zweiter API-Call - der Text IST die Antwort."""
     c = fake([{"content": [_tool_block("antwort", {"text": "Das war's."})],
                "stop_reason": "tool_use"}])
     events = _lauf(cloud.chat_stream(_msgs()))
     assert events == ["Das war's."]
     assert len(c.calls) == 1
-    assert kein_echter_graph[0][2] == cloud.CLOUD_GRAPH
+    assert recorded_turns[0][2] == cloud.CLOUD_STORE
 
 
 def test_lies_news_feuert_cinema_und_ist_terminal(fake):
@@ -566,44 +555,18 @@ def test_api_fehler_reisst_den_stream_nicht_ab(fake, monkeypatch):
 
 # ── Cloud an, Ollama aus ───────────────────────────────────────────────
 
-def test_cloud_laeuft_auch_ohne_ollama(fake, tmp_path, monkeypatch):
-    """Der Cloud-Kern denkt in der Cloud, braucht Ollama aber weiter für die
-    EMBEDDINGS (Memory). Ist Ollama weg, liefert embed() None. Das darf den
-    Chat höchstens gedächtnislos machen, nicht abstürzen lassen — sonst wäre
-    ausgerechnet der Pfad kaputt, der laufen soll, wenn lokal nichts geht.
-
-    Läuft bewusst gegen den ECHTEN Graph-Code, nur mit totem Embedder.
-    """
+def test_cloud_laeuft_auch_ohne_ollama(fake, monkeypatch):
+    """Der Cloud-Kern denkt in der Cloud. Ist Ollama weg (kein Embedder),
+    darf das den Chat nicht abstürzen lassen — sonst wäre ausgerechnet der
+    Pfad kaputt, der laufen soll, wenn lokal nichts geht."""
     import embeddings
-    import graph
 
-    store = str(tmp_path / "ai_graph_cloud.json")
-    monkeypatch.setattr(cloud, "CLOUD_GRAPH", store)
     monkeypatch.setattr(embeddings, "embed_query", lambda *a, **k: None)
     monkeypatch.setattr(embeddings, "embed_document", lambda *a, **k: None)
-    # Echten Graph-Pfad wiederherstellen (die autouse-Fixture klemmt ihn ab).
-    monkeypatch.setattr(cloud.graph, "context_for_query", graph.context_for_query)
-
-    # Seed gegen den echten Graphen laufen lassen, ebenfalls ohne Embedder.
-    monkeypatch.setattr(graph, "einmal_seeden",
-                        lambda store=None: graph.ensure_seed(store=store))
 
     fake([{"text": ["Ich hab dazu nichts gespeichert."], "stop_reason": "end_turn"}])
     events = _lauf(cloud.chat_stream(_msgs("was weisst du ueber mich?")))
     assert events == ["Ich hab dazu nichts gespeichert."]
-
-
-def test_kontext_ohne_embedder_ist_leer_nicht_kaputt(tmp_path, monkeypatch):
-    """Dieselbe Lage eine Ebene tiefer: kein Embedder → kein Kontext, aber
-    auch keine Exception."""
-    import embeddings
-    import graph
-
-    monkeypatch.setattr(embeddings, "embed_query", lambda *a, **k: None)
-    monkeypatch.setattr(embeddings, "embed_document", lambda *a, **k: None)
-    store = str(tmp_path / "leer.json")
-    ctx = graph.context_for_query("irgendwas", store=store)
-    assert isinstance(ctx, str)
 
 
 # ── Das Rauchtest-Skript selbst ────────────────────────────────────────
@@ -675,7 +638,7 @@ def test_rauchtest_laeuft_alle_stufen_durch(fake, monkeypatch, capsys):
 
 # ── Tutor-Modus (fremdes Tool-Set) ─────────────────────────────────────
 
-def test_tutor_modus_ohne_memory_und_ohne_gate(fake, gate, kein_echter_graph):
+def test_tutor_modus_ohne_memory_und_ohne_gate(fake, gate, recorded_turns):
     eigene_tools = [{"type": "function",
                      "function": {"name": "get_confirmed_vocab",
                                   "description": "d", "parameters": {"type": "object"}}}]
@@ -687,5 +650,5 @@ def test_tutor_modus_ohne_memory_und_ohne_gate(fake, gate, kein_echter_graph):
                                      tool_executor=lambda n, a: "hallo"))
     assert events == ["你好"]
     assert len(c.calls[0]["tools"]) == 1          # nur das fremde Tool-Set
-    assert kein_echter_graph == []                # kein Memory-Schreiben
+    assert recorded_turns == []                # kein Memory-Schreiben
     assert not any(isinstance(e, dict) for e in events)

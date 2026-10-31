@@ -69,7 +69,7 @@ def test_der_kopf_hat_alle_teile_in_der_alten_reihenfolge():
     """Die Reihenfolge ist nicht Geschmack: der statische Kopf muss über alle
     Turns byte-identisch sein, und was das Modell zuletzt liest, wiegt am
     schwersten."""
-    kopf = klein.system(dashview=True, graph=True)
+    kopf = klein.system(dashview=True)
     stellen = [kopf.index(t) for t in (
         klein._SYSTEM_PROMPT,
         klein._CAPABILITIES_PROMPT,
@@ -581,12 +581,12 @@ def test_kein_chat_app_ballast():
         assert wort not in t, wort
 
 
-def test_klein_ohne_graph_verspricht_nichts_was_es_nicht_gibt():
-    """Ist der Graph-Kontext aus (der Normalfall seit 18.08.2026), darf die
-    kleine Schiene weder auf seinen Wissens-Block verweisen noch dem Modell
-    erlauben, "notiert, läuft in den Graphen" zu sagen — es hat lokal kein
-    Werkzeug zum Merken."""
-    ohne = klein.system(graph=False)
+def test_klein_verspricht_nichts_was_es_nicht_gibt():
+    """Den Konzept-Graphen gibt es nicht mehr (aus seit 18.08.2026, aus dem
+    Code seit 2026-10-31): die kleine Schiene darf weder auf seinen
+    Wissens-Block verweisen noch dem Modell erlauben, "notiert, läuft in den
+    Graphen" zu sagen — es hat lokal kein Werkzeug zum Merken."""
+    ohne = klein.system()
     for wort in ("Aktiviertes Wissen", "Das kannst DU", "Konzept-Graphen",
                  "Wissens-Block", "läuft in den Graphen"):
         assert wort not in ohne, wort
@@ -595,8 +595,4 @@ def test_klein_ohne_graph_verspricht_nichts_was_es_nicht_gibt():
     for satz in ("Antworte auf Deutsch", "Nur reale Wörter",
                  "Eigene Vorantwort ist kein Beweis", "lies_news", "lies_mail"):
         assert satz in ohne, satz
-
-
-def test_klein_mit_graph_behaelt_die_alten_regeln():
-    assert klein._CAPABILITIES_PROMPT in klein.system(graph=True)
 

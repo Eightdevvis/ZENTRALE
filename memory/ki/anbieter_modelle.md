@@ -37,15 +37,13 @@ Wechsel tauscht genau eine Komponente aus.
 
 **Lokal sieht alles von Cloud. Cloud sieht nichts von lokal.**
 
-Der Cloud-Pfad hat einen **eigenen Graphen**: `data/ai_graph_cloud.json`
-(`cloud.CLOUD_GRAPH`). Würde er `graph.context_for_query()` ohne `store`
-rufen, ginge Sashas kompletter Konzept-Graph mit jedem Turn an die API.
-Getragen wird das vom Multi-Store in `core/graph.py` (`store`-Parameter, war
-schon da) plus `store`-Durchreichung in `ki_antwort.mit_bildern` →
-`consolidation.zug_vormerken` → `consolidation.extract_turn_into_graph`. Der Extraktor
-selbst läuft weiterhin lokal — er schreibt nur in DEN Graphen, aus dem der
-Turn kam. Das lokale Modell darf den Cloud-Graphen später lesen und einen
-zweiten Layer darauf bauen; es schreibt nie hinein.
+Der Cloud-Pfad schreibt sein **eigenes Transkript**
+(`data/ai_transcripts/cloud-YYYY-MM.jsonl`, Marke `cloud.CLOUD_STORE`):
+`store`-Durchreichung in `ki_antwort.mit_bildern` →
+`consolidation.zug_vormerken` → `consolidation.record_turns` →
+`transkript.schreiben`. Bis 2026-10-31 hatte er dafür auch einen eigenen
+Konzept-Graphen (`data/ai_graph_cloud.json`); der Graph ist aus dem Code
+([../archive/associative_graph/](../archive/associative_graph/README.md)).
 
 > **Was die Cloud trotzdem sieht:** Tool-*Ergebnisse* gehen zurück ans Modell
 > — Dateiinhalte aus `read_file`, Kalendereinträge, Mail-Betreffzeilen,
@@ -106,7 +104,7 @@ durch — vorher galt pauschal 2,0×, was für `cloud.py` (1 h) stimmte, für
 (`OFFIZIELL`-Tabelle).
 
 Der OpenAI-Pfad existiert vor allem, weil er die Struktur **prüfbar** macht,
-ohne dass ein Anthropic-Key da sein muss: Routing, getrennter Cloud-Graph,
+ohne dass ein Anthropic-Key da sein muss: Routing, getrenntes Cloud-Transkript,
 Gate, SSE bis in die TUI sind providerunabhängig. Ein zweiter echter
 Provider ist der ehrlichere Test der Naht als ein zweiter Mock — erst wenn ein
 fremdes Modell durch dieselbe Naht passt, ist es wirklich eine.
@@ -116,7 +114,7 @@ implizit und ohne messbares Signal), `thinking`/`effort`, `is_error` auf
 Tool-Ergebnissen. `temperature` ist hier dagegen erlaubt und wird genutzt.
 Liefert ein Modell `reasoning_content`, wird es als `reflect`-Event gespiegelt.
 
-**Beide Provider teilen sich denselben Cloud-Graphen.** Die Grenze verläuft
+**Beide Provider teilen sich dasselbe Cloud-Transkript.** Die Grenze verläuft
 zwischen „im Haus" und „draußen", nicht zwischen zwei Anbietern.
 
 ## Backend-Wahl

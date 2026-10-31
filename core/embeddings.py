@@ -1,6 +1,10 @@
 # core/embeddings.py
 #
-# Embedding-Schicht für das KI-Memory-System (siehe memory/ki/ki_memory_plan.md).
+# Embedding-Client (lokales Ollama, bge-m3). Gebaut für das alte KI-Memory
+# (memory/ki/ki_memory_plan.md) und den Konzept-Graphen; beide sind aus dem
+# Code (Graph seit 2026-10-31). Heute nutzen ihn core/news.py
+# (Themen-Ähnlichkeit fürs Cross-Poll-Matching), core/ascii_lib.py
+# (Bildsuche) und der Warmup in core/ollama.py.
 #
 # Embeddings sind numerische Vektoren, die die *Bedeutung* eines Textes
 # in einem hochdimensionalen Raum kodieren - zwei semantisch verwandte
@@ -141,151 +145,30 @@ def _embed_raw(text: str) -> list[float] | None:
         return None
 
 
-# ── Cloud-Embedder (für unterwegs) ─────────────────────────────────────
-#
-# Ollama läuft nur daheim. Der Cloud-Chat braucht sein Memory aber überall —
-# ohne Embeddings findet der Graph keine Entry-Points und die KI ist
-# gedächtnislos. Deshalb ein zweiter Embedder über den OpenAI-kompatiblen
-# /v1/embeddings-Endpoint (DashScope & Co).
-#
-# ⚠ ZWEI VEKTORRÄUME, DIE MAN NIE MISCHEN DARF. Ein bge-m3-Vektor und ein
-# text-embedding-v3-Vektor haben beide 1024 Dimensionen, sind aber in völlig
-# verschiedenen Räumen — ihre Kosinus-Ähnlichkeit ist Rauschen, kein Signal.
-# Nichts würde krachen; die Suche würde einfach still Unsinn liefern. Deshalb
-# merkt sich JEDER Graph in seiner Datei, mit welchem Embedder er gebaut
-# wurde (siehe graph.py), und es wird nie quer verglichen.
-#
-# Isolations-Invariante: der Cloud-Embedder ist NUR für den Cloud-Graphen.
-# Den lokalen Graphen embedden hieße, Sashas Konzeptnamen an einen Anbieter
-# zu schicken — genau das, was der getrennte Graph verhindern soll.
-# Beide übersteuern hart. Ohne sie gilt: Anbieter nach Vorrang (s. unten),
-# Modell = dessen `embed_model` aus providers.py.
-CLOUD_EMBED_PROVIDER = os.environ.get("ZENTRALE_CLOUD_EMBED_PROVIDER", "")
-CLOUD_EMBED_MODEL    = os.environ.get("ZENTRALE_CLOUD_EMBED_MODEL", "")
-
-_cloud_client = None       # (base_url, client) — neu, sobald der Endpunkt wechselt
-
-
-def _cloud_provider() -> dict:
-    """Provider-Eintrag für den Cloud-Embedder.
-
-    WER EMBEDDET, IST UNABHÄNGIG DAVON, WER REDET. Das ist keine Feinheit,
-    sondern der Grund für einen realen Gedächtnisverlust: Anthropic hat gar
-    keine Embeddings-API. Solange hier "erst der konfigurierte Chat-Provider"
-    stand, lieferte diese Funktion beim Chatten auf Claude schlicht nichts —
-    und JEDER in der Sitzung entstandene Knoten blieb ohne Vektor, also für
-    die Einstiegspunkt-Suche unsichtbar. Am 17.08.2026 waren das 30 von 59
-    Knoten, darunter genau die, um die es im Gespräch ging.
-
-    Deshalb: nimm den erstbesten Provider, der (a) OpenAI-kompatibel ist,
-    also überhaupt einen /v1/embeddings-Endpoint hat, und (b) dessen Key
-    dasteht — egal ob er gerade der Chat-Provider ist. Reihenfolge kommt aus
-    providers.preference(); ZENTRALE_CLOUD_EMBED_PROVIDER übersteuert hart.
+def embed_document(text: str) -> list[float] | None:
     """
-    import os
-    import providers
-
-    def eintrag(name: str) -> dict:
-        p = providers.get(name or "")
-        if p.get("kind") != "openai_compat":
-            return {}
-        if not (p.get("embed_model") or CLOUD_EMBED_MODEL):
-            return {}        # redet OpenAI, embeddet aber nicht (xAI, Groq …)
-        key = p.get("key_env")
-        return p if key and os.environ.get(key) else {}
-
-    if CLOUD_EMBED_PROVIDER:
-        return eintrag(CLOUD_EMBED_PROVIDER)
-    # Fester Vorrang, NICHT der Chat-Anbieter: das Embed-Modell muss stabil
-    # bleiben, sonst passt es nicht mehr zum Stempel in der Graph-Datei und
-    # graph._modell_passt() sperrt die Vektorsuche — bloß weil Sasha zum
-    # Reden einen anderen Anbieter gewählt hat (Stand 2026-10-07).
-    return next((p for p in map(eintrag, providers.preference()) if p), {})
-
-
-def cloud_embed_model() -> str:
-    """Das Cloud-Embeddings-Modell, das JETZT benutzt würde: Env hart, sonst
-    das `embed_model` des gewählten Anbieters, sonst leer (kein Embedder)."""
-    return CLOUD_EMBED_MODEL or _cloud_provider().get("embed_model") or ""
-
-
-def cloud_available() -> bool:
-    """Ist ein Cloud-Embedder konfiguriert und benutzbar?"""
-    p = _cloud_provider()
-    if not p or not os.environ.get(p.get("key_env") or ""):
-        return False
-    try:
-        import openai  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-def _cloud_embed(text: str) -> list[float] | None:
-    """Ein Embedding über den OpenAI-kompatiblen /v1/embeddings-Endpoint.
-    Fehler → None, genau wie beim lokalen Pfad (Caller läuft weiter)."""
-    global _cloud_client
-    p = _cloud_provider()
-    modell = cloud_embed_model()
-    if not p or not modell:
-        return None
-    try:
-        if _cloud_client is None or _cloud_client[0] != p.get("base_url"):
-            from openai import OpenAI  # type: ignore
-            _cloud_client = (p.get("base_url"), OpenAI(
-                base_url=p.get("base_url"),
-                api_key=os.environ.get(p.get("key_env") or "", "") or "missing-key"))
-        r = _cloud_client[1].embeddings.create(model=modell, input=text)
-        return list(r.data[0].embedding)
-    except Exception as e:
-        try:
-            import state
-            state.push_log(f"[embed-cloud] FEHLER: {e}")
-        except Exception:
-            pass
-        return None
-
-
-def model_name(backend: str | None = None) -> str:
-    """Wie der Embedder heißt, mit dem gerade gearbeitet wird — landet als
-    Herkunfts-Stempel in der Graph-Datei."""
-    return cloud_embed_model() if backend == "cloud" else EMBED_MODEL
-
-
-def embed_document(text: str, backend: str | None = None) -> list[float] | None:
-    """
-    Embedding für etwas, das ins LTM eingelagert wird (Dokument-Seite
+    Embedding für etwas, das abgelegt und später gesucht wird (Dokument-Seite
     der asymmetrischen Suche).
-
-    backend: None/'local' → Ollama, 'cloud' → OpenAI-kompatibler Endpoint.
     """
     if not text or not text.strip():
         return None
-    if backend == "cloud":
-        return _cloud_embed(text)
     return _embed_raw(_PREFIX_DOC + text)
 
 
-def embed_query(text: str, backend: str | None = None) -> list[float] | None:
+def embed_query(text: str) -> list[float] | None:
     """
     Embedding für eine Suchanfrage (Query-Seite der asymmetrischen Suche).
 
-    Wird in memory._select_relevant_entries(), graph._find_entry_points()
-    und überall sonst genutzt, wo die KI semantisch sucht.
+    Genutzt von core/news.py (Themen-Ähnlichkeit), core/ascii_lib.py
+    (Bildsuche) und dem Warmup in core/ollama.py.
 
     LRU-gecacht: identische Folge-Queries (gleicher Wortlaut, gleicher
     Whitespace nach strip()) sparen einen kompletten Ollama-Round-Trip.
     """
     if not text or not text.strip():
         return None
-    if backend == "cloud":
-        # Eigener Cache-Schlüssel über model_name(): sonst käme bei gleichem
-        # Wortlaut ein bge-m3-Vektor aus dem Cache zurück, wenn eigentlich ein
-        # Cloud-Vektor gebraucht wird - der stille Vektorraum-Mix.
-        full_input = text.strip()
-    else:
-        full_input = _PREFIX_QUERY + text.strip()
-    cache_key  = (model_name(backend), full_input)
+    full_input = _PREFIX_QUERY + text.strip()
+    cache_key  = (EMBED_MODEL, full_input)
 
     # Cache-Lookup
     with _query_cache_lock:
@@ -296,7 +179,7 @@ def embed_query(text: str, backend: str | None = None) -> list[float] | None:
             return cached
 
     # Cache-Miss → frisches Embedding holen
-    vec = _cloud_embed(full_input) if backend == "cloud" else _embed_raw(full_input)
+    vec = _embed_raw(full_input)
     if vec is None:
         return None
 

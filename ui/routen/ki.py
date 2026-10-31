@@ -540,9 +540,9 @@ def api_erlaubnis_zuruecknehmen():
     return jsonify(dict(erlaubnis.uebersicht(), weg=weg))
 
 
-# /api/memory und /api/memory/<id> entfielen mit dem Legacy-LTM-Pfad.
-# Graph-Stats werden über graph.stats() bzw. den Konzept-Browser
-# bereitgestellt (siehe memory/ki/konzept_graph.md).
+# /api/memory und /api/memory/<id> entfielen mit dem Legacy-LTM-Pfad; der
+# Konzept-Graph ist seit 2026-10-31 aus dem Code
+# (memory/archive/associative_graph/konzept_graph.md).
 
 
 @bp.route('/api/ai/status')

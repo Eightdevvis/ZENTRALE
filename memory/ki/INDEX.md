@@ -21,7 +21,7 @@ Messungen dazu existiert.
 | Internet-Pipe (`web_search`/`fetch_url`, SearXNG) und Netz-Transparenz | [internet_netz.md](internet_netz.md) |
 | Transparenz: Devtools-Terminal, Tool-Calls und Denken im Chat, Ablauf-Protokoll „trace ›" | [transparenz.md](transparenz.md) |
 | Chat in der TUI: Slash-Befehle, Markdown im Terminal, Bild-Marker `[[bild: name]]`, Bewertungen (wofür, wo sie liegen) | [chat_bedienung.md](chat_bedienung.md) |
-| Konzept-Graph (seit 18.08. aus): Zeit-Regeln, Alias als Kante, Extraktor, Embeddings, Transkript-Schicht, Memory unterwegs | [konzept_graph.md](konzept_graph.md) |
+| Konzept-Graph (seit 18.08. aus, seit 31.10. aus dem Code): wie er arbeitete — im Archiv | [../archive/associative_graph/konzept_graph.md](../archive/associative_graph/konzept_graph.md) |
 | **Aufbau des KI-Kerns** — welches Modul wofür, wie die Abhängigkeiten laufen, die Umbau-Abschnitte K1–K5 | [kern_aufbau.md](kern_aufbau.md) |
 | **Das Gedächtnis nach Themen** (seit 11.10.2026) — Aufbau `themen/<thema>/` im Format von Claudes Datei-Gedächtnis, Index im Kopf, Werkzeuge (anlegen, ergänzen, archivieren), Messreihen unter dem Thema, der Umzug per Skript | [gedaechtnis.md](gedaechtnis.md) |
 | **Das Gedächtnis — das Warum.** Notiz/Dossier/Katalog, Nachprüf-Schritt, Skills, Import aus einer anderen KI, für Sasha sichtbar (TUI) — und warum der Konzept-Graph abgelöst wurde | [gedaechtnis_dateien.md](gedaechtnis_dateien.md) |

@@ -35,7 +35,6 @@ def modell(monkeypatch):
     monkeypatch.setattr(ai_backends, "chat_cloud_kind", lambda: "anthropic")
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "claude")
     monkeypatch.setattr(cloud, "_model", lambda: "claude-sonnet-5")
-    monkeypatch.setattr(cloud.graph, "einmal_seeden", lambda *a, **k: None)
 
     def einhaengen(runden):
         c = FakeClient([dict(r) for r in runden])

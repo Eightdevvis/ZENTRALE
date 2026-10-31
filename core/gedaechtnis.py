@@ -3,7 +3,7 @@
 # Das Gedächtnis als DATEIEN, die die KI liest und fortschreibt.
 #
 # ── Warum Dateien statt Konzept-Graph (18.08.2026) ────────────────────
-# Der Graph (core/graph.py) zerlegte jeden Turn in Tripel. Nach Wochen
+# Der Graph (core/graph.py, seit 2026-10-31 aus dem Code) zerlegte jeden Turn in Tripel. Nach Wochen
 # Betrieb waren 42 von 104 Kanten `erwähnt-am`, und unter den Fakten stand
 # `Sasha wohnt-in Universität des Saarlandes`. Ein Wissensgraph ohne Schema
 # ist ein Haufen Sätze, denen man die Wörter weggenommen hat — und das

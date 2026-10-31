@@ -24,12 +24,10 @@
 #
 # ── Isolations-Invariante ───────────────────────────────────────────────
 # LOKAL SIEHT ALLES VON CLOUD. CLOUD SIEHT NICHTS VON LOKAL.
-# Deshalb hat der Cloud-Pfad einen EIGENEN Graphen (data/ai_graph_cloud.json).
-# Würde er graph.context_for_query() ohne store rufen, ginge Sashas kompletter
-# Konzept-Graph mit jedem Turn an die API. Das lokale Modell darf den
-# Cloud-Graphen später lesen und einen zweiten Layer darauf bauen; es schreibt
-# nie hinein. Jetzt eine Zeile Konfiguration, in einem Jahr ein
-# Entwirrungs-Albtraum.
+# Deshalb schreibt der Cloud-Pfad sein eigenes Transkript (CLOUD_STORE →
+# data/ai_transcripts/cloud-YYYY-MM.jsonl, core/transkript.py). Bis 2026-10-31
+# hatte er dafür auch einen eigenen Konzept-Graphen; der ist aus dem Code
+# (memory/ki/gedaechtnis_dateien.md).
 #
 # ── Was die Cloud trotzdem sieht ────────────────────────────────────────
 # Tool-ERGEBNISSE gehen zurück ans Modell: Dateiinhalte aus read_file,
@@ -52,16 +50,14 @@ import erlaubnis     # Freigabestand im Werkzeug-Text (W-03, 2026-10-22)
 import ehrlichkeit   # Live-Prüfer: Tat gegen Wort, Kennungen, offene Zusagen
 import ki_prompt     # Prompt-Bausteine (Jetzt, Imprint, Alarme, Schalter)
 import ki_werkzeuge  # Tool-Ausführung — lokal, egal wer denkt
-import graph
 import kidebug   # Devtools-Bus: was WIRKLICH rausgeht (scripts/ai_devtools.py)
 import werkzeug_schleife  # die EINE Tool-Schleife; hier steht nur der Anthropic-Adapter
 import zug_ablauf    # Ablauf-Protokoll des Zugs: nur mitschreiben (2026-10-09)
 
-# ── Der getrennte Cloud-Graph ──────────────────────────────────────────
-# Absoluter Pfad, damit derselbe String immer denselben _Store trifft (graph.py
-# cacht Stores nach Pfad — zwei Schreibweisen wären zwei Locks auf einer Datei).
-_DATA_DIR   = os.path.join(os.path.dirname(__file__), '..', 'data')
-CLOUD_GRAPH = os.path.abspath(os.path.join(_DATA_DIR, 'ai_graph_cloud.json'))
+# ── Wohin ein Cloud-Turn gemerkt wird ──────────────────────────────────
+# Marker für consolidation.zug_vormerken → transkript: gesetzt = das
+# Cloud-Transkript, None = das lokale. Lokal und Cloud mischen sich nie.
+CLOUD_STORE = "cloud"
 
 # Modell und Denk-Tiefe kommen aus ai_backends (pro Anbieter gespeichert,
 # per Config umstellbar) — NICHT mehr aus eigenen Env-Vars hier. Sonst
@@ -117,12 +113,6 @@ _MAX_TOKENS = int(os.environ.get("ZENTRALE_CLOUD_MAX_TOKENS", "16000"))
 # aber nur das Delta — dafür überlebt der Präfix eine ganze Sitzung.
 # "5m" für den Rückweg, falls sich das je als Fehlrechnung erweist.
 _CACHE_TTL = os.environ.get("ZENTRALE_CACHE_TTL", "1h")
-
-# Zeichenbudget für den Graph-Kontext — greift nur mit ZENTRALE_GRAPH_KONTEXT=1
-# (ki_prompt.GRAPH_KONTEXT, seit 18.08.2026 per Default aus). Er ändert sich mit jeder Frage, geht
-# also bei JEDEM Turn ungecacht raus — und `max_nodes` deckelt nur die Anzahl,
-# über die Länge sagt eine Knotenzahl nichts.
-_CTX_CHARS = int(os.environ.get("ZENTRALE_CLOUD_CTX_CHARS", "2500"))
 
 # Obergrenze für EINE Verlauf-Nachricht. Die Zahl der Nachrichten ist längst
 # gedeckelt (gespraeche.FENSTER = 50), ihre Länge nicht: eine komplette
@@ -186,40 +176,6 @@ def _get_client():
         import anthropic  # type: ignore  – nur im Cloud-Pfad importiert
         _client = anthropic.Anthropic()
     return _client
-
-
-_store_bereit = False
-
-
-def prepare_store():
-    """
-    Meldet den Cloud-Graphen mit seinem Embedder an und zieht fehlende
-    Vektoren nach. Einmal pro Prozess, lazy — nicht beim Import, weil die
-    API-Keys erst über ai_config in die Env wandern.
-
-    Warum überhaupt ein eigener Embedder: Ollama läuft nur daheim. Ohne
-    Embeddings findet der Graph keine Entry-Points und die Cloud-KI ist
-    unterwegs gedächtnislos — also genau dort blind, wo sie gebraucht wird.
-    Gibt es einen Cloud-Embedder, läuft der Cloud-Graph über den; sonst
-    bleibt es beim lokalen (dann eben nur daheim mit Gedächtnis).
-
-    Der LOKALE Graph bleibt in jedem Fall bei Ollama. Ihn per Cloud zu
-    embedden hieße, Sashas Konzeptnamen an einen Anbieter zu schicken.
-    """
-    global _store_bereit
-    if _store_bereit:
-        return
-    import embeddings
-    kind = "cloud" if embeddings.cloud_available() else "local"
-    graph.register_store(CLOUD_GRAPH, kind)
-    _store_bereit = True
-    # Knoten, die ohne erreichbaren Embedder angelegt wurden, haben keinen
-    # Vektor und wären für die Suche unsichtbar. Idempotent, no-op wenn nichts
-    # fehlt.
-    try:
-        graph.reembed_missing(CLOUD_GRAPH)
-    except Exception:
-        pass
 
 
 def is_available() -> bool:
@@ -312,8 +268,7 @@ def _static_system(system: str | None, tutor_mode: bool, projekt=None,
     # schiene: mit Modell-Profil, wenn der Weg das Modell kennt (2026-10-09,
     # cloud_openai); ohne die Schiene des Backends wie bisher.
     schiene = schiene or _profil()
-    teile = [schiene.system(system, dashview=ki_prompt._DASHVIEW,
-                            graph=ki_prompt.GRAPH_KONTEXT)]
+    teile = [schiene.system(system, dashview=ki_prompt._DASHVIEW)]
     # Werkzeug-Suche (Schritt 9, 2026-10-22, KI-Bibel W-08): direkt hinter den
     # Meta-Regeln ein Absatz, was geladen ist und was search_tools holt; die
     # Stellen dahinter, die zurückgestellte Werkzeuge nennen, sagen es kurz
@@ -378,11 +333,11 @@ def cloud_tools() -> list:
     return _profil().TOOLS
 
 
-def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
+def _volatile_text(via_mic: bool, tutor_mode: bool) -> str:
     """
     Das Wechselnde: Jetzt-Block (auf gross mit „Jetzt und als Nächstes"),
-    Alarme, Mic-Hinweis. Der Graph-Kontext
-    stand bis 18.08.2026 hier und ist aus (ki_prompt.GRAPH_KONTEXT); Imprint und
+    Alarme, Mic-Hinweis. Der Konzept-Graph-Kontext stand bis 18.08.2026
+    hier (der Graph ist seit 2026-10-31 aus dem Code); Imprint und
     Gedaechtnis-Kopf gehoeren NICHT hierher, sondern in _static_system.
 
     Das steht NICHT mehr im System-Prompt. Dort saß es vor dem gesamten
@@ -402,8 +357,6 @@ def _volatile_text(mem_ctx: str, via_mic: bool, tutor_mode: bool) -> str:
         # Straße (2026-10-08) bleibt das so.
         return ""
     parts = []
-    if mem_ctx:
-        parts.append(mem_ctx)
     schiene = _profil()
     # Werkzeug-Suche an (Schritt 9): read_time heißt „über search_tools“.
     # Aus bleibt der Block byte-gleich (Aufruf ohne Argument wie vorher).
@@ -458,7 +411,7 @@ def _umschlag(text: str) -> str:
     return f"{_UMSCHLAG_AUF}\n\n{text}\n{_UMSCHLAG_ZU}"
 
 
-def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
+def _system_blocks(system: str | None, via_mic: bool,
                    tutor_mode: bool, projekt=None) -> list:
     """Beide Teile als System-Blöcke — nur noch für Aufrufer, die den Prompt
     am Stück wollen (Tests, Größen-Messung). Der Live-Pfad benutzt
@@ -466,7 +419,7 @@ def _system_blocks(system: str | None, mem_ctx: str, via_mic: bool,
     return [
         {"type": "text", "text": _static_system(system, tutor_mode, projekt),
          "cache_control": _cc()},
-        {"type": "text", "text": _volatile_text(mem_ctx, via_mic, tutor_mode)},
+        {"type": "text", "text": _volatile_text(via_mic, tutor_mode)},
     ]
 
 
@@ -651,26 +604,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
     # read_project_file, das nur dieses eine Projekt lesen darf.
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))
-    store        = None if tutor_mode else CLOUD_GRAPH
+    store        = None if tutor_mode else CLOUD_STORE
 
     user_query = ki_prompt._last_user_query(messages)
-
-    if tutor_mode:
-        mem_ctx = ""
-    else:
-        # Embedder anmelden, Identity-Seed sicherstellen, dann Kontext von dort.
-        prepare_store()
-        graph.einmal_seeden(store=store)
-        mem_ctx = (graph.context_for_query(user_query, store=store,
-                                           max_chars=_CTX_CHARS)
-                   if ki_prompt.GRAPH_KONTEXT else "")
 
     # Statischer Kopf ins system-Feld (gecacht), Wechselndes ans Ende der
     # neuesten User-Nachricht (ungecacht, aber hinter allem Cachebaren).
     sys_blocks = [{"type": "text", "text": _static_system(system, tutor_mode, projekt),
                    "cache_control": _cc()}]
     anthro_msgs = _prepare_messages(messages)
-    volatile = _volatile_text(mem_ctx, via_mic, tutor_mode)
+    volatile = _volatile_text(via_mic, tutor_mode)
     _append_volatile(anthro_msgs, volatile)
     # Werkzeug-Suche (2026-10-14, Einstellung werkzeug_suche): die Werkzeuge
     # mit laden=bedarf gehen mit defer_loading raus, search_tools schaltet

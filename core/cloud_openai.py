@@ -6,7 +6,7 @@
 #
 # ── Warum es das gibt ───────────────────────────────────────────────────
 # Der Ziel-Pfad des Kerns ist Anthropic (core/cloud.py). Aber die ganze
-# Verkabelung drumherum — Backend-Routing, getrennter Cloud-Graph,
+# Verkabelung drumherum — Backend-Routing, getrenntes Cloud-Transkript,
 # Event-Protokoll, Erlaubnis-Gate, Tool-Loop, SSE bis in die TUI — ist
 # providerunabhängig und lässt sich mit dem Qwen-Key testen, der schon da ist.
 # Ein zweiter Provider ist ausserdem der ehrlichere Test der Struktur als ein
@@ -25,10 +25,10 @@
 #   Der Fehler geht als Text zurueck, das Modell sieht ihn trotzdem.
 #
 # ── Isolations-Invariante ───────────────────────────────────────────────
-# Wie core/cloud.py: eigener Graph (cloud.CLOUD_GRAPH), damit Sashas
-# Konzept-Graph nicht an die API geht. Es ist DERSELBE Cloud-Graph fuer beide
-# Provider — die Grenze verlaeuft zwischen "im Haus" und "draussen", nicht
-# zwischen zwei Anbietern.
+# Wie core/cloud.py: Turns gehen ins Cloud-Transkript (cloud.CLOUD_STORE),
+# nie ins lokale. Es ist DASSELBE Cloud-Transkript fuer beide Provider — die
+# Grenze verlaeuft zwischen "im Haus" und "draussen", nicht zwischen zwei
+# Anbietern.
 #
 # ── Konfiguration ───────────────────────────────────────────────────────
 #   Modell: ai_backends.chat_model(<provider>) → data/ai_config.json
@@ -40,10 +40,9 @@
 import json as _json
 import os
 
-import cloud      # geteilt: Graph-Pfad, System-Bloecke
+import cloud      # geteilt: Cloud-Marker, System-Bloecke
 import erlaubnis    # Freigabestand im Werkzeug-Text (W-03, 2026-10-22)
 import ehrlichkeit  # Live-Prüfer (Tat gegen Wort, Kennungen, Zusagen)
-import graph
 import kidebug    # Devtools-Bus (scripts/ai_devtools.py)
 import ki_prompt
 import ki_werkzeuge
@@ -101,12 +100,12 @@ def is_available(name: str | None = None) -> bool:
         return False
 
 
-def _system_text(system, mem_ctx, via_mic, tutor_mode, projekt=None,
+def _system_text(system, via_mic, tutor_mode, projekt=None,
                  schiene=None) -> str:
     """Der statische Kopf — dieselbe Funktion wie im Anthropic-Pfad, damit die
     beiden Dialekte nicht auseinanderlaufen.
 
-    mem_ctx/via_mic werden hier NICHT mehr eingefaltet: das Wechselnde haengt
+    via_mic wird hier NICHT mehr eingefaltet: das Wechselnde haengt
     seit dem Cache-Umbau hinten an der neuesten User-Nachricht. Explizites
     cache_control gibt es in diesem Dialekt zwar nicht, aber die impliziten
     Praefix-Caches der Anbieter arbeiten nach derselben Logik — was sich
@@ -178,7 +177,7 @@ def _geschaetzt_buchen(model: str, msgs: list, tools, text: str):
 
 def _prepare_messages(messages: list, system_text: str,
                       volatile: str = "") -> list:
-    """Verlauf in OpenAI-Form. `volatile` (Graph, Jetzt, Alarme, Mic) haengt
+    """Verlauf in OpenAI-Form. `volatile` (Jetzt, Alarme, Mic) haengt
     hinten an der letzten User-Nachricht statt vorne im System-Prompt — siehe
     cloud._volatile_text."""
     out = [{"role": "system", "content": system_text}]
@@ -274,25 +273,16 @@ def chat_stream(messages: list, model: str = None, system: str = None,
             alle_tools = erlaubnis.mit_freigabe(alle_tools)
     active_exec  = (tool_executor if tool_executor is not None
                     else ki_werkzeuge.mit_projekt(projekt))   # Phase 6, wie cloud.py
-    store        = None if tutor_mode else cloud.CLOUD_GRAPH
+    store        = None if tutor_mode else cloud.CLOUD_STORE
 
     user_query = ki_prompt._last_user_query(messages)
 
-    if tutor_mode:
-        mem_ctx = ""
-    else:
-        cloud.prepare_store()      # Embedder anmelden (derselbe Cloud-Graph)
-        graph.einmal_seeden(store=store)
-        mem_ctx = (graph.context_for_query(user_query, store=store,
-                                           max_chars=cloud._CTX_CHARS)
-                   if ki_prompt.GRAPH_KONTEXT else "")
-
-    volatile = cloud._volatile_text(mem_ctx, via_mic, tutor_mode)
+    volatile = cloud._volatile_text(via_mic, tutor_mode)
     if _profil_der(schiene_obj) is not None:
         volatile = schiene_obj.erinnerung(volatile, messages)
     msgs   = _prepare_messages(
         messages,
-        _system_text(system, mem_ctx, via_mic, tutor_mode, projekt, schiene_obj),
+        _system_text(system, via_mic, tutor_mode, projekt, schiene_obj),
         volatile)
     cloud.ablauf_melden(msgs[0]["content"], volatile, messages, tutor_mode)
     client = _get_client(prov)

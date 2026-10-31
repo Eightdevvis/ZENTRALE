@@ -1,28 +1,23 @@
 # core/transkript.py
 #
-# Was gesagt wurde — die Schicht UNTER dem Konzept-Graphen.
+# Was gesagt wurde — entstanden als Schicht UNTER dem Konzept-Graphen (der
+# ist seit 2026-10-31 aus dem Code; heute ist diese Datei das Einzige, was pro
+# Turn geschrieben wird, über core/consolidation.py).
 #
 # ── Warum es das braucht ────────────────────────────────────────────────
-# Der Graph merkt sich, DASS eine Beziehung besteht: `Sasha ─[besitzt]─►
-# Falter`. Er merkt sich nicht, WAS gesagt wurde. Das ist als Gedächtnis-
+# Der Graph merkte sich, DASS eine Beziehung besteht: `Sasha ─[besitzt]─►
+# Falter`. Er merkte sich nicht, WAS gesagt wurde. Das ist als Gedächtnis-
 # Struktur richtig (assoziativ, klein, schnell aktivierbar), aber es ist
 # eine Einbahnstraße: aus „Sasha besitzt Falter" kommt nie wieder heraus, dass
 # es ein blaues Klapprad ist und dass der Name von einem Falter kommt, den er
 # an dem Tag gesehen hat. Der Extraktor destilliert, und was er wegwirft, ist
 # weg.
 #
-# Also legen wir das Rohmaterial daneben. Append-only, nach Monat getrennt,
-# und der Graph merkt sich pro Knoten nur die IDs der Zeilen, aus denen er
-# stammt (`quellen`).
-#
-# Seit 18.08.2026 ist die Tripel-Extraktion per Default aus
-# (consolidation.GRAPH_EXTRAKTION) — dann ist diese Datei das EINZIGE, was
-# pro Turn geschrieben wird.
+# Also legen wir das Rohmaterial daneben. Append-only, nach Monat getrennt.
 #
 # ── Was das ausdrücklich NICHT ist ──────────────────────────────────────
 # Kein zweiter Suchindex: nie embedded, nie etwas in den Prompt geladen.
-# Die Datei ist ein Archiv, auf das der Graph zeigt — nachschlagen kann man
-# sie, wenn man wissen will, woher ein Knoten kommt.
+# Die Datei ist ein Archiv.
 #
 # Seit 2026-10-07 (Claude-Web-Plan Phase 3) LIEST das Werkzeug search_chats
 # sie mit (core/chat_suche.py, über alle()): sie ist der Verlauf von vor den
@@ -30,8 +25,8 @@
 # die Suche liefert wörtlich, was gesagt wurde, mit Datum, und behauptet
 # nichts darüber hinaus. Geschrieben wird hier weiter nur angehängt.
 #
-# ── Trennung der Graphen ────────────────────────────────────────────────
-# Der Cloud-Graph bekommt eigene Dateien (`cloud-YYYY-MM.jsonl`). Beide
+# ── Trennung lokal / Cloud ──────────────────────────────────────────────
+# Cloud-Turns bekommen eigene Dateien (`cloud-YYYY-MM.jsonl`). Beide
 # bleiben im Haus — aber welcher Turn zu welchem Gedächtnis gehört, darf
 # nicht verwischen, sonst ist die Isolations-Invariante nur noch halb wahr.
 #
@@ -54,18 +49,12 @@ _DIR  = os.environ.get("ZENTRALE_TRANSKRIPT_DIR") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'data', 'ai_transcripts'))
 _lock = Lock()
 
-# So viele Quell-IDs behält ein Knoten. Ein oft erwähntes Konzept sammelt
-# sonst hunderte, und der Graph soll klein bleiben — die ältesten fallen raus,
-# die jüngsten sind die, nach denen man fragt.
-MAX_QUELLEN = 20
-
-
 def _monat() -> str:
     return datetime.now().strftime("%Y-%m")
 
 
 def datei(store: str | None = None, monat: str | None = None) -> str:
-    """Pfad der Transkript-Datei für diesen Graphen und Monat."""
+    """Pfad der Transkript-Datei für lokal/Cloud (store) und Monat."""
     praefix = "cloud-" if store else ""
     return os.path.join(_DIR, f"{praefix}{monat or _monat()}.jsonl")
 
@@ -82,8 +71,7 @@ def schreiben(turns, store: str | None = None) -> list[str]:
     Turns anhängen. `turns` ist [(user, ai), …]. Liefert die IDs.
 
     Schluckt Fehler und gibt dann [] zurück: ein volles Dateisystem oder ein
-    kaputter Pfad darf die Konsolidierung nicht abreißen lassen. Lieber ein
-    Knoten ohne Quelle als ein verlorener Knoten.
+    kaputter Pfad darf die Konsolidierung nicht abreißen lassen.
     """
     if not turns:
         return []

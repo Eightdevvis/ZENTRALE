@@ -98,7 +98,7 @@ _CORE = os.path.join(_ROOT, "core")
 sys.path.insert(0, _CORE)
 
 # Leere Stubs fuer alles, was ai importiert, aber dieser Bench-Pfad nie nutzt.
-for _m in ("net", "graph", "consolidation", "context"):
+for _m in ("net", "consolidation", "context"):
     if _m not in sys.modules:
         sys.modules[_m] = types.ModuleType(_m)
 

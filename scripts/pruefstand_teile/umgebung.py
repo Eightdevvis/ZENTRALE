@@ -99,11 +99,9 @@ def vorbereiten(tmp: str, daten: str, einstellungen: dict | None = None) -> dict
 def umlenken(tmp: str):
     """Modul-Attribute auf den Temp-Ordner. -> Funktion, die alles zurückstellt."""
     from pathlib import Path
-    import cloud
     import consolidation
     import gedaechtnis
     import gespraeche
-    import graph
     import graphs
     import kalender
     import transkript
@@ -117,8 +115,6 @@ def umlenken(tmp: str):
 
     setzen(kalender, "CAL_PATH", Path(tmp) / "ai_calendar.json")
     setzen(kalender, "ICS_DIR", None)                      # → tmp/kalender/
-    setzen(cloud, "CLOUD_GRAPH", os.path.join(tmp, "graph_cloud.json"))
-    setzen(graph, "_DATA_DIR", tmp)
     reihen = os.path.join(tmp, "reihen")
     os.makedirs(reihen, exist_ok=True)
     setzen(graphs, "_DATA_DIR", reihen)

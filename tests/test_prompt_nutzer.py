@@ -42,8 +42,7 @@ def aktuell():
 
     aus = {}
     for dv in (True, False):
-        for gr in (True, False):
-            aus[f"klein_dashview{int(dv)}_graph{int(gr)}"] = klein.system(dashview=dv, graph=gr)
+        aus[f"klein_dashview{int(dv)}"] = klein.system(dashview=dv)
     aus["gross"] = gross.system()
     aus["mic"] = ki_prompt._MIC_INPUT_HINT
     alt_zeit, alt_alarme, alt_dv = ki_prompt.datetime, state.get_alarms, ki_prompt._DASHVIEW
@@ -93,7 +92,7 @@ def test_anderer_name_kein_sasha_im_prompt(alex):
     for teil, text in aktuell().items():
         assert "sasha" not in text.lower(), teil
     assert "Alex" in aktuell()["gross"]
-    assert "ALEX' Gefühl" in aktuell()["klein_dashview1_graph1"]
+    assert "Fragt Alex nach seinen Mails" in aktuell()["klein_dashview1"]
 
 
 def test_pronomen_sie(alex, monkeypatch):
@@ -101,7 +100,7 @@ def test_pronomen_sie(alex, monkeypatch):
     g = aktuell()["gross"]
     assert "Alex ist eine mündige Erwachsene und wird so behandelt. Sie kennt ihre Prioritäten" in g
     assert "in ihrem Leben" in g and "Was du über sie weißt, steht in ihren Notizen" in g
-    k = aktuell()["klein_dashview0_graph0"]
+    k = aktuell()["klein_dashview0"]
     assert "Fragt Alex nach ihren Mails" in k and "wenn sie gezielt" in k
 
 

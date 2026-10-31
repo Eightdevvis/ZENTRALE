@@ -13,7 +13,6 @@ import pytest
 
 import ai
 import consolidation
-import graph
 import ki_prompt
 import ai_backends
 import state
@@ -56,7 +55,6 @@ def ollama(monkeypatch):
 def ruhig(monkeypatch):
     """Alles abklemmen, was beim Prompt-Bau oder Speichern echte Daten anfasst."""
     gespeichert = []
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_should_think", lambda m: False)

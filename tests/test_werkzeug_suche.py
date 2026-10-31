@@ -17,7 +17,6 @@ import anhang
 import cloud
 import cloud_openai
 import consolidation
-import graph
 import werkzeug_gruppen
 import werkzeug_register
 import werkzeug_schleife
@@ -38,8 +37,6 @@ def suche_an(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def ruhig(monkeypatch):
-    monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken", lambda *a, **k: None)
 
 

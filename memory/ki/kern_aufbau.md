@@ -45,8 +45,8 @@ Richtung — von oben (wer einen Chat startet) nach unten (was er dafür braucht
    ki_einstellungen  daneben, nur für die Routen: Einstellungen lesen und
                      mit Klartext-Prüfung setzen (über ai_backends, seit 07.10.)
    ─────────────── darunter: Dienste und Fundament ───────────────
-   consolidation  (nach dem Zug: Transkript, Graph wenn an)   ollama (Ollama-Anbindung)
-   graph · gedaechtnis · kalender · mail · news · web …       state · net · providers …
+   consolidation  (nach dem Zug: Transkript)                 ollama (Ollama-Anbindung)
+   gedaechtnis · kalender · mail · news · web …               state · net · providers …
 ```
 
 ## Bauabschnitte (je ein Commit, volle Testsuite dazwischen)

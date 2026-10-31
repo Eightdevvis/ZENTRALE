@@ -14,9 +14,9 @@ Einstellung `modell_profile` → [modell_profile.md](modell_profile.md)).
 **Tools laufen immer lokal**, nur die Entscheidung wandert. Schreib-Tools
 gehen durchs Erlaubnis-Gate (Regel im Werkzeug-Register, nicht
 modellgetrieben). **Das Gedächtnis ist das Datei-Gedächtnis**
-(`gedaechtnis_dateien.md`, Aufbau nach Themen: `gedaechtnis.md`); der Konzept-Graph ist seit 2026-08-18
-abgeschaltet (`ZENTRALE_GRAPH_KONTEXT`/`_EXTRAKTION` holen ihn zurück),
-[konzept_graph.md](konzept_graph.md) beschreibt, wie er arbeitet, wenn er an ist. Der Chat ist
+(`gedaechtnis_dateien.md`, Aufbau nach Themen: `gedaechtnis.md`); der Konzept-Graph war seit 2026-08-18
+abgeschaltet und ist seit 2026-10-31 aus dem Code
+([../archive/associative_graph/](../archive/associative_graph/README.md)). Der Chat ist
 nicht hart gegatet (`chat_available()`: ohne lokale KI —
 `ZENTRALE_LOKALE_KI=aus` — Cloud ja, lokal nie). Tool-Calls und Denken stehen im Chat, das Devtools-Terminal
 zeigt den vollen Request. Kosten in `data/ai_usage.json` — oben Sashas Chat
@@ -44,13 +44,12 @@ TUI ──POST /api/chat──▶ ui/routen/ki.py ──kern.chat()────�
 
 alle Wege ─▶ werkzeug_schleife     (die EINE Tool-Schleife, run_tool)
           ─▶ ki_werkzeuge.ausfuehren (Werkzeuge immer lokal, Erlaubnis-Gate)
-           ─▶ consolidation.py     (nach dem Turn: Transkript; Graph-Extraktion aus)
-           ─▶ graph.py             (nur Identity-Seed; Kontext aus, GRAPH_KONTEXT)
+           ─▶ consolidation.py     (nach dem Turn: Transkript, gebündelt in der Pause)
 ```
 
-`ai.py` ist der einzige Ollama-Client für Chat-Calls. `embeddings.py` und
-`consolidation.py` reden ebenfalls direkt mit Ollama (Embeddings bzw.
-Extraktor-LLM), aber alle gehen durch `core/net.py` – damit landet jeder
+`ai.py` ist der einzige Ollama-Client für Chat-Calls. `embeddings.py` redet
+ebenfalls direkt mit Ollama (Embeddings für News und ASCII-Bildsuche), aber
+alle gehen durch `core/net.py` – damit landet jeder
 Request im Terminal (siehe [internet_netz.md](internet_netz.md), „Network-Transparenz“).
 
 ## Wo was steht
@@ -75,7 +74,7 @@ eigenen Dateien (Grenze 600 Zeilen, [../doku_regeln.md](../doku_regeln.md)):
 | Internet-Pipe, Netz-Transparenz | [internet_netz.md](internet_netz.md) |
 | Devtools, Tool-Calls im Chat, Ablauf-Protokoll („trace ›") | [transparenz.md](transparenz.md) |
 | Chat-Befehle, Markdown im Terminal, Bild-Marker, Bewertungen | [chat_bedienung.md](chat_bedienung.md) |
-| Konzept-Graph (abgeschaltet), Extraktor, Embeddings, Transkript-Schicht | [konzept_graph.md](konzept_graph.md) |
+| Konzept-Graph (seit 2026-10-31 im Archiv), Extraktor, Embeddings | [../archive/associative_graph/konzept_graph.md](../archive/associative_graph/konzept_graph.md) |
 
 ## Voice-Pipeline (Core, sprachneutral)
 

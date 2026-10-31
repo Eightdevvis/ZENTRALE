@@ -8,3 +8,4 @@ delete the file when empty.
 | Backup `skill-recherche-SKILL.md.vor-bibel-20261022` can come back via rsync after deletion | `data/_beiseite/` (main checkout, untracked) |
 | qwen: `input_examples` untested, and whether DashScope rejects unknown fields | bible W-05 ([../ki/bibel/werkzeuge.md](../ki/bibel/werkzeuge.md)) |
 | Long tool results of read_note, read_calendar, read_chat not cut yet | bible W-06 (same file) |
+| `web_search`, `klein` text still says "nicht in deinem Konzept-Graph (Gedächtnis)" — the graph left the code 2026-10-31; changing it changes the live local prompt, so it was left as is (found 2026-10-31) | `core/werkzeug_register.py` (`web_search`, `klein=`) |

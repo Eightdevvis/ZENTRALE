@@ -119,7 +119,6 @@ def main():
     print(f"  Provider    {name}  ({kind}, {prov.get('jurisdiction')})")
     print(f"  Modell      {mdl}")
     print(f"  {extra}")
-    print(f"  Graph       {modul.cloud.CLOUD_GRAPH if kind == 'openai_compat' else modul.CLOUD_GRAPH}")
 
     # Erlaubnis-Gate stilllegen: der Test hat keine Oberfläche zum Klicken.
     state.wait_permission = lambda: "nein"
@@ -237,8 +236,8 @@ def main():
         print(f"  Antwort:  {text.strip()[:200]}")
 
     print("\n=== fertig ===")
-    print("Der Turn wird erst nach ~45 s Gesprächspause in den Cloud-Graphen")
-    print("konsolidiert - dieses Skript endet vorher, der Graph bleibt leer.")
+    print("Der Turn wird erst nach ~45 s Gesprächspause ins Cloud-Transkript")
+    print("geschrieben - dieses Skript endet vorher, das Transkript bleibt leer.")
     print("Das ist kein Fehler.\n")
 
 

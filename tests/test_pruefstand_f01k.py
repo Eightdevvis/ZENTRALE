@@ -78,7 +78,6 @@ def lauf(monkeypatch, tmp_path):
     monkeypatch.setattr(ai_backends, "chat_cloud_kind", lambda: "anthropic")
     monkeypatch.setattr(ai_backends, "cloud_provider", lambda: "claude")
     monkeypatch.setattr(cloud, "_model", lambda: "claude-sonnet-5")
-    monkeypatch.setattr(cloud.graph, "einmal_seeden", lambda *a, **k: None)
     client = FakeClient([dict(r) for r in RUNDEN])
     monkeypatch.setattr(cloud, "_get_client", lambda: client)
     erg = kind.ausfuehren(_fall(), code_wurzel=ROOT, tmp=str(tmp_path / "probe"),

@@ -14,7 +14,6 @@ import consolidation
 import ehrlichkeit
 import ehrlichkeit_erkennen as erkennen
 import gespraeche
-import graph
 import kern
 import ki_prompt
 import werkzeug_register
@@ -327,8 +326,6 @@ def test_read_file_nicht_gefunden_belegt():
 # ── Der echte Anthropic-Adapter: die Korrektur als user-Nachricht ───────
 
 def test_anthropic_adapter_haengt_hinweis_als_user_nachricht_an(monkeypatch):
-    monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
     c = FakeClient([
@@ -366,7 +363,7 @@ def _zug(client, monkeypatch, nachricht, runden, gesehen):
     """Ein Zug über /api/chat mit einem Skript-Modell; `gesehen` sammelt den
     Kontext-Umschlag, wie cloud._volatile_text ihn für diesen Zug baut."""
     def gen(history, **k):
-        gesehen.append(cloud._volatile_text("", False, False))
+        gesehen.append(cloud._volatile_text(False, False))
         p = ehrlichkeit.pruefer_fuer(history, schiene="gross", tutor_mode=False)
         yield from werkzeug_schleife.laufen(
             _Skript(runden), tutor_mode=False, user_query=nachricht, schiene="gross",

@@ -21,7 +21,7 @@ steht nirgends.
 
 ## Was hier nicht steht
 
-- Memory-System: → `memory/ki/ki_memory_plan.md` (archiviert), `memory/ki/gedaechtnis_dateien.md` und `memory/ki/konzept_graph.md`.
+- Memory-System: → `memory/ki/ki_memory_plan.md` (archiviert), `memory/ki/gedaechtnis_dateien.md` und `memory/archive/associative_graph/konzept_graph.md`.
 - Tool-Use, Capabilities-Prompt: → `memory/ki/werkzeuge.md`, `memory/ki/prompt_aufbau.md`.
 - Persona-Inhalt selbst (Tonfall, Vorlieben): wird im Code in
   `core/profil/klein.py:_SYSTEM_PROMPT` (lokal) bzw. `gross.py` (Cloud)

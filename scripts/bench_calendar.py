@@ -61,7 +61,7 @@ sys.path.insert(0, _CORE)
 # kalender NICHT stubben - wird real gebraucht (RANGE_BUCKETS in TOOLS, und
 # _dispatch_tool fuehrt echte Kalender-Reads aus). context wird gestubbt:
 # read_file/list_files rufen wir in den Kalender-Szenarien nicht.
-for _m in ("net", "graph", "consolidation", "state", "context"):
+for _m in ("net", "consolidation", "state", "context"):
     if _m not in sys.modules:
         sys.modules[_m] = types.ModuleType(_m)
 

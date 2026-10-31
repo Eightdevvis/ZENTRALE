@@ -107,7 +107,7 @@ Bedacht, damit das Context-Window des Modells nicht überläuft.
 | Pfad                  | Grund                                                         |
 |-----------------------|---------------------------------------------------------------|
 | `data/*.json`         | persönliche Daten / Logs                                      |
-| `data/ai_graph.json`  | Konzept-Graph (primary memory), lokal & privat                |
+| `data/ai_graph*.json` | ehemaliger Konzept-Graph (seit 2026-10-31 aus dem Code, liest nichts mehr), privat |
 | `data/ai_ltm.json`    | Legacy LTM (save_memory-Tool)                                 |
 | `data/ai_stm.json`    | Legacy STM (Session-Turns)                                    |
 | `data/ai_config.json` | **API-Keys** + Kill-Switches (`core/ai_config.py`)             |
@@ -136,7 +136,6 @@ ignoriert – lokaler Inhalt, kein Repo-Material.
 vorhanden:
 
 - `data/sleep_quality.json` (sobald der erste Eintrag geloggt wird)
-- `data/ai_graph.json` (sobald der erste Turn in den Graphen extrahiert wird)
 - `data/ai_ltm.json` (sobald die KI das erste Mal `save_memory` aufruft)
 - `data/ai_stm.json` (sobald der erste Chat-Turn passiert)
 - `data/<kategorie>.json` (für jede neue Data-Collection-Kategorie)

@@ -13,7 +13,7 @@ den Dateien. Sonst wächst hier wieder eine 40-Zeilen-Tabelle heran, die man
 
 | Bereich | Was drinsteht | Index |
 |---|---|---|
-| **KI** | Wie ZENTRALE denkt: lokal + Cloud, Datei-Gedächtnis (Konzept-Graph seit 2026-08-18 aus), Tools, Erlaubnis-Gate, Sprache, Pläne, Benchmarks | [ki/INDEX.md](ki/INDEX.md) |
+| **KI** | Wie ZENTRALE denkt: lokal + Cloud, Datei-Gedächtnis (Konzept-Graph seit 2026-10-31 im Archiv), Tools, Erlaubnis-Gate, Sprache, Pläne, Benchmarks | [ki/INDEX.md](ki/INDEX.md) |
 | **Werkzeuge** | Was ZENTRALE tut: Kalender, Mail, News, Notizen, Zyklus | [werkzeuge/INDEX.md](werkzeuge/INDEX.md) |
 | **System** | Wie der Kern gebaut ist: Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | [system/INDEX.md](system/INDEX.md) |
 | **Hub** | ZENTRALE als Plattform: Hub-Schnittstelle, App-Modell, Werkstatt, Shop, Desk, Bausteine für Apps, Produkt | [hub/INDEX.md](hub/INDEX.md) |

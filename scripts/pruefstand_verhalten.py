@@ -18,7 +18,6 @@ Wegwerf-Ordner für ALLES, was geschrieben wird:
 
     Gedächtnis   gedaechtnis._DIR
     Kalender     kalender.CAL_PATH
-    Graph        cloud.CLOUD_GRAPH
     Messreihen   graphs._DATA_DIR      ← leicht zu übersehen; create_series
                                           und log_series schreiben dorthin
     Transkript   transkript._DIR
@@ -65,12 +64,11 @@ DATEN = os.path.join(ROOT, "data")
 def sandkasten():
     """Jeden Schreibweg in einen Temp-Ordner umbiegen. Gibt den Ordner."""
     from pathlib import Path
-    import cloud, gedaechtnis, graphs, kalender, transkript
+    import gedaechtnis, graphs, kalender, transkript
 
     ordner = tempfile.mkdtemp(prefix="zentrale_pruefstand_")
     gedaechtnis._DIR = os.path.join(ordner, "gedaechtnis")
     kalender.CAL_PATH = Path(ordner) / "kalender.json"
-    cloud.CLOUD_GRAPH = os.path.join(ordner, "graph.json")
     graphs._DATA_DIR = os.path.join(ordner, "reihen")
     graphs._REGISTRY = os.path.join(graphs._DATA_DIR, "graphs.json")
     transkript._DIR = os.path.join(ordner, "transkripte")

@@ -31,32 +31,23 @@ Imprint) und hängt das Wechselnde (4–6) hinten an die neueste User-Nachricht,
 siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
 
 1. **`_SYSTEM_PROMPT`** – Persona (entspannt, direkt, deutsch).
-2. **`_CAPABILITIES_PROMPT`** – Meta-Regeln: nicht lügen über Memory;
-   nicht erfinden über Sasha; **Subjekt-Grenze** (Sashas Gefühle/Zustände
-   NIE als eigene ausgeben → Anti-Identity-Bleed, mit konkretem Beispiel);
-   nicht erfinden über eigene Fähigkeiten (was unter „Das kannst DU NICHT"
-   steht, nie behaupten zu können); lateinische Schrift; reale Wörter.
-   Bei jedem Turn injiziert.
-3. **`graph.context_for_query(user_query)`** – **per Default AUS seit
-   2026-08-18** (nur mit `ZENTRALE_GRAPH_KONTEXT=1`, `ki_prompt.GRAPH_KONTEXT`); der
-   Block fehlt dann ganz. Wenn an: aktiviertes Wissen aus
-   dem Graphen (Spread-Aktivierung von Entry-Points aus). Kann leer
-   sein → KI sagt dann "noch nichts gespeichert" statt zu raten
-   (Anti-Konfabulation). **Seit 2026-06-06 nach SUBJEKT getrennt
-   gerendert** – drei Abschnitte „Über SASHA" / „Das kannst DU" / „Das
-   kannst DU NICHT" statt flacher Liste. Verhindert dass das Modell
-   Sashas Zustände („einsam") als eigenes Gefühl oder Limit-Knoten
-   („Bilder generieren") als eigene Fähigkeit liest. Nötig mit qwen3.5
-   (weniger guarded als qwen2.5). Trennung nur per `type`-Feld
-   (self/capability/limit), siehe Render-Block in `core/graph.py`.
+2. **`_CAPABILITIES_PROMPT`** – Meta-Regeln der `klein`-Schiene: nicht
+   lügen übers Merken (lokal gibt es kein Werkzeug dazu), nicht erfinden
+   über Sasha und über die eigenen Fähigkeiten, Deutsch, reale Wörter,
+   eigene Vorantwort ist kein Beweis, News und Mail nur übers Werkzeug.
+   Bei jedem Turn injiziert. (Bis 2026-10-31 gab es eine zweite Fassung mit
+   Verweisen auf den Wissens-Block des Konzept-Graphen; die ist mit dem
+   Graphen aus dem Code gegangen.)
+3. *(frei)* Hier stand bis 2026-08-18 der Graph-Kontext
+   (`graph.context_for_query`); der Graph ist seit 2026-10-31 aus dem Code
+   ([../archive/associative_graph/konzept_graph.md](../archive/associative_graph/konzept_graph.md)).
 4. **`_now_prompt()`** – dynamisch pro Turn: heutiges Datum, Wochentag,
    Uhrzeit. Schließt das Zeit-Loch: vorher lebte das Datum nur als
    Aktivierungs-Anker im Graphen – die KI konnte Time-Knoten sehen, aber
    nicht wissen welcher davon "heute" ist, und hat dann aus den aktivierten
    alten Tagen geraten (Symptom: "die letzte Konversation war am 19.5., die
-   am 21.5. war bereits danach"-Logik-Quatsch). Steht **direkt hinter dem
-   Graph-Kontext**, weil er genau dessen Datums-Knoten korrigiert – und
-   hinten ist er nicht schwächer als vorne, sondern präsenter.
+   am 21.5. war bereits danach"-Logik-Quatsch). Steht hinten, weil er
+   dort nicht schwächer ist als vorne, sondern präsenter.
 5. **`_alarm_prompt()`** – *konditional*, offene Kalender-Erinnerungen.
 6. **`_MIC_INPUT_HINT`** – *konditional*, nur wenn die letzte
    User-Message per Whisper-Spracheingabe kam (`via_mic=True`). Sagt
@@ -65,28 +56,14 @@ siehe „Prompt-Cache: statisch vorn, Wechselndes ganz hinten".
    (Tastatur) sieht den Block nicht – Token-Ersparnis. Trigger-Pfad:
    Client → `/api/chat` mit `via_mic: true` → `chat_stream(via_mic=True)`.
 
-> **Solange der Graph-Kontext aus ist, gilt der folgende Absatz nicht:** die
-> Seed-Knoten werden zwar angelegt, kommen aber nicht in den Prompt. Seit
-> 2026-10-06 bekommt die `klein`-Schiene dann auch die passende Fassung der
-> Meta-Regeln (`_META_REGELN_OHNE_GRAPH`, gewählt über `klein.system(graph=…)`
-> aus `ki_prompt.GRAPH_KONTEXT`): ohne Verweis auf den Wissens-Block und ohne
-> die frühere Erlaubnis, „notiert, läuft in den Graphen" zu sagen.
-
-Konkrete Capabilities/Limits leben als Graph-Knoten (`graph.ensure_seed()`)
-und kommen via Aktivierungs-Spread in den Wissens-Block, statt fest
-ins System-Prompt zu wandern. Das gilt **auch für die Identität der KI
-selbst** (Tools, Grenzen, "wer bin ich"): der Graph ist *ihre* Memory,
-nicht nur ein Faktenspeicher über Sasha. Deshalb verweist Meta-Regel 4
-(Fähigkeiten/Grenzen) auf den Wissens-Block statt feste Tool-Namen
-hardzucoden – fügt man der KI einen neuen Knoten "Tool X" hinzu, weiß
-sie es ohne Prompt-Änderung. Verhindert auch, dass das Pretraining
-(qwen kennt Claude-Code-Skill-Namen wie `update-config` aus öffentlichen
-Docs) sich als eigene Fähigkeit ausgibt.
+Was die KI kann, sagen ihr die Werkzeuge und die Meta-Regeln. Bis
+2026-08-18 lebten Fähigkeiten/Grenzen als Graph-Knoten (Selbstbild-Seed,
+[../archive/associative_graph/core-ki_selbstbild.md](../archive/associative_graph/core-ki_selbstbild.md)).
 
 ## Prompt-Cache
 
 Der System-Prompt geht als **zwei Blöcke** raus: `[0]` statisch mit
-`cache_control: ephemeral`, `[1]` wechselnd (Graph, Jetzt, Alarme, Mic).
+`cache_control: ephemeral`, `[1]` wechselnd (Jetzt, Alarme, Mic).
 Gerendert wird `tools → system → messages`, ein Breakpoint auf dem letzten
 statischen Block cacht also **Tool-Schema und statischen Prompt zusammen** —
 die ~8.000 Token, die sonst bei jedem Turn UND jeder Tool-Runde voll bezahlt
@@ -112,7 +89,7 @@ Jetzt:
 
 * `cloud._static_system()` → nur Byte-identisches, ins `system`-Feld, mit
   Breakpoint (`ttl: 1h`, per `ZENTRALE_CACHE_TTL` zurückstellbar).
-* `cloud._volatile_text()` → Graph, Jetzt-Block, Imprint (heute/morgen),
+* `cloud._volatile_text()` → Jetzt-Block (auf gross mit „Jetzt und als Nächstes"),
   Alarme, Mic-Hinweis. Hängt als
   **letzter Block der neuesten User-Nachricht**, also hinter allem Cachebaren.
   Bewusst nicht als `{"role":"system"}`-Nachricht: das können nur Opus 5/4.8,
@@ -144,8 +121,7 @@ Turn 3  in=250  cache_read=5479  cache_write=20    ≈0,25 ct
 Der Präfix wird einmal geschrieben, danach gelesen; geschrieben wird pro Turn
 nur noch das Delta. Die 250 ungecachten Token sind das Wechselnde.
 
-Deckel gegen Aufblähen: `ZENTRALE_CLOUD_CTX_CHARS` (Graph-Kontext, Default
-2.500) und die Länge einer einzelnen Verlauf-Nachricht — `cloud.kappen()`
+Deckel gegen Aufblähen: die Länge einer einzelnen Verlauf-Nachricht — `cloud.kappen()`
 kürzt in der Mitte, deterministisch, damit der Präfix byte-stabil bleibt, mit
 dem Vermerk „[… N Zeichen gekürzt …]" (seit 2026-10-07; vorher nur
 „[gekürzt]"). Seit 2026-10-07 zwei Grenzen über `ai_config.setting`:
@@ -167,7 +143,7 @@ System-Prompt und EIN Tool-Set. Jede Anpassung für das eine war Ballast oder
 Gift für das andere — und jeder Ballast geht bei JEDEM Turn und JEDER
 Tool-Runde mit raus.
 
-Der Zug bleibt einer (Tool-Ausführung, Kalender, Graph, Gate, Event-Protokoll,
+Der Zug bleibt einer (Tool-Ausführung, Kalender, Gedächtnis, Gate, Event-Protokoll,
 Loop). Die Schiene — Prompt-Texte, Tool-Set, Beschreibungen, Namen — bekommt
 jedes Modell für sich:
 
@@ -227,7 +203,7 @@ geteilt** (ein Schnitt in `klein._SYSTEM_PROMPT` trifft beide Schienen), die
 Wer das verwechselt, ändert den lokalen Prompt mit, ohne es zu merken.
 
 Unterschied zu `scripts/ai_devtools.py`: das Devtools-Terminal zeigt einen
-**echten Turn** samt Graph-Kontext, Verlauf und Cache-Breakpoints, braucht aber
+**echten Turn** samt Wechselndem, Verlauf und Cache-Breakpoints, braucht aber
 ein laufendes Gespräch. `prompt_zeigen.py` zeigt den **statischen Teil** allein,
 jederzeit und ohne Backend.
 
@@ -361,3 +337,5 @@ nur noch auf `klein` (dort gemessen, unverändert).
   gross), Prompt-Budget 21.000 Zeichen mit Wächter-Test.
 - **2026-10-26** — gross: eigener Jetzt-Block ohne Kalender-Satz und
   Abschnitt „Jetzt und als Nächstes" im Wechselnden (siehe oben).
+- **2026-10-31** — Konzept-Graph aus dem Code: `klein` hat nur noch eine
+  Fassung der Meta-Regeln, `system(graph=…)` und `GRAPH_KONTEXT` entfallen.

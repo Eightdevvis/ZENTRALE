@@ -22,7 +22,6 @@ import ehrlichkeit
 import ehrlichkeit_erkennen as erkennen
 import erlaubnis
 import gespraeche
-import graph
 import kern
 import ki_browser
 import ki_prompt
@@ -336,8 +335,6 @@ def test_eindampfen_zeile():
 
 @pytest.fixture
 def anthropic(monkeypatch):
-    monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
     seiten = iter(range(1, 100))

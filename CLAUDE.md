@@ -161,7 +161,7 @@ nach dem Thema suchen — in den Bereich springen und dessen Index lesen.
 
 | Bereich | Was drinsteht | Index |
 |---|---|---|
-| KI | denkt: lokal + Cloud, Datei-Gedächtnis (Graph seit 18.08. aus), Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
+| KI | denkt: lokal + Cloud, Datei-Gedächtnis (Konzept-Graph seit 31.10. im Archiv), Tools, Gate, Sprache, Pläne, Benchmarks | `memory/ki/INDEX.md` |
 | KI-Bibel | wonach die KI gebaut wird: Regeln mit Quelle und Status (vor KI-Arbeit lesen) | `memory/ki/bibel/README.md` |
 | Werkzeuge | tut: Kalender, Mail, News, Notizen, Zyklus | `memory/werkzeuge/INDEX.md` |
 | System | gebaut (Kern): Architektur, Schichten, Events, Topologie, API, TUI, Tastatur, Handy | `memory/system/INDEX.md` |

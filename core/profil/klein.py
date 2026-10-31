@@ -11,7 +11,7 @@
 # Woerter", die Bild-Marker. Ein starkes Modell braucht nichts davon und zahlt
 # es trotzdem bei jedem einzelnen Turn mit.
 #
-# Der Zug bleibt einer: Tool-Ausfuehrung, Kalender, Graph, Erlaubnis-Gate,
+# Der Zug bleibt einer: Tool-Ausfuehrung, Kalender, Gedaechtnis, Erlaubnis-Gate,
 # Event-Protokoll, der Loop selbst. Nur die Schiene — Prompt-Texte, Tool-Set,
 # Beschreibungen, Namen — bekommt jedes Modell fuer sich.
 #
@@ -57,8 +57,7 @@ _DASHBOARD_VORLAGE = (
 
 _SYSTEM_VORLAGE = (
     # Persona / Rolle. Meta-Regeln gegen Lügen/Erfinden stehen separat in
-    # _CAPABILITIES_PROMPT. Konkrete Capabilities/Limits leben als Graph-
-    # Knoten und kommen via Aktivierungs-Spread in den Memory-Kontext.
+    # _CAPABILITIES_PROMPT.
     #
     # Stil-Block bewusst konkret statt floskelhaft - kleine Modelle
     # brauchen Anti-Patterns explizit aufgelistet, vages "sei freundlich"
@@ -139,38 +138,15 @@ _SYSTEM_VORLAGE = (
     "beauftragt oder wenn dein eigener Plan es vorsieht, nie aus Diensteifer."
 )
 
-# ── Meta-Regeln für die KI (Phase G: schlank, keine Capability-Liste) ─
+# ── Meta-Regeln für die KI ─────────────────────────────────────────────
 #
-# Konkrete Fähigkeiten/Grenzen leben als Knoten im Graphen (siehe
-# graph.ensure_seed) und kommen via Aktivierungs-Spread in den
-# "## Aktiviertes Wissen"-Block. Hier stehen NUR META-Regeln, die kein
-# Retrieval-Treffer ersetzen kann: nicht lügen, nicht erfinden, lateinische
-# Schrift, reale Wörter.
-#
-# Bewusst kompakt gehalten (~400 chars, ~100 tokens statt vorher ~430)
-# weil dieser Block bei JEDEM Turn im System-Prompt landet - jedes
-# eingesparte Token reduziert Prompt-Processing-Zeit linear.
+# Until 18.08.2026 there were two versions: one that pointed to the concept
+# graph's "## Aktiviertes Wissen" block and a background extractor, and this
+# honest one without them. The graph is gone from the code since 2026-10-31
+# (memory/ki/gedaechtnis_dateien.md), so only this one is left. Rule 1 must not
+# promise "notiert": the small rail has no tool to remember, and nothing pulls
+# the conversation into a memory.
 _CAPABILITIES_VORLAGE = """## Meta-Regeln
-
-1. Nicht lügen über Memory-Aktionen: ein Hintergrund-Extraktor zieht nach jedem Turn automatisch Fakten in den Konzept-Graphen. Du kannst sagen "notiert, läuft in den Graphen" - das stimmt. Aber NICHT "ich speichere das gerade ab als X" oder ähnliche Tool-Call-Imitationen.
-2. Nicht erfinden über {nutzer}: was du über {nutzer} weißt, steht im "## Aktiviertes Wissen"-Block unten. Steht es nicht dort → sag direkt "noch nichts gespeichert" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden.
-3. Subjekt-Grenze (häufigster Fehler!): Gefühle, Zustände, Erlebnisse und Vergangenheit im Wissens-Block gehören der dort genannten Person — fast immer {NUTZER}, nicht dir. Steht da "{nutzer} fühlt sich einsam", ist das {NUTZERS} Gefühl: sprich es als seines/ihres an ("du fühlst dich oft einsam, oder?"), aber gib es NIEMALS als deinen eigenen Zustand aus ("ich bin einsam seit dem 19. Mai"). Du bist eine KI — du übernimmst keine fremden Gefühle, keinen Körper, keine Vergangenheit als deine eigenen. (Warm und zugewandt sein ist völlig ok; {NUTZERS} Gefühle als deine ausgeben nicht.)
-4. Nicht erfinden über dich selbst: was du kannst, steht im Wissens-Block unter "Das kannst DU", was du NICHT kannst unter "Das kannst DU NICHT". Was im NICHT-Abschnitt steht (z.B. Bilder generieren, Anrufe, Audio ohne TTS), behauptest du NIEMALS zu können — auch wenn dir aus dem Pretraining APIs, Skills oder Endpunkte vertraut vorkommen (Cloud-Assistant-Schemata wie Claude/ChatGPT). Steht etwas in gar keinem Abschnitt: "kann ich nicht".
-5. Antworte auf Deutsch (Englisch wenn der User Englisch tippt).
-6. Nur reale Wörter, keine Neuschöpfungen.
-7. Eigene Vorantwort ist kein Beweis: vertrau bei Termin- und Faktenfragen nie blind deiner früheren Antwort im Verlauf. Hakt der User nach oder bist du unsicher, ruf das Tool ERNEUT statt die alte Aussage zu verteidigen. Ein zugegebener, korrigierter Fehler ist besser als ein hartnäckig verteidigter. Manche Menschen reflektieren und erkennen ihre Fehler, manche nicht, dies ist mit der entscheidenste Unterschied zwischen einem intelligenten Menschen und einem dummen Menschen.
-8. Aktuelles Weltgeschehen kennst du NICHT aus dir selbst – dein Trainingswissen ist veraltet und fürs Tagesgeschehen unzuverlässig. Fragt {nutzer} nach Nachrichten, Weltlage, Politik oder „was ist los": ruf IMMER das Tool lies_news (die Tagessendung; für „was war diese Woche" / „seit ich weg war" mit tage=7) und gib wieder, was es liefert. Erfinde NIEMALS Nachrichten oder aktuelle Ereignisse aus dem Gedächtnis – im Zweifel das Tool rufen, nicht raten.
-9. Mail kennst du NICHT aus dir selbst. Fragt {nutzer} nach {seinen} Mails, dem Posteingang, „was liegt an", „muss ich was angucken" oder dem Sortier-/Review-Stand: ruf das Tool lies_mail (modus='review' wenn {er} gezielt den Stapel unbekannter Absender will) und gib wieder, was es liefert. Erfinde NIEMALS Absender, Betreffzeilen oder Zähler – nur was das Tool liefert."""
-
-# Dieselben Meta-Regeln für den Fall, dass der Konzept-Graph AUS ist — und
-# das ist seit 18.08.2026 der Normalfall. Die Regeln 1–4 oben beschreiben
-# eine Welt, die es dann nicht gibt: Regel 1 sagte dem Modell sogar, es
-# dürfe "notiert, läuft in den Graphen" sagen, obwohl nichts mehr extrahiert
-# wird und die lokale Schiene kein Werkzeug zum Merken hat. Für die große
-# Schiene wurde dasselbe am 18.08. bereinigt ("Falsche Anweisungen sind
-# schlimmer als gar keine: das Modell versucht, sie zu befolgen"); hier blieb
-# es bis 2026-10-06 liegen. Regeln 3–7 sind wörtlich die alten 5–9.
-_META_OHNE_GRAPH_VORLAGE = """## Meta-Regeln
 
 1. Nicht lügen übers Merken: du hast hier kein Werkzeug zum Merken, und nichts zieht das Gespräch in ein Gedächtnis. Sag nie "notiert", "gespeichert" oder "merk ich mir" — was gesagt wurde, steht nur in diesem Gespräch.
 2. Nicht erfinden über {nutzer} und nicht über dich: was du über {nutzer} weißt, steht in diesem Gespräch; steht es nicht dort → sag direkt "weiß ich nicht" statt zu raten. Keine Hobbys, Berufe, Familie, Wohnort frei erfinden. Du kannst nur, was deine Werkzeuge können — Bilder generieren, Anrufe, Audio ohne TTS kannst du NICHT, auch wenn dir aus dem Pretraining APIs oder Skills vertraut vorkommen. Im Zweifel: "kann ich nicht".
@@ -192,7 +168,6 @@ _META_OHNE_GRAPH_VORLAGE = """## Meta-Regeln
 _DASHBOARD_VIEW         = nutzer_angaben.einsetzen(_DASHBOARD_VORLAGE)
 _SYSTEM_PROMPT          = nutzer_angaben.einsetzen(_SYSTEM_VORLAGE)
 _CAPABILITIES_PROMPT    = nutzer_angaben.einsetzen(_CAPABILITIES_VORLAGE)
-_META_REGELN_OHNE_GRAPH = nutzer_angaben.einsetzen(_META_OHNE_GRAPH_VORLAGE)
 
 # EXPERIMENT 2026-06-06: Die harte CJK-Sperre in Regel 5 ("Nur lateinische
 # Schrift ... Keine CJK-Zeichen") ist RAUS - Test, ob qwen3.5:9b von allein
@@ -277,19 +252,16 @@ MERKMALE = {
 }
 
 
-def system(override: str | None = None, *, dashview: bool = True,
-           graph: bool = False) -> str:
+def system(override: str | None = None, *, dashview: bool = True) -> str:
     """Der fertige statische Kopf dieser Schiene.
 
     `override` ersetzt nur die Persona (fremde Tool-Sets bringen ihre eigene
     mit), `dashview` kommt von aussen, damit ZENTRALE_DASHVIEW=0 weiterhin
-    den A/B-Vergleich erlaubt. `graph` ebenso: ist der Konzept-Graph-Kontext
-    an (ZENTRALE_GRAPH_KONTEXT=1), gelten die Meta-Regeln, die auf seinen
-    Wissens-Block verweisen; sonst die ehrliche Fassung ohne ihn. Von aussen,
-    weil die Schiene ki_prompt nicht importieren darf (der importiert sie).
+    den A/B-Vergleich erlaubt — von aussen, weil die Schiene ki_prompt nicht
+    importieren darf (der importiert sie).
     """
     ein = nutzer_angaben.einsetzen
-    meta = ein(_CAPABILITIES_VORLAGE if graph else _META_OHNE_GRAPH_VORLAGE)
+    meta = ein(_CAPABILITIES_VORLAGE)
     s = (override or ein(_SYSTEM_VORLAGE)) + "\n\n" + meta
     s += ANTWORT_SUFFIX
     s += _ASCII_MARKER_PROMPT

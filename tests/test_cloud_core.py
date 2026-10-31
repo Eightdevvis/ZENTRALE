@@ -14,7 +14,6 @@ import pytest
 
 import ai
 import cloud
-import graph
 import ai_backends
 
 
@@ -53,7 +52,7 @@ def test_uebersetzung_ohne_tools():
 # ── System-Prompt: die Cache-Mechanik ──────────────────────────────────
 
 def test_statischer_block_traegt_cache_control():
-    blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
+    blocks = cloud._system_blocks(None, False, tutor_mode=False)
     assert len(blocks) == 2
     assert blocks[0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     # Der wechselnde Block darf KEINEN Breakpoint haben - sonst würde jeder
@@ -63,10 +62,9 @@ def test_statischer_block_traegt_cache_control():
 
 def test_statischer_block_ist_ueber_turns_byte_identisch():
     """Der Kern der Sache: ein Cache-Treffer verlangt ein byte-identisches
-    Präfix. Unterschiedlicher Graph-Kontext und Mic-Flag dürfen den statischen
-    Block NICHT anfassen."""
-    a = cloud._system_blocks(None, "", False, tutor_mode=False)
-    b = cloud._system_blocks(None, "## Erinnerung\nirgendwas", True, tutor_mode=False)
+    Präfix. Das Mic-Flag darf den statischen Block NICHT anfassen."""
+    a = cloud._system_blocks(None, False, tutor_mode=False)
+    b = cloud._system_blocks(None, True, tutor_mode=False)
     assert a[0]["text"] == b[0]["text"]
     assert a[1]["text"] != b[1]["text"]
 
@@ -75,7 +73,7 @@ def test_jetzt_block_steht_nicht_im_statischen_teil():
     """Der Jetzt-Block enthält die UHRZEIT. Stünde er im gecachten Block,
     wäre der Cache bei jedem Turn kaputt - das war der teuerste Einzelfehler
     im ganzen Umbau."""
-    blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
+    blocks = cloud._system_blocks(None, False, tutor_mode=False)
     assert "## Jetzt" not in blocks[0]["text"]
     assert "## Jetzt" in blocks[1]["text"]
 
@@ -83,7 +81,7 @@ def test_jetzt_block_steht_nicht_im_statischen_teil():
 def test_wechselnder_teil_sagt_dass_er_nicht_von_sasha_ist():
     """Prüfstand f01, 08.10.: der Block hängt an Sashas Nachricht, und ohne
     Umschlag hielt die KI ihn für etwas, das Sasha geschickt hat."""
-    t = cloud._volatile_text("", via_mic=False, tutor_mode=False)
+    t = cloud._volatile_text(via_mic=False, tutor_mode=False)
     assert t.startswith("<kontext_automatisch>") and t.endswith("</kontext_automatisch>")
     assert "nicht geschrieben" in t and "## Jetzt" in t
     # fester Wortlaut: der Umschlag selbst ändert sich nie
@@ -93,24 +91,17 @@ def test_wechselnder_teil_sagt_dass_er_nicht_von_sasha_ist():
 
 def test_umschlag_steht_hinter_dem_cache_breakpoint():
     msgs = [{"role": "user", "content": [{"type": "text", "text": "hallo"}]}]
-    cloud._append_volatile(msgs, cloud._volatile_text("", False, False))
+    cloud._append_volatile(msgs, cloud._volatile_text(False, False))
     bloecke = msgs[0]["content"]
     assert "cache_control" in bloecke[0] and bloecke[0]["text"] == "hallo"
     assert bloecke[1]["text"].startswith("<kontext_automatisch>")
-
-
-def test_graph_kontext_steht_im_wechselnden_teil():
-    mem = "## Erinnerung\nSasha mag Karten."
-    blocks = cloud._system_blocks(None, mem, False, tutor_mode=False)
-    assert mem not in blocks[0]["text"]
-    assert mem in blocks[1]["text"]
 
 
 def test_statischer_block_enthaelt_die_persona():
     """Die Persona der CLOUD-Schiene (gross), nicht die aus ai.* — dort haengt
     seit dem Schienen-Umbau das Set fuer kleine Modelle."""
     from profil import gross
-    blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
+    blocks = cloud._system_blocks(None, False, tutor_mode=False)
     assert gross.SYSTEM in blocks[0]["text"]
     assert gross.CAPABILITIES in blocks[0]["text"]
 
@@ -118,7 +109,7 @@ def test_statischer_block_enthaelt_die_persona():
 def test_tutor_modus_ohne_kern_bloecke():
     """Fremdes Tool-Set: eigener vollständiger Prompt, keine Bild-Marker,
     keine Kern-Meta-Regeln - genau wie im lokalen Pfad."""
-    blocks = cloud._system_blocks("EIGENER PROMPT", "", False, tutor_mode=True)
+    blocks = cloud._system_blocks("EIGENER PROMPT", False, tutor_mode=True)
     assert blocks[0]["text"] == "EIGENER PROMPT"
     assert ai._ASCII_MARKER_PROMPT not in blocks[0]["text"]
     # Kein deutscher Jetzt-Block im Tutor (2026-10-08, seit er über
@@ -132,7 +123,7 @@ def test_statischer_block_ueberschreitet_die_cache_mindestgroesse():
     """Anthropic cacht ein Präfix erst ab einer Mindestgröße (Opus 5: 512
     Token) - darunter passiert stillschweigend nichts. Grobe Zeichen-Schätzung
     reicht hier als Untergrenze."""
-    blocks = cloud._system_blocks(None, "", False, tutor_mode=False)
+    blocks = cloud._system_blocks(None, False, tutor_mode=False)
     assert len(blocks[0]["text"]) > 2048
 
 
@@ -232,24 +223,12 @@ def test_leere_turns_fliegen_raus():
 
 # ── Isolations-Invariante ──────────────────────────────────────────────
 
-def test_cloud_graph_ist_nicht_der_core_graph():
-    """Lokal sieht alles von Cloud. Cloud sieht nichts von lokal. Wäre das
-    derselbe Pfad, ginge Sashas kompletter Konzept-Graph an die API."""
-    assert os.path.abspath(cloud.CLOUD_GRAPH) != os.path.abspath(graph._GRAPH_FILE)
-    assert cloud.CLOUD_GRAPH.endswith("ai_graph_cloud.json")
-
-
-def test_cloud_graph_ist_absolut():
-    """graph.py cacht Stores nach Pfad-String - zwei Schreibweisen desselben
-    Pfades wären zwei Locks auf einer Datei."""
-    assert os.path.isabs(cloud.CLOUD_GRAPH)
-
-
-def test_getrennte_stores_teilen_keinen_zustand():
-    st_core  = graph._get_store()
-    st_cloud = graph._get_store(cloud.CLOUD_GRAPH)
-    assert st_core is not st_cloud
-    assert st_core.lock is not st_cloud.lock
+def test_cloud_turns_haben_eine_eigene_marke():
+    """Lokal sieht alles von Cloud. Cloud sieht nichts von lokal: Cloud-Turns
+    gehen ins eigene Transkript (cloud-YYYY-MM.jsonl), nie ins lokale."""
+    import transkript
+    assert cloud.CLOUD_STORE
+    assert transkript.datei(cloud.CLOUD_STORE) != transkript.datei(None)
 
 
 def test_tool_result_shape():

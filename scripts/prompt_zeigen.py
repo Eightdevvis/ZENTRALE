@@ -106,8 +106,8 @@ WOHER = [
     ("Uhrzeit und Alarme (das Wechselnde)",
      "core/cloud.py  ->  _volatile_text()",
      "steht NICHT im System-Prompt, sondern hinten an der letzten "
-     "User-Nachricht. Der Konzept-Graph hing frueher auch hier — er ist seit "
-     "18.08.2026 aus (ai.GRAPH_KONTEXT)"),
+     "User-Nachricht. Der Konzept-Graph hing frueher auch hier — aus seit "
+     "18.08.2026, aus dem Code seit 2026-10-31"),
 ]
 
 

@@ -180,7 +180,7 @@ def test_qwen_kopf_beginnt_mit_arbeitsweise(mit_qwen_profil):
 
 def test_erinnerung_steht_im_umschlag_am_ende(mit_qwen_profil):
     s = profil.fuer_backend("cloud", modell="qwen-plus")
-    v = cloud._volatile_text("", False, False)
+    v = cloud._volatile_text(False, False)
     mit = s.erinnerung(v)
     assert mit.endswith("</kontext_automatisch>")
     assert modelle.qwen.erinnerung() in mit

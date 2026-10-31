@@ -1,9 +1,10 @@
 # core/calendar.py
 #
-# Kalender-System mit Layer-Struktur – zeitliche Klammer um den
-# assoziativen Graph (siehe memory/ki/konzept_graph.md).
+# Kalender-System mit Layer-Struktur – entstanden als zeitliche Klammer um
+# den assoziativen Graph (seit 2026-10-31 aus dem Code, Archiv:
+# memory/archive/associative_graph/konzept_graph.md).
 #
-# Idee: der Konzept-Graph ist assoziativ und gut darin "wer mag was,
+# Idee: der Konzept-Graph war assoziativ und gut darin "wer mag was,
 # wer kennt wen, was hängt mit was zusammen" abzubilden. Was er
 # strukturell NICHT gut kann ist "welcher Tag war wann", "was kommt
 # noch", "regelmäßige Termine". Dafür gibt es jetzt diese Schicht:

@@ -57,11 +57,11 @@ _ROOT = os.path.dirname(_HERE)
 _CORE = os.path.join(_ROOT, "core")
 sys.path.insert(0, _CORE)
 
-# net/graph/consolidation/state/context stubben. ascii_lib + kalender bleiben
+# net/consolidation/state/context stubben. ascii_lib + kalender bleiben
 # echt (ascii_lib.pick fuer die Match-Pruefung; kalender liefert RANGE_BUCKETS
 # in TOOLS). Mit gestubbtem `net` faellt embeddings.embed_query auf None ->
 # der Embedding-Fallback in ascii_lib ist im Bench inaktiv (Keyword-Pfad only).
-for _m in ("net", "graph", "consolidation", "state", "context"):
+for _m in ("net", "consolidation", "state", "context"):
     if _m not in sys.modules:
         sys.modules[_m] = types.ModuleType(_m)
 

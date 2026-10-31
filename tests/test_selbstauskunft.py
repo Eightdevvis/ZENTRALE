@@ -20,7 +20,6 @@ import cloud_openai
 import consolidation
 import ehrlichkeit
 import erlaubnis
-import graph
 import klassifikator
 import klassifikator_beispiele
 import selbstauskunft
@@ -284,8 +283,6 @@ def test_leeres_textfeld_nimmt_den_freien_text():
 
 @pytest.fixture
 def anthropic_fake(monkeypatch):
-    monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
 
     def bauen(runden):
         c = FakeClient(runden)

@@ -172,8 +172,7 @@ zählen als ein Modul.
 | `mail_puffer` | 2 | Puffer des Mail-Panels (Live-Zählung, Ordner-Inhalte) und seine Hintergrund-Jobs |
 | `news` | 2 | Persönliche Tagesschau: RSS und Briefing |
 | `web` | 2 | Gegatete Internet-Pipe (Suche, Seite holen) |
-| `embeddings` | 2 | Vektoren lokal (bge-m3) oder in der Cloud |
-| `graph` | 2 | Konzept-Graph der KI (seit 18.08.2026 aus) |
+| `embeddings` | 2 | Vektoren lokal (bge-m3): News-Themen, ASCII-Bildsuche |
 | `gedaechtnis` | 2 | Das Datei-Gedächtnis, das die KI liest und fortschreibt (nach Themen: anlegen/ergänzen, Kataloge, Tagebuch, archivieren, Suche, Prompt-Kopf; liest den alten Aufbau bis zum Umzug mit) |
 | `gedaechtnis_ablage` | 2 | Wie das Gedächtnis auf der Platte liegt: `themen/<thema>/`, Kopf im Format von Claudes Datei-Gedächtnis (name, description, metadata), Dateien finden, archivieren, INDEX.md, Ort einer Messreihe |
 | `gedaechtnis_katalog` | 2 | Katalog-Einträge als Text: lesen, rendern, upsert, Dossier-Kopf setzen, Vorlagen |
@@ -235,7 +234,7 @@ zählen als ein Modul.
 | `cloud_openai` | 3 | OpenAI-kompatibler Weg |
 | `werkzeug_schleife` | 3 | Die eine Tool-Schleife aller Wege |
 | `profil` | 3 | Prompt-Schienen klein und gross, Modell-Profile darüber (`profil/modelle/`, z. B. qwen) |
-| `consolidation` | 3 | Nach dem Zug: Transkript (und Graph-Extraktion, wenn an) |
+| `consolidation` | 3 | Nach dem Zug: Transkript, gebündelt in der Gesprächspause |
 | `erlaubnis` | 3 | Das Erlaubnis-Gate: die Tür, durch die die Schleife fragt (Regeln und Fragen stehen im Werkzeug-Register); Geltungsbereiche einmal / dieses Gespräch / immer |
 | `ki_antwort` | 3 | Fertige Antwort: Bild-Marker ziehen, Zug zum Merken vormerken |
 | `ki_prompt` | 3 | Prompt-Bausteine für jeden Weg: Jetzt-Block, Imprint, Alarme, Denk-Heuristik, Schalter |

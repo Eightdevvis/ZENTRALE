@@ -94,7 +94,7 @@ def _wechselnd(monkeypatch, schiene, alarme=()):
     monkeypatch.setattr(cloud, "_profil", lambda modell=None: profil.hol(schiene))
     monkeypatch.setattr(state, "get_alarms", lambda: list(alarme))
     with uhr.gestellt(JETZT):
-        return cloud._volatile_text("", False, False)
+        return cloud._volatile_text(False, False)
 
 
 @pytest.mark.kalender_beide

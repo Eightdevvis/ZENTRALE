@@ -18,7 +18,7 @@ jedem Fehlschlag der Kontext mit ausgegeben, nicht nur das Urteil.
 
 ── Isolation (wichtig) ─────────────────────────────────────────────────
 Alles, was der Kopf und die Werkzeuge lesen oder schreiben, liegt in einem
-Wegwerf-Ordner: Kalender, Cloud-Graph, Transkript, Datei-Gedächtnis
+Wegwerf-Ordner: Kalender, Transkript, Datei-Gedächtnis
 (Steckbrief, Ziele, Hausregeln), Ablage, Gespräche, Rückmeldungen,
 Klassifikator-Beispiele, Nutzerordner, Desk, Shop, Apps, Anbindungen,
 Sandbox (Liste: _UMLENKUNGEN unten, wie tests/conftest.py). Von `data/`
@@ -37,9 +37,8 @@ System-Prompt. Keine echten Termine, kein echtes Gedächtnis.
 
 ── Graph-Fallen: archiviert ────────────────────────────────────────────
 Falle 1 (Fieber/Monat) und die Extraktions-Fallen prüften den
-Konzept-Graphen, der seit 2026-08-18 aus ist. Sie liegen wörtlich in
-memory/archive/associative_graph/gedaechtnis_probe_graph.py, samt
-Anleitung zum Zurückholen.
+Konzept-Graphen (aus seit 2026-08-18, seit 2026-10-31 aus dem Code). Sie
+liegen wörtlich in memory/archive/associative_graph/gedaechtnis_probe_graph.py.
 
 ── Kosten ──────────────────────────────────────────────────────────────
 Standard laeuft ALLES auf dem billigen Modell: rund 2 Cent fuer den ganzen
@@ -95,20 +94,18 @@ def sandkasten():
 
     Muss VOR dem ersten Import der core-Module laufen: die meisten Pfade
     werden beim Import aus der Env festgelegt. Wo es keinen Env-Riegel gibt
-    (Kalender, Cloud-Graph), werden die Modul-Globals danach direkt gesetzt;
+    (Kalender), werden die Modul-Globals danach direkt gesetzt;
     Gedächtnis und Transkript zusätzlich, falls sie doch schon geladen sind.
     """
     ordner = tempfile.mkdtemp(prefix="zentrale_probe_")
     for name, unter in _UMLENKUNGEN.items():
         os.environ[name] = os.path.join(ordner, unter)
 
-    import kalender, cloud, graph, gedaechtnis, transkript
+    import kalender, gedaechtnis, transkript
     from pathlib import Path
 
     kalender.CAL_PATH = Path(ordner) / "kalender.json"
     kalender.ICS_DIR = None          # = kalender/ neben CAL_PATH
-    cloud.CLOUD_GRAPH = os.path.join(ordner, "graph.json")
-    graph._GRAPH_FILE = os.path.join(ordner, "graph_lokal.json")
     gedaechtnis._DIR = os.environ["ZENTRALE_GEDAECHTNIS_DIR"]
     for name in ("_DIR", "DIR", "TRANS_DIR", "_ORDNER"):
         if hasattr(transkript, name):

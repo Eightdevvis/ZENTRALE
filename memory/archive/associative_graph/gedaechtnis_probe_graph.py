@@ -17,7 +17,7 @@ Wieder einschalten (Graph + diese Fallen):
   1. Graph an: Env ZENTRALE_GRAPH_KONTEXT=1 (Kontext in den Prompt,
      ki_prompt.GRAPH_KONTEXT) und ZENTRALE_GRAPH_EXTRAKTION=1 (neue
      Extraktionen, consolidation.GRAPH_EXTRAKTION). Code: core/graph.py,
-     core/consolidation.py; Beschreibung: memory/ki/konzept_graph.md.
+     core/consolidation.py; Beschreibung: memory/archive/associative_graph/konzept_graph.md.
   2. Die Stücke unten zurück in scripts/gedaechtnis_probe.py: den Graph-Seed
      in szenario_bauen(), Falle 1 vorne in FAELLE, EXTRAKTIONS_FAELLE samt
      Hilfsfunktionen, und aus AUSZUG_MAIN die Option --nur, den

@@ -307,7 +307,7 @@ das vom Backend gespawnte `zentrale-push-data` seine Helfer nicht). **Bewusst im
 Datei-Watcher:** ein vom Sync eingehendes rsync schreibt die Datei direkt auf
 Platte, NICHT durch `_save_*` → löst nie einen Gegen-Push aus ⇒ **kein
 Ping-Pong** (ein Watcher hätte genau die Schleife). Bewusst **nicht** gehängt:
-`graph.py` (KI-Konzeptgraph, würde während Chats stürmen) und die
+der KI-Konzeptgraph (würde während Chats stürmen; seit 2026-10-31 aus dem Code) und die
 Hochfrequenz-Sensorlogs (`/api/log`) — die bleiben beim Boot-Sync.
 
 **Kalender als .ics (ab Sashas Umzug, siehe

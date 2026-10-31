@@ -2,7 +2,7 @@
 #
 # Die Prompt-Bausteine, die jeder Weg braucht: Jetzt-Block, naher Horizont
 # (Imprint), offene Erinnerungen, die Denk-Heuristik, die letzte Frage — und
-# die Schalter Dashboard-Sicht und Graph-Kontext.
+# der Schalter Dashboard-Sicht.
 #
 # KI-Kern (Schicht 3, memory/system/bauplan_kern.md). Bis 2026-10-06 standen
 # sie in core/ai.py, und beide Cloud-Wege importierten dafür den lokalen Weg —
@@ -28,18 +28,6 @@ from profil.klein import _SYSTEM_PROMPT, _MIC_INPUT_HINT   # noqa: F401
 # den A/B-Vergleich (ZENTRALE_DASHVIEW=0 = alte Baseline ohne Sicht).
 _DASHVIEW = os.environ.get("ZENTRALE_DASHVIEW", "1") != "0"
 
-# Der Konzept-Graph als Kontext-Quelle. DEFAULT AUS seit 18.08.2026.
-#
-# Er ging bei JEDEM Turn ungecacht mit raus (~2.500 Zeichen) und lieferte
-# dafuer Rauschen: gemessen waren 42 von 104 Kanten reine Buchhaltung
-# darueber, WANN geredet wurde, und unter den Fakten standen Saetze wie
-# "Sasha wohnt-in Universitaet des Saarlandes". An seine Stelle tritt das
-# Datei-Gedaechtnis (core/gedaechtnis.py): Steckbrief und Ziele stehen im
-# GECACHTEN Kopf, alles andere holt sie per Werkzeug.
-#
-# Die Datei bleibt liegen, nichts geht verloren, und mit
-# ZENTRALE_GRAPH_KONTEXT=1 ist er in einer Zeile zurueck.
-GRAPH_KONTEXT = os.environ.get("ZENTRALE_GRAPH_KONTEXT", "0") == "1"
 
 
 # ── _PROMPT_ORDER: Reihenfolge im System-Prompt ───────────────────────
@@ -50,9 +38,9 @@ GRAPH_KONTEXT = os.environ.get("ZENTRALE_GRAPH_KONTEXT", "0") == "1"
 #   ─────────────── ab hier wechselnd ───────────────
 #   Jetzt-Block · Alarme · Mic-Hinweis
 #
-# (Der Graph-Kontext stand bis 18.08.2026 vorne im Wechselnden. Er ist aus,
-#  siehe GRAPH_KONTEXT; was sie ueber Sasha weiss, sitzt jetzt im GECACHTEN
-#  Kopf — core/gedaechtnis.py.)
+# (Der Konzept-Graph-Kontext stand bis 18.08.2026 vorne im Wechselnden; der
+#  Graph ist seit 2026-10-31 aus dem Code. Was sie ueber Sasha weiss, sitzt
+#  im GECACHTEN Kopf — core/gedaechtnis.py.)
 #
 # Zwei Gründe, ein Handgriff:
 #  * Prompt-Cache. Ein Cache-Treffer braucht ein byte-identisches Präfix.
@@ -61,8 +49,7 @@ GRAPH_KONTEXT = os.environ.get("ZENTRALE_GRAPH_KONTEXT", "0") == "1"
 #    Bei einem Cloud-Modell ist das der größte einzelne Kostenposten.
 #  * Recency. Was zuletzt im Prompt steht, sitzt am dichtesten an der
 #    User-Message. Hinten ist der Jetzt-Block also nicht schwächer als
-#    vorne, sondern präsenter — und er steht direkt hinter dem
-#    Graph-Kontext, dessen Datums-Knoten er ja gerade korrigiert.
+#    vorne, sondern präsenter.
 #
 # ── Jetzt-Block ───────────────────────────────────────────────────────
 # Wird bei JEDEM Turn frisch gebaut. Schließt die strukturelle Zeit-

@@ -66,7 +66,7 @@ state.py     brain.py      actions.py     event-queue
 TUI  (pollt /api/state; früher der Browser, heute archiviert)
    │
    ▼
- ai.py ── graph.py / consolidation.py / embeddings.py
+ ai.py ── gedaechtnis.py / consolidation.py (Transkript) / embeddings.py
    │       └─ context.py (Datei-Whitelist) / kalender.py / ascii_lib.py / web.py / news.py
    │
    ├──▶ Ollama (qwen3.5:9b Chat, bge-m3 Embeddings)
@@ -104,13 +104,12 @@ ZENTRALE/
 │   ├── ai_config.py         # Kill-Switches (cloud/local) + API-Key-Store, data/ai_config.json
 │   ├── providers.py         # die EINE Anbieter-Liste (Kern + Tutor, seit 2026-10-08)
 │   ├── net.py               # HTTP-Wrapper mit Terminal-Logging
-│   ├── graph.py             # KONZEPT-Graph Memory der KI (PRIMARY, data/ai_graph.json)
-│   ├── transkript.py        # Rohes Gesagtes unter dem Graphen (append-only jsonl)
+│   ├── transkript.py        # Rohes Gesagtes nach jedem Turn (append-only jsonl, search_chats)
 │   ├── kidebug.py           # Devtools-Bus der Kern-KI (scripts/ai_devtools.py)
-│   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug, ≠ graph.py!)
+│   ├── graphs.py            # Lifestyle-GRAPHEN-Registry (Messreihen-Werkzeug)
 │   ├── cycle.py             # Zyklus/PMS-Vorhersage AUS dem »periode«-Graphen (kein eigener Speicher)
-│   ├── consolidation.py     # async Fakt-Extraktor in den Graphen
-│   ├── embeddings.py        # bge-m3 via Ollama (Alias-Resolution, Entry-Points)
+│   ├── consolidation.py     # nach dem Turn: Transkript, gebündelt in der Gesprächspause
+│   ├── embeddings.py        # bge-m3 via Ollama (News-Themen, ASCII-Bildsuche)
 │   ├── context.py           # Whitelist-Dateizugriff (Cap 8000 Zeichen)
 │   ├── kalender.py          # Kalender-Layer (Termine, Routinen, Konflikt-Alarm)
 │   ├── kalender_*.py        # darunter: Speicher json/.ics, Abbildung, Sicherung, Migration
@@ -221,11 +220,10 @@ Selbst-Registrierung. Die KI-Werkzeuge haben seit 2026-10-07 ihre
 Registry; wer echtes Hot-Plug will, müsste noch das Event-Routing
 (`brain.py`/`actions.py`, heute `if-elif`) auf eine Dispatch-Tabelle heben.
 
-> **`graph.py` vs. `graphs.py`** – leicht zu verwechseln: `graph.py` ist der
-> **Konzept-Graph** des KI-Memorys (eine globale Wissensstruktur, primary
-> memory). `graphs.py` ist die **Lifestyle-Graphen-Registry** des Mess-/
-> Tracking-Werkzeugs (viele benannte Messreihen, zur Laufzeit anlegbar).
-> Verschiedene Systeme, nur namensähnlich.
+> **`graphs.py`** ist die **Lifestyle-Graphen-Registry** des Mess-/
+> Tracking-Werkzeugs (viele benannte Messreihen, zur Laufzeit anlegbar). Der
+> namensähnliche Konzept-Graph `graph.py` (KI-Memory) ist seit 2026-10-31 aus
+> dem Code ([../archive/associative_graph/](../archive/associative_graph/README.md)).
 
 ## Historie
 

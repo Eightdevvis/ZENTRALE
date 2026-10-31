@@ -183,33 +183,27 @@ def test_ohne_ziele_datei_kein_block():
     assert "Deine Ziele" not in gedaechtnis.kopf_block()
 
 
-# ── Der Graph ist aus, das Rohmaterial läuft weiter ───────────────────
+# ── Der Graph ist weg, das Rohmaterial läuft weiter ───────────────────
 
-def test_graph_kontext_ist_aus():
-    """Er ging bei JEDEM Turn ungecacht raus und lieferte Rauschen."""
-    assert ai.GRAPH_KONTEXT is False
+def test_konzept_graph_ist_aus_dem_code():
+    """Aus seit 18.08.2026 (ging ungecacht raus, lieferte Rauschen), aus dem
+    Code seit 2026-10-31. Kein Schalter holt ihn zurück."""
+    import importlib.util
+    for name in ("graph",):
+        assert importlib.util.find_spec(name) is None, name
+    assert not hasattr(ai, "GRAPH_KONTEXT")
+    assert not hasattr(consolidation, "GRAPH_EXTRAKTION")
 
 
-def test_tripel_extraktion_ist_aus():
-    """Sie kostete einen eigenen LLM-Call pro Turn — rund 2,70 € im Monat
-    dafür, das Gedächtnis schlechter zu machen."""
-    assert consolidation.GRAPH_EXTRAKTION is False
-
-
-def test_rohmaterial_wird_trotzdem_geschrieben(monkeypatch, tmp_path):
-    """Die wichtigste Garantie des Umbaus: die Gespräche laufen weiter in
-    das Transkript. Verloren geht nichts, es wird nur nicht mehr jeder
-    Satz in Tripel zerhackt."""
+def test_rohmaterial_wird_trotzdem_geschrieben(monkeypatch):
+    """Die wichtigste Garantie: die Gespräche laufen weiter in das
+    Transkript (search_chats liest es)."""
     geschrieben = []
     monkeypatch.setattr(consolidation.transkript, "schreiben",
                         lambda turns, store=None: geschrieben.append(turns) or [])
-    gerufen = []
-    monkeypatch.setattr(consolidation, "_call_graph_extractor",
-                        lambda *a: gerufen.append(1) or ([], []))
-    consolidation.extract_turn_into_graph(
+    consolidation.record_turns(
         "ich hatte gestern einen breakdown", "klingt hart", store=None)
-    assert geschrieben, "das Rohmaterial fehlt"
-    assert not gerufen, "der Extraktor lief trotzdem"
+    assert geschrieben == [[("ich hatte gestern einen breakdown", "klingt hart")]]
 
 
 # ── Wer fragen muss und wer nicht ─────────────────────────────────────

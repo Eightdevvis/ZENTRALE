@@ -41,9 +41,11 @@ genau das, was der Extraktor löscht. Der Graph war eine verlustbehaftete
 Kompression, die ausgerechnet das wegwarf, worin das Modell gut ist: Sprache.
 Deshalb fühlte sich ZENTRALE dümmer an als dasselbe Modell im nackten Chat.
 
-Der Graph ist **nicht gelöscht**: `data/ai_graph*.json` bleibt liegen,
-`core/graph.py` bleibt im Baum, und zwei Schalter holen ihn zurück
-(`ZENTRALE_GRAPH_KONTEXT=1`, `ZENTRALE_GRAPH_EXTRAKTION=1`). Wenn er je
+Bis 2026-10-31 blieb der Graph abschaltbar im Baum. Seitdem ist er **aus dem
+Code** (Sasha: gehört ins Archiv): Beschreibung und Testskripte in
+[../archive/associative_graph/](../archive/associative_graph/README.md), der
+Code in der Git-Historie; Sashas Dateien `data/ai_graph*.json` liegen
+unangetastet, nur liest sie nichts mehr. Wenn er je
 wiederkommt, dann mit einem Schema — [Graphiti](https://github.com/getzep/graphiti)
 (Apache 2.0) hat genau die drei fehlenden Stücke: eigene Entity-Typen als
 Pydantic-Schema, bi-temporale Gültigkeit mit Invalidierung, und Episoden-Knoten,

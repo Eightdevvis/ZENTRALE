@@ -5,11 +5,11 @@
 `ZENTRALE_GRAPH_KONTEXT`), keine neuen Extraktionen
 (`consolidation.GRAPH_EXTRAKTION`, Env `ZENTRALE_GRAPH_EXTRAKTION`); es läuft
 nur noch der Identity-Seed. Das Gedächtnis ist das Datei-Gedächtnis
-([gedaechtnis_dateien.md](gedaechtnis_dateien.md)). Weiter in Gebrauch: die
+([gedaechtnis_dateien.md](../../ki/gedaechtnis_dateien.md)). Weiter in Gebrauch: die
 Transkript-Schicht (`core/transkript.py`), die `search_chats` mitliest. Diese
 Datei beschreibt, wie der Graph arbeitet, wenn man ihn wieder anschaltet.
 Die Graph-Testskripte (Phase-G-Harness, Graph-Fallen der Live-Probe) liegen
-seit 2026-10-14 im Archiv: [../archive/associative_graph/](../archive/associative_graph/README.md).
+seit 2026-10-14 im Archiv: [../archive/associative_graph/](README.md).
 
 **Warum sie bleibt:** Die Entscheidungen hier — Erzähltag ist nicht
 Ereignistag, verbinden statt verschmelzen, Vektorräume nie mischen, der lokale
@@ -45,7 +45,7 @@ KI bei jedem Turn „sah", kam komplett aus dem Graphen (plus
 > Kontext in den Prompt (`ki_prompt.GRAPH_KONTEXT`) noch nimmt er neue Extraktionen auf
 > (`consolidation.GRAPH_EXTRAKTION`) — beides per Env wieder einschaltbar. An
 > seiner Stelle steht das Datei-Gedächtnis, siehe
-> [gedaechtnis_dateien.md](gedaechtnis_dateien.md). Der folgende Abschnitt
+> [gedaechtnis_dateien.md](../../ki/gedaechtnis_dateien.md). Der folgende Abschnitt
 > beschreibt weiterhin korrekt, WIE der Graph arbeitet, wenn man ihn anschaltet.
 
 #### Zeit: der Erzähltag ist nicht der Ereignistag (seit 08/2026)
@@ -177,7 +177,7 @@ Dubletten).
 
 **Das ist kein zweiter Suchindex:** nie embedded, nie etwas in den Prompt
 geladen. Sie ist ein Archiv, auf das der Graph zeigt. Seit 2026-10-07 liest
-sie das Werkzeug `search_chats` mit ([werkzeuge.md](werkzeuge.md), „Frühere Gespräche") —
+sie das Werkzeug `search_chats` mit ([werkzeuge.md](../../ki/werkzeuge.md), „Frühere Gespräche") —
 als Verlauf von vor den Gesprächen, wörtlich und mit Datum, nicht als
 Gedächtnis, das etwas behauptet.
 
@@ -302,7 +302,7 @@ zurück und hat unterwegs eben kein Gedächtnis.
 ## Historie
 
 - **2026-05** — Legacy LTM/STM (`save_memory`, `/sleep`), Phasen A–F
-  ([ki_memory_plan.md](ki_memory_plan.md)).
+  ([ki_memory_plan.md](../../ki/ki_memory_plan.md)).
 - **2026-06-01** — bge-m3 auf die CPU (VRAM-Contention mit qwen).
 - **2026-06-06** — Graph primary (Phase G), LTM/STM entfernt, Subjekt-Trennung.
 - **2026-08** — Zeit in vier Auflösungen, wörtliche Einstiegspunkte, gedämpfte

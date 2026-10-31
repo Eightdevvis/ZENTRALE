@@ -13,7 +13,6 @@ import cloud
 import consolidation
 import erlaubnis
 import gespraeche
-import graph
 import kern
 import ki_prompt
 import ki_werkzeuge
@@ -84,8 +83,6 @@ def welt(monkeypatch):
     monkeypatch.setattr(ai_config, "_overrides", {"ehrlichkeit_pruefer": "an"})
     monkeypatch.setattr(kern, "cloud_modul", lambda: cloud)
     monkeypatch.setattr(cloud, "_profil", lambda: __import__("profil").gross)
-    monkeypatch.setattr(cloud.graph, "context_for_query", lambda *a, **k: "")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken", lambda *a, **k: None)
     monkeypatch.setattr(ki_prompt, "_imprint_prompt", lambda **_: "")
     monkeypatch.setattr(ki_prompt, "_alarm_prompt", lambda **_: "")

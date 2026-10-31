@@ -1,7 +1,7 @@
 # Prompts der Core-KI — Lesefassung
 
 Hier liegen die **Prompts der ZENTRALE-KI selbst** und der KI, die im
-Hintergrund für sie arbeitet (Graph-Extraktor, News). Auf Deutsch, am Stück
+Hintergrund für sie arbeitet (News). Auf Deutsch, am Stück
 lesbar, damit man sie durchsehen und umschreiben kann, ohne sich durch Python
 zu wühlen.
 
@@ -73,15 +73,12 @@ nicht. Warum welcher Schnitt fällt, steht ausführlich im Kopfkommentar von
 | Datei | Was | Schiene |
 |-------|-----|---------|
 | [core-ki_system.md](core-ki_system.md) | System-Prompt: Rolle, Stimme, Länge | `klein`, `gross` leitet ab |
-| [core-ki_meta-regeln.md](core-ki_meta-regeln.md) | Meta-Regeln (nicht lügen, nichts erfinden, Subjekt-Grenze) | `klein`, `gross` hat eigene |
+| [core-ki_meta-regeln.md](core-ki_meta-regeln.md) | Meta-Regeln (nicht lügen, nichts erfinden) | `klein`, `gross` hat eigene |
 | [core-ki_mic-hint.md](core-ki_mic-hint.md) | Spracheingabe-Hinweis + „Jetzt"-Block | beide |
-| [core-ki_selbstbild.md](core-ki_selbstbild.md) | kann / kann-nicht — **kein Prompt-Text**, sondern Graph-Knoten | schienen-unabhängig |
 
-`core-ki_selbstbild.md` fällt bewusst aus der Reihe: das Selbstbild steht nicht
-im Prompt, sondern als Knoten im Graphen und kommt nur dann in den Kontext,
-wenn die Frage thematisch dorthin greift — und auch das nur mit eingeschaltetem
-Graph-Kontext (`ZENTRALE_GRAPH_KONTEXT=1`; per Default aus seit 18.08.2026).
-Ebenso der Graph-Extraktor (`memory-extraktor.md`): per Default aus.
+Selbstbild-Seed (`core-ki_selbstbild.md`) und Graph-Extraktor
+(`memory-extraktor.md`) gehörten zum Konzept-Graphen; seit 2026-10-31 liegen
+sie mit ihm im Archiv: `../memory/archive/associative_graph/`.
 
 Letzter Abgleich der Lesefassungen mit dem Code: 2026-10-04 (nachgezogen:
 „Kein Dienstbotentum" im System-Prompt, Jetzt-Block ohne Uhrzeit,
@@ -91,7 +88,6 @@ Zeit-Regel 5 a–f im Extraktor).
 
 | Datei | Was |
 |-------|-----|
-| [memory-extraktor.md](memory-extraktor.md) | Graph-Extraktor: Turn → Knoten und Kanten |
 | [news.md](news.md) | News-Pipeline: Label, Sendung, Rückblick, Aufholmodus |
 
 ## Wenn du hier etwas änderst

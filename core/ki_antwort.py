@@ -48,15 +48,14 @@ def mit_bildern(answer: str, user_query: str, store: str | None = None):
     Verarbeitet eine FINALE Antwort (regulaerer Chat): zieht Bild-Marker raus,
     feuert pro Treffer ein Inline-Bild-Event ({"ascii","name"}) - ui/routen/ki.py macht
     daraus ein SSE 'ascii'-Event - und yieldet zum Schluss den bereinigten
-    Text. Speichert den bereinigten Text (ohne Marker) in den Graphen.
+    Text. Merkt den bereinigten Text (ohne Marker) fürs Transkript vor.
     Generator: in der Werkzeug-Schleife via `yield from` nutzen. Nur fuer tools is None
     aufrufen (Tutor kennt keine Marker).
 
-    store: in WELCHEN Graphen der Turn gespeichert wird. None = Core-Graph
-    (data/ai_graph.json, lokales Modell). Der Cloud-Pfad (core/cloud.py) reicht
-    hier seinen eigenen Graphen durch - die Isolations-Invariante lautet
-    "lokal sieht alles von cloud, cloud sieht nichts von lokal", und die
-    steht und faellt damit, dass Cloud-Turns NICHT im Core-Graphen landen.
+    store: in WELCHES Transkript der Turn geht. None = das lokale; der
+    Cloud-Pfad (core/cloud.py) reicht cloud.CLOUD_STORE durch - die
+    Isolations-Invariante lautet "lokal sieht alles von cloud, cloud sieht
+    nichts von lokal", und Cloud-Turns landen nie im lokalen Transkript.
     """
     import state as _state
     clean, names = marker_ziehen(answer)

@@ -294,7 +294,7 @@ abgleichen tun Timer, Änderungs-Haken und `scripts/abgleich.py`.
 | `/api/ai/debug/stream`   | GET     | Devtools-Stream (SSE) für `scripts/ai_devtools.py`: der VOLLE Request (System-Prompt, alle Messages, Tool-Namen, Cache-Breakpoints), die Roh-Antwort, jeder Tool-Call, was der Extraktor in den Graphen schrieb. Verbinden schaltet den Bus (`core/kidebug.py`) an. ⚠ Enthält den kompletten Prompt inkl. Graph-Kontext. |
 
 > `/api/memory` + `/api/memory/<id>` (Legacy-LTM) sind entfallen – Memory
-> läuft jetzt über den Konzept-Graphen (siehe `memory/ki/konzept_graph.md`).
+> läuft jetzt über den Konzept-Graphen (siehe `memory/archive/associative_graph/konzept_graph.md`; seit 2026-10-31 aus dem Code).
 
 ## Skills und Gedächtnis (`ui/routen/skills.py`, seit 2026-10-07)
 

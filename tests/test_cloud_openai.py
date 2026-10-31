@@ -13,7 +13,6 @@ import ai
 import consolidation
 import cloud
 import cloud_openai
-import graph
 
 
 # ── Fake-OpenAI ────────────────────────────────────────────────────────
@@ -87,11 +86,8 @@ def fake(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def kein_echter_graph(monkeypatch):
+def recorded_turns(monkeypatch):
     gespeichert = []
-    monkeypatch.setattr(cloud_openai.graph, "context_for_query",
-                        lambda *a, **k: "## Erinnerung\n(test)")
-    monkeypatch.setattr(graph, "einmal_seeden", lambda *a, **k: None)
     monkeypatch.setattr(consolidation, "zug_vormerken",
                         lambda u, a, store=None: gespeichert.append((u, a, store)))
     return gespeichert
@@ -130,12 +126,12 @@ def _lauf(gen):
 
 # ── Grundfälle ─────────────────────────────────────────────────────────
 
-def test_einfache_antwort(fake, kein_echter_graph):
+def test_einfache_antwort(fake, recorded_turns):
     fake([_text("Hallo ", "Sasha.")])
     assert _lauf(cloud_openai.chat_stream(_msgs())) == ["Hallo Sasha."]
     # Derselbe Cloud-Graph wie beim Anthropic-Pfad: die Grenze verlaeuft
     # zwischen "im Haus" und "draussen", nicht zwischen zwei Anbietern.
-    assert kein_echter_graph[0][2] == cloud.CLOUD_GRAPH
+    assert recorded_turns[0][2] == cloud.CLOUD_STORE
 
 
 def test_reasoning_wird_reflect_event(fake):
