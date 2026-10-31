@@ -31,7 +31,10 @@ PROBE_URL="${PROBE_URL:-http://192.168.50.1:5000/}"
 
 # Schon erreichbar? Dann nichts tun. Schneller Check mit 2s Timeout —
 # wenn der PC up ist, antwortet Flask in <50 ms.
-if curl -fsS -o /dev/null --max-time 2 "$PROBE_URL"; then
+# No -f on purpose (2026-10-31): the access door is closed by default, so
+# from the Pi "/" may answer 401. Any HTTP answer means the backend is up;
+# only a failed connection means "PC off" (memory/betrieb/zugang.md).
+if curl -sS -o /dev/null --max-time 2 "$PROBE_URL"; then
     echo "PC ist schon erreichbar ($PROBE_URL), nichts zu tun."
     exit 0
 fi
@@ -50,7 +53,7 @@ wakeonlan -i "$LAN_BROADCAST" "$PC_MAC"
 # beim ersten erfolgreichen HTTP-Response ab.
 echo -n "Warte auf ZENTRALE"
 for i in $(seq 1 90); do
-    if curl -fsS -o /dev/null --max-time 1 "$PROBE_URL"; then
+    if curl -sS -o /dev/null --max-time 1 "$PROBE_URL"; then
         echo
         echo "PC ist nach ${i}s da, ZENTRALE antwortet."
         exit 0

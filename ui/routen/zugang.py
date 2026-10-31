@@ -9,7 +9,9 @@
 #   Authorization: Bearer <schlüssel>                       → frei
 #   Keks aus einem Browser-Link                             → frei
 #   ?zugang=<marke> (Link, 10 min gültig)                   → Keks setzen, weiterleiten
-#   sonst: Modus „melden" lässt durch und schreibt ins Log, „an" sagt 401.
+#   sonst: Modus „melden" lässt durch und schreibt ins Log, „an" sagt 401
+#   with the next step for the refused client (_NEXT_STEP). Default „an"
+#   since 2026-10-31.
 #
 # Teil der Routen-Schicht (Schicht 5, memory/system/bauplan_kern.md). 2026-10-08.
 
@@ -74,16 +76,37 @@ def _melden(grund: str, durchgelassen: bool):
     state.push_log(f"ZUGANG: {request.method} {request.path} von {adr} {grund} — {was}")
 
 
-def _abweisen():
-    text = ("Kein Zugang: dieses ZENTRALE braucht den Zugangsschlüssel. "
-            "Er liegt in KeePass unter „ZENTRALE Zugang“.")
+# What a refused client is told to do next (2026-10-31). The default is now
+# "an", so this message is what a forgotten node sees first: it has to say
+# where the key goes, not just "no".
+_NEXT_STEP = {
+    "missing": "Put the access key (KeePass entry “ZENTRALE Zugang”) on the "
+               "device that is asking, as a one-line file at "
+               "~/.config/zentrale/zugang.schluessel (or point "
+               "ZENTRALE_ZUGANG_SCHLUESSEL at it); the programs send it by "
+               "themselves. For a browser: create a link on this machine with "
+               "scripts/zugang.py link <address>.",
+    "wrong": "The key the device sent does not match the one on this machine. "
+             "Copy the current line from KeePass (“ZENTRALE Zugang”) into "
+             "~/.config/zentrale/zugang.schluessel on the asking device.",
+    "no_key_here": "This machine has no access key yet, so nobody gets in "
+                   "from another device. On this machine: scripts/zugang.py "
+                   "anlegen, then put the same line on the other devices.",
+}
+
+
+def _abweisen(art: str = "missing"):
+    from i18n import _      # type: ignore  – core/i18n.py
+    text = (_("No access: this ZENTRALE answers other devices only with its "
+              "access key.") + " " + _(_NEXT_STEP[art]))
     if "text/html" in request.headers.get("Accept", ""):
-        r = Response('<!doctype html><meta charset="utf-8"><title>Kein Zugang</title>'
-                     f'<p style="font:16px system-ui;margin:20vh auto;max-width:520px">{text}</p>',
+        from html import escape
+        r = Response('<!doctype html><meta charset="utf-8"><title>No access</title>'
+                     f'<p style="font:16px system-ui;margin:20vh auto;max-width:520px">{escape(text)}</p>',
                      status=401, mimetype="text/html")
         r.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
     else:
-        r = jsonify({"error": text})
+        r = jsonify({"error": text, "reason": art})
         r.status_code = 401
     r.headers["WWW-Authenticate"] = 'Bearer realm="zentrale"'
     r.headers["Cache-Control"] = "no-store"
@@ -114,17 +137,20 @@ def pruefen():
     if angebot is not None:
         if zugang.passt(angebot):
             return None
-        grund = "mit falschem Schlüssel"
+        grund, art = "mit falschem Schlüssel", "wrong"
     elif zugang.keks_passt(request.cookies.get(zugang.KEKS_NAME)):
         return None
+    elif zugang.vorhanden():
+        grund, art = "ohne Schlüssel", "missing"
     else:
-        grund = "ohne Schlüssel" if zugang.vorhanden() else \
-                "ohne Schlüssel (auf diesem Rechner ist auch keiner angelegt)"
+        grund, art = "ohne Schlüssel (auf diesem Rechner ist auch keiner angelegt)", "no_key_here"
+    if not zugang.vorhanden():
+        art = "no_key_here"
     if m == "melden":
         _melden(grund, durchgelassen=True)
         return None
     _melden(grund, durchgelassen=False)
-    return _abweisen()
+    return _abweisen(art)
 
 
 @bp.route('/api/zugang', methods=['GET'])

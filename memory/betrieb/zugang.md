@@ -1,5 +1,17 @@
 # Zugang — der Schlüssel fürs Backend
 
+**Stand 2026-10-31: the door is closed by default.** The default mode is now
+`an` (was `melden`): requests from this machine (loopback + Host localhost)
+stay free, every other device needs the access key; a refused client gets a
+401 whose text says what to do next (JSON field `reason`: `missing`, `wrong`,
+`no_key_here`). Decision 2 in
+[../hub/kern_auszug_inventur.md](../hub/kern_auszug_inventur.md) H. Who
+sends the key today: Pi TUI, room, sensor bridge, devtools (all read
+`~/.config/zentrale/zugang.schluessel`); the Pi's code update and the phone
+app need none. `scripts/wake_pc.sh` now counts any HTTP answer (also 401) as
+"PC up". A machine that still needs the old behaviour sets `modus melden`
+explicitly (command below). Older history follows.
+
 **Stand 2026-10-08.** Das Backend (Flask, Port 5000) lauschte im ganzen Netz
 — am PC tut es das weiter, am Laptop seit 2026-10-12 nur noch auf localhost
 (unten „Wer lauscht wo"). Bis 2026-10-08 konnte jeder im WLAN Chat, Kalender,
@@ -21,8 +33,8 @@ Die Adresse, auf der das Backend lauscht, kommt aus `ZENTRALE_HOST`
 | **Laptop** (`0RAMMachine`) | `zentrale-kern.service` (Benutzer) | `127.0.0.1` (`ZENTRALE_HOST` in der Unit) | niemand spricht ihn von außen an |
 | **PC** | `zentrale-pc.service` (System) | `0.0.0.0` (unverändert) | der Pi (TUI, Zimmer, Bridge) fragt `192.168.50.1:5000` |
 
-**Warum am Laptop zu:** die Tür steht auf „melden" (lässt alle durch, schreibt
-nur ins Log), und das LAN spricht unverschlüsseltes HTTP — jedes WLAN, in dem
+**Warum am Laptop zu:** die Tür stand bis 2026-10-31 auf „melden" (ließ alle
+durch, schrieb nur ins Log), und das LAN spricht unverschlüsseltes HTTP — jedes WLAN, in dem
 der Laptop hängt (Hotspot, fremdes Netz), hätte sonst Chat, Kalender und Mail
 offen vor sich bzw. könnte den Schlüssel mitlesen. Gebraucht wird der Weg nicht:
 der Pi spricht den PC an, der Laptop den PC über den SSH-Tunnel.
@@ -51,13 +63,16 @@ Die Einstellung `zugang`:
 | Stellung | Was passiert |
 |---|---|
 | `aus` | Keine Prüfung, wie früher. |
-| `melden` | **Vorgabe.** Alle kommen rein; wer ohne passenden Schlüssel kommt, steht im Log („ZUGANG: … durchgelassen"). |
-| `an` | Ohne Schlüssel kein Zugang von anderen Geräten. Dieser Rechner bleibt frei. |
+| `melden` | Alle kommen rein; wer ohne passenden Schlüssel kommt, steht im Log („ZUGANG: … durchgelassen"). Vorgabe bis 2026-10-31. |
+| `an` | **Default since 2026-10-31.** Ohne Schlüssel kein Zugang von anderen Geräten. Dieser Rechner bleibt frei. |
 
-**Warum „melden" als Vorgabe:** der Pi braucht den Schlüssel, und den kann
-nur Sasha dort ablegen. Mit „an" stünde die Wand sonst schwarz da. Erst wenn
-das Log ein paar Tage lang still ist (niemand kommt mehr ohne Schlüssel),
-auf „an" stellen.
+**Why `an` is the default now (2026-10-31):** with `melden` any device in the
+same network (hotspot, foreign WLAN) could read and change everything (Sasha:
+"das offene netz ist ja meh"). Every remote client can send the key; a node
+that does not have it yet sees a 401 that names the file and the KeePass
+entry. Escape hatch on the backend machine: `modus melden` (live, local
+only). Until 2026-10-31 the default was `melden` because the Pi might not
+have the key yet.
 
 Ein Tippfehler in der Einstellung zählt als „an" — der Rechner selbst bleibt
 ja immer frei, aussperren kann man sich so nicht.
@@ -111,9 +126,9 @@ neuen anlegen und auf die Geräte bringen. Es geht nichts verloren.
      landet (also nicht als Teil eines Befehls tippen, sondern in einen
      Editor oder eine Eingabe einfügen). ⚠ Kein Zeilenumbruch-Müll und keine
      Leerzeichen davor: die Zeile muss genau so drinstehen.
-5. Ein paar Tage **beobachten**: der Befehl ohne Zusatz zeigt, wer ohne
-   Schlüssel kam. Kommt nichts mehr (vor allem nicht von `192.168.50.10`,
-   dem Pi): auf `an` stellen.
+5. **Check:** the command without an argument shows who was refused (since
+   2026-10-31 `an` is the default). If `192.168.50.10` (the Pi) shows up,
+   its key file is missing or wrong (step 4).
 
 ## Das Handy
 
@@ -153,12 +168,16 @@ sofort auf die Adresse ohne Marke um).
   Tür, gegen einen Lauscher im Netz nicht — dafür bräuchte es HTTPS oder
   das VPN aus [../system/heimnetz.md](../system/heimnetz.md).
 - `find-pc` (Laptop, `~/.local/bin`, nicht im Repo) erkennt den PC als
-  Notlösung an der Antwort von `/api/state`. Mit „an" bekommt es dort eine
-  Abweisung und findet ihn auf diesem Weg nicht mehr (der normale Weg über
-  die MAC-Adresse bleibt).
-- Der Weck-Test `scripts/wake_pc.sh` fragt `/` am **PC** ab — seit
-  2026-10-12 gibt es `/` wieder (Weiterleitung auf `/zentrale`, zählt als
-  Erfolg). Mit „an" bekommt er von außen 401 und wertet das als „PC aus".
+  Notlösung an der Antwort von `/api/state`. Mit „an" (seit 2026-10-31
+  Vorgabe) bekommt es dort eine Abweisung und findet ihn auf diesem Weg
+  nicht mehr (der normale Weg über die MAC-Adresse bleibt). ⚠ open: not in
+  the repo, so not adjusted.
+- Der Weck-Test `scripts/wake_pc.sh` fragt `/` am **PC** ab. Since
+  2026-10-31 it counts any HTTP answer (also the 401 of the closed door) as
+  "PC up"; only a failed connection means "PC off".
+- **Pi kiosk in `browser` mode** (Firefox on the PC page, not the default
+  `room`): a browser sends no key, only the cookie from a browser link (30
+  days). In that mode the wall needs a link every 30 days — or `melden`.
 - **Laptop nur localhost:** `find-pc`, `wake_pc.sh` und der Pi fragen alle den
   **PC**, nie den Laptop — von der Einschränkung merken sie nichts. Ein
   Gerät, das künftig das Laptop-Backend direkt ansprechen soll, braucht

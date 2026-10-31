@@ -93,8 +93,40 @@ def test_unbekannter_modus_zaehlt_als_an(modus):
     assert zugang.modus() == "melden"
 
 
-def test_vorgabe_ist_melden():
-    assert zugang.modus() == "melden"
+def test_default_is_enforcing():
+    """Since 2026-10-31 the door is closed by default (decision 2,
+    memory/hub/kern_auszug_inventur.md H)."""
+    assert zugang.modus() == "an"
+
+
+# ── Default mode: own machine free, other devices only with the key ───
+
+def test_default_loopback_allowed_without_key(client):
+    assert client.get("/api/state").status_code == 200
+
+
+def test_default_foreign_without_key_refused_with_next_step(client, schluessel):
+    r = client.get("/api/state", environ_base=FREMD)
+    assert r.status_code == 401
+    body = r.get_json()
+    assert body["reason"] == "missing"
+    assert "zugang.schluessel" in body["error"] and "KeePass" in body["error"]
+
+
+def test_default_foreign_with_key_allowed(client, schluessel):
+    assert client.get("/api/state", environ_base=FREMD,
+                      headers=_bearer(schluessel)).status_code == 200
+
+
+def test_refusal_says_wrong_key(client, schluessel):
+    r = client.get("/api/state", environ_base=FREMD, headers=_bearer("x" * 43))
+    assert r.status_code == 401 and r.get_json()["reason"] == "wrong"
+
+
+def test_refusal_says_no_key_on_this_machine(client):
+    r = client.get("/api/state", environ_base=FREMD, headers=_bearer("y" * 43))
+    assert r.status_code == 401 and r.get_json()["reason"] == "no_key_here"
+    assert "anlegen" in r.get_json()["error"]
 
 
 def test_link_marke_gilt_zehn_minuten(schluessel):
@@ -118,7 +150,7 @@ def test_fremd_ohne_schluessel_abgewiesen(client, modus, schluessel):
     r = client.get("/api/state", environ_base=FREMD)
     assert r.status_code == 401
     assert "Bearer" in r.headers["WWW-Authenticate"]
-    assert "Zugangsschlüssel" in r.get_json()["error"]
+    assert "access key" in r.get_json()["error"]
 
 
 def test_fremd_mit_falschem_schluessel_abgewiesen(client, modus, schluessel):

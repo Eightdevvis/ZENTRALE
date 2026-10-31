@@ -29,10 +29,15 @@ VORGABE_PFAD = "~/.config/zentrale/zugang.schluessel"
 # melden = durchlassen, aber jede Anfrage ohne Schlüssel ins Log schreiben
 # an     = ohne Schlüssel kein Zugang (außer von diesem Rechner)
 MODI = ("aus", "melden", "an")
-# Vorgabe „melden" (2026-10-08): der Pi spricht das PC-Backend übers LAN an
-# und hat den Schlüssel erst, wenn Sasha ihn dort ablegt. Mit „an" stünde die
-# Wand morgen schwarz da. Sasha schaltet um, wenn das Log still ist.
-VORGABE_MODUS = "melden"
+# Default "an" since 2026-10-31 (Sasha: "das offene netz ist ja meh"): the
+# backend listens on every address, so "melden" left Sasha's data open to any
+# device in the same network (hotspot, foreign WLAN). This machine stays free
+# (loopback + Host localhost, ui/routen/zugang.py); every remote client (Pi
+# TUI, room, sensor bridge, devtools) already sends the key from
+# ~/.config/zentrale/zugang.schluessel. Until 2026-10-31 the default was
+# "melden" because the Pi might not have the key yet; whoever still needs
+# that sets `zugang = melden` explicitly (memory/betrieb/zugang.md).
+VORGABE_MODUS = "an"
 
 LINK_GUELTIG_S = 10 * 60          # ein Browser-Link gilt 10 Minuten
 KEKS_NAME = "zentrale_zugang"

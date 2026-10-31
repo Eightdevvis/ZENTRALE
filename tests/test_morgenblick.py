@@ -398,12 +398,16 @@ def test_knopf_legt_genau_ein_gespraech_an(client):
     assert r2.status_code == 200 and len(_gespraeche()) == 1
 
 
-def test_knopf_nur_von_diesem_rechner(client):
+def test_knopf_nur_von_diesem_rechner(client, monkeypatch):
+    # Door on "melden" so the button's own, stricter check is what answers
+    # (with the default "an" the door would refuse first, 401).
+    monkeypatch.setenv("ZENTRALE_ZUGANG", "melden")
     r = client.get(_knopf(), environ_base={"REMOTE_ADDR": "192.168.1.20"})
     assert r.status_code == 403 and _gespraeche() == []
 
 
-def test_knopf_nur_an_localhost_gerichtet(client):
+def test_knopf_nur_an_localhost_gerichtet(client, monkeypatch):
+    monkeypatch.setenv("ZENTRALE_ZUGANG", "melden")
     r = client.get(_knopf(), headers={"Host": "boese.example:5000"})
     assert r.status_code == 403 and _gespraeche() == []
 
