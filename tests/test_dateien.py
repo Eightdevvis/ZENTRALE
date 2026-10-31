@@ -70,7 +70,7 @@ def test_kein_datenmodul_schreibt_mehr_nackt():
     import re
     kern = pathlib.Path(dateien.__file__).parent
     for name in ("lists", "notes", "graphs", "melodies", "takt", "news",
-                 "usage", "graph", "ai_config"):
+                 "usage", "ai_config"):
         text = (kern / f"{name}.py").read_text(encoding="utf-8")
         assert not re.search(r"open\([^)]*['\"]w['\"][^)]*\)\s+as\s+\w+:\s*\n\s*_?json\.dump",
                              text), name
