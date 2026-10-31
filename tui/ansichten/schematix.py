@@ -28,7 +28,7 @@ import time
 
 from . import schematix_bild, schematix_draht as draht
 from .basis import api_call
-from .schematix_arten import ART, Piece, node_height
+from .schematix_arten import ART, Piece, shape
 from .tasten import Tasten
 from .translate import _
 
@@ -42,6 +42,7 @@ except ImportError:                     # started as a script: tui/ is on the pa
 LAYERS = ("data", "services", "hardware", "network", "power")
 REFRESH_S = 30.0                        # the map is laid fresh this often while open
 SCHEME = "home"
+VIA = "◦"                               # where a trace meets a piece (memory/hub/schematix_style.md)
 
 _PAN = [("W/A/S/D", "schieben", "move view"), ("alt+↑↓←→", "schieben"), ("shift+↑↓←→", "schieben")]
 _SELECT = [("↑↓←→", "waehlen", "select"), _PAN[0]]
@@ -61,9 +62,9 @@ def elements(m, layers, offen=(), fehler=None):
     for p in m.get("pieces") or []:
         if p.get("kind") == "device" and not layers.get("hardware", True):
             continue
-        h = node_height(p, p["id"] in offen) if p.get("kind") == "node" else p.get("h", 4)
+        w, h = shape(p, p["id"] in offen, fehler.get(p["id"]))   # the size follows the look
         out.append({"id": p["id"], "art": ART, "x": p.get("x", 0), "y": p.get("y", 0),
-                    "w": p.get("w", 20), "h": h, "piece": p, "offen": p["id"] in offen,
+                    "w": w, "h": h, "piece": p, "offen": p["id"] in offen,
                     **({"fehler": fehler[p["id"]]} if p["id"] in fehler else {})})
     return out
 
@@ -96,10 +97,10 @@ def connections(m, layers, visible, pending=None):
         elif w.get("type") != "sync":
             label = str(w.get("type"))
         if w.get("pending"):
-            label = "⟳ " + (_("unplugged") if w.get("state") == "off" else _("plugged")) + " · r"
+            label = "↻ " + (_("unplugged") if w.get("state") == "off" else _("plugged")) + " · r"
         out.append({"id": w["id"], "von": w["from_piece"], "nach": w["to_piece"],
                     "rolle": "focus" if w.get("pending") else "layer-" + layer,
-                    "stil": wire_style(w), "rolle_ende": "solder",
+                    "stil": wire_style(w), "rolle_ende": "solder", "punkt": VIA,
                     **({"label": label} if label else {})})
     return out
 

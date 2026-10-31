@@ -195,7 +195,38 @@ def contrast(a, b) -> float:
     return round((max(la, lb) + 0.05) / (min(la, lb) + 0.05), 2)
 
 
+def role_kind(role) -> str:
+    """What a colour role is, by its name (the contract says so):
+    `surface-*` the ground of a plane, `texture-*` the quiet pattern on it,
+    everything else light/text."""
+    if role.startswith("surface-"):
+        return "surface"
+    if role.startswith("texture-"):
+        return "texture"
+    return "text"
+
+
+def against(role, roles) -> str:
+    """The role a role is measured against: text on the board, the faintest
+    text (`dim`) on a surface, a texture against its own surface."""
+    kind = role_kind(role)
+    if kind == "surface":
+        return "dim"
+    if kind == "texture":
+        s = "surface-" + role[len("texture-"):]
+        return s if s in roles else "board"
+    return "board"
+
+
 def measured(roles=None) -> dict:
-    """{role: contrast against the board} — what the colour panel shows."""
+    """{role: contrast} — what the colour panel shows; each role against
+    what it is seen on (against()). Text roles and surfaces have the 4.5:1
+    floor (floored()); textures are decoration and only measured."""
     roles = roles or palette()
-    return {k: contrast(v, roles["board"]) for k, v in roles.items() if k != "board"}
+    return {k: contrast(v, roles[against(k, roles)]) for k, v in roles.items()
+            if k != "board" and against(k, roles) in roles}
+
+
+def floored(role) -> bool:
+    """Does Sasha's e-ink floor (4.5:1) apply to this role?"""
+    return role_kind(role) != "texture"

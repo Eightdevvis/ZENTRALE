@@ -14,13 +14,15 @@ Start page → the **Erschaffen** wheel (beside Werkstatt and Shop) →
 `schematix` → enter. The scheme **home** opens (made from
 [../system/heimnetz.md](../system/heimnetz.md) the first time):
 
-- **Top strip:** layer chips `▐1▌SYNC ▐2▌SVC ▐3▌HW ▐4▌NET ▐5▌PWR` and the
-  gauge `LIVE ▕████░░▏ live/all` with counters (◇ planned, ▣ documented, ✕ errors).
-- **Board** (cross-section, top → bottom): the cloud, the apps of each node
-  in its column, the nodes, the things. The gutter on the left shows the
-  band in its colour.
-- **Right column** (wide terminals): the cross-section with counts per band,
-  wires per layer, and the focused piece with its sockets.
+- **Top line:** the layers `━1 sync ━2 services ━3 hardware ━4 network ━5 power`
+  (`┄` when off) and `live 04/14 · ◇ planned · ▣ documented · ✕ errors`.
+- **Board** (cross-section, top → bottom, each band a plane of its own with
+  its own ground and texture, `// cloud · 01` at its top): the cloud, the
+  apps of each node in its column (sigil + name), the nodes and the things
+  (a pixel-art icon with the name below it). Since 2026-10-31
+  ([schematix_style.md](schematix_style.md)).
+- **Right column** (wide terminals): a quiet data column — counts per band,
+  wires per layer, the focused piece with its sockets, the traces.
 - **Status line:** the scheme, how many nodes/pieces/wires, or a note
   ("not logged in — only this device is shown").
 
@@ -73,7 +75,7 @@ version as", and what it cannot do yet (from what its description lacks).
 ## Rewire by drawing, Run (step 15)
 
 - **Drawing** a wire (`v`) or unplugging one (`p`, `x`) changes only the
-  sketch; the board shows it in the focus colour with `⟳ … · r` and the
+  sketch; the board shows it in the focus colour with `↻ … · r` and the
   title says "scheming…". A drawn network/power wire is a planned link of
   the scheme (stored at once); everything else waits for Run.
 - **The socket table** for the red ✕ is the type registry: an offer of one
@@ -118,16 +120,17 @@ list), it appears in the sync choice like every app.
 | Part | File |
 |---|---|
 | view, keys (one table), loading | `tui/ansichten/schematix.py` |
-| panels, colours, board | `tui/ansichten/schematix_bild.py` |
-| the canvas art `piece` (frames per state, versions panel) | `tui/ansichten/schematix_arten.py` |
+| panels, colours, the planes (surfaces, textures, plates), the data column | `tui/ansichten/schematix_bild.py` |
+| the canvas art `piece` (sigils, icons with the name below, frames per state, size from content, versions panel); node name → icon, app → sigil | `tui/ansichten/schematix_arten.py` |
 | drawing wires: socket table, misfit text, wire for a drawn pair, plugs toggle | `tui/ansichten/schematix_draht.py` |
 | Run from the drawing | `core/schematix_run.py` |
-| canvas additions any app may use: `rand_von`/`rolle_von` per art, wire `stil` (pcb/planned/off), `passt` (red ✕) | `tui/bausteine/canvas.py`, `tui/bausteine/schnur.py` |
+| canvas additions any app may use: `rand_von`/`rolle_von`/`rand_fokus` per art, wire `stil` (pcb/planned/off) and `punkt`, `passt` (red ✕); device icons (`pixel_icons`, bitmaps in `device_icons.txt`) | `tui/bausteine/canvas.py`, `tui/bausteine/schnur.py`, `tui/bausteine/pixel_icons.py` |
 | routes | `ui/routen/schematix.py`, `openapi.yaml` (tag `schematix`) |
 | tests | `tests/test_schematix.py` (acceptance on the fake cloud), `tests/test_schematix_scheme.py` (step 14), `tests/test_schematix_run.py` (step 15), `tests/test_schematix_tui.py` (TUI, screen captures), `tests/tasten_zustaende/schematix.py` |
 
 Text captures of the screen: `SCHEMATIX_CAPTURE=<folder> venv/bin/python -m
-pytest tests/test_schematix_tui.py` writes one `.txt` per screen.
+pytest tests/test_schematix_tui.py` writes one `.txt` per screen, and a `.png` with
+the real colour roles when Pillow is installed (`tests/_schematix_png.py`).
 
 ## Not yet
 

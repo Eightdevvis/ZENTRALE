@@ -1183,7 +1183,8 @@ def run_ui(stdscr, store):
     # wheel wieder gelandet"). Nur der Kalender nimmt auch Ansicht und Tag mit.
     _offen_apps = (("c", K, kalender), ("g", G, graphen), ("m", M, karte),
                    ("p", MAIL, post), ("a", AI, chat), ("n", NOTE, notizen),
-                   ("f", L, fokus), ("d", DESK, desk), ("shop", SHOP, shop))
+                   ("f", L, fokus), ("d", DESK, desk), ("shop", SHOP, shop),
+                   ("schematix", schematix.S, schematix))   # 2026-10-31: hot reload reopens it
 
     def offen_merken():
         for name, zustand, _ansicht in _offen_apps:

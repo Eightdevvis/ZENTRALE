@@ -109,6 +109,8 @@ def api_pieces():
 def _palette_body():
     roles = schematix_store.palette()
     return {"roles": roles, "measured": schematix_store.measured(roles),
+            "against": {k: schematix_store.against(k, roles) for k in roles if k != "board"},
+            "floored": sorted(k for k in roles if k != "board" and schematix_store.floored(k)),
             "defaults": schematix_store.default_palette(), "minimum": 4.5}
 
 

@@ -43,10 +43,12 @@
 #   rand_von(element)          -> six frame characters (┌─┐│└┘ order) and
 #   rolle_von(element)         -> frame role per element (2026-10-30,
 #                              Schematix: states readable without colour)
+#   rand_fokus(element)        -> six frame characters for the focused /
+#                              target element (2026-10-31; default ┏━┓┃┗┛)
 #
 # Connections may carry `rolle` (colour role of the line), `stil` ("pcb",
-# "planned", "off": rounded traces with solder dots, schnur.py) and
-# `rolle_ende` (role of the solder dots). The view's `passt(quelle, ziel)`
+# "planned", "off": rounded traces with solder dots, schnur.py),
+# `rolle_ende` (role of the solder dots) and `punkt` (their glyph). The view's `passt(quelle, ziel)`
 # refuses unfitting connections: red ✕ at the cursor, Ergebnis "abgelehnt".
 #
 # Bedienung (Zustände, Sasha 2026-10-09; Belegung: die Tastentabelle
@@ -784,13 +786,14 @@ class Canvas:
             for (x, y), r in netz.items():
                 setze(x, y, schnur.zeichen(r, stil), rolle)
             punkt = v.get("rolle_ende") or rolle   # solder dots may have their own role
+            dot = v.get("punkt") or schnur.LOETPUNKT   # … and their own glyph (2026-10-31)
             if stil and punkte:                    # solder dots at both ends (pcb)
-                setze(punkte[0][0], punkte[0][1], schnur.LOETPUNKT, punkt)
+                setze(punkte[0][0], punkte[0][1], dot, punkt)
             if ende:
                 if rolle == "abgelehnt":           # the red ✕ at the cursor (2026-10-30)
                     setze(ende[0], ende[1], "✕", rolle)
                 elif stil:
-                    setze(ende[0], ende[1], schnur.LOETPUNKT, punkt)
+                    setze(ende[0], ende[1], dot, punkt)
                 else:
                     setze(ende[0], ende[1], schnur.spitze(ende[2]), rolle)
             if v.get("label"):
@@ -805,10 +808,12 @@ class Canvas:
         elif self.groesse and self.groesse["id"] == e["id"]:
             # Gestrichelt mit Griff-Ecke unten rechts: die Ecke wächst.
             rand, rolle = "┏╍┓╏┗◢", "groesse"
-        elif e["id"] == self.ziel:
-            rand, rolle = "┏━┓┃┗┛", "ziel"
-        elif e["id"] == self.fokus:
-            rand, rolle = "┏━┓┃┗┛", "fokus"
+        elif e["id"] in (self.ziel, self.fokus):
+            # An art may draw focus and target in its own frame (2026-10-31,
+            # Schematix: a thin glowing outline instead of the heavy box).
+            art = self.arten.holen(e.get("art"))
+            rand = art.rand_fokus(e) if hasattr(art, "rand_fokus") else "┏━┓┃┗┛"
+            rolle = "ziel" if e["id"] == self.ziel else "fokus"
         else:
             # An art may give each element its own frame and role (2026-10-30,
             # Schematix: node ┏━┓, thing ╔═╗, planned ┌╌┐ — readable without

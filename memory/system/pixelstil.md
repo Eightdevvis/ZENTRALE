@@ -39,6 +39,7 @@ Was ihn ausmacht, wo der Code liegt und wie ein neues Symbol gebaut wird.
 | Bernstein: `gem`, `bernstein_zellen` (Fokus-Leiste) | `tui/pixel.py`, benutzt in `tui/ansichten/fokus.py` |
 | App-Symbole: `SYM_FARBEN`, `MOTIVE` (`_m_post` …), `symbol_pixel`, `symbol_zellen`, `symbol_pille` | `tui/pixel.py`, benutzt in `tui/ansichten/startseite.py` |
 | Elektronik: `elektronik_pixel`, `elektronik_zellen` | `tui/pixel.py` |
+| Device icons (2026-10-31, building block, first user Schematix): bitmaps as data (`#`/`.` per kind in `device_icons.txt`, ≤ 16×8 px), drawn as quadrant blocks (2×2 px per cell, no colour needed); `cells(kind, hatched)` — hatched = inside as a checkerboard for "not yet" | `tui/bausteine/pixel_icons.py`, `tui/bausteine/device_icons.txt` |
 | Auge: `AUGE_FARBEN`, `auge_zustand`, `auge_zellen` | `tui/pixel.py`, benutzt in `tui/ansichten/chat.py` |
 | Denk-Adern: `adern_zellen(t, dauer, breite, hoehe, thema, ausklang)` | `tui/ansichten/denkadern.py` |
 | Symbole der Chat-Seitenleiste (Braille, 4×2 Felder = 8×8 Punkte): `BILDER`, `codieren`, `symbol_zellen` | `tui/ansichten/symbole.py` |

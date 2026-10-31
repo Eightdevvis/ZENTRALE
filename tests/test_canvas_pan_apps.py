@@ -24,6 +24,7 @@ import pytest
 from _tui_fuzz import pty_supported
 from test_fussleiste import welt  # noqa: F401  – fixture: the TUI without a screen
 from test_schematix_tui import _bild, _schirm, _t
+from tui.bausteine import pixel_icons
 
 BURST = 120                     # ~6 s of key repeat at 20/s, all at once
 
@@ -86,7 +87,11 @@ def test_a_burst_of_pan_keys_is_bounded_never_lost_and_recovers(welt, oeffnen): 
 # ── The real TUI in a PTY: the same bytes into Desk and Schematix ─────────
 
 DESK_TITEL = ["alpha", "beta", "gamma", "delta"]
-SCHEMATIX_TITEL = ["☁ CLOUD", "▣ LAPTOP", "▣ MINIPC", "▣ PC", "Fokus", "Tutor", "PDF viewer", "◈ Router"]
+# What only the board shows: names and lines of the pieces, and the rows of
+# the device icons (one run of glyphs each, so they come through the PTY whole).
+SCHEMATIX_TITEL = ["the account's sync", "zentrale 44", "i: versions", "not yet", "Fokus", "Tutor",
+                   "PDF viewer", "Router"] + [row.strip() for kind in ("laptop", "mini-pc", "tower", "router")
+                                              for row in pixel_icons.cells(kind)]
 
 
 def _backend():

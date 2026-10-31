@@ -189,8 +189,15 @@ def test_an_old_node_says_what_it_cannot_do_yet():
 
 def test_default_palette_reaches_the_contrast_floor():
     """Sasha's e-ink rule: never below 4.5:1 (measured, never corrected)."""
-    measured = schematix_store.measured(schematix_store.default_palette())
-    assert measured and min(measured.values()) >= 4.5, measured
+    roles = schematix_store.default_palette()
+    measured = schematix_store.measured(roles)
+    floored = {k: v for k, v in measured.items() if schematix_store.floored(k)}
+    assert floored and min(floored.values()) >= 4.5, floored
+    # every role is measured against what it is seen on
+    assert set(measured) == set(roles) - {"board"}
+    assert schematix_store.against("surface-piece", roles) == "dim"
+    assert schematix_store.against("texture-nodes", roles) == "surface-nodes"
+    assert not schematix_store.floored("texture-nodes") and schematix_store.floored("surface-nodes")
 
 
 def test_palette_role_is_stored_and_measured_not_corrected():

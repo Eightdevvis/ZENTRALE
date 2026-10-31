@@ -151,7 +151,9 @@ schreibt `core/desk.py` Lage und Größe getrennt — wer nur die Größe
   `rolle_von`), eine Schnur `stil` (`pcb` gerundet mit Lötpunkten,
   `planned` gestrichelt, `off` gepunktet), `rolle` und `rolle_ende`, und die
   Ansicht kann mit `passt(quelle, ziel)` ein Verbinden ablehnen (rotes ✕ am
-  Ziel, Ergebnis `abgelehnt`). Der Desk nutzt nichts davon; ohne bleibt alles, wie es war.
+  Ziel, Ergebnis `abgelehnt`). Since 2026-10-31 also `rand_fokus` (an art draws
+  focus/target in its own frame) and `punkt` on a wire (glyph of the solder dots).
+  Der Desk nutzt nichts davon; ohne bleibt alles, wie es war.
 - **App** `tui/ansichten/desk.py`: Auswahl, laden/speichern über HTTP,
   Modal, Tastentabelle. Speichert nach jedem Ablegen, Verbinden, Lösen, Löschen
   und Bearbeiten den ganzen Desk (ohne Puffer-Felder „_…").

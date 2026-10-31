@@ -857,7 +857,7 @@ paths:
     get:
       tags: [schematix]
       operationId: schematixPalette
-      summary: Colour roles with their measured contrast against the board
+      summary: Colour roles with their measured contrast (each against what it is seen on)
       responses:
         "200": {$ref: "#/components/responses/SchematixPalette"}
 
@@ -1520,7 +1520,9 @@ components:
             required: [roles, measured, defaults, minimum]
             properties:
               roles: {type: object, additionalProperties: {type: string}}
-              measured: {type: object, additionalProperties: {type: number}}
+              measured: {type: object, additionalProperties: {type: number}, description: "each role against what it is seen on (`against`)"}
+              against: {type: object, additionalProperties: {type: string}, description: "text → board, surface-* → dim, texture-* → its surface"}
+              floored: {type: array, items: {type: string}, description: "roles the 4.5:1 floor applies to (textures are decoration)"}
               defaults: {type: object, additionalProperties: {type: string}}
               minimum: {type: number}
     RunResult:
