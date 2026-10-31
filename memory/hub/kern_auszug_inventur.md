@@ -10,7 +10,8 @@ the building kit (ports, wires, Run gate, plug dialog, bundle, keeper, dev
 mode, Schematix), the adapter, account/cloud. **Nothing else moved out**: core
 is 263 modules / 76,700 lines (was 184 / 67,900), the TUI door is unchanged
 (9 modules), 78 TUI routes still have no description (was 81). The TUI logic
-rows A1, A2, A5–A19 are all still open; A5 grew (Muss/Soll mode).
+rows A2, A5–A19 are all still open; A5 grew (Muss/Soll mode). A1 done
+`270fada` (31.10.: one edit = one call).
 **Recommended next step:** D step 3 — make Lists ready to move *inside* the
 core (A8, A9, a resolve route for the calendar, Prüfstand by setting) plus the
 cheap guards E5/E7/E8; recipe in [list_extraction_plan.md](list_extraction_plan.md).
@@ -74,7 +75,7 @@ several files + tests), L (several sessions). Line numbers checked 2026-10-31.
 
 | # | Place | What is computed/decided there | Route today / missing | Size | Stand 2026-10-31 |
 |---|---|---|---|---|---|
-| A1 | `tui/ansichten/kalender_werkzeuge.py:1117–1290` (`formular_bearbeiten`), executor `kalender_bedienung.py:590–690` | **Editing = up to 7 write calls** (`typ` before, `PUT eintrag/routine`, `kategorie`, `stil`, `quelle`, `typ` after, `ebene`); "once → recurring/span" = create new + delete old. An abort mid-way leaves half a state, **no rollback** | missing: **one change = one call**, all or nothing | L | open, unchanged — **bug risk** |
+| A1 | `tui/ansichten/kalender_werkzeuge.py:1117–1290` (`formular_bearbeiten`), executor `kalender_bedienung.py:590–690` | **Editing = up to 7 write calls** (`typ` before, `PUT eintrag/routine`, `kategorie`, `stil`, `quelle`, `typ` after, `ebene`); "once → recurring/span" = create new + delete old. An abort mid-way leaves half a state, **no rollback** | `PUT /api/calendar/edit` (`kalender_bearbeiten.edit`, `kalender.one_write`): one call, one save, all or nothing; conversion = create + delete in the same save | L | **done `270fada`** (31.10., [kalender_ics_bauplan.md](../werkzeuge/kalender_ics_bauplan.md) „One edit = one call") |
 | A2 | `kalender_werkzeuge.py:40–150` (`zeit`, `dauer`, `datum`, `wochentage`, `regel_text`), `kalender_phasen.py:42–86` (`regel_lesen`, `regel_bauen`), `kalender_advanced.py:80` `_dauer_lesen` (copy of `core/kalender_deadline.dauer_lesen`) | read input ("9.30", "+2h", "14.10.", "mo-fr"), build and read RRULE | missing: raw text to the core (`POST /api/calendar/…` preview/error sentence), RRULE only in the core | M | open, unchanged |
 | A3 | `kalender_ansichten.py` `KURZFORMEN`/`titel_schluessel` | copy of `core/kalender_kategorie` | `/api/calendar` carries `colour.key` | S | **done `fff210d`** ([calendar_colours.md](../werkzeuge/calendar_colours.md)) |
 | A4 | course colours per device in `~/.local/state/zentrale/kalender_farben.json` | phone/browser would assign differently | `data/calendar_colours.json` (synced), answer carries `colour.slot`; the core migrates the old file once (`core/calendar_colours.py:345`) | M | **done `fff210d`** |
@@ -269,7 +270,7 @@ takes ~7,350 lines of that back into the hub.
 | 9 | Graphs + cycle | untangle first: AI tools through F instead of privates, one write path, one picture (A13), cycle marks over HTTP, A10–A12 | L | open |
 | 10 | Schematix as its own package, preinstalled, deselectable | code quiet since 31.10. (`f004864`); needs 4 (store path, holds) | M | open ([schematix_extraction.md](../open/schematix_extraction.md)) |
 | 11 | Mail (rebuild as app), News (own app, decided) | AI tools through F, rights | M–L | open |
-| 12 | Calendar | A1, A2, A5–A7 into the core **first**; A1 can be pulled forward any time as a bug fix (H6) | L | open |
+| 12 | Calendar | A2, A5–A7 into the core **first** (A1 done `270fada`) | L | open |
 | 13 | Morgenblick | needs HTTP of all sources | M | open |
 | 14 | Ablage + memory + assistant | after F, the assistant's own tools leave with it | L | open |
 
@@ -290,14 +291,14 @@ computes the forecast and paints its own picture (unchanged since 22.10.).
 | E1 | `tests/test_kern_bauplan.py` (`_tuer_verstoesse`, `ausgezogene_apps`, table "Ausgezogene Apps" in `bauplan_kern.md`) | the hub imports no moved app | **built `15d4aa1`**; list: `tutor`, `karte`/`map`/`glossary` |
 | E2 | `test_kern_bauplan.py` `TUI_TUER_HOECHSTENS`, `test_tui_tuer_schrumpft_nur`, `test_jedes_modul_der_tui_tuer_wird_gebraucht` | TUI door only shrinks | **built `15d4aa1`**; still 9 modules |
 | E3 | per app repo: `zentrale-karte/tests/test_karte_grenze.py`, `language-tutor/tests/test_tutor_grenze.py` | one app, one root | **built** for tutor and map; ⚠ prüfen: `budgeter` |
-| E4 | `tests/test_routen_beschrieben.py` + [routen_altlast.md](routen_altlast.md) | every TUI route described | **built `15d4aa1`**; 81 → 78, unchanged since 23.10. |
+| E4 | `tests/test_routen_beschrieben.py` + [routen_altlast.md](routen_altlast.md) | every TUI route described | **built `15d4aa1`**; 81 → 78 → 75 (31.10.: `kategorie`, `stil`, `typ` no longer called by the TUI) |
 | E5 | no copies in `tui/` ("wie core/…", constants equal to a core value) | no second truth | **not built**; today A2, A5, A7, A18, A20, `notizen.n_float_pos` → legacy list |
-| E6 | one user action = at most ONE write call (calendar plan builder) | all or nothing in the core | **not built**; A1 is the only known case |
+| E6 | one user action = at most ONE write call (calendar plan builder) | all or nothing in the core | **built `270fada`** (31.10.): `kalender_werkzeuge._plan` refuses a second call; `tests/test_calendar_one_call.py` (every plan through `_plan`, every edit form one call); legacy list empty |
 | E7 | no data file in `tui/` (writes only on an allowlist) | no domain state in the surface | **not built**; `kalender_farben.json` gone (A4) |
 | E8 | route ownership: a path belongs to the hub or exactly one app; forwarding only there | no route without owner | **not built**: `app_weiterleitung.besitzer` takes the longest prefix, an app's `routen` can shadow a hub route and two apps can claim the same prefix unnoticed |
 | E9 | `test_kern_bauplan.py` `test_no_new_built_in_apps`, `BUILT_IN_APPS_AT_MOST` + [bauplan_kern.md](../system/bauplan_kern.md) "Altlast: Built-in apps" | no new app inside the core; the built-in list only shrinks | **built `7b0bab0`** (31.10.) |
 
-E5, E7, E8 are read-only tests, seconds to run; E6 needs a legacy table.
+E5, E7, E8 are read-only tests, seconds to run; E6 is built (legacy list empty).
 
 ## F. AI tools and skills: hub machinery vs. app-owned
 
@@ -422,9 +423,14 @@ tool in their package).
    ([../betrieb/zugang.md](../betrieb/zugang.md)).
 3. **Calendar A1** (edit = up to 7 writes, no rollback): fix now as a bug,
    or with the calendar extraction (D step 12)?
+   **Done 2026-10-31 (`270fada`):** fixed now as a bug (Sasha: „omg bitte was is
+   das denn haha. beheben."). One edit = one `PUT /api/calendar/edit`, one
+   save, all or nothing; guard E6 built.
 
 ## Historie
 
+- **2026-10-31** — A1 fixed and E6 built (`270fada`): one calendar edit = one
+  call (`PUT /api/calendar/edit`), all or nothing.
 - **2026-10-31** — re-measured and checked row by row against the code
   (docs only). New: numbers table old/new, A20, Schematix in B and D, sections
   F (AI tools/skills), G (device adapters), H (decisions). The step-by-step
