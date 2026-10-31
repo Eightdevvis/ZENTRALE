@@ -62,7 +62,8 @@ it is a judgement, the line counts are exact. `mobile/` was not measured
 Size of the groups that move (core only): calendar 29 modules / 12,058 lines,
 memory+projects+skills 30 / 9,958 (6,497 of it skill templates), Ablage and
 file formats 14 / 4,054, mail 5 / 3,272, concept graph 3 / 2,497 (off since
-18.08.), lists 4 / 1,380, Schematix 7 / 1,282, Morgenblick 3 / 1,049, graphs 5 / 991.
+18.08.; **removed `40938b3`**, what is left: `consolidation` 124 lines for the
+transcript, `embeddings` 270 as local bge-m3 client), lists 4 / 1,380, Schematix 7 / 1,282, Morgenblick 3 / 1,049, graphs 5 / 991.
 
 The logic still does not sit in forbidden imports but **in the TUI itself**,
 mostly in the calendar. A core module "in process" stays unreachable for a
@@ -212,8 +213,9 @@ desk — block or app?) is not drawn yet. Schematix and own apps use the block.
   calendar, mail, news, graphs, memory, Ablage, web, sandbox, skills directly
   (`:24–43`). Which parts are hub and which belong to the apps: **section F**.
 - **Concept graph** (`graph.py`, `consolidation`, `embeddings`, 2,497 lines)
-  off since 18.08.; `cloud.py`/`ai.py` still import it → archive and remove
-  from the code, don't move (decided, section H).
+  off since 18.08. **Done `40938b3`:** removed from the code, not moved
+  (section H). `consolidation` (transcript queue) and `embeddings` (local
+  bge-m3 client for news and ASCII search) stay with the assistant.
 
 ### Sensors
 
@@ -251,7 +253,8 @@ switchable module. Port types now exist for the hardware (`mic`, `speaker`,
 `ehrlichkeit*`, `klassifikator*`, `profil`, `context`, `gespraech*`,
 `chat_suche`, `transkript`, `zusagen`, `rueckmeldungen`, `selbstauskunft`,
 `quellen`, `auftrag_abrechnung`, `zug`, `zug_ablauf`, `fehlercodes`), `ascii_lib`,
-`web`, `browser_sitzung`, `mobil_kontext`, `takt*`, concept graph. Section F
+`web`, `browser_sitzung`, `mobil_kontext`, `takt*` (concept graph: removed
+`40938b3`). Section F
 takes ~7,350 lines of that back into the hub.
 
 ## D. Order
@@ -272,7 +275,10 @@ takes ~7,350 lines of that back into the hub.
 | 11 | Mail (rebuild as app), News (own app, decided) | AI tools through F, rights | M–L | open |
 | 12 | Calendar | A2, A5–A7 into the core **first** (A1 done `270fada`) | L | open |
 | 13 | Morgenblick | needs HTTP of all sources | M | open |
-| 14 | Ablage + memory + assistant | after F, the assistant's own tools leave with it | L | open |
+| 14 | **Base app for files** + **untangle the assistant**: creating files and writing text is a base app every computer has; the AI memory is just a folder plugged via a `files` port (section H, open item 1). Sort what of today's memory logic (topics, index, notes, projects, skills) belongs to the assistant and what to the base file app. **Architecture questions go to Sasha before building** (Sasha: go slow, stop when unsure, especially architecture) | 15 moves the assistant out; it must know first which half is its own and which half is the platform's file app, or the memory moves twice | M–L | open, **waits for Sasha** (architecture) |
+| 15 | Ablage + memory + assistant | after F and 14, the assistant's own tools leave with it | L | open |
+| 16 | Concept graph out of the code (`graph.py`, extractor, cloud embedder, switches, graph tests) | decided in H; dead code since 18.08., imported by 7 core modules | M | **done `40938b3`** |
+| **17** | **Full memory inventory** | **all `memory/` docs (and Claude's home memory notes about ZENTRALE) checked against the new state after the move, so everything is current** | **M** | **open** |
 
 **Why Lists before the AI gap (F):** Lists has no AI tool, so F would only
 delay the first real extraction that has readers in the core — the hard case
@@ -364,6 +370,13 @@ tool in their package).
   `cloud.py`, `ai.py`, `news.py`, `ki_antwort.py`, `ollama.py`,
   `cloud_openai.py`, `ascii_lib.py`) → remove from the code, keep only in
   history/`memory/archive/`.
+  **Done 2026-10-31 (`40938b3`):** `graph.py` and `scripts/graph_cleanup.py`
+  gone, `consolidation` keeps only the transcript, `embeddings` keeps the
+  local client (news and `ascii_lib` use it; not graph), switches and graph
+  tests removed; docs in
+  [../archive/associative_graph/](../archive/associative_graph/README.md).
+  Sasha's `data/ai_graph.json`, `data/ai_graph_cloud.json` untouched,
+  nothing reads them.
 - **Where an app's AI tool lives:** in the app's package, **as an optional
   part, like an adapter**. Default: it comes with the app; it can be left
   out at install and added later ("you notice you need it for your AI").
@@ -407,7 +420,7 @@ tool in their package).
      "the cloud is never overwritten".
    - Still open: what of today's memory logic (topics, index, notes,
      projects, skills) is the assistant's and what is the base file app;
-     a separate doc when it gets built.
+     a separate doc when it gets built (D step 14).
    - No AI in the core; the core only brokers.
 2. **Backend reachable from the network:** the ZENTRALE server listens on
    every network address (`ui/app.py:90`), so any device in the same network
@@ -428,6 +441,10 @@ tool in their package).
    save, all or nothing; guard E6 built.
 
 ## Historie
+
+- **2026-10-31** — concept graph removed from the code (`40938b3`); D: rows 14
+  (base app for files + untangle the assistant), 16 (graph, done) and 17
+  (full memory inventory) added; Ablage + memory + assistant is now 15.
 
 - **2026-10-31** — A1 fixed and E6 built (`270fada`): one calendar edit = one
   call (`PUT /api/calendar/edit`), all or nothing.
