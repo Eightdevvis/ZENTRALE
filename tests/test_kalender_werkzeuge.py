@@ -158,8 +158,8 @@ def test_einmal_vorbelegt_und_gesendet():
     assert {x.name: x.roh() for x in f.felder}["von"] == "14:00"
     fuelle(f, von="14:30")
     (m, pfad, body), = f.plan()["aufrufe"]
-    assert (m, pfad) == ("PUT", "/api/calendar/eintrag")
-    assert body["time"] == "14:00" and body["new"]["time"] == "14:30"
+    assert (m, pfad) == ("PUT", "/api/calendar/edit")
+    assert body["locate"]["time"] == "14:00" and body["new"]["time"] == "14:30"
     assert body["new"]["ende"] == "15:00"
 
 
@@ -181,7 +181,7 @@ def test_routine_alle_wiederholung_aendern():
     assert {x.name: x.roh() for x in f.felder}["wied"] == "wöchentlich"
     fuelle(f, wtage="di do")
     (m, pfad, body), = f.plan()["aufrufe"]
-    assert (m, pfad) == ("PUT", "/api/calendar/routine")
+    assert (m, pfad) == ("PUT", "/api/calendar/edit") and body["day"] == "2026-10-07"
     assert body["new"]["wiederholung"]["wochentage"] == ["TU", "TH"]
     d = kw.formular_bearbeiten(GEIGE, TAG, HEUTE)
     d.taste(ord("a"))
@@ -204,7 +204,7 @@ def test_spanne_einzelner_tag_und_alle():
     f = d.plan()["weiter"]
     fuelle(f, erster="13.10.2026", letzter="15.10.2026")
     (m, pfad, body), = f.plan()["aufrufe"]
-    assert (m, pfad) == ("PUT", "/api/calendar/spanne")
+    assert (m, pfad) == ("PUT", "/api/calendar/edit")
     assert body["new"]["verschieben"] == 7 and "bis" not in body["new"]
 
 
@@ -213,17 +213,21 @@ def test_taeglich_mit_ende_wird_spanne_und_original_weg():
     f = kw.formular_wiederholen(ZAHN, TAG, HEUTE)
     assert f.feld.name == "wied"
     fuelle(f, wied="täglich", wbis="09.10.2026")
-    neu, weg = f.plan()["aufrufe"]
-    assert neu[1] == "/api/calendar/spanne" and neu[2]["tageszeit"] == ["14:00", "15:00"]
-    assert weg[0:2] == ("DELETE", "/api/calendar/eintrag")
+    (m, pfad, body), = f.plan()["aufrufe"]          # create + delete: ONE call (A1)
+    assert (m, pfad) == ("PUT", "/api/calendar/edit") and "new" not in body
+    assert body["replace"]["kind"] == "spanne"
+    assert body["replace"]["tageszeit"] == ["14:00", "15:00"]
+    assert body["locate"] == {"layer": "termine", "day": "2026-10-07", "label": "Zahnarzt",
+                              "time": "14:00"}
 
 
 def test_woechentlich_wird_routine_ab_diesem_tag():
     f = kw.formular_wiederholen(ZAHN, TAG, HEUTE)
     fuelle(f, wied="wöchentlich", alle="2")
-    neu, weg = f.plan()["aufrufe"]
-    assert neu[1] == "/api/calendar/routine"
-    assert (neu[2]["freq"], neu[2]["intervall"], neu[2]["seit"]) == ("w", 2, "2026-10-07")
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    neu = body["replace"]
+    assert pfad == "/api/calendar/edit" and neu["kind"] == "routine"
+    assert (neu["freq"], neu["intervall"], neu["seit"]) == ("w", 2, "2026-10-07")
 
 
 def test_wiederholen_einer_routine_geht_direkt_zur_regel():
@@ -376,21 +380,20 @@ def test_bearbeiten_status_geaendert_ebene_zuletzt():
     _status_waehlen(f, "uncommitted")
     f.i = 0
     fuelle(f, von="14:30")
-    aufrufe = f.plan()["aufrufe"]
-    assert aufrufe[0][1] == "/api/calendar/eintrag"
-    assert aufrufe[-1] == ("POST", "/api/calendar/ebene",
-                           {"kennung": "k-zahn", "ziel": "uncommitted"})
-    # Startwert aus layer; unverändert → kein Aufruf
+    (_m, pfad, body), = f.plan()["aufrufe"]          # layer is part of the ONE edit
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-zahn"
+    assert body["new"]["layer"] == "uncommitted" and body["new"]["time"] == "14:30"
+    # Startwert aus layer; unverändert → the core leaves the layer (core test)
     blass = {**zahn, "layer": "uncommitted"}
     f = kw.formular_bearbeiten(blass, TAG, HEUTE)
     assert f.felder[-1].adv["status"] == "uncommitted"
     fuelle(f, von="14:30")
-    assert all(p != "/api/calendar/ebene" for _m, p, _b in f.plan()["aufrufe"])
+    assert f.plan()["aufrufe"][0][2]["new"]["layer"] == "uncommitted"
     f = kw.formular_bearbeiten(blass, TAG, HEUTE)
     _status_waehlen(f, "committed")
     f.i = 0
     fuelle(f)
-    assert f.plan()["aufrufe"][-1][2] == {"kennung": "k-zahn", "ziel": "termine"}
+    assert f.plan()["aufrufe"][0][2]["new"]["layer"] == "termine"
 
 
 def test_status_nicht_im_kasten_nur_dieser_tag():
@@ -404,5 +407,6 @@ def test_status_nicht_im_kasten_nur_dieser_tag():
     _status_waehlen(f, "uncommitted")
     f.i = 0
     fuelle(f, titel="Violine")
-    assert f.plan()["aufrufe"][-1] == ("POST", "/api/calendar/ebene",
-                                       {"kennung": "k-geige", "ziel": "uncommitted"})
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-geige"
+    assert body["new"]["layer"] == "uncommitted"

@@ -60,6 +60,11 @@ tags:
       Schematix, the wiring map (building kit steps 13–15,
       memory/hub/schematix.md): the map of the account laid fresh from the
       truths, the `+` picker, colour roles, schemes, things and Run.
+  - name: calendar
+    description: >
+      The calendar of this node (core/kalender*.py). Only the edit route is
+      described here so far; the older calendar routes are listed in
+      memory/hub/routen_altlast.md.
   - name: app-seite
     description: >
       Was eine Prozess-App selbst beantwortet (unter ihrer `adresse`, nur auf
@@ -1244,6 +1249,119 @@ paths:
                   gestoppt: {const: true}
         "404": {$ref: "#/components/responses/AppFehler"}
         "409": {$ref: "#/components/responses/AppFehler"}
+
+  /api/calendar/edit:
+    put:
+      tags: [calendar]
+      operationId: calendarEdit
+      summary: One user edit of a calendar entry = one call, all or nothing
+      description: >
+        Changes a one-time entry, a whole series or a whole span in ONE save
+        (core/kalender_bearbeiten.edit, A1 2026-10-31). Everything is applied
+        to a working copy first; any rejection writes nothing. `new` holds
+        the change: one-time entry `day, label, time, ende, ort`; series
+        `label, time, ende, ort, wiederholung`; span `label, ort,
+        verschieben, bis` — plus the wished `kategorie, kategorie_name,
+        stil, typ, vorwarnung, soll_abstand, quelle, layer` (applied only
+        where they differ from the stored entry). Missing = unchanged,
+        "" = remove (time/ende/ort). `replace` turns a one-time entry into a
+        series or span: the new one (body as for POST /api/calendar/routine
+        with `freq` or POST /api/calendar/spanne) is created and the old one
+        deleted in the same save. The answer is the entry re-read by its
+        kennung (after `replace`: the new one).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                kennung: {type: string, description: the entry (UID); or `locate`}
+                locate:
+                  type: object
+                  description: find the entry as shown (old JSON store without kennung)
+                  properties:
+                    layer: {type: string}
+                    day: {type: string, format: date}
+                    label: {type: string}
+                    time: {type: [string, "null"]}
+                day: {type: string, format: date, description: "series: the shown occurrence"}
+                new:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    day: {type: string, format: date}
+                    label: {type: string}
+                    time: {type: string, description: "HH:MM, empty = all day"}
+                    ende: {type: string, description: "HH:MM, empty = none"}
+                    ort: {type: string}
+                    wiederholung:
+                      type: object
+                      properties:
+                        freq: {type: string, enum: [t, w, m, j, DAILY, WEEKLY, MONTHLY, YEARLY]}
+                        intervall: {type: integer, minimum: 1}
+                        bis: {type: [string, "null"], format: date}
+                        wochentage: {type: [array, "null"], items: {type: string}}
+                    verschieben: {type: integer, description: "span: shift by days"}
+                    bis: {type: string, format: date, description: "span: new last day"}
+                    kategorie: {type: string}
+                    kategorie_name: {type: [string, "null"]}
+                    stil: {type: object, description: "CSS dict, {} removes the style"}
+                    typ: {type: string, enum: [normal, deadline]}
+                    vorwarnung: {type: [integer, string]}
+                    soll_abstand: {type: [integer, string]}
+                    quelle:
+                      type: object
+                      required: [art, id]
+                      properties:
+                        art: {type: string, enum: [liste, projekt]}
+                        id: {type: string}
+                    layer: {type: string, enum: [termine, uncommitted]}
+                replace:
+                  type: object
+                  required: [kind]
+                  properties:
+                    kind: {type: string, enum: [routine, spanne]}
+      responses:
+        "200":
+          description: Written in one save and re-read
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, eintrag]
+                properties:
+                  ok: {const: true}
+                  eintrag:
+                    type: object
+                    description: the entry as GET /api/calendar/eintrag shows it (kennung null if the new one could not be named)
+                    required: [kennung]
+                    properties:
+                      kennung: {type: [string, "null"]}
+                      art: {type: string, enum: [einmal, spanne, routine]}
+                      layer: {type: string}
+        "400":
+          description: Rejected — nothing was written
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code]
+                properties:
+                  error: {type: string, description: readable reason}
+                  code: {type: string, description: "a code of core/kalender_fehler.py (K-<code> in core/fehlercodes.py)"}
+                  next: {type: string, description: what to do next}
+        "409":
+          description: A protection lock of the calendar (mass delete, fallback store) — nothing was written
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: {type: string}
+                  gesperrt: {const: true}
 
   /hub/gesund:
     servers: [{url: "http://127.0.0.1:{port}", description: "die App (adresse im app.toml)",

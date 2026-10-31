@@ -398,7 +398,8 @@ def test_bearbeiten_aendert_soll_per_typ_aufruf():
         f.box.taste(ord(ch))
     f.taste(STRG_S)
     assert f.taste(STRG_S) == "fertig", f.fehler
-    typ = [b for _m, p, b in f.plan()["aufrufe"] if p == "/api/calendar/typ"]
-    assert typ == [{"kennung": "k1", "typ": "deadline", "vorwarnung": 4320,
-                    "soll_abstand": -(16 * 60)}]
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k1"
+    assert {k: body["new"][k] for k in ("typ", "vorwarnung", "soll_abstand")} == \
+        {"typ": "deadline", "vorwarnung": 4320, "soll_abstand": -(16 * 60)}
     assert kw.kopie(roh)["soll_abstand"] == SOLL

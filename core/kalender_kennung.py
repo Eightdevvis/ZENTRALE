@@ -135,6 +135,17 @@ def alle_eintraege() -> list[dict]:
     return _mit_titel([_aussen(a, l, o, obj, pausen) for a, l, o, obj in _alle_objekte(data)])
 
 
+def kennungen() -> set:
+    """All kennungen that exist now (cheaper than alle_eintraege: no titles
+    from lists). JSON store: missing ones are given first."""
+    with kalender._lock:
+        data = kalender._load_raw()
+        if _sicherstellen(data):
+            kalender._save_raw(data)
+            data = kalender._load_raw()
+    return {kalender.kennung(obj) for *_rest, obj in _alle_objekte(data)}
+
+
 def eintrag(k: str) -> dict:
     """Ein Eintrag per Kennung (wie in alle_eintraege)."""
     data = kalender._load_raw()

@@ -135,13 +135,14 @@ def test_aendern_setzt_gruppe_per_kennung():
     assert _feld(f, "gruppe").roh() == "keine"
     _waehle(f, "gruppe", "Uni")
     assert f.taste(10) == "fertig"
-    aufrufe = f.plan()["aufrufe"]
-    assert aufrufe[-1] == ("POST", "/api/calendar/kategorie",
-                           {"kennung": "k-Analysis I", "kategorie": "uni"})
-    # unverändert → kein Aufruf
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-Analysis I"
+    assert body["new"]["kategorie"] == "uni" and "kategorie_name" not in body["new"]
+    # unverändert → still the one call; the core changes nothing (core test)
     f = kw.formular_bearbeiten(_e("Analysis I", "08:30", "10:00"), TAG, HEUTE)
     assert f.taste(10) == "fertig"
-    assert all(p != "/api/calendar/kategorie" for _m, p, _b in f.plan()["aufrufe"])
+    (_m, pfad, _b), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit"
 
 
 def test_nur_dieser_tag_hat_keine_gruppe():
@@ -232,14 +233,16 @@ def test_bearbeiten_zeigt_eigenen_namen_in_der_zeile():
     roh = _e("Probe", "19:00", "21:00", kat="custom", kategorie_name="Musik")
     f = kw.formular_bearbeiten(roh, TAG, HEUTE)
     assert _zeile(f) == "‹ eigene: Musik ›"
-    assert f.taste(10) == "fertig"                # unverändert → kein Aufruf
-    assert all(p != "/api/calendar/kategorie" for _m, p, _b in f.plan()["aufrufe"])
+    assert f.taste(10) == "fertig"                # unverändert: same wish as stored
+    new = f.plan()["aufrufe"][0][2]["new"]
+    assert (new["kategorie"], new["kategorie_name"]) == ("custom", "Musik")
     f = kw.formular_bearbeiten(roh, TAG, HEUTE)
     _auf_gruppe(f)
     f.taste(curses.KEY_BACKSPACE)
     assert f.taste(10) == "fertig"
-    assert f.plan()["aufrufe"][-1] == ("POST", "/api/calendar/kategorie", {
-        "kennung": "k-Probe", "kategorie": "custom", "kategorie_name": "Musi"})
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-Probe"
+    assert (body["new"]["kategorie"], body["new"]["kategorie_name"]) == ("custom", "Musi")
 
 
 def test_serie_alle_und_spanne_haben_die_eine_zeile():

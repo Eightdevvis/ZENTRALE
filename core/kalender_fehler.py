@@ -50,6 +50,8 @@ CODES = {
     # Soll-Zeit einer Deadline (soll_abstand), seit 24.10.2026
     "SOLL-UNGUELTIG": "Der Soll-Abstand ist keine Dauer (Minuten ≤ 0 oder z. B. -3d18h; höchstens 28 Tage vor der Muss-Zeit).",
     "SOLL-NACH-MUSS": "Die Soll-Zeit liegt nach der Muss-Zeit — sie darf nur davor oder gleich liegen.",
+    # One edit = one write (kalender_bearbeiten.edit, 2026-10-31)
+    "AENDERUNG-ABGELEHNT": "The change does not fit the entry (time, date or rule invalid); nothing was written.",
 }
 
 

@@ -28,7 +28,6 @@ Nichts neu eintragen — beschreiben.
 | `/api/calendar/ebene` | calendar |
 | `/api/calendar/eintrag` | calendar |
 | `/api/calendar/entry` | calendar |
-| `/api/calendar/kategorie` | calendar |
 | `/api/calendar/kategorien` | calendar |
 | `/api/calendar/konflikte` | calendar |
 | `/api/calendar/motive` | calendar |
@@ -42,8 +41,6 @@ Nichts neu eintragen — beschreiben.
 | `/api/calendar/routine/zeitraum` | calendar |
 | `/api/calendar/spanne` | calendar |
 | `/api/calendar/spanne/tag` | calendar |
-| `/api/calendar/stil` | calendar |
-| `/api/calendar/typ` | calendar |
 | `/api/chat` | chat |
 | `/api/chat/clear` | chat |
 | `/api/chat/history` | chat |

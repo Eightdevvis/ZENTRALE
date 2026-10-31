@@ -668,6 +668,8 @@ class Bedienung:
                 else:
                     self._starte(folge)
             return
+        # At most ONE write call per user action (E6, kw._plan refuses more):
+        # all or nothing happens in the core, never half here.
         for methode, pfad, body in plan.get("aufrufe", []):
             ok, _antwort = self._rufen(methode, pfad, body)
             if not ok:

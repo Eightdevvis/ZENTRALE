@@ -152,13 +152,14 @@ def test_backspace_entfernt_den_stil():
 
 def test_bearbeiten_stil_per_kennung_nur_wenn_geaendert():
     f = kw.formular_bearbeiten(dict(UNI, layer="termine"), TAG, TAG)
-    assert f.taste(19) == "fertig"
-    assert all(p != "/api/calendar/stil" for _m, p, _b in f.plan()["aufrufe"])
+    assert f.taste(19) == "fertig"            # unchanged: the core compares (core test)
+    assert f.plan()["aufrufe"][0][2]["new"]["stil"] == STIL
     f = kw.formular_bearbeiten(dict(UNI, layer="termine"), TAG, TAG)
     _setze_stil(f, {"color": "#00ff00"})
     assert f.taste(19) == "fertig"
-    assert ("POST", "/api/calendar/stil", {"kennung": "k-uni", "stil": {"color": "#00ff00"}}) \
-        in f.plan()["aufrufe"]
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-uni"
+    assert body["new"]["stil"] == {"color": "#00ff00"}
 
 
 def test_routine_und_spanne_alle_haben_stil_dieser_tag_nicht():
@@ -173,8 +174,9 @@ def test_routine_und_spanne_alle_haben_stil_dieser_tag_nicht():
     alle = frage.plan()["weiter"]
     _setze_stil(alle, {})
     assert alle.taste(19) == "fertig"
-    assert ("POST", "/api/calendar/stil", {"kennung": "k-geige", "stil": {}}) \
-        in alle.plan()["aufrufe"]
+    (_m, pfad, body), = alle.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-geige"
+    assert body["new"]["stil"] == {}
     sp = {"label": "Messe", "spanning": True, "von": "2026-10-06", "bis": "2026-10-08",
           "layer": "termine", "kennung": "k-messe"}
     frage = kw.formular_bearbeiten(sp, TAG, TAG)

@@ -57,7 +57,10 @@ from kalender_ics import FELD as _ICS_FELD, ohne_interna
 # Speicher zugleich in sein Wegwerf-Verzeichnis.
 CAL_PATH = Path(__file__).resolve().parent.parent / "data" / "ai_calendar.json"
 ICS_DIR: Path | None = None       # None = data/kalender/ neben CAL_PATH
-_lock    = threading.Lock()
+# Re-entrant since 2026-10-31: one_write() holds it for a whole edit while the
+# setters inside take it again (same thread).
+_lock    = threading.RLock()
+_one_write = threading.local()    # one_write(): working copy of this thread
 _ERZWUNGEN = None                 # mit_speicher(): fester Speicher für Skripte/Tests
 
 # ── Default-Layer beim ersten Boot ────────────────────────────────────
@@ -148,7 +151,34 @@ def _default_layers() -> dict:
     return {k: copy.deepcopy(v) for k, v in _DEFAULT_LAYERS.items() if k not in weg}
 
 
+@contextmanager
+def one_write():
+    """All calendar writes inside this block become ONE save, or none.
+
+    Anlass A1 (2026-10-31): editing an entry was up to 7 separate writes; a
+    failure halfway left a half-changed entry. Inside the block every
+    `_load_raw` reads and every `_save_raw` writes an in-memory working copy
+    (only this thread; the lock keeps other writers out). On a clean exit
+    the copy is saved once, with all the usual side effects; on an exception
+    nothing is written. Nested blocks join the outer one."""
+    if getattr(_one_write, "data", None) is not None:
+        yield
+        return
+    with _lock:
+        _one_write.data = copy.deepcopy(_load_raw())
+        _one_write.dirty = False
+        try:
+            yield
+            data, dirty = _one_write.data, _one_write.dirty
+        finally:
+            _one_write.data, _one_write.dirty = None, False
+        if dirty:
+            _save_raw(data)
+
+
 def _load_raw() -> dict:
+    if getattr(_one_write, "data", None) is not None:
+        return copy.deepcopy(_one_write.data)
     data = _speicher().laden()
     if data is None:
         return {"version": 1, "layers": _default_layers()}
@@ -156,6 +186,9 @@ def _load_raw() -> dict:
 
 
 def _save_raw(data: dict) -> None:
+    if getattr(_one_write, "data", None) is not None:   # inside one_write()
+        _one_write.data, _one_write.dirty = copy.deepcopy(data), True
+        return
     # Wirft KalenderGesperrt (Massenlösch-Sperre, Rückfall-Sperre): dann ist
     # nichts geschrieben, und der Aufrufer soll es merken — kein except hier.
     _speicher().speichern(data)

@@ -155,9 +155,9 @@ def test_bearbeiten_ganztaegig_stylebox_zurueck_speichern_ohne_uhrzeit():
     _stylebox_und_zurueck(f)
     assert _feld(f, "ganz").roh() == "ja"
     assert f.taste(STRG_S) == "fertig", f.fehler
-    aufrufe = f.plan()["aufrufe"]
-    assert aufrufe[0][2]["new"]["time"] == ""
-    assert any(p == "/api/calendar/stil" for _m, p, _b in aufrufe)
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["new"]["time"] == ""
+    assert "stil" in body["new"]
 
 
 def test_ganztaegige_serie_bearbeiten_hat_ganztaegig_und_speichert_ohne_uhrzeit():
@@ -170,8 +170,8 @@ def test_ganztaegige_serie_bearbeiten_hat_ganztaegig_und_speichert_ohne_uhrzeit(
     _stylebox_und_zurueck(f)
     assert _feld(f, "ganz").roh() == "ja"
     assert f.taste(STRG_S) == "fertig", f.fehler   # vorher: „uhrzeit fehlt"
-    (_m, pfad, body) = f.plan()["aufrufe"][0]
-    assert pfad == "/api/calendar/routine" and body["new"]["time"] == ""
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["new"]["time"] == ""
     # nur dieser Tag: ebenfalls ganztägig, ohne Uhrzeit speicherbar
     d = kw.formular_bearbeiten(roh, TAG, TAG)
     d.taste(ord("t"))
@@ -231,9 +231,9 @@ def test_bearbeiten_ganztaegig_mit_letztem_tag_wird_spanne():
     assert _feld(f, "letzter").text == ""
     _feld(f, "letzter").text = "09.10.2026"
     assert f.taste(STRG_S) == "fertig", f.fehler
-    aufrufe = f.plan()["aufrufe"]
-    assert aufrufe[0][1] == "/api/calendar/spanne" and aufrufe[0][2]["bis"] == "2026-10-09"
-    assert aufrufe[-1][:2] == ("DELETE", "/api/calendar/eintrag")
+    (_m, pfad, body), = f.plan()["aufrufe"]          # new span + old gone: ONE call
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-u"
+    assert body["replace"]["kind"] == "spanne" and body["replace"]["bis"] == "2026-10-09"
 
 
 def test_serien_kaesten_haben_keinen_letzten_tag():

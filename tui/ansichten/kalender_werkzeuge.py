@@ -328,7 +328,12 @@ def _plan(aufrufe=(), meldung="", konflikt=None, danach=None, weiter=None,
     — erst fragen, dann entscheiden (Gruppe für den Kurs: Probe, dann y/n).
     zurueck: () → Dialog, der nach den Aufrufen wieder aufgeht (der
     Rhythmus-Kasten nach dem Speichern einer Phase)."""
-    return {"aufrufe": list(aufrufe), "meldung": meldung,
+    aufrufe = list(aufrufe)
+    if len(aufrufe) > 1:            # E6 (A1, 2026-10-31): one action = one call, all or nothing
+        raise ValueError("one user action = at most ONE write call; got %d: %s — "
+                         "build one core route that does it all (PUT /api/calendar/edit)"
+                         % (len(aufrufe), [p for _m, p, _b in aufrufe]))
+    return {"aufrufe": aufrufe, "meldung": meldung,
             "konflikt": konflikt, "danach": danach or {}, "weiter": weiter,
             "vorab": vorab, "zurueck": zurueck}
 
@@ -716,22 +721,6 @@ def _gruppe_body(w) -> dict:
     return {"kategorie": k, **({"kategorie_name": n} if n else {})}
 
 
-def _gruppe_aufruf(roh, w) -> list:
-    """Hat sich die Gruppe eines bestehenden Eintrags geändert → ein Aufruf
-    per Kennung (POST /api/calendar/kategorie), sonst keiner."""
-    if "gruppe" not in w or not roh.get("kennung"):
-        return []
-    k, n = _gruppe_wert(w)
-    alt_k = roh.get("kategorie") or kalender_gruppen.KEINE
-    alt_n = roh.get("kategorie_name") if alt_k == kalender_gruppen.CUSTOM else None
-    if (k, n or None) == (alt_k, alt_n or None):
-        return []
-    body = {"kennung": roh["kennung"], "kategorie": k}
-    if n:
-        body["kategorie_name"] = n
-    return [("POST", "/api/calendar/kategorie", body)]
-
-
 # ── Feld „Advanced": Typ (normal/liste) und Stylebox (11.10.2026) ─────
 # Sasha: „bitte setz die stylebox unter ein eigenes fenster … mit typ
 # ‚normal' und ‚list' verfügbar, dann wird der listentermin zu nem
@@ -803,40 +792,62 @@ def _typ_body(w, tag=None) -> dict:
     return body
 
 
-def _typ_aufrufe(roh, w, tag=None) -> tuple:
-    """Typ eines bestehenden Eintrags geändert → (vorher, nachher): zurück
-    zu normal VOR dem Ändern (sonst lehnt der Kern ein neues Ende ab),
-    zur Deadline bzw. neue Vorwarnung NACH dem Ändern (dann ist das Ende
-    schon weg). Je höchstens EIN Aufruf POST /api/calendar/typ per Kennung."""
-    if "typ" not in w or not roh.get("kennung"):
-        return [], []
-    alt, neu = kalender_deadline.ist(roh), w.get("typ") == kalender_advanced.DEADLINE
-    k = roh["kennung"]
-    if alt and not neu:
-        return [("POST", "/api/calendar/typ", {"kennung": k, "typ": "normal"})], []
-    v = w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)
-    soll = _soll_minuten(w, tag) if "soll" in w else kalender_deadline.soll_abstand(roh)
-    if neu and (not alt or kalender_deadline.vorwarnung(roh) != v
-                or kalender_deadline.soll_abstand(roh) != soll):
-        return [], [("POST", "/api/calendar/typ",
-                     {"kennung": k, "typ": "deadline", "vorwarnung": v,
-                      "soll_abstand": "" if soll is None else soll})]
-    return [], []
-
-
 def _stil_body(w) -> dict:
     """Zusatzfeld für einen NEUEN Eintrag (leer = keins)."""
     return {"stil": dict(w["stil"])} if w.get("stil") else {}
 
 
-def _stil_aufruf(roh, w) -> list:
-    """Hat sich der Stil eines bestehenden Eintrags geändert → EIN Aufruf
-    per Kennung (POST /api/calendar/stil ersetzt ihn; {} entfernt)."""
-    if "stil" not in w or not roh.get("kennung"):
-        return []
-    if dict(w["stil"] or {}) == kalender_stil.von(roh):
-        return []
-    return [("POST", "/api/calendar/stil", {"kennung": roh["kennung"], "stil": dict(w["stil"] or {})})]
+def _edit_wish(roh, w, tag=None) -> dict:
+    """The Advanced fields of the form as wished values for an EXISTING
+    entry (group, style, deadline, source, layer). The core compares them
+    with the stored entry and changes only what differs — all in the one
+    edit call (A1, 2026-10-31; before: up to five extra calls)."""
+    wish = {}
+    if "gruppe" in w:
+        k, n = _gruppe_wert(w)
+        wish["kategorie"] = k
+        if n:
+            wish["kategorie_name"] = n
+    if "stil" in w:
+        wish["stil"] = dict(w["stil"] or {})
+    if "typ" in w:
+        if w.get("typ") == kalender_advanced.DEADLINE:
+            wish["typ"] = "deadline"
+            wish["vorwarnung"] = w.get("vorwarnung", kalender_deadline.VORWARNUNG_STANDARD)
+            if "soll" in w:
+                soll = _soll_minuten(w, tag)
+                wish["soll_abstand"] = "" if soll is None else soll
+        else:
+            wish["typ"] = "normal"
+        if w.get("quelle"):
+            wish["quelle"] = {"art": w["quelle"]["art"], "id": w["quelle"]["id"]}
+    if w.get("status") is not None:
+        wish["layer"] = _ziel_ebene(w, roh.get("layer") or "termine")
+    return wish
+
+
+def _edit_call(roh, new=None, *, shown, day=None, replace=None) -> tuple:
+    """THE one write call of an edit: PUT /api/calendar/edit (all or
+    nothing in the core). Without a kennung the core finds the entry as
+    shown (`locate`: a span by its first day, else the shown day)."""
+    body = {"new": dict(new or {})} if replace is None else {"replace": replace}
+    if roh.get("kennung"):
+        body["kennung"] = roh["kennung"]
+    else:
+        body["locate"] = {"layer": roh.get("layer") or "termine",
+                          "day": roh.get("von") if art(roh) == "spanne" else shown,
+                          "label": roh.get("label", ""), "time": roh.get("time") or None}
+    if day:
+        body["day"] = day
+    return ("PUT", "/api/calendar/edit", body)
+
+
+def _replace_body(aufrufe) -> dict:
+    """The create call of _neu_plan as `replace` of the edit (once →
+    series/span): {kind, …the same body}."""
+    (_m, pfad, body), = aufrufe
+    kind = {"/api/calendar/routine": "routine", "/api/calendar/spanne": "spanne"}[pfad]
+    return {"kind": kind, **body}
 
 
 def _termin_felder(tag, heute, *, titel="", ganz=False, von="", bis="", ort="",
@@ -1015,20 +1026,6 @@ def formular_neu(tag: date, heute: date, quellen=None) -> Formular:
 # Wahl im Fenster „advanced". Beim Speichern eines bestehenden Eintrags:
 # neue/andere Liste → POST /api/calendar/quelle per Kennung; Typ zurück auf
 # normal → danach „aktuellen Titel übernehmen? (y/n)" (DELETE …/quelle).
-def _gleiche_quelle(a, b) -> bool:
-    return (a or {}).get("art") == (b or {}).get("art") and (a or {}).get("id") == (b or {}).get("id")
-
-
-def _quelle_aufruf(roh, w) -> list:
-    """Neue oder andere Liste für einen bestehenden Eintrag → EIN Aufruf."""
-    if "typ" not in w or not roh.get("kennung"):
-        return []
-    neu, alt = w.get("quelle"), kalender_quellen.quelle_von(roh)
-    if not neu or _gleiche_quelle(neu, alt):
-        return []
-    return kalender_quellen.plan_setzen(roh, neu)["aufrufe"]
-
-
 def _quelle_folge(roh, w):
     """Nach dem Speichern: Typ liste → normal? → () → Rückfrage-Kasten,
     den die Bedienung nach den Aufrufen öffnet; sonst None."""
@@ -1060,18 +1057,6 @@ def _ziel_ebene(w, alt="termine"):
     if s is None:
         return alt
     return UNVERBINDLICH if s == kalender_advanced.UNCOMMITTED else "termine"
-
-
-def _ebene_aufruf(roh, w) -> list:
-    """Status in Advanced geändert → nach den anderen Aufrufen EIN Aufruf
-    per Kennung (POST /api/calendar/ebene mit ziel)."""
-    if not roh.get("kennung"):
-        return []
-    alt = roh.get("layer") or "termine"
-    ziel = _ziel_ebene(w, alt)
-    if ziel == alt:
-        return []
-    return [("POST", "/api/calendar/ebene", {"kennung": roh["kennung"], "ziel": ziel})]
 
 
 def plan_ebene(roh: dict) -> dict | None:
@@ -1130,17 +1115,14 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             if w.get("wied", "keine") != "keine":       # wird zur Wiederholung
                 aufrufe, meldung, _k = _neu_plan(w, tag, _ziel_ebene(w, layer),
                                                  _quelle_bleibt(roh, w))
-                weg = ("DELETE", "/api/calendar/eintrag",
-                       {"layer": layer, "day": iso, "label": label, "time": t0 or None})
-                return _plan(aufrufe + [weg], meldung)
+                return _plan([_edit_call(roh, shown=iso, replace=_replace_body(aufrufe))], meldung)
             start, e_dt = _zeiten(w["datum"], w)
             mehrtaegig = w.get("letzter") and w["letzter"] > w["datum"]
             if (e_dt and e_dt.date() > w["datum"]) or mehrtaegig:   # → Spanne
                 aufrufe, meldung, _k = _neu_plan(w, tag, _ziel_ebene(w, layer),
                                                  _quelle_bleibt(roh, w))
-                weg = ("DELETE", "/api/calendar/eintrag",
-                       {"layer": layer, "day": iso, "label": label, "time": t0 or None})
-                return _plan(aufrufe + [weg], meldung, danach={"tag": w["datum"]})
+                return _plan([_edit_call(roh, shown=iso, replace=_replace_body(aufrufe))], meldung,
+                             danach={"tag": w["datum"]})
             neu = {"day": w["datum"].isoformat(), "label": w["titel"],
                    "time": start or "", "ende": e_dt.strftime("%H:%M") if e_dt else "",
                    "ort": w.get("ort") or ""}
@@ -1152,12 +1134,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                     "ende": neu["ende"], "ausser": roh.get("kennung")}
                    if neu["time"] and neu["ende"] and zeit_neu
                    and _ziel_ebene(w, layer) != UNVERBINDLICH else None)
-            vor, nach = _typ_aufrufe(roh, w, w["datum"])
-            return _plan(vor + [("PUT", "/api/calendar/eintrag",
-                                 {"layer": layer, "day": iso, "label": label,
-                                  "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w)
-                         + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + nach
-                         + _ebene_aufruf(roh, w),
+            return _plan([_edit_call(roh, {**neu, **_edit_wish(roh, w, w["datum"])}, shown=iso)],
                          "geändert: " + w["titel"], konflikt=kon, danach={"tag": w["datum"]},
                          zurueck=_quelle_folge(roh, w))
         felder = _termin_felder(tag, heute, titel=label, ganz=not t0, von=t0, bis=e0,
@@ -1197,14 +1174,10 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
                              "wochentage": wochentage(r["wtage"]) or None}
                 if neu_regel != alt_regel:
                     neu["wiederholung"] = neu_regel
-            vor, nach = _typ_aufrufe(roh, w, tag)
-            aufrufe = vor + [("PUT", "/api/calendar/routine",
-                              {"layer": layer, "label": label, "day": iso,
-                               "time": t0 or None, "new": neu})] + _gruppe_aufruf(roh, w) \
-                + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w) + nach + _ebene_aufruf(roh, w)
             if wied == "keine":                         # Wiederholung aus = ganz löschen?
                 return _plan(meldung="Wiederholung „keine“: zum Löschen d benutzen")
-            return _plan(aufrufe, "alle geändert: " + w["titel"],
+            return _plan([_edit_call(roh, {**neu, **_edit_wish(roh, w, tag)}, shown=iso, day=iso)],
+                         "alle geändert: " + w["titel"],
                          zurueck=_quelle_folge(roh, w))
 
         r = _regel_felder(roh.get("rrule"))
@@ -1250,10 +1223,7 @@ def formular_bearbeiten(roh: dict, tag: date, heute: date, fokus=None, quellen=N
             neu["verschieben"] = schub
         if w["letzter"] != bis_d + timedelta(days=schub):
             neu["bis"] = (w["letzter"] - timedelta(days=schub)).isoformat()
-        return _plan([("PUT", "/api/calendar/spanne",
-                       {"layer": layer, "von": von_iso, "label": label, "new": neu})]
-                     + _gruppe_aufruf(roh, w) + _stil_aufruf(roh, w) + _quelle_aufruf(roh, w)
-                     + _ebene_aufruf(roh, w),
+        return _plan([_edit_call(roh, {**neu, **_edit_wish(roh, w)}, shown=iso)],
                      "alle tage geändert: " + w["titel"], danach={"tag": w["erster"]},
                      zurueck=_quelle_folge(roh, w))
 

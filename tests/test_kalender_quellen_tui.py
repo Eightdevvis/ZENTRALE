@@ -287,9 +287,10 @@ def test_bearbeiten_typ_liste_setzt_per_kennung_beim_speichern():
     assert f.felder[0].text == "Kino"          # eigener Titel bleibt (nur Rückfall)
     assert f.taste(19) == "fertig"
     p = f.plan()
-    assert p["aufrufe"][0][0] == "PUT" and p["zurueck"] is None
-    assert ("POST", "/api/calendar/quelle", {"kennung": "k-kino", "art": "liste",
-                                             "id": "l_todo"}) in p["aufrufe"]
+    assert p["zurueck"] is None
+    (meth, pfad, body), = p["aufrufe"]
+    assert (meth, pfad) == ("PUT", "/api/calendar/edit") and body["kennung"] == "k-kino"
+    assert body["new"]["quelle"] == {"art": "liste", "id": "l_todo"}
 
 
 def test_bearbeiten_andere_liste_und_serie_und_spanne():
@@ -307,8 +308,9 @@ def test_bearbeiten_andere_liste_und_serie_und_spanne():
     alle.taste(19)
     assert alle.felder[0].text == "Bad renovieren"   # Titel war der Name der alten Liste
     assert alle.taste(19) == "fertig"
-    assert ("POST", "/api/calendar/quelle", {"kennung": "k-todo", "art": "projekt",
-                                             "id": "l_haus/7"}) in alle.plan()["aufrufe"]
+    (_m, pfad, body), = alle.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["kennung"] == "k-todo"
+    assert body["new"]["quelle"] == {"art": "projekt", "id": "l_haus/7"}
     frage = kw.formular_bearbeiten(roh, TAG, TAG)
     frage.taste(ord("t"))
     assert "advanced" not in [x.name for x in frage.plan()["weiter"].felder]
@@ -328,14 +330,15 @@ def test_einmal_wird_routine_quelle_aus_dem_fenster():
     f = kw.formular_bearbeiten(roh, TAG, TAG)
     _feld(f, "wied").wahl = kw.WIEDERHOLUNG.index("wöchentlich")
     assert f.taste(19) == "fertig"
-    (_m, pfad, body), _weg = f.plan()["aufrufe"]
-    assert pfad == "/api/calendar/routine" and body["quelle"] == Q
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert pfad == "/api/calendar/edit" and body["replace"]["kind"] == "routine"
+    assert body["replace"]["quelle"] == Q
     f = kw.formular_bearbeiten(roh, TAG, TAG)
     _typ_normal(f)
     _feld(f, "wied").wahl = kw.WIEDERHOLUNG.index("wöchentlich")
     assert f.taste(19) == "fertig"
-    (_m, pfad, body), _weg = f.plan()["aufrufe"]
-    assert "quelle" not in body
+    (_m, pfad, body), = f.plan()["aufrufe"]
+    assert "quelle" not in body["replace"]
 
 
 def test_kopie_nimmt_die_liste_mit():

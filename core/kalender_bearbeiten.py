@@ -20,6 +20,9 @@ from datetime import date, datetime, timedelta
 import kalender
 import kalender_deadline
 import kalender_regel
+import kalender_kategorie
+import kalender_kennung
+import uhr  # die eine Uhr (core/uhr.py)
 from kalender_fehler import KalenderAbgelehnt
 
 
@@ -138,11 +141,16 @@ def routine_neu(layer: str, label: str, seit: str, freq: str, intervall: int = 1
 
 
 # ── Eine bestimmte Routine finden ──────────────────────────────────────
-def _routine_ziel(lobj: dict, label: str, day: date | None, time: str | None):
+def _routine_ziel(lobj: dict, label: str, day: date | None, time: str | None,
+                  kennung: str | None = None):
     """DIE Routine hinter einem angezeigten Vorkommen: gleiches Label
     (exakt), kommt an `day` vor, bei mehreren gleichnamigen per Uhrzeit.
     Ein Teilstring-Treffer wie bei delete_routine wäre hier gefährlich —
-    „Geige" würde „Geigenstunde" mit ändern."""
+    „Geige" würde „Geigenstunde" mit ändern. With `kennung` exactly that
+    routine (edit(), 2026-10-31)."""
+    if kennung:
+        return next((r for r in lobj.get("routines", [])
+                     if isinstance(r, dict) and kalender.kennung(r) == kennung), None)
     needle = (label or "").strip().lower()
     cands = [r for r in lobj.get("routines", [])
              if (r.get("label") or "").strip().lower() == needle]
@@ -178,7 +186,7 @@ def _ursprung(r: dict, day: date) -> str:
 
 
 def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
-                       neu: dict) -> bool:
+                       neu: dict, kennung: str | None = None) -> bool:
     """ALLE Vorkommen einer Routine ändern (calcurse „e" bzw. Handy „alle").
     `neu`: label, time, ende, ort (leerer String löscht das Feld) und/oder
     wiederholung = {freq, intervall, bis, wochentage}. Wer die Wiederholung
@@ -189,7 +197,7 @@ def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
         lobj = data.get("layers", {}).get(layer or "termine")
         if not lobj:
             return False
-        r = _routine_ziel(lobj, label, d, _hhmm(time) if time else None)
+        r = _routine_ziel(lobj, label, d, _hhmm(time) if time else None, kennung)
         if r is None:
             return False
         if (neu.get("label") or "").strip():
@@ -211,7 +219,7 @@ def routine_bearbeiten(layer: str, label: str, day: str, time: str | None,
                 r.pop("ort", None)
         w = neu.get("wiederholung")
         if isinstance(w, dict):
-            seit = _iso(r.get("seit")) or d or date.today()
+            seit = _iso(r.get("seit")) or d or uhr.heute()
             regel = regel_bauen(w.get("freq"), seit, w.get("intervall", 1),
                                 _iso(w.get("bis")) if w.get("bis") else None,
                                 w.get("wochentage"))
@@ -278,10 +286,12 @@ def routine_abweichung(layer: str, label: str, day: str, time: str | None,
 
 
 # ── Spannen ────────────────────────────────────────────────────────────
-def _spanne_ziel(lobj: dict, von: str, label: str):
+def _spanne_ziel(lobj: dict, von: str, label: str, kennung: str | None = None):
     needle = (label or "").strip().lower()
     for e in (lobj.get("entries", {}).get(von) or []):
-        if isinstance(e, dict) and e.get("bis") and \
+        if not (isinstance(e, dict) and e.get("bis")):
+            continue
+        if kalender.kennung(e) == kennung if kennung else \
                 (e.get("label") or "").strip().lower() == needle:
             return e
     return None
@@ -313,6 +323,13 @@ def spanne_neu(layer: str, von: str, bis: str, label: str,
         extras["quelle"] = quelle
     if stil:
         extras["stil"] = stil
+    with kalender.one_write():           # the span and its times: one save
+        return _spanne_neu_zeiten(layer, von, bis, label, start_zeit, end_zeit,
+                                  tageszeit, extras, d0, d1)
+
+
+def _spanne_neu_zeiten(layer, von, bis, label, start_zeit, end_zeit, tageszeit, extras,
+                       d0, d1) -> bool:
     if not kalender.add_span(layer or "termine", von, bis, label.strip(), **extras):
         return False
     with kalender._lock:
@@ -380,7 +397,7 @@ def spanne_tag(layer: str, von: str, label: str, day: str,
 
 def spanne_aendern(layer: str, von: str, label: str, neu_label: str | None = None,
                    verschieben: int = 0, neu_bis: str | None = None,
-                   ort: str | None = None) -> bool:
+                   ort: str | None = None, kennung: str | None = None) -> bool:
     """Alle Tage einer Spanne: Titel, Ort, verschieben (Tage, samt aller
     Tageszeiten) oder neues Ende."""
     with kalender._lock:
@@ -388,7 +405,7 @@ def spanne_aendern(layer: str, von: str, label: str, neu_label: str | None = Non
         lobj = data.get("layers", {}).get(layer or "termine")
         if not lobj:
             return False
-        e = _spanne_ziel(lobj, von, label)
+        e = _spanne_ziel(lobj, von, label, kennung)
         if e is None:
             return False
         if (neu_label or "").strip():
@@ -430,9 +447,14 @@ def spanne_aendern(layer: str, von: str, label: str, neu_label: str | None = Non
 # KI gewollt („Fake-Termin" trifft „Fake-Termin: Test"), für eine Taste in
 # der Ansicht zu grob: „d" auf „Kino" würde „Kino mit Lea" am selben Tag
 # mitnehmen. Hier zählt nur der exakte Titel, bei Gleichnamigen die Uhrzeit.
-def _eintrag_ziel(lobj: dict, day: str, label: str, time: str | None):
+def _eintrag_ziel(lobj: dict, day: str, label: str, time: str | None,
+                 kennung: str | None = None):
     needle = (label or "").strip().lower()
     liste = lobj.get("entries", {}).get(day) or []
+    if kennung:
+        e = next((e for e in liste if isinstance(e, dict) and kalender.kennung(e) == kennung),
+                 None)
+        return liste, e
     cands = [e for e in liste if isinstance(e, dict)
              and (e.get("label") or "").strip().lower() == needle]
     if time is not None and len(cands) > 1:
@@ -459,7 +481,7 @@ def eintrag_loeschen(layer: str, day: str, label: str, time: str | None = None) 
 
 
 def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
-                    neu: dict) -> bool:
+                    neu: dict, kennung: str | None = None) -> bool:
     """Einen Einmal-Termin ändern; alle anderen Felder bleiben. `neu`: day,
     label, time, ende, ort (leerer String löscht time/ende/ort)."""
     with kalender._lock:
@@ -467,7 +489,7 @@ def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
         lobj = data.get("layers", {}).get(layer or "termine")
         if not lobj:
             return False
-        liste, e = _eintrag_ziel(lobj, day, label, _hhmm(time) if time else None)
+        liste, e = _eintrag_ziel(lobj, day, label, _hhmm(time) if time else None, kennung)
         if e is None or e.get("bis"):
             return False
         if (neu.get("label") or "").strip():
@@ -499,3 +521,201 @@ def eintrag_aendern(layer: str, day: str, label: str, time: str | None,
             lobj["entries"].setdefault(neu_tag, []).append(e)
         kalender._save_raw(data)
         return True
+
+
+# ── Create from a request body (POST routes and edit(replace=…)) ──────
+# One reading of the body for both ways in, so "create" and "once → series"
+# can never drift apart.
+def routine_from_body(b: dict) -> bool:
+    """POST /api/calendar/routine with `freq` (calcurse „r")."""
+    return routine_neu(
+        b.get("layer") or "termine", b.get("label") or "", b.get("seit") or "",
+        b.get("freq"), b.get("intervall") or 1, b.get("bis") or None,
+        b.get("wochentage") or None, b.get("time") or None, b.get("ende") or None,
+        b.get("ort") or None, b.get("kategorie") or None, b.get("kategorie_name") or None,
+        b.get("quelle") or None, stil=b.get("stil") or None, typ=b.get("typ") or None,
+        vorwarnung=b.get("vorwarnung"), soll_abstand=b.get("soll_abstand"))
+
+
+def span_from_body(b: dict) -> bool:
+    """POST /api/calendar/spanne."""
+    tz = b.get("tageszeit")
+    return spanne_neu(
+        b.get("layer") or "termine", b.get("von") or "", b.get("bis") or "",
+        b.get("label") or "", b.get("start_zeit") or None, b.get("end_zeit") or None,
+        tuple(tz) if isinstance(tz, list) and len(tz) == 2 else None,
+        b.get("ort") or None, b.get("kategorie") or None, b.get("kategorie_name") or None,
+        b.get("quelle") or None, stil=b.get("stil") or None)
+
+
+# ── One user edit = one write, all or nothing (A1, 2026-10-31) ─────────
+# Before, the TUI sent up to 7 calls for one edit (typ before, the change,
+# group, style, source, typ after, layer) and "once → series/span" was
+# create + delete as two calls; a failure halfway left a half-changed entry.
+# Now edit() does all of it inside kalender.one_write(): everything is
+# applied to a working copy, any rejection writes nothing, and the store is
+# written once at the end. Route: PUT /api/calendar/edit.
+EDIT_MAIN = {
+    "einmal": ("day", "label", "time", "ende", "ort"),
+    "routine": ("label", "time", "ende", "ort", "wiederholung"),
+    "spanne": ("label", "ort", "verschieben", "bis"),
+}
+EDIT_COMMON = ("kategorie", "kategorie_name", "stil", "typ", "vorwarnung", "soll_abstand",
+               "quelle", "layer")
+REPLACE_KINDS = {"routine": routine_from_body, "spanne": span_from_body}
+
+
+def _locate(locate: dict) -> str:
+    """The kennung of an entry shown as {layer, day, label, time} (entries of
+    the old JSON store may not have one yet; it is given here, in the same
+    save)."""
+    if not isinstance(locate, dict):
+        raise KalenderAbgelehnt("UNBEKANNTES-FELD", "locate must be {layer, day, label, time}")
+    layer = locate.get("layer") or "termine"
+    day, label = locate.get("day") or "", (locate.get("label") or "").strip().lower()
+    time = _hhmm(locate.get("time")) if locate.get("time") else None
+    d = _iso(day)
+    treffer = []
+    for e in kalender_kennung.alle_eintraege():
+        if e.get("layer") != layer or (e.get("label") or "").strip().lower() != label:
+            continue
+        if e["art"] == "routine":
+            if d is None or _vorkommen_an(e, d):
+                treffer.append(e)
+        elif (e.get("tag") or e.get("von")) == day:
+            treffer.append(e)
+    if time and len(treffer) > 1:
+        treffer = [e for e in treffer if (e.get("time") or "") == time] or treffer
+    if not treffer:
+        raise KalenderAbgelehnt("KEIN-TREFFER", f"no entry {locate.get('label')!r} on {day}")
+    return treffer[0]["kennung"]
+
+
+def _check_fields(art: str, new: dict, replace) -> dict:
+    """Unknown fields are rejected before anything is touched. -> the main
+    fields of the change."""
+    if not isinstance(new, dict):
+        raise KalenderAbgelehnt("UNBEKANNTES-FELD", "new must be an object")
+    allowed = EDIT_MAIN[art] + EDIT_COMMON
+    foreign = sorted(set(new) - set(allowed))
+    if foreign:
+        raise KalenderAbgelehnt("UNBEKANNTES-FELD", "not for a %s: %s (allowed: %s)"
+                                % (art, ", ".join(foreign), ", ".join(allowed)))
+    if ("vorwarnung" in new or "soll_abstand" in new) and "typ" not in new:
+        raise KalenderAbgelehnt("UNBEKANNTES-FELD",
+                                "vorwarnung/soll_abstand only together with typ")
+    if replace is not None:
+        if art != "einmal":
+            raise KalenderAbgelehnt("FALSCHE-ART", "replace turns a one-time entry into a "
+                                    "series or span; this is a " + art)
+        if not isinstance(replace, dict) or replace.get("kind") not in REPLACE_KINDS:
+            raise KalenderAbgelehnt("UNBEKANNTES-FELD", "replace.kind: routine or spanne")
+        if new:
+            raise KalenderAbgelehnt("UNBEKANNTES-FELD", "replace carries the whole new entry; "
+                                    "send no new fields with it")
+    return {f: new[f] for f in EDIT_MAIN[art] if f in new}
+
+
+def _typ_wish(alt: dict, new: dict):
+    """(before, after): typ back to normal BEFORE the change (else the core
+    rejects a new end), deadline / new warning AFTER it (then the end is
+    gone). Each kwargs for kalender_kennung.typ_setzen, or None."""
+    if "typ" not in new:
+        return None, None
+    want = kalender_deadline.typ_pruefen(new["typ"])
+    is_dl = kalender_deadline.ist_deadline(alt)
+    if want != kalender_deadline.TYP:
+        return ({"typ": kalender_deadline.NORMAL} if is_dl else None), None
+    v = new.get("vorwarnung")
+    v = (kalender_deadline.VORWARNUNG_STANDARD if v is None
+         else kalender_deadline.vorwarnung_pruefen(v))
+    if "soll_abstand" in new:
+        s = new["soll_abstand"]
+        s = None if s in (None, "") else kalender_deadline.soll_pruefen(s)
+    else:
+        s = kalender_deadline.soll_von(alt)
+    if is_dl and kalender_deadline.vorwarnung_von(alt) == v and kalender_deadline.soll_von(alt) == s:
+        return None, None
+    return None, {"typ": kalender_deadline.TYP, "vorwarnung": v,
+                  "soll_abstand": "" if s is None else s}
+
+
+def _main_change(k: str, alt: dict, main: dict, day) -> None:
+    art, layer = alt["art"], alt["layer"]
+    if art == "einmal":
+        ok = eintrag_aendern(layer, alt["tag"], alt.get("label") or "", alt.get("time"), main,
+                             kennung=k)
+    elif art == "routine":
+        ok = routine_bearbeiten(layer, alt.get("label") or "", day or "", alt.get("time"), main,
+                                kennung=k)
+    else:
+        try:
+            schub = int(main.get("verschieben") or 0)
+        except (TypeError, ValueError):
+            raise KalenderAbgelehnt("UNBEKANNTES-FELD", "verschieben must be a number of days")
+        ok = spanne_aendern(layer, alt["von"], alt.get("label") or "", main.get("label") or None,
+                            schub, main.get("bis") or None, main.get("ort"), kennung=k)
+    if not ok:
+        raise KalenderAbgelehnt("AENDERUNG-ABGELEHNT")
+
+
+def _extras(k: str, alt: dict, new: dict, typ_after) -> None:
+    """Group, style, source, deadline, layer — each only if it differs."""
+    if "kategorie" in new:
+        kat, name = new["kategorie"], new.get("kategorie_name") or None
+        alt_k = alt.get("kategorie") or kalender_kategorie.KEINE
+        alt_n = alt.get("kategorie_name") if alt_k == kalender_kategorie.CUSTOM else None
+        if (kat, name) != (alt_k, alt_n or None):
+            kalender_kennung.kategorie_setzen(k, kat, name)
+    if "stil" in new and dict(new["stil"] or {}) != (alt.get("stil") or {}):
+        kalender_kennung.stil_setzen(k, dict(new["stil"] or {}))
+    q = new.get("quelle")
+    if q:
+        if not isinstance(q, dict):
+            raise KalenderAbgelehnt("QUELLE-UNGUELTIG")
+        a = alt.get("quelle") or {}
+        if (q.get("art"), q.get("id")) != (a.get("art"), a.get("id")):
+            kalender_kennung.quelle_setzen(k, q.get("art"), q.get("id"))
+    if typ_after:
+        kalender_kennung.typ_setzen(k, **typ_after)
+    if new.get("layer") and new["layer"] != alt["layer"]:
+        kalender_kennung.ebene_wechseln(k, new["layer"])
+
+
+def edit(kennung: str | None = None, new: dict | None = None, *, day: str | None = None,
+         replace: dict | None = None, locate: dict | None = None) -> dict:
+    """ONE user edit of a one-time entry, a whole series or a whole span —
+    all or nothing, one save. -> the entry re-read by kennung afterwards.
+
+    `new`: the fields of the change — per kind (EDIT_MAIN) as the old single
+    routes took them, plus EDIT_COMMON (group, style, source, deadline,
+    layer) as the wished value, applied only where it differs. `day`: the
+    shown occurrence of a series. `replace` ({kind: routine|spanne, …the
+    body of POST /api/calendar/routine|spanne}): a one-time entry becomes a
+    series/span — the new one is created and the old one deleted in the
+    same save. `locate` instead of `kennung`: see _locate."""
+    new = dict(new or {})
+    with kalender.one_write():
+        k = kennung or _locate(locate)
+        alt = kalender_kennung.eintrag(k)
+        main = _check_fields(alt["art"], new, replace)
+        if replace is not None:
+            vorher = kalender_kennung.kennungen()
+            body = {f: v for f, v in replace.items() if f != "kind"}
+            if not REPLACE_KINDS[replace["kind"]](body):
+                raise KalenderAbgelehnt("AENDERUNG-ABGELEHNT",
+                                        "the new %s was rejected" % replace["kind"])
+            kalender_kennung.eintrag_loeschen(k)
+        else:
+            before, after = _typ_wish(alt, new)
+            if before:
+                kalender_kennung.typ_setzen(k, **before)
+            if main:
+                _main_change(k, alt, main, day)
+            _extras(k, alt, new, after)
+    if replace is None:
+        return kalender_kennung.eintrag(k)
+    neu = kalender_kennung.kennungen() - vorher - {k}
+    if len(neu) != 1:              # written, but not to be named — say so, do not guess
+        return {"kennung": None, "art": replace["kind"]}
+    return kalender_kennung.eintrag(neu.pop())

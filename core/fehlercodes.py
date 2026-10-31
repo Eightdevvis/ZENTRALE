@@ -144,6 +144,12 @@ CODES = {
     "K-SOLL-NACH-MUSS": (
         "Die Soll-Zeit läge nach der Muss-Zeit.",
         "Negativen Abstand nehmen (Soll liegt vor der Abgabe), z. B. -3d18h."),
+    # One edit = one write (PUT /api/calendar/edit, A1, 2026-10-31)
+    "K-AENDERUNG-ABGELEHNT": (
+        "The change does not fit the entry (time, date or rule invalid, or the entry moved). "
+        "Nothing was written.",
+        "Read the entry again by its kennung, fix the field named in the reason, send the "
+        "whole edit once more."),
     "K-KEIN-TREFFER": (
         "Kein Eintrag passt.",
         "read_calendar aufrufen und die Kennung aus dem Ergebnis nehmen."),

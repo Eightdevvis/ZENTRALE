@@ -255,10 +255,10 @@ def test_bearbeiten_reihenfolge_der_typ_aufrufe():
     f = kw.formular_bearbeiten(roh, TAG, TAG)
     _deadline_waehlen(f)
     assert f.taste(STRG_S) == "fertig", f.fehler
-    pfade = [(m, p) for m, p, _b in f.plan()["aufrufe"]]
-    assert pfade == [("PUT", "/api/calendar/eintrag"), ("POST", "/api/calendar/typ")]
-    assert f.plan()["aufrufe"][0][2]["new"]["ende"] == ""     # Ende fällt VORHER weg
-    # zurück zu normal: der Typ-Aufruf kommt ZUERST (sonst lehnt der Kern das Ende ab)
+    (m, p, body), = f.plan()["aufrufe"]       # ONE call; the order is the core's (A1)
+    assert (m, p) == ("PUT", "/api/calendar/edit")
+    assert body["new"]["ende"] == "" and body["new"]["typ"] == "deadline"
+    # zurück zu normal: the core sets the typ FIRST (core test)
     roh = {"label": "Analysis HÜ", "time": "23:59", "typ": "deadline", "vorwarnung": 4320,
            "kennung": "k2", "layer": "termine"}
     f = kw.formular_bearbeiten(roh, TAG, TAG)
@@ -270,9 +270,8 @@ def test_bearbeiten_reihenfolge_der_typ_aufrufe():
     _feld(f, "von").text = "19:00"
     _feld(f, "bis").text = "+1h"
     assert f.taste(STRG_S) == "fertig", f.fehler
-    aufrufe = f.plan()["aufrufe"]
-    assert aufrufe[0][1] == "/api/calendar/typ" and aufrufe[0][2]["typ"] == "normal"
-    assert aufrufe[1][2]["new"]["ende"] == "20:00"
+    (_m, _p, body), = f.plan()["aufrufe"]
+    assert body["new"]["typ"] == "normal" and body["new"]["ende"] == "20:00"
 
 
 def test_kopie_und_details():

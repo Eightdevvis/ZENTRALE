@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, request
 
 import calendar_colours  # type: ignore  – colour key/slot per entry (one rule for all fronts)
 import cycle        # type: ignore  – Zyklus/PMS-Vorhersage aus dem »periode«-Graphen
+import fehlercodes  # type: ignore  – next step for a rejection
 import kalender     # type: ignore  – Kalender-Layer (Woche/Monat, data/ai_calendar.json)
 import kalender_kennung  # type: ignore  – Fehler-Codes (KalenderAbgelehnt)
 import kalender_bearbeiten  # type: ignore  – Wiederholung, „nur dieser Tag", Spannen
@@ -31,7 +32,11 @@ bp = Blueprint('kalender', __name__)
 def _abgelehnt(e):
     """Abgelehnt statt still korrigiert (seit 09.10.2026): 400 mit festem
     Code und lesbarem Grund — die TUI zeigt den Grund an."""
-    return jsonify({"error": e.grund, "code": e.code}), 400
+    antwort = {"error": e.grund, "code": e.code}
+    erklaert = fehlercodes.CODES.get("K-" + e.code)
+    if erklaert:                       # the next step (fehlercodes style, 2026-10-31)
+        antwort["next"] = erklaert[1]
+    return jsonify(antwort), 400
 
 
 @bp.errorhandler(kalender_sicherung.KalenderGesperrt)
@@ -334,15 +339,7 @@ def api_calendar_add_routine():
     if body.get('freq'):
         # calcurse „r": Typ (t/w/m/j), alle wie viele, Ende, ab dem gewählten Tag.
         vorher = _alle_kennungen()
-        ok = kalender_bearbeiten.routine_neu(
-            (body.get('layer') or 'termine'), label, body.get('seit') or '',
-            body.get('freq'), body.get('intervall') or 1, body.get('bis') or None,
-            body.get('wochentage') or None, body.get('time') or None,
-            body.get('ende') or None, body.get('ort') or None,
-            body.get('kategorie') or None, body.get('kategorie_name') or None,
-            body.get('quelle') or None, stil=body.get('stil') or None,
-            typ=body.get('typ') or None, vorwarnung=body.get('vorwarnung'),
-            soll_abstand=body.get('soll_abstand'))
+        ok = kalender_bearbeiten.routine_from_body(body)
         return (jsonify({"ok": True, "kennung": _neue_kennung(vorher)}) if ok
                 else (jsonify({"error": "wiederholung abgelehnt"}), 400))
     raw = body.get('byday')
@@ -436,14 +433,7 @@ def api_calendar_spanne_neu():
     end_zeit?, tageszeit?:[von, bis], ort?, kategorie?, kategorie_name?,
     quelle?: {art, id}, stil?: {css: wert}}."""
     b = request.get_json(silent=True) or {}
-    tz = b.get('tageszeit')
-    return _antwort(kalender_bearbeiten.spanne_neu(
-        b.get('layer') or 'termine', b.get('von') or '', b.get('bis') or '',
-        b.get('label') or '', b.get('start_zeit') or None, b.get('end_zeit') or None,
-        tuple(tz) if isinstance(tz, list) and len(tz) == 2 else None,
-        b.get('ort') or None, b.get('kategorie') or None,
-        b.get('kategorie_name') or None, b.get('quelle') or None,
-        stil=b.get('stil') or None), "spanne abgelehnt")
+    return _antwort(kalender_bearbeiten.span_from_body(b), "spanne abgelehnt")
 
 
 @bp.route('/api/calendar/spanne', methods=['PUT'])
@@ -584,6 +574,33 @@ def api_calendar_eintrag_aendern():
     return _antwort(kalender_bearbeiten.eintrag_aendern(
         b.get('layer') or 'termine', b.get('day') or '', b.get('label') or '',
         b.get('time') or None, b.get('new') or {}), "termin nicht gefunden/abgelehnt")
+
+
+@bp.route('/api/calendar/edit', methods=['PUT'])
+def api_calendar_edit():
+    """ONE user edit = ONE call, all or nothing (A1, 2026-10-31;
+    core/kalender_bearbeiten.edit). Body: {kennung | locate:{layer, day,
+    label, time}, day?, new:{…}, replace?:{kind: routine|spanne, …}}.
+    `new`: one-time entry day/label/time/ende/ort, series
+    label/time/ende/ort/wiederholung, span label/ort/verschieben/bis — plus
+    kategorie, kategorie_name, stil, typ, vorwarnung, soll_abstand, quelle,
+    layer (wished value, applied where it differs). `replace`: a one-time
+    entry becomes a series/span (created + old deleted in the same save).
+    Answer {ok, eintrag} (re-read by kennung); rejection 400 {error, code,
+    next} and nothing written."""
+    b = request.get_json(silent=True) or {}
+    if not isinstance(b, dict):
+        raise kalender_kennung.KalenderAbgelehnt("UNBEKANNTES-FELD", "body must be an object")
+    fremd = sorted(set(b) - {'kennung', 'locate', 'day', 'new', 'replace'})
+    if fremd:
+        raise kalender_kennung.KalenderAbgelehnt(
+            "UNBEKANNTES-FELD", f"unknown in body: {', '.join(fremd)}")
+    if not b.get('kennung') and not b.get('locate'):
+        raise kalender_kennung.KalenderAbgelehnt("KENNUNG-UNBEKANNT",
+                                                 "kennung (or locate) is missing")
+    return jsonify({"ok": True, "eintrag": kalender_bearbeiten.edit(
+        b.get('kennung') or None, b.get('new') or {}, day=b.get('day') or None,
+        replace=b.get('replace'), locate=b.get('locate'))})
 
 
 @bp.route('/api/calendar/ebene', methods=['POST'])
